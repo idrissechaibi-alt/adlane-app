@@ -50,7 +50,7 @@ interface SyncPayload {
 }
 
 const DEFAULT_GITHUB_SYNC_CONFIG: GitHubDataSyncConfig = {
-  enabled: false,
+  enabled: true, // MODE AUTO ACTIVÉ
   repoOwner: 'idrissechaibi-alt',
   repoName: 'adlane-app',
   branch: 'main',
