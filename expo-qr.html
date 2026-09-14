@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Code - Adlane App</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            text-align: center;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 40px;
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+        h1 {
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+        .subtitle {
+            color: #a0a0a0;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+        #qrcode {
+            margin: 30px auto;
+            padding: 20px;
+            background: white;
+            border-radius: 10px;
+            display: inline-block;
+        }
+        .instructions {
+            text-align: left;
+            margin-top: 40px;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+            max-width: 600px;
+        }
+        .instructions h3 {
+            color: #4fd1c5;
+            margin-top: 0;
+        }
+        .instructions ol {
+            line-height: 1.8;
+        }
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(79, 209, 197, 0.2);
+            border-radius: 8px;
+            color: #4fd1c5;
+            font-weight: bold;
+        }
+        .port-info {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(79, 209, 197, 0.1);
+            border-radius: 8px;
+            color: #a0a0a0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Adlane App</h1>
+        <p class="subtitle">Football Betting Tracker - Scanning</p>
+
+        <div id="qrcode"></div>
+
+        <div class="status">
+            Expo Server Running on http://localhost:8081
+        </div>
+
+        <div class="port-info">
+            Scan with Expo Go on your phone<br>
+            Make sure your phone and PC are on the same WiFi network
+        </div>
+
+        <div class="instructions">
+            <h3>Instructions to connect:</h3>
+            <ol>
+                <li>Download <strong>Expo Go</strong> from Google Play Store (Android) or App Store (iOS)</li>
+                <li>Open Expo Go app on your phone</li>
+                <li>Scan the QR code above</li>
+                <li>Make sure your phone and PC are on the <strong>same WiFi network</strong></li>
+                <li>Wait for the app to load</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        // Generate QR code for Expo Go
+        var url = "exp://192.168.1.100:8081";
+        var qrContainer = document.getElementById("qrcode");
+
+        // Try to get local IP dynamically
+        function getLocalIP() {
+            return "192.168.1.100"; // Default - user may need to update
+        }
+
+        // Display placeholder QR code
+        qrContainer.innerHTML = "";
+        new QRCode(qrContainer, {
+            text: "exp://192.168.1.100:8081",
+            width: 200,
+            height: 200,
+            colorDark: "#000000",
+            colorLight: "#ffffff",
+            correctLevel: QRCode.CorrectLevel.H
+        });
+
+        // Update IP when page loads
+        window.onload = function() {
+            var localIP = getLocalIP();
+            qrContainer.innerHTML = "";
+            new QRCode(qrContainer, {
+                text: "exp://" + localIP + ":8081",
+                width: 200,
+                height: 200,
+                colorDark: "#000000",
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.H
+            });
+        };
+    </script>
+</body>
+</html>

@@ -15,6 +15,7 @@ import EvolutionScreen from './src/screens/EvolutionScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import APIManagementScreen from './src/screens/APIManagementScreen';
 import GitSyncScreen from './src/screens/GitSyncScreen';
+import FootballDataScreen from './src/screens/FootballDataScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -52,6 +53,11 @@ function SettingsStack() {
   );
 }
 
+// Écran placeholder simple pour FootballData
+function FootballPlaceholder() {
+  return null;
+}
+
 export default function App() {
   useEffect(() => {
     // Initialiser la base de données locale au démarrage
@@ -66,7 +72,7 @@ export default function App() {
       <Tab.Navigator
         screenOptions={({ route }) => ({
           tabBarIcon: ({ focused, color, size }) => {
-            let iconName: keyof typeof Ionicons.glyphMap;
+            let iconName: string = 'ellipse';
 
             if (route.name === 'Planning') {
               iconName = focused ? 'calendar' : 'calendar-outline';
@@ -78,11 +84,11 @@ export default function App() {
               iconName = focused ? 'analytics' : 'analytics-outline';
             } else if (route.name === 'Paramètres') {
               iconName = focused ? 'settings' : 'settings-outline';
-            } else {
-              iconName = 'ellipse';
+            } else if (route.name === 'Football') {
+              iconName = focused ? 'football' : 'football-outline';
             }
 
-            return <Ionicons name={iconName} size={size} color={color} />;
+            return <Ionicons name={iconName as any} size={size} color={color} />;
           },
           tabBarActiveTintColor: '#3b82f6',
           tabBarInactiveTintColor: '#64748b',
@@ -128,6 +134,11 @@ export default function App() {
           name="Évolution"
           component={EvolutionScreen}
           options={{ title: 'Rapports IA' }}
+        />
+        <Tab.Screen
+          name="Football"
+          component={FootballPlaceholder}
+          options={{ title: 'Données Foot' }}
         />
         <Tab.Screen
           name="Paramètres"
