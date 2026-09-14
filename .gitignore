@@ -35,6 +35,13 @@ yarn-error.*
 # Local env files
 .env*.local
 
+# Local app data and GitHub credentials must never be committed
+app-adlane-data/
+data/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
 # TypeScript
 *.tsbuildinfo
 

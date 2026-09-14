@@ -1,5 +1,5 @@
-// Écran Paramètres & Configuration Omniroute
-// Configure l'URL Omniroute, clé API, et sélection des modèles IA disponibles
+// Écran Paramètres : Configuration Omniroute + API Football
+// Configure Omniroute, clés API football, et préférences système
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -11,182 +11,409 @@ import {
   TouchableOpacity,
   SafeAreaView,
   Alert,
-  Switch
+  Switch,
+  ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { OmnirouteConfig } from '../types';
-import { DEFAULT_OMNIROUTE_CONFIG } from '../core/omniroute';
+import { getAPIConfig, saveAPIConfig, APIConfig } from '../api/multiAPIManager';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export default function SettingsScreen() {
-  const [endpoint, setEndpoint] = useState(DEFAULT_OMNIROUTE_CONFIG.endpoint);
-  const [apiKey, setApiKey] = useState(DEFAULT_OMNIROUTE_CONFIG.apiKey);
-  const [selectedModel, setSelectedModel] = useState(DEFAULT_OMNIROUTE_CONFIG.selectedModel);
-  const [customModels, setCustomModels] = useState<string[]>(DEFAULT_OMNIROUTE_CONFIG.availableModels);
-  const [newModelName, setNewModelName] = useState('');
+const OMNIROUTE_CONFIG_KEY = '@omniroute_config';
 
-  const handleSave = () => {
-    // Sauvegarde dans AsyncStorage (à implémenter via storage.ts)
-    Alert.alert('✅ Configuration sauvegardée', `Endpoint: ${endpoint}\nModèle actif: ${selectedModel}`);
+interface OmnirouteConfig {
+  endpoint: string;
+  apiKey: string;
+  selectedModel: string;
+  enabled: boolean;
+}
+
+const DEFAULT_OMNIROUTE: OmnirouteConfig = {
+  endpoint: 'https://api.omniroute.io',
+  apiKey: '',
+  selectedModel: 'gpt-4',
+  enabled: false
+};
+
+export default function SettingsScreen({ navigation }: any) {
+  // Omniroute
+  const [omniroute, setOmniroute] = useState<OmnirouteConfig>(DEFAULT_OMNIROUTE);
+
+  // API Football
+  const [apiConfig, setApiConfig] = useState<APIConfig | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+
+  useEffect(() => {
+    loadConfigs();
+  }, []);
+
+  const loadConfigs = async () => {
+    try {
+      // Charger config Omniroute
+      const omniRaw = await AsyncStorage.getItem(OMNIROUTE_CONFIG_KEY);
+      if (omniRaw) {
+        setOmniroute(JSON.parse(omniRaw));
+      }
+
+      // Charger config API
+      const apiConf = await getAPIConfig();
+      setApiConfig(apiConf);
+    } catch (error) {
+      console.error('Erreur chargement configs:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleTestConnection = async () => {
+  const handleSave = async () => {
+    setSaving(true);
     try {
-      Alert.alert('🔄 Test en cours...', 'Tentative de connexion à Omniroute...');
-      // Test de connexion réel à Omniroute
-      const response = await fetch(`${endpoint}/models`, {
-        headers: apiKey ? { 'Authorization': `Bearer ${apiKey}` } : {}
+      // Sauvegarder Omniroute
+      await AsyncStorage.setItem(OMNIROUTE_CONFIG_KEY, JSON.stringify(omniroute));
+
+      // Sauvegarder API config
+      if (apiConfig) {
+        await saveAPIConfig(apiConfig);
+      }
+
+      Alert.alert('✅ Sauvegardé', 'Configuration enregistrée avec succès');
+    } catch (error) {
+      Alert.alert('❌ Erreur', 'Impossible de sauvegarder la configuration');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleTestOmniroute = async () => {
+    setTesting(true);
+    try {
+      const response = await fetch(`${omniroute.endpoint}/models`, {
+        headers: omniroute.apiKey ? { 'Authorization': `Bearer ${omniroute.apiKey}` } : {},
+        timeout: 10000
+      } as any);
+
+      if (response.ok) {
+        const data = await response.json();
+        Alert.alert('✅ Omniroute OK', `Connexion réussie. ${data.data?.length || 0} modèles disponibles.`);
+      } else {
+        Alert.alert('⚠️ Erreur', `HTTP ${response.status}: ${response.statusText}`);
+      }
+    } catch (error: any) {
+      Alert.alert('❌ Échec', error.message || 'Impossible de joindre Omniroute');
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const handleTestAPIFootball = async () => {
+    if (!apiConfig?.apiFootball) {
+      Alert.alert('⚠️ Clé manquante', 'Veuillez d\'abord configurer votre clé API-Football');
+      return;
+    }
+
+    setTesting(true);
+    try {
+      const response = await fetch('https://v3.football.api-sports.io/status', {
+        headers: {
+          'x-rapidapi-key': apiConfig.apiFootball,
+          'x-rapidapi-host': 'v3.football.api-sports.io'
+        }
       });
 
       if (response.ok) {
         const data = await response.json();
-        Alert.alert('✅ Connexion réussie', `Omniroute accessible. ${data.data?.length || 0} modèles détectés.`);
+        const account = data.response?.account;
+        Alert.alert(
+          '✅ API-Football OK',
+          `Plan: ${account?.firstname || 'Free'}\nRequêtes restantes: ${account?.requests?.current || 'N/A'}`
+        );
       } else {
-        Alert.alert('⚠️ Connexion échouée', `HTTP ${response.status}: ${response.statusText}`);
+        Alert.alert('⚠️ Erreur', `Clé invalide ou quota dépassé (HTTP ${response.status})`);
       }
     } catch (error: any) {
-      Alert.alert('❌ Erreur de connexion', error.message || 'Impossible de joindre Omniroute.');
+      Alert.alert('❌ Échec', error.message || 'Impossible de joindre API-Football');
+    } finally {
+      setTesting(false);
     }
   };
 
-  const handleAddModel = () => {
-    if (!newModelName.trim()) return;
-    if (customModels.includes(newModelName.trim())) {
-      Alert.alert('⚠️ Doublon', 'Ce modèle est déjà dans la liste.');
-      return;
-    }
-    setCustomModels([...customModels, newModelName.trim()]);
-    setNewModelName('');
-  };
-
-  const handleRemoveModel = (model: string) => {
-    setCustomModels(customModels.filter(m => m !== model));
-  };
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#3b82f6" />
+          <Text style={styles.loadingText}>Chargement configuration...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Configuration Omniroute</Text>
-          <Text style={styles.subtitle}>Connecteur multi-modèles IA pour l'analyse</Text>
-        </View>
 
-        {/* Section Endpoint */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Endpoint Omniroute</Text>
+        {/* Bouton Gestion Avancée des API */}
+        <TouchableOpacity
+          style={styles.apiManagementButton}
+          onPress={() => navigation.navigate('APIManagement')}
+        >
+          <View style={styles.apiManagementLeft}>
+            <Ionicons name="server" size={28} color="#10b981" />
+            <View>
+              <Text style={styles.apiManagementTitle}>🌐 Gestion des API</Text>
+              <Text style={styles.apiManagementSubtitle}>
+                20+ sources disponibles • Fixtures, Cotes, Stats xG, Live, IA, Scouting
+              </Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={24} color="#60a5fa" />
+        </TouchableOpacity>
 
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>URL du serveur Omniroute</Text>
-            <TextInput
-              style={styles.input}
-              value={endpoint}
-              onChangeText={setEndpoint}
-              placeholder="http://192.168.x.x:8000/v1"
-              placeholderTextColor="#64748b"
-              autoCapitalize="none"
-              keyboardType="url"
-            />
-            <Text style={styles.helpText}>
-              💡 En local : http://localhost:8000/v1 ou ton IP réseau. En distant : ton URL Cloudflare / Tailscale / Tunnel.
-            </Text>
+        {/* Bouton de sauvegarde des données sur GitHub */}
+        <TouchableOpacity
+          style={styles.gitSyncButton}
+          onPress={() => navigation.navigate('GitSync')}
+        >
+          <View style={styles.apiManagementLeft}>
+            <Ionicons name="git-branch" size={28} color="#f59e0b" />
+            <View>
+              <Text style={styles.apiManagementTitle}>🔄 Sauvegarde GitHub</Text>
+              <Text style={styles.apiManagementSubtitle}>
+                Copie locale vers GitHub toutes les 20 min • Données conservées sur le téléphone
+              </Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={24} color="#60a5fa" />
+        </TouchableOpacity>
+
+        {/* Section Omniroute */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="flask" size={24} color="#3b82f6" />
+            <Text style={styles.sectionTitle}>Configuration Omniroute</Text>
           </View>
 
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Clé API (optionnelle)</Text>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Endpoint</Text>
             <TextInput
               style={styles.input}
-              value={apiKey}
-              onChangeText={setApiKey}
+              value={omniroute.endpoint}
+              onChangeText={(text) => setOmniroute({ ...omniroute, endpoint: text })}
+              placeholder="https://api.omniroute.io"
+              placeholderTextColor="#64748b"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Clé API (optionnel)</Text>
+            <TextInput
+              style={styles.input}
+              value={omniroute.apiKey}
+              onChangeText={(text) => setOmniroute({ ...omniroute, apiKey: text })}
               placeholder="sk-..."
               placeholderTextColor="#64748b"
-              autoCapitalize="none"
               secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
             />
           </View>
 
-          <TouchableOpacity style={styles.testButton} onPress={handleTestConnection}>
-            <Ionicons name="flash" size={16} color="#ffffff" />
-            <Text style={styles.testButtonText}>Tester la Connexion</Text>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Modèle actif</Text>
+            <TextInput
+              style={styles.input}
+              value={omniroute.selectedModel}
+              onChangeText={(text) => setOmniroute({ ...omniroute, selectedModel: text })}
+              placeholder="gpt-4"
+              placeholderTextColor="#64748b"
+              autoCapitalize="none"
+            />
+          </View>
+
+          <View style={styles.switchRow}>
+            <Text style={styles.switchLabel}>Activer Omniroute</Text>
+            <Switch
+              value={omniroute.enabled}
+              onValueChange={(value) => setOmniroute({ ...omniroute, enabled: value })}
+              trackColor={{ false: '#334155', true: '#3b82f6' }}
+              thumbColor={omniroute.enabled ? '#ffffff' : '#94a3b8'}
+            />
+          </View>
+
+          <TouchableOpacity
+            style={[styles.testButton, testing && styles.testButtonDisabled]}
+            onPress={handleTestOmniroute}
+            disabled={testing}
+          >
+            {testing ? (
+              <ActivityIndicator color="#ffffff" size="small" />
+            ) : (
+              <>
+                <Ionicons name="checkmark-circle-outline" size={18} color="#ffffff" />
+                <Text style={styles.testButtonText}>Tester la connexion</Text>
+              </>
+            )}
           </TouchableOpacity>
         </View>
 
-        {/* Section Modèles */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Modèles IA Disponibles</Text>
-
-          <View style={styles.modelsList}>
-            {customModels.map((model, idx) => (
-              <View key={idx} style={styles.modelRow}>
-                <TouchableOpacity
-                  style={[styles.modelRadio, selectedModel === model && styles.modelRadioActive]}
-                  onPress={() => setSelectedModel(model)}
-                >
-                  {selectedModel === model && (
-                    <View style={styles.modelRadioInner} />
-                  )}
-                </TouchableOpacity>
-
-                <Text style={styles.modelName}>{model}</Text>
-
-                <TouchableOpacity onPress={() => handleRemoveModel(model)}>
-                  <Ionicons name="trash-outline" size={18} color="#ef4444" />
-                </TouchableOpacity>
-              </View>
-            ))}
+        {/* Section API Football */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="football" size={24} color="#10b981" />
+            <Text style={styles.sectionTitle}>API Football</Text>
           </View>
 
-          <View style={styles.addModelContainer}>
+          <View style={styles.inputGroup}>
+            <View style={styles.labelRow}>
+              <Text style={styles.label}>API-Football (RapidAPI) ⭐</Text>
+              <TouchableOpacity onPress={() => Alert.alert('ℹ️ Info', 'Source principale recommandée.\n100 requêtes/jour gratuites.\n\nInscription: rapidapi.com/api-sports/api/api-football')}>
+                <Ionicons name="information-circle-outline" size={18} color="#60a5fa" />
+              </TouchableOpacity>
+            </View>
             <TextInput
-              style={styles.addModelInput}
-              value={newModelName}
-              onChangeText={setNewModelName}
-              placeholder="Nom du modèle (ex: llama-3.3-70b)"
+              style={styles.input}
+              value={apiConfig?.apiFootball || ''}
+              onChangeText={(text) => setApiConfig({ ...apiConfig!, apiFootball: text })}
+              placeholder="Votre clé RapidAPI"
               placeholderTextColor="#64748b"
               autoCapitalize="none"
+              autoCorrect={false}
             />
-            <TouchableOpacity style={styles.addModelButton} onPress={handleAddModel}>
-              <Ionicons name="add-circle" size={24} color="#10b981" />
-            </TouchableOpacity>
           </View>
 
-          <Text style={styles.helpText}>
-            💡 Le modèle sélectionné sera utilisé pour toutes les analyses de matchs via Omniroute.
-          </Text>
+          <View style={styles.inputGroup}>
+            <View style={styles.labelRow}>
+              <Text style={styles.label}>TheOddsAPI</Text>
+              <TouchableOpacity onPress={() => Alert.alert('ℹ️ Info', 'Spécialisé cotes temps réel.\n$30/mois (10k requêtes)\n\nInscription: the-odds-api.com')}>
+                <Ionicons name="information-circle-outline" size={18} color="#60a5fa" />
+              </TouchableOpacity>
+            </View>
+            <TextInput
+              style={styles.input}
+              value={apiConfig?.theOddsApi || ''}
+              onChangeText={(text) => setApiConfig({ ...apiConfig!, theOddsApi: text })}
+              placeholder="Clé TheOddsAPI (optionnel)"
+              placeholderTextColor="#64748b"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <View style={styles.labelRow}>
+              <Text style={styles.label}>Football-Data.org</Text>
+              <TouchableOpacity onPress={() => Alert.alert('ℹ️ Info', 'Gratuit (10 req/min).\nTop 5 ligues européennes.\n\nInscription: football-data.org/client/register')}>
+                <Ionicons name="information-circle-outline" size={18} color="#60a5fa" />
+              </TouchableOpacity>
+            </View>
+            <TextInput
+              style={styles.input}
+              value={apiConfig?.footballData || ''}
+              onChangeText={(text) => setApiConfig({ ...apiConfig!, footballData: text })}
+              placeholder="Clé Football-Data (optionnel)"
+              placeholderTextColor="#64748b"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <View style={styles.labelRow}>
+              <Text style={styles.label}>Sportmonks</Text>
+              <TouchableOpacity onPress={() => Alert.alert('ℹ️ Info', 'API complète pro.\n$40/mois (Classic)\n\nInscription: sportmonks.com/register')}>
+                <Ionicons name="information-circle-outline" size={18} color="#60a5fa" />
+              </TouchableOpacity>
+            </View>
+            <TextInput
+              style={styles.input}
+              value={apiConfig?.sportmonks || ''}
+              onChangeText={(text) => setApiConfig({ ...apiConfig!, sportmonks: text })}
+              placeholder="Clé Sportmonks (optionnel)"
+              placeholderTextColor="#64748b"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </View>
+
+          <View style={styles.switchRow}>
+            <Text style={styles.switchLabel}>Fallback automatique</Text>
+            <Switch
+              value={apiConfig?.fallbackEnabled ?? true}
+              onValueChange={(value) => setApiConfig({ ...apiConfig!, fallbackEnabled: value })}
+              trackColor={{ false: '#334155', true: '#10b981' }}
+              thumbColor={apiConfig?.fallbackEnabled ? '#ffffff' : '#94a3b8'}
+            />
+          </View>
+
+          <TouchableOpacity
+            style={[styles.testButton, styles.testButtonGreen, testing && styles.testButtonDisabled]}
+            onPress={handleTestAPIFootball}
+            disabled={testing}
+          >
+            {testing ? (
+              <ActivityIndicator color="#ffffff" size="small" />
+            ) : (
+              <>
+                <Ionicons name="checkmark-circle-outline" size={18} color="#ffffff" />
+                <Text style={styles.testButtonText}>Tester API-Football</Text>
+              </>
+            )}
+          </TouchableOpacity>
         </View>
 
-        {/* Section Données & Sécurité */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Stockage & Données</Text>
-
-          <View style={styles.infoRow}>
-            <Ionicons name="phone-portrait" size={20} color="#10b981" />
-            <View style={styles.infoContent}>
-              <Text style={styles.infoTitle}>100% Local sur ton Téléphone</Text>
-              <Text style={styles.infoText}>
-                Tous les paris, leçons, calibrations et rapports sont stockés dans une base SQLite locale.
-                Aucune donnée n'est envoyée à un serveur externe (hors appels Omniroute pour analyse).
-              </Text>
-            </View>
+        {/* Section Informations */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="help-circle" size={24} color="#f59e0b" />
+            <Text style={styles.sectionTitle}>Aide</Text>
           </View>
 
-          <View style={styles.infoRow}>
-            <Ionicons name="shield-checkmark" size={20} color="#3b82f6" />
-            <View style={styles.infoContent}>
-              <Text style={styles.infoTitle}>Cadre Éthique Strict</Text>
-              <Text style={styles.infoText}>
-                Aucun conseil de mise. Aucun vocabulaire de certitude. Zéro hallucination.
-                L'IA est bridée par les leçons apprises et le validateur automatique.
-              </Text>
-            </View>
+          <View style={styles.infoBox}>
+            <Text style={styles.infoText}>
+              <Text style={styles.infoBold}>Configuration minimale :</Text>{'\n'}
+              • API-Football gratuite (100 req/jour){'\n'}
+              • Suffit pour tester l'app{'\n\n'}
+
+              <Text style={styles.infoBold}>Configuration optimale :</Text>{'\n'}
+              • API-Football Pro ($10/mois){'\n'}
+              • TheOddsAPI ($30/mois){'\n'}
+              • Cotes temps réel + fallback{'\n\n'}
+
+              <Text style={styles.infoBold}>Sécurité :</Text>{'\n'}
+              • Clés stockées localement uniquement{'\n'}
+              • Jamais envoyées à des tiers{'\n'}
+              • Chiffrées au repos sur Android
+            </Text>
           </View>
+
+          <TouchableOpacity
+            style={styles.linkButton}
+            onPress={() => Alert.alert('📖 Documentation', 'Consultez API-INTEGRATION-GUIDE.md dans le projet pour la liste complète des API disponibles et leurs tarifs.')}
+          >
+            <Ionicons name="document-text-outline" size={18} color="#60a5fa" />
+            <Text style={styles.linkButtonText}>Voir le guide complet des API</Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Bouton Sauvegarde */}
-        <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-          <Ionicons name="save" size={18} color="#ffffff" />
-          <Text style={styles.saveButtonText}>Enregistrer la Configuration</Text>
+        {/* Bouton Sauvegarder */}
+        <TouchableOpacity
+          style={[styles.saveButton, saving && styles.saveButtonDisabled]}
+          onPress={handleSave}
+          disabled={saving}
+        >
+          {saving ? (
+            <ActivityIndicator color="#ffffff" size="small" />
+          ) : (
+            <>
+              <Ionicons name="save" size={20} color="#ffffff" />
+              <Text style={styles.saveButtonText}>Sauvegarder la configuration</Text>
+            </>
+          )}
         </TouchableOpacity>
 
-        <Text style={styles.version}>APP adlane v1.0.0 • Conforme HANDOFF-PARIS-FOOT.md</Text>
       </ScrollView>
     </SafeAreaView>
   );
@@ -197,168 +424,181 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#0f172a',
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 14,
+    color: '#94a3b8',
+    marginTop: 12,
+  },
   scrollContent: {
     padding: 16,
     paddingBottom: 40,
   },
-  header: {
-    marginBottom: 16,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#f8fafc',
-  },
-  subtitle: {
-    fontSize: 13,
-    color: '#94a3b8',
-    marginTop: 2,
-  },
-  card: {
+  apiManagementButton: {
     backgroundColor: '#1e293b',
     borderRadius: 12,
     padding: 16,
+    marginBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 2,
+    borderColor: '#10b981',
+  },
+  gitSyncButton: {
+    backgroundColor: '#1e293b',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 2,
+    borderColor: '#f59e0b',
+  },
+  apiManagementLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  apiManagementTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#f8fafc',
+    marginBottom: 4,
+  },
+  apiManagementSubtitle: {
+    fontSize: 11,
+    color: '#94a3b8',
+    lineHeight: 16,
+  },
+  section: {
+    backgroundColor: '#1e293b',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: '#334155',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 10,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#f8fafc',
+  },
+  inputGroup: {
     marginBottom: 16,
   },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#f1f5f9',
-    marginBottom: 12,
-  },
-  inputContainer: {
-    marginBottom: 14,
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
   },
   label: {
-    fontSize: 12,
-    color: '#94a3b8',
-    marginBottom: 6,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#cbd5e1',
+    marginBottom: 8,
   },
   input: {
     backgroundColor: '#0f172a',
-    borderRadius: 8,
     borderWidth: 1,
     borderColor: '#334155',
-    padding: 10,
-    color: '#f8fafc',
+    borderRadius: 8,
+    padding: 12,
     fontSize: 14,
+    color: '#f8fafc',
   },
-  helpText: {
-    fontSize: 11,
-    color: '#64748b',
-    marginTop: 6,
-    lineHeight: 16,
+  switchRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#334155',
+    marginTop: 8,
+  },
+  switchLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#cbd5e1',
   },
   testButton: {
-    backgroundColor: '#f59e0b',
+    backgroundColor: '#3b82f6',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 12,
     borderRadius: 8,
-    gap: 6,
+    marginTop: 12,
+    gap: 8,
+  },
+  testButtonGreen: {
+    backgroundColor: '#10b981',
+  },
+  testButtonDisabled: {
+    opacity: 0.6,
   },
   testButtonText: {
     color: '#ffffff',
+    fontSize: 14,
     fontWeight: 'bold',
-    fontSize: 13,
   },
-  modelsList: {
-    marginBottom: 12,
-  },
-  modelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 10,
+  infoBox: {
     backgroundColor: '#0f172a',
     borderRadius: 8,
-    marginBottom: 6,
-    gap: 10,
-  },
-  modelRadio: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: '#64748b',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modelRadioActive: {
-    borderColor: '#3b82f6',
-  },
-  modelRadioInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#3b82f6',
-  },
-  modelName: {
-    fontSize: 13,
-    color: '#f8fafc',
-    flex: 1,
-    fontWeight: '500',
-  },
-  addModelContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
-  },
-  addModelInput: {
-    flex: 1,
-    backgroundColor: '#0f172a',
-    borderRadius: 8,
+    padding: 14,
     borderWidth: 1,
     borderColor: '#334155',
-    padding: 10,
-    color: '#f8fafc',
-    fontSize: 13,
-  },
-  addModelButton: {
-    padding: 4,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 14,
-  },
-  infoContent: {
-    flex: 1,
-  },
-  infoTitle: {
-    fontSize: 13,
-    fontWeight: 'bold',
-    color: '#f8fafc',
-    marginBottom: 4,
   },
   infoText: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#94a3b8',
-    lineHeight: 16,
+    lineHeight: 18,
+  },
+  infoBold: {
+    fontWeight: 'bold',
+    color: '#cbd5e1',
+  },
+  linkButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    marginTop: 12,
+    gap: 8,
+  },
+  linkButtonText: {
+    color: '#60a5fa',
+    fontSize: 13,
+    fontWeight: '600',
   },
   saveButton: {
     backgroundColor: '#10b981',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 14,
-    borderRadius: 8,
-    marginTop: 8,
-    gap: 8,
+    padding: 16,
+    borderRadius: 12,
+    gap: 10,
+  },
+  saveButtonDisabled: {
+    opacity: 0.6,
   },
   saveButtonText: {
     color: '#ffffff',
+    fontSize: 16,
     fontWeight: 'bold',
-    fontSize: 15,
-  },
-  version: {
-    fontSize: 11,
-    color: '#64748b',
-    textAlign: 'center',
-    marginTop: 20,
-    fontStyle: 'italic',
   },
 });
