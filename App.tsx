@@ -7,6 +7,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { initDatabase } from './src/database/storage';
 import DashboardScreen from './src/screens/DashboardScreen';
+import DailyPlanScreen from './src/screens/DailyPlanScreen';
 import ScoutingScreen from './src/screens/ScoutingScreen';
 import EvolutionScreen from './src/screens/EvolutionScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
@@ -26,7 +27,9 @@ export default function App() {
           tabBarIcon: ({ focused, color, size }) => {
             let iconName: keyof typeof Ionicons.glyphMap;
 
-            if (route.name === 'Dashboard') {
+            if (route.name === 'Planning') {
+              iconName = focused ? 'calendar' : 'calendar-outline';
+            } else if (route.name === 'Dashboard') {
               iconName = focused ? 'stats-chart' : 'stats-chart-outline';
             } else if (route.name === 'Scouting') {
               iconName = focused ? 'search' : 'search-outline';
@@ -65,6 +68,11 @@ export default function App() {
           },
         })}
       >
+        <Tab.Screen
+          name="Planning"
+          component={DailyPlanScreen}
+          options={{ title: 'Planning du Jour' }}
+        />
         <Tab.Screen
           name="Dashboard"
           component={DashboardScreen}
