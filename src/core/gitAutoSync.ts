@@ -189,10 +189,15 @@ async function getRemoteFileSha(
   token: string,
   repositoryPath: string
 ): Promise<{ sha: string | null; message?: string }> {
-  const response = await fetch(
-    `https://api.github.com/repos/${encodeURIComponent(config.repoOwner)}/${encodeURIComponent(config.repoName)}/contents/${repositoryPath}?ref=${encodeURIComponent(config.branch)}`,
-    { headers: githubHeaders(token) }
-  );
+  // Ajout d'un paramètre timestamp pour éviter le cache de l'API GitHub
+  const url = `https://api.github.com/repos/${encodeURIComponent(config.repoOwner)}/${encodeURIComponent(config.repoName)}/contents/${repositoryPath}?ref=${encodeURIComponent(config.branch)}&t=${Date.now()}`;
+
+  const response = await fetch(url, {
+    headers: {
+      ...githubHeaders(token),
+      'Cache-Control': 'no-cache'
+    }
+  });
 
   if (response.status === 404) {
     return { sha: null };

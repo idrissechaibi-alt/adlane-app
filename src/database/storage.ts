@@ -4,6 +4,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SQLite from 'expo-sqlite';
 import { Bet, Lesson, MarketCalibration, OmnirouteConfig, DailyReport } from '../types';
+import { HISTORICAL_BETS, HISTORICAL_LESSONS, INITIAL_CALIBRATIONS } from '../data/historical';
 
 const DB_NAME = 'app_adlane.db';
 
@@ -87,6 +88,58 @@ export async function initDatabase(): Promise<void> {
   `);
 
   console.log('✅ Base de données locale initialisée');
+}
+
+/**
+ * Remplit la base de données avec les données historiques si elle est vide.
+ * Cela permet d'éviter d'avoir un Dashboard vide au premier lancement.
+ */
+export async function seedDatabaseIfEmpty(): Promise<void> {
+  if (!db) await initDatabase();
+
+  const bets = await getAllBets();
+  if (bets.length > 0) {
+    console.log('ℹ️ Base de données déjà alimentée');
+    return;
+  }
+
+  console.log('🌱 Alimentation de la base de données avec les données historiques...');
+
+  await db!.transactionAsync(async (tx) => {
+    // Import des paris
+    for (const bet of HISTORICAL_BETS) {
+      await tx.runAsync(
+        `INSERT INTO bets VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [
+          bet.id, bet.version, bet.date, bet.creneau_utc, bet.creneau_display,
+          bet.league, JSON.stringify(bet.legs), bet.odds ?? null, bet.stake ?? null,
+          bet.payout ?? null, bet.net_pnl ?? null, bet.excluded_from_pnl ? 1 : 0,
+          bet.status, bet.played ? 1 : 0, bet.confiance ?? null, bet.confidence_level,
+          bet.analysis, bet.resultat_verif ?? null, JSON.stringify(bet.validation_flags),
+          bet.createdAt, bet.updatedAt
+        ]
+      );
+    }
+
+    // Import des leçons
+    for (const lesson of HISTORICAL_LESSONS) {
+      await tx.runAsync(
+        `INSERT INTO lessons VALUES (?,?,?,?,?,?)`,
+        [lesson.doc_id, lesson.motif, lesson.occurrences, lesson.regle_validation, lesson.detail, lesson.derniere_maj]
+      );
+    }
+
+    // Import des calibrations
+    for (const cal of INITIAL_CALIBRATIONS) {
+      await tx.runAsync(
+        `INSERT INTO calibrations VALUES (?,?,?,?,?,?,?,?)`,
+        [cal.market, cal.league ?? null, cal.total_predictions, cal.predictions_won,
+         cal.actual_success_rate, cal.avg_predicted_prob, cal.calibration_status, cal.last_updated]
+      );
+    }
+  });
+
+  console.log('✅ Importation des données historiques terminée');
 }
 
 // ==================== BETS ====================

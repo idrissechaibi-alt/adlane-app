@@ -6,7 +6,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
-import { initDatabase } from './src/database/storage';
+import { initDatabase, seedDatabaseIfEmpty } from './src/database/storage';
 import { startAutoSync } from './src/core/gitAutoSync';
 import DashboardScreen from './src/screens/DashboardScreen';
 import DailyPlanScreen from './src/screens/DailyPlanScreen';
@@ -60,11 +60,20 @@ function FootballPlaceholder() {
 
 export default function App() {
   useEffect(() => {
-    // Initialiser la base de données locale au démarrage
-    initDatabase().catch(console.error);
+    const setupApp = async () => {
+      try {
+        // Initialiser la base de données locale
+        await initDatabase();
+        // Remplir si vide (fix P&L vide)
+        await seedDatabaseIfEmpty();
+        // Démarrer la synchronisation automatique Git/GitHub
+        await startAutoSync();
+      } catch (error) {
+        console.error('Erreur initialisation App:', error);
+      }
+    };
 
-    // Démarrer la synchronisation automatique Git/GitHub
-    startAutoSync().catch(console.error);
+    setupApp();
   }, []);
 
   return (
