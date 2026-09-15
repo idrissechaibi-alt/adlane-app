@@ -23,8 +23,10 @@ import {
   startAutoSync,
   stopAutoSync,
   syncDataToGitHub,
+  syncDataFromGitHub,
   GitHubDataSyncConfig,
 } from '../core/gitAutoSync';
+import * as Updates from 'expo-updates';
 
 export default function GitSyncScreen({ navigation }: any) {
   const [config, setConfig] = useState<GitHubDataSyncConfig | null>(null);
@@ -36,6 +38,7 @@ export default function GitSyncScreen({ navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [updating, setUpdating] = useState(false);
 
   useEffect(() => {
     void loadData();
@@ -109,6 +112,71 @@ export default function GitSyncScreen({ navigation }: any) {
       Alert.alert('❌ Erreur', error instanceof Error ? error.message : 'Une erreur inattendue est survenue.');
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const handleRestore = async () => {
+    Alert.alert(
+      '📥 Restaurer les données ?',
+      'Cette action remplacera TOUS vos paris et leçons locaux par la version sur GitHub.',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Restaurer',
+          style: 'destructive',
+          onPress: async () => {
+            setSyncing(true);
+            setLogs([]);
+            try {
+              const result = await syncDataFromGitHub();
+              setLogs(result.logs);
+              if (result.success) {
+                Alert.alert('✅ Restauration terminée', 'Les données locales ont été mises à jour.');
+              } else {
+                Alert.alert('⚠️ Échec', result.logs.join('\n'));
+              }
+            } catch (error) {
+              Alert.alert('❌ Erreur', error instanceof Error ? error.message : 'Erreur de restauration.');
+            } finally {
+              setSyncing(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleCheckUpdate = async () => {
+    if (__DEV__) {
+      Alert.alert('Mises à jour indisponibles', 'En mode développement, les mises à jour OTA ne sont pas actives.');
+      return;
+    }
+
+    setUpdating(true);
+    try {
+      const update = await Updates.checkForUpdateAsync();
+      if (update.isAvailable) {
+        Alert.alert(
+          '🚀 Mise à jour disponible',
+          'Une nouvelle version de l’application est prête. Voulez-vous l’installer maintenant ?',
+          [
+            { text: 'Plus tard', style: 'cancel' },
+            {
+              text: 'Mettre à jour',
+              onPress: async () => {
+                await Updates.fetchUpdateAsync();
+                await Updates.reloadAsync();
+              },
+            },
+          ]
+        );
+      } else {
+        Alert.alert('✅ À jour', 'Vous utilisez déjà la dernière version disponible.');
+      }
+    } catch (error) {
+      Alert.alert('❌ Erreur', 'Impossible de vérifier les mises à jour.');
+    } finally {
+      setUpdating(false);
     }
   };
 
@@ -255,6 +323,16 @@ export default function GitSyncScreen({ navigation }: any) {
           <Text style={styles.primaryButtonText}>Créer une sauvegarde maintenant</Text>
         </TouchableOpacity>
 
+        <TouchableOpacity disabled={syncing || saving} onPress={() => void handleRestore()} style={[styles.restoreButton, (syncing || saving) && styles.disabledButton]}>
+          {syncing ? <ActivityIndicator color="#ffffff" /> : <Ionicons color="#ffffff" name="cloud-download-outline" size={20} />}
+          <Text style={styles.primaryButtonText}>Restaurer les données GitHub</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity disabled={updating} onPress={() => void handleCheckUpdate()} style={[styles.otaButton, updating && styles.disabledButton]}>
+          {updating ? <ActivityIndicator color="#ffffff" /> : <Ionicons color="#ffffff" name="rocket-outline" size={20} />}
+          <Text style={styles.primaryButtonText}>Vérifier les mises à jour de l'app</Text>
+        </TouchableOpacity>
+
         {config.enabled && (
           <TouchableOpacity onPress={handleDisable} style={styles.disableButton}>
             <Text style={styles.disableButtonText}>Désactiver la sauvegarde</Text>
@@ -311,6 +389,8 @@ const styles = StyleSheet.create({
   primaryButton: { alignItems: 'center', backgroundColor: '#3b82f6', borderRadius: 12, flexDirection: 'row', gap: 10, justifyContent: 'center', marginBottom: 12, padding: 16 },
   primaryButtonText: { color: '#ffffff', fontSize: 15, fontWeight: '700' },
   secondaryButton: { alignItems: 'center', backgroundColor: '#10b981', borderRadius: 12, flexDirection: 'row', gap: 10, justifyContent: 'center', marginBottom: 12, padding: 16 },
+  restoreButton: { alignItems: 'center', backgroundColor: '#f59e0b', borderRadius: 12, flexDirection: 'row', gap: 10, justifyContent: 'center', marginBottom: 12, padding: 16 },
+  otaButton: { alignItems: 'center', backgroundColor: '#8b5cf6', borderRadius: 12, flexDirection: 'row', gap: 10, justifyContent: 'center', marginBottom: 12, padding: 16 },
   statusLabel: { color: '#94a3b8', fontSize: 13 },
   statusRow: { alignItems: 'center', borderBottomColor: '#334155', borderBottomWidth: 1, flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 11 },
   statusValue: { color: '#f8fafc', fontSize: 12, fontWeight: '600', maxWidth: '60%', textAlign: 'right' },

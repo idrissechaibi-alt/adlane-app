@@ -263,3 +263,66 @@ export async function getOmnirouteConfig(): Promise<OmnirouteConfig | null> {
   const json = await AsyncStorage.getItem(CONFIG_KEY);
   return json ? JSON.parse(json) : null;
 }
+
+// ==================== RESTORE SNAPSHOT ====================
+
+export async function restoreSnapshot(data: {
+  bets: Bet[];
+  lessons: Lesson[];
+  calibrations: MarketCalibration[];
+  dailyReports: DailyReport[];
+}): Promise<void> {
+  if (!db) throw new Error('Database not initialized');
+
+  await db.transactionAsync(async (tx) => {
+    // Nettoyage complet
+    await tx.runAsync('DELETE FROM bets');
+    await tx.runAsync('DELETE FROM lessons');
+    await tx.runAsync('DELETE FROM calibrations');
+    await tx.runAsync('DELETE FROM daily_reports');
+
+    // Restauration des paris
+    for (const bet of data.bets) {
+      await tx.runAsync(
+        `INSERT INTO bets VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [
+          bet.id, bet.version, bet.date, bet.creneau_utc, bet.creneau_display,
+          bet.league, JSON.stringify(bet.legs), bet.odds ?? null, bet.stake ?? null,
+          bet.payout ?? null, bet.net_pnl ?? null, bet.excluded_from_pnl ? 1 : 0,
+          bet.status, bet.played ? 1 : 0, bet.confiance ?? null, bet.confidence_level,
+          bet.analysis, bet.resultat_verif ?? null, JSON.stringify(bet.validation_flags),
+          bet.createdAt, bet.updatedAt
+        ]
+      );
+    }
+
+    // Restauration des leçons
+    for (const lesson of data.lessons) {
+      await tx.runAsync(
+        `INSERT INTO lessons VALUES (?,?,?,?,?,?)`,
+        [lesson.doc_id, lesson.motif, lesson.occurrences, lesson.regle_validation, lesson.detail, lesson.derniere_maj]
+      );
+    }
+
+    // Restauration des calibrations
+    for (const cal of data.calibrations) {
+      await tx.runAsync(
+        `INSERT INTO calibrations VALUES (?,?,?,?,?,?,?,?)`,
+        [cal.market, cal.league ?? null, cal.total_predictions, cal.predictions_won,
+         cal.actual_success_rate, cal.avg_predicted_prob, cal.calibration_status, cal.last_updated]
+      );
+    }
+
+    // Restauration des rapports
+    for (const report of data.dailyReports) {
+      await tx.runAsync(
+        `INSERT INTO daily_reports VALUES (?,?,?,?,?,?,?,?,?,?)`,
+        [report.date, report.bets_settled, report.bets_won, report.bets_lost,
+         report.total_stake, report.total_return, report.net_pnl, report.roi,
+         JSON.stringify(report.lessons_learned), report.details]
+      );
+    }
+  });
+
+  console.log('✅ Base de données restaurée avec succès');
+}

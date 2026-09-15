@@ -8,27 +8,62 @@ import {
   View,
   ScrollView,
   TouchableOpacity,
-  SafeAreaView
+  SafeAreaView,
+  ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { HISTORICAL_BETS, HISTORICAL_LESSONS, INITIAL_CALIBRATIONS } from '../data/historical';
+import { getAllBets, getAllLessons, getAllCalibrations } from '../database/storage';
 import { computeMarketCalibrations } from '../core/calibration';
 import { generateDailyReport, generateImprovementReport } from '../core/reporter';
-import { MarketCalibration, Lesson } from '../types';
+import { MarketCalibration, Lesson, Bet, DailyReport } from '../types';
+import { useIsFocused } from '@react-navigation/native';
 
 export default function EvolutionScreen() {
-  const [calibrations, setCalibrations] = useState<MarketCalibration[]>(INITIAL_CALIBRATIONS);
-  const [lessons, setLessons] = useState<Lesson[]>(HISTORICAL_LESSONS);
+  const isFocused = useIsFocused();
+  const [calibrations, setCalibrations] = useState<MarketCalibration[]>([]);
+  const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [bets, setBets] = useState<Bet[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedTab, setSelectedTab] = useState<'calibration' | 'lessons' | 'report'>('calibration');
 
-  const dailyReport = generateDailyReport('2026-09-13', HISTORICAL_BETS);
-  const improvementReport = generateImprovementReport(calibrations, lessons);
-
   useEffect(() => {
-    // Recalculer la calibration à partir des paris réglés
-    const freshCalibrations = computeMarketCalibrations(HISTORICAL_BETS);
-    setCalibrations(freshCalibrations);
-  }, []);
+    if (isFocused) {
+      void loadData();
+    }
+  }, [isFocused]);
+
+  const loadData = async () => {
+    try {
+      const [dbBets, dbLessons, dbCalibrations] = await Promise.all([
+        getAllBets(),
+        getAllLessons(),
+        getAllCalibrations(),
+      ]);
+
+      setBets(dbBets);
+      setLessons(dbLessons);
+
+      // Recalculer la calibration à partir des paris réglés
+      const freshCalibrations = computeMarketCalibrations(dbBets);
+      setCalibrations(freshCalibrations.length > 0 ? freshCalibrations : dbCalibrations);
+    } catch (error) {
+      console.error('Erreur chargement Evolution:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const dailyReport = generateDailyReport('2026-09-13', bets);
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.centered}>
+          <ActivityIndicator color="#3b82f6" size="large" />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   const renderCalibrationView = () => (
     <View>
@@ -222,6 +257,11 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: '#f8fafc',
+  },
+  centered: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   subtitle: {
     fontSize: 13,

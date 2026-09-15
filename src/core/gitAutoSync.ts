@@ -4,7 +4,8 @@
 import { Directory, EncodingType, File, Paths } from 'expo-file-system';
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getAllBets, getAllCalibrations, getAllLessons, getDailyReports } from '../database/storage';
+import { getAllBets, getAllCalibrations, getAllLessons, getDailyReports, restoreSnapshot } from '../database/storage';
+import * as Buffer from 'buffer';
 
 const SYNC_CONFIG_KEY = '@github_data_sync_config';
 const LAST_SYNC_KEY = '@last_github_data_sync';
@@ -328,8 +329,8 @@ export async function syncDataToGitHub(
 }
 
 /**
- * Le téléchargement n'est pas automatique : restaurer des données distantes peut remplacer
- * les données locales et doit toujours rester une action consciente.
+ * Télécharge la sauvegarde depuis GitHub et l'installe dans la base de données locale.
+ * Cette action remplace les données actuelles de l'application.
  */
 export async function syncDataFromGitHub(): Promise<{
   success: boolean;
@@ -338,16 +339,90 @@ export async function syncDataFromGitHub(): Promise<{
   failedFiles: number;
   skippedFiles: number;
 }> {
-  return {
-    success: false,
-    logs: [
-      '⚠️ Restauration distante désactivée pour protéger les données locales.',
-      'Les sauvegardes GitHub sont des copies de secours ; elles ne remplacent jamais automatiquement la base locale.',
-    ],
-    downloadedFiles: 0,
-    failedFiles: 0,
-    skippedFiles: 1,
-  };
+  const logs: string[] = [];
+  try {
+    const config = await getGitHubSyncConfig();
+    const token = await getGitHubToken();
+
+    if (!token) {
+      return {
+        success: false,
+        logs: ['❌ Token GitHub absent. Ajoutez-le dans les paramètres.'],
+        downloadedFiles: 0,
+        failedFiles: 1,
+        skippedFiles: 0,
+      };
+    }
+
+    const repositoryPath = `${normalizeFolderPath(config.dataFolderPath)}/app-adlane-data.json`;
+    logs.push(`🔄 Recherche de la sauvegarde sur GitHub...`);
+
+    const response = await fetch(
+      `https://api.github.com/repos/${encodeURIComponent(config.repoOwner)}/${encodeURIComponent(config.repoName)}/contents/${repositoryPath}?ref=${encodeURIComponent(config.branch)}`,
+      {
+        headers: {
+          ...githubHeaders(token),
+          Accept: 'application/vnd.github.v3.raw',
+        },
+      }
+    );
+
+    if (response.status === 404) {
+      return {
+        success: false,
+        logs: [...logs, `❌ Aucune sauvegarde trouvée à l'emplacement : ${repositoryPath}`],
+        downloadedFiles: 0,
+        failedFiles: 1,
+        skippedFiles: 0,
+      };
+    }
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ message: response.statusText }));
+      return {
+        success: false,
+        logs: [...logs, `❌ Erreur GitHub (${response.status}) : ${errorData.message}`],
+        downloadedFiles: 0,
+        failedFiles: 1,
+        skippedFiles: 0,
+      };
+    }
+
+    const payload = await response.json() as SyncPayload;
+
+    if (payload.source !== 'APP adlane') {
+      return {
+        success: false,
+        logs: [...logs, '❌ Le fichier trouvé n’est pas une sauvegarde Adlane valide.'],
+        downloadedFiles: 0,
+        failedFiles: 1,
+        skippedFiles: 0,
+      };
+    }
+
+    logs.push(`📥 Sauvegarde récupérée (datant du ${new Date(payload.exportedAt).toLocaleString()})`);
+    logs.push('🔄 Restauration dans SQLite...');
+
+    await restoreSnapshot(payload.data);
+
+    logs.push('✅ Restauration terminée avec succès !');
+    return {
+      success: true,
+      logs,
+      downloadedFiles: 1,
+      failedFiles: 0,
+      skippedFiles: 0,
+    };
+  } catch (error) {
+    console.error('Erreur restauration GitHub:', error);
+    return {
+      success: false,
+      logs: [`❌ Erreur pendant la restauration : ${safeErrorMessage(error)}`],
+      downloadedFiles: 0,
+      failedFiles: 1,
+      skippedFiles: 0,
+    };
+  }
 }
 
 /** Sauvegarde automatiquement toutes les 20 minutes lorsque l'option est activée. */

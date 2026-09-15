@@ -9,26 +9,54 @@ import {
   ScrollView,
   TouchableOpacity,
   RefreshControl,
-  SafeAreaView
+  SafeAreaView,
+  ActivityIndicator
 } from 'react-native';
 import { Bet } from '../types';
-import { HISTORICAL_BETS } from '../data/historical';
+import { getAllBets } from '../database/storage';
 import { calculateDailySummary, calculateLedgerSummary, LedgerSummary } from '../core/ledger';
 import { Ionicons } from '@expo/vector-icons';
+import { useIsFocused } from '@react-navigation/native';
 
 export default function DashboardScreen() {
-  const [bets, setBets] = useState<Bet[]>(HISTORICAL_BETS);
+  const isFocused = useIsFocused();
+  const [bets, setBets] = useState<Bet[]>([]);
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedDate, setSelectedDate] = useState('2026-09-13');
 
-  const dailySummary: LedgerSummary = calculateDailySummary(bets, selectedDate);
-  const cumulativeSummary: LedgerSummary = calculateLedgerSummary(bets);
+  useEffect(() => {
+    if (isFocused) {
+      void loadBets();
+    }
+  }, [isFocused]);
+
+  const loadBets = async () => {
+    try {
+      const data = await getAllBets();
+      setBets(data);
+    } catch (error) {
+      console.error('Erreur chargement paris:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
 
   const onRefresh = () => {
     setRefreshing(true);
-    // Recharger
-    setRefreshing(false);
+    void loadBets();
   };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.centered}>
+          <ActivityIndicator color="#3b82f6" size="large" />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -259,6 +287,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: '#f1f5f9',
+  },
+  centered: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   statsGrid: {
     flexDirection: 'row',
