@@ -174,7 +174,11 @@ export default function GitSyncScreen({ navigation }: any) {
         Alert.alert('✅ À jour', 'Vous utilisez déjà la dernière version disponible.');
       }
     } catch (error) {
-      Alert.alert('❌ Erreur', 'Impossible de vérifier les mises à jour.');
+      console.error('Erreur check updates:', error);
+      Alert.alert(
+        '❌ Erreur',
+        `Impossible de vérifier les mises à jour.\n\nDétail : ${error instanceof Error ? error.message : String(error)}`
+      );
     } finally {
       setUpdating(false);
     }
