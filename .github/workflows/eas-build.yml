@@ -17,6 +17,4 @@ jobs:
         with:
           eas-version: latest
           token: ${{ secrets.EAS_TOKEN }}
-      - run: npx eas build --platform android --profile preview --non-interactive
-        env:
-          EAS_NO_VCS: "1"
+      - run: eas build --platform android --profile preview --non-interactive

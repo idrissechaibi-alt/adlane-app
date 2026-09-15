@@ -37,7 +37,9 @@ yarn-error.*
 
 # Local app data and GitHub credentials must never be committed
 app-adlane-data/
-data/
+/data/
+!src/data/
+.tools/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
