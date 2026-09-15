@@ -1,20 +1,29 @@
-name: EAS Build
+name: EAS Update (OTA)
 on:
   push:
     branches:
       - main
 jobs:
-  build:
+  update:
+    name: Publish Update
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm install
-      - run: npm install -g eas-cli
-      - uses: expo/expo-github-action@v9
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
         with:
           eas-version: latest
           token: ${{ secrets.EAS_TOKEN }}
-      - run: eas build --platform android --profile preview --non-interactive
+
+      - name: Publish update to production
+        run: eas update --branch production --message "${{ github.event.head_commit.message }}" --non-interactive
