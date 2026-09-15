@@ -1,0 +1,57 @@
+{
+  "app": "Adlane",
+  "version": "1.0.0",
+  "description": "App de suivi et analyse de paris football — Alimentée par Omniroute",
+
+  "omniroute": {
+    "endpoint": "http://localhost:8000/v1",
+    "apiKey": "TON_API_KEY_OMNIROUTE",
+    "selectedModel": "claude-3-5-sonnet",
+
+    "availableModels": [
+      "claude-3-5-sonnet",
+      "claude-3-opus",
+      "gpt-4o",
+      "deepseek-r1",
+      "deepseek-v3",
+      "qwen-2.5-72b",
+      "llama-3.3-70b"
+    ],
+
+    "temperature": 0.2,
+    "systemPrompt": "VOIR PROMPT_SYTEME_COMPLET.md"
+  },
+
+  "rules": {
+    "noBettingAdvice": true,
+    "noCertaintyLanguage": true,
+    "probabilisticOnly": true,
+    "maxConfidenceNoHistoryMarkets": "Moyen"
+  },
+
+  "markets": [
+    { "id": "1X2", "name": "1X2 (1/N/2)", "confidenceMax": "Élevé" },
+    { "id": "BTTS", "name": "Both Teams To Score", "confidenceMax": "Élevé" },
+    { "id": "OU_2_5", "name": "Over/Under 2.5", "confidenceMax": "Élevé" },
+    { "id": "corners", "name": "Corners", "confidenceMax": "Moyen" },
+    { "id": "shots_on_target", "name": "Tirs cadrés", "confidenceMax": "Moyen" },
+    { "id": "fouls", "name": "Fautes", "confidenceMax": "Moyen" },
+    { "id": "cards", "name": "Cartons", "confidenceMax": "Moyen" },
+    { "id": "saves", "name": "Arrêts", "confidenceMax": "Moyen" }
+  ],
+
+  "blockers": [
+    { "id": "BLOCK_1X2_SOUS_50", "description": "Jambe 1X2 avec proba estimée < 50%" },
+    { "id": "BLOCK_COTE_MANQUANTE", "description": "Une jambe sans cote publiée" },
+    { "id": "BLOCK_KICKOFF_DEPASSE", "description": "Coup d'envoi déjà passé" },
+    { "id": "ERROR_AUTO_ANNULATION", "description": "Sélections opposées dans même session" }
+  ],
+
+  "warnings": [
+    { "id": "WARN_EXPOSITION_MATCH", "description": "Même match dans > 2 slips" },
+    { "id": "WARN_BTTS_NON_CALIBRE", "description": "BTTS sur équipe en disette offensive" },
+    { "id": "WARN_MARCHE_SANS_HISTO", "description": "Marché sans historique avec confiance Élevé" }
+  ],
+
+  "lessons": "VOIR LESSONS.json"
+}
