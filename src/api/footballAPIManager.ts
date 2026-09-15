@@ -24,7 +24,7 @@ export interface FootballAPIConfig {
 }
 
 export const DEFAULT_CONFIG: FootballAPIConfig = {
-  ballDontLie: { apiKey: '' },
+  ballDontLie: { apiKey: '', apiHost: 'v3.football.api-sports.io' },
   sofaScore: { useScrapingFallback: true },
   footballData: { apiKey: '' },
   theOddsAPI: { apiKey: '', region: 'us' },
@@ -58,7 +58,7 @@ export class FootballAPIManager {
   ): Promise<APIResponse<FootballMatch[]>> {
     const results: APIResponse<FootballMatch[]>[] = [];
 
-    for (const source of this.config.priority) {
+    for (const source of this.config.priority!) {
       let result: APIResponse<FootballMatch[]>;
 
       switch (source) {
@@ -111,7 +111,7 @@ export class FootballAPIManager {
   async getMatchStatistics(
     matchId: string
   ): Promise<APIResponse<MatchStatistics>> {
-    for (const source of this.config.priority) {
+    for (const source of this.config.priority!) {
       let result: APIResponse<MatchStatistics>;
 
       switch (source) {
@@ -159,7 +159,7 @@ export class FootballAPIManager {
   async getMatchOdds(
     matchId: string
   ): Promise<APIResponse<MarketOdds[]>> {
-    for (const source of this.config.priority) {
+    for (const source of this.config.priority!) {
       let result: APIResponse<MarketOdds[]>;
 
       switch (source) {
@@ -199,7 +199,7 @@ export class FootballAPIManager {
   async getTeamInfo(
     teamId: string
   ): Promise<APIResponse<Team>> {
-    for (const source of this.config.priority) {
+    for (const source of this.config.priority!) {
       let result: APIResponse<Team>;
 
       switch (source) {
@@ -318,8 +318,8 @@ export class FootballAPIManager {
 /**
  * Crée un manager avec la configuration par défaut
  */
-export function createFootballAPIManager(config: FootballAPIConfig = {}): FootballAPIManager {
-  return new FootballAPIManager(config);
+export function createFootballAPIManager(config: Partial<FootballAPIConfig> = {}): FootballAPIManager {
+  return new FootballAPIManager({ ...DEFAULT_CONFIG, ...config });
 }
 
 /**
@@ -331,7 +331,7 @@ export async function isAPIAvailable(
 ): Promise<boolean> {
   switch (apiName) {
     case 'ballDontLie':
-      return await ballDontLie.testConnection({ apiKey });
+      return await ballDontLie.testConnection({ apiKey, apiHost: 'v3.football.api-sports.io' });
     case 'footballData':
       return await footballData.testConnection({ apiKey });
     case 'theOddsAPI':

@@ -1,7 +1,7 @@
 // Outils de Calcul Avancé pour le Betting
 // Modèles statistiques, Value Betting, Surebets, etc.
 
-import { FootballMatch, MatchStatistics, MarketOdds } from '../types';
+import { FootballMatch, MatchStatistics, MarketOdds } from '../api/types';
 
 // ==================== CONFIGURATION ====================
 

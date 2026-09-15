@@ -1,0 +1,11 @@
+diff --git a/node_modules/react-native/Libraries/Renderer/shims/ReactNative.js b/node_modules/react-native/Libraries/Renderer/shims/ReactNative.js
+new file mode 100644
+index 0000000..e92d7f9
+--- /dev/null
++++ b/node_modules/react-native/Libraries/Renderer/shims/ReactNative.js
+@@ -0,0 +1,5 @@
++'use strict';
++// Shim for React Native 0.76+ compatibility
++// The original path react-native/Libraries/Renderer/shims/ReactNative was removed in RN 0.76
++module.exports = require('./ReactFabric');
++

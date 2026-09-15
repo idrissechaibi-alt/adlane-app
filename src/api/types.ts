@@ -30,6 +30,7 @@ export interface FootballMatch {
   timezone?: string;
   round?: string;
   season?: number;
+  source?: string;
 }
 
 export interface MatchStatistics {
@@ -77,7 +78,7 @@ export interface MatchStatistics {
 // ==================== ODDS ====================
 
 export interface MarketOdds {
-  market: '1X2' | 'BTTS' | 'OU_2_5' | 'corners' | 'fouls' | 'cards' | 'shots';
+  market: '1X2' | 'BTTS' | 'OU_2_5' | 'corners' | 'fouls' | 'cards' | 'shots' | 'handicap';
   odds: {
     home?: number;
     draw?: number;

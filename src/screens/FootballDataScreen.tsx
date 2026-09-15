@@ -17,8 +17,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 import { FootballAPIManager, createFootballAPIManager } from '../api';
-import { FootballMatch, MarketOdds } from '../types';
-import { EdgeCalculator, SurebetCalculator, ProbabilityCalculator } from '../calc';
+import { FootballMatch, MarketOdds } from '../api/types';
+import { EdgeCalculator, SurebetCalculator, ProbabilityCalculator } from '../calc/advancedCalculations';
 
 export default function FootballDataScreen({ navigation }: any) {
   const [manager, setManager] = useState<FootballAPIManager | null>(null);
@@ -44,7 +44,7 @@ export default function FootballDataScreen({ navigation }: any) {
     const initManager = async () => {
       const config = await getAPIConfig();
       const manager = createFootballAPIManager({
-        ballDontLie: config.apiFootball ? { apiKey: config.apiFootball } : undefined,
+        ballDontLie: config.apiFootball ? { apiKey: config.apiFootball, apiHost: 'v3.football.api-sports.io' } : undefined,
         footballData: config.footballData ? { apiKey: config.footballData } : undefined,
         theOddsAPI: config.theOddsApi ? { apiKey: config.theOddsApi } : undefined,
       });

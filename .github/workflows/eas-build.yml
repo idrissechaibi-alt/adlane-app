@@ -1,0 +1,19 @@
+name: EAS Build
+on:
+  push:
+    branches:
+      - main
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          eas-version: latest
+          token: ${{ secrets.EAS_TOKEN }}
+      - run: npm ci
+      - run: npx eas build --platform android --profile preview --non-interactive
+        env:
+          EAS_NO_VCS: 1

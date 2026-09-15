@@ -1,5 +1,5 @@
 // API Football - Module Principal
-// Exporte tous les clients API et le gestionnaire
+// Exporte les types, le manager et les clients API
 
 // ==================== TYPES ====================
 export * from './types';
@@ -8,24 +8,6 @@ export * from './types';
 export * from './cache';
 
 // ==================== MANAGER ====================
-export * from './footballAPIManager';
-
-// ==================== API CLIENTS ====================
-
-// BallDontLie (API-Football)
-export * from './footballDataAPIs/ballDontLie';
-
-// SofaScore
-export * from './footballDataAPIs/sofaScore';
-
-// Football-Data.org
-export * from './footballDataAPIs/footballData';
-
-// TheOddsAPI
-export * from './footballDataAPIs/theOddsAPI';
-
-// ==================== SCRAPING ====================
-export * from './scraping/matchScraper';
-
-// ==================== CALCULS AVANCÉS ====================
-export * from '../calc/advancedCalculations';
+// Only export the manager (not individual API functions to avoid conflicts)
+export { FootballAPIManager, createFootballAPIManager } from './footballAPIManager';
+export type { FootballAPIConfig } from './footballAPIManager';

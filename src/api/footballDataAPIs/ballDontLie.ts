@@ -9,7 +9,7 @@ const BASE_URL = 'https://v3.football.api-sports.io';
 
 export interface BallDontLieConfig {
   apiKey: string;
-  apiHost?: string;
+  apiHost: string;
 }
 
 const DEFAULT_CONFIG: BallDontLieConfig = {
@@ -17,16 +17,20 @@ const DEFAULT_CONFIG: BallDontLieConfig = {
   apiHost: 'v3.football.api-sports.io'
 };
 
+function buildHeaders(config: BallDontLieConfig): Record<string, string> {
+  return {
+    'x-rapidapi-key': config.apiKey,
+    'x-rapidapi-host': config.apiHost
+  };
+}
+
 /**
  * Vérifie la validité de la clé API
  */
 export async function testConnection(config: BallDontLieConfig): Promise<boolean> {
   try {
     const response = await fetch(`${BASE_URL}/status`, {
-      headers: {
-        'x-rapidapi-key': config.apiKey,
-        'x-rapidapi-host': config.apiHost || DEFAULT_CONFIG.apiHost
-      }
+      headers: buildHeaders(config)
     });
     return response.ok;
   } catch {
@@ -51,10 +55,7 @@ export async function getFixturesByDate(
 
   try {
     const response = await fetch(`${BASE_URL}/fixtures?league=${leagueId}&date=${date}`, {
-      headers: {
-        'x-rapidapi-key': config.apiKey,
-        'x-rapidapi-host': config.apiHost || DEFAULT_CONFIG.apiHost
-      }
+      headers: buildHeaders(config)
     });
 
     if (!response.ok) {
@@ -88,10 +89,7 @@ export async function getFixturesBySeason(
 ): Promise<APIResponse<FootballMatch[]>> {
   try {
     const response = await fetch(`${BASE_URL}/fixtures?league=${leagueId}&season=${season}`, {
-      headers: {
-        'x-rapidapi-key': config.apiKey,
-        'x-rapidapi-host': config.apiHost || DEFAULT_CONFIG.apiHost
-      }
+      headers: buildHeaders(config)
     });
 
     if (!response.ok) {
@@ -129,10 +127,7 @@ export async function getMatchStatistics(
 
   try {
     const response = await fetch(`${BASE_URL}/fixtures/statistics?fixture=${matchId}`, {
-      headers: {
-        'x-rapidapi-key': config.apiKey,
-        'x-rapidapi-host': config.apiHost || DEFAULT_CONFIG.apiHost
-      }
+      headers: buildHeaders(config)
     });
 
     if (!response.ok) {
@@ -172,10 +167,7 @@ export async function getTeamInfo(
 
   try {
     const response = await fetch(`${BASE_URL}/teams?id=${teamId}`, {
-      headers: {
-        'x-rapidapi-key': config.apiKey,
-        'x-rapidapi-host': config.apiHost || DEFAULT_CONFIG.apiHost
-      }
+      headers: buildHeaders(config)
     });
 
     if (!response.ok) {
@@ -209,10 +201,7 @@ export async function getTeamLastMatches(
 ): Promise<APIResponse<FootballMatch[]>> {
   try {
     const response = await fetch(`${BASE_URL}/fixtures?team=${teamId}&last=${count}`, {
-      headers: {
-        'x-rapidapi-key': config.apiKey,
-        'x-rapidapi-host': config.apiHost || DEFAULT_CONFIG.apiHost
-      }
+      headers: buildHeaders(config)
     });
 
     if (!response.ok) {
