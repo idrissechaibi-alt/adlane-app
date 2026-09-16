@@ -113,7 +113,6 @@ export default function DashboardScreen() {
               </Text>
               {renderProgressBar(Math.abs(cumulativeSummary.roi), 100, '#10b981')}
             </View>
-            </View>
 
             <View style={styles.statBox}>
               <Text style={styles.statLabel}>Taux Victoires</Text>
