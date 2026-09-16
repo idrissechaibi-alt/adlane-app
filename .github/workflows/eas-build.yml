@@ -14,13 +14,13 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Install dependencies
         run: npm install
 
       - name: Setup EAS
-        uses: expo/expo-github-action@v8
+        uses: expo/expo-github-action@v9
         with:
           eas-version: latest
           token: ${{ secrets.EAS_TOKEN }}
