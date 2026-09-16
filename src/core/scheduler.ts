@@ -81,16 +81,18 @@ export async function getDailyPlan(): Promise<DailyPlan | null> {
  * TODO : Remplacer par un vrai appel API (API-Football, TheOddsAPI)
  */
 async function fetchTodayFixtures(date: string): Promise<ScheduledMatchDetail[]> {
-  // Simulé pour démonstration (à remplacer par fetch réel)
+  // Détection de la date système
+  const today = new Date().toISOString().split('T')[0];
+
   return [
     {
-      id: `m-${date}-pl-01`,
+      id: `m-${today}-pl-01`,
       leagueId: 'PL',
       leagueName: 'Premier League',
       flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿',
       homeTeam: 'Liverpool',
       awayTeam: 'Nottingham Forest',
-      kickoff_utc: `${date}T14:00:00Z`,
+      kickoff_utc: `${today}T14:00:00Z`,
       creneau_display: '15:00',
       odds: {
         home: 1.35,
@@ -104,13 +106,13 @@ async function fetchTodayFixtures(date: string): Promise<ScheduledMatchDetail[]>
       context: 'Liverpool invaincu à domicile. Salah de retour.'
     },
     {
-      id: `m-${date}-pl-02`,
+      id: `m-${today}-pl-02`,
       leagueId: 'PL',
       leagueName: 'Premier League',
       flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿',
       homeTeam: 'Brighton',
       awayTeam: 'Ipswich Town',
-      kickoff_utc: `${date}T14:00:00Z`,
+      kickoff_utc: `${today}T14:00:00Z`,
       creneau_display: '15:00',
       odds: {
         home: 1.65,
@@ -124,13 +126,13 @@ async function fetchTodayFixtures(date: string): Promise<ScheduledMatchDetail[]>
       context: 'Brighton intense à domicile, Ipswich fragile.'
     },
     {
-      id: `m-${date}-pl-03`,
+      id: `m-${today}-pl-03`,
       leagueId: 'PL',
       leagueName: 'Premier League',
       flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿',
       homeTeam: 'Southampton',
       awayTeam: 'Manchester United',
-      kickoff_utc: `${date}T16:30:00Z`,
+      kickoff_utc: `${today}T16:30:00Z`,
       creneau_display: '17:30',
       odds: {
         home: 4.50,
@@ -144,13 +146,13 @@ async function fetchTodayFixtures(date: string): Promise<ScheduledMatchDetail[]>
       context: 'Arbitre Michael Oliver. Rashford incertain.'
     },
     {
-      id: `m-${date}-ll-01`,
+      id: `m-${today}-ll-01`,
       leagueId: 'LL',
       leagueName: 'La Liga',
       flag: '🇪🇸',
       homeTeam: 'Real Madrid',
       awayTeam: 'Real Sociedad',
-      kickoff_utc: `${date}T19:00:00Z`,
+      kickoff_utc: `${today}T19:00:00Z`,
       creneau_display: '20:00',
       odds: {
         home: 1.30,
@@ -164,13 +166,13 @@ async function fetchTodayFixtures(date: string): Promise<ScheduledMatchDetail[]>
       context: 'Mbappé et Vinicius titulaires. Real Sociedad défensive.'
     },
     {
-      id: `m-${date}-sa-01`,
+      id: `m-${today}-sa-01`,
       leagueId: 'SA',
       leagueName: 'Serie A',
       flag: '🇮🇹',
       homeTeam: 'Inter Milan',
       awayTeam: 'Monza',
-      kickoff_utc: `${date}T19:00:00Z`,
+      kickoff_utc: `${today}T19:00:00Z`,
       creneau_display: '20:00',
       odds: {
         home: 1.28,
@@ -184,13 +186,13 @@ async function fetchTodayFixtures(date: string): Promise<ScheduledMatchDetail[]>
       context: 'Inter en forme, 6 victoires consécutives. Lautaro en feu.'
     },
     {
-      id: `m-${date}-l1-01`,
+      id: `m-${today}-l1-01`,
       leagueId: 'L1',
       leagueName: 'Ligue 1',
       flag: '🇫🇷',
       homeTeam: 'PSG',
       awayTeam: 'Brest',
-      kickoff_utc: `${date}T18:45:00Z`,
+      kickoff_utc: `${today}T18:45:00Z`,
       creneau_display: '19:45',
       odds: {
         home: 1.22,

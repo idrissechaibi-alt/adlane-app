@@ -58,6 +58,18 @@ export default function DashboardScreen() {
     );
   }
 
+  const dailySummary: LedgerSummary = calculateDailySummary(bets, selectedDate);
+  const cumulativeSummary: LedgerSummary = calculateLedgerSummary(bets);
+
+  const renderProgressBar = (value: number, max: number, color: string) => {
+    const percentage = Math.min(Math.max((value / max) * 100, 0), 100);
+    return (
+      <View style={styles.progressContainer}>
+        <View style={[styles.progressBar, { width: `${percentage}%`, backgroundColor: color }]} />
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView
@@ -88,16 +100,19 @@ export default function DashboardScreen() {
           <View style={styles.statsGrid}>
             <View style={styles.statBox}>
               <Text style={styles.statLabel}>Net P&L</Text>
-              <Text style={[styles.statValue, styles.positive]}>
-                +{cumulativeSummary.net_pnl.toFixed(3)} u
+              <Text style={[styles.statValue, cumulativeSummary.net_pnl >= 0 ? styles.positive : styles.negative]}>
+                {cumulativeSummary.net_pnl >= 0 ? '+' : ''}{cumulativeSummary.net_pnl.toFixed(3)} u
               </Text>
+              {renderProgressBar(Math.abs(cumulativeSummary.net_pnl), 50, '#3b82f6')}
             </View>
 
             <View style={styles.statBox}>
               <Text style={styles.statLabel}>ROI Global</Text>
-              <Text style={[styles.statValue, styles.positive]}>
-                +{cumulativeSummary.roi.toFixed(1)}%
+              <Text style={[styles.statValue, cumulativeSummary.roi >= 0 ? styles.positive : styles.negative]}>
+                {cumulativeSummary.roi >= 0 ? '+' : ''}{cumulativeSummary.roi.toFixed(1)}%
               </Text>
+              {renderProgressBar(Math.abs(cumulativeSummary.roi), 100, '#10b981')}
+            </View>
             </View>
 
             <View style={styles.statBox}>
@@ -298,6 +313,17 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     justifyContent: 'space-between',
     gap: 8,
+  },
+  progressContainer: {
+    height: 4,
+    backgroundColor: '#334155',
+    borderRadius: 2,
+    marginTop: 8,
+    width: '100%',
+  },
+  progressBar: {
+    height: '100%',
+    borderRadius: 2,
   },
   statBox: {
     width: '48%',

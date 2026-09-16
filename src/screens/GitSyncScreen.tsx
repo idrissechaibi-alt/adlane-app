@@ -39,10 +39,38 @@ export default function GitSyncScreen({ navigation }: any) {
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [updating, setUpdating] = useState(false);
+  const [githubStatus, setGithubStatus] = useState<'connected' | 'disconnected' | 'checking'>('disconnected');
 
   useEffect(() => {
     void loadData();
   }, []);
+
+  const checkConnection = async (tokenToCheck?: string) => {
+    setGithubStatus('checking');
+    try {
+      const config = await getGitHubSyncConfig();
+      const actualToken = tokenToCheck || await SecureStore.getItemAsync('app-adlane.github-token');
+
+      if (!actualToken) {
+        setGithubStatus('disconnected');
+        return;
+      }
+
+      const response = await fetch(
+        `https://api.github.com/repos/${encodeURIComponent(config.repoOwner)}/${encodeURIComponent(config.repoName)}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${actualToken}`,
+            'Accept': 'application/vnd.github+json'
+          }
+        }
+      );
+
+      setGithubStatus(response.ok ? 'connected' : 'disconnected');
+    } catch {
+      setGithubStatus('disconnected');
+    }
+  };
 
   const loadData = async () => {
     try {
@@ -54,6 +82,10 @@ export default function GitSyncScreen({ navigation }: any) {
       setConfig(storedConfig);
       setTokenConfigured(hasToken);
       setLastSync(syncTime);
+
+      if (hasToken) {
+        void checkConnection();
+      }
     } catch (error) {
       console.error('Erreur chargement sauvegarde GitHub:', error);
     } finally {
@@ -221,6 +253,10 @@ export default function GitSyncScreen({ navigation }: any) {
           <Ionicons color="#f8fafc" name="arrow-back" size={24} />
         </TouchableOpacity>
         <Text style={styles.title}>Sauvegarde GitHub</Text>
+        <View style={[
+          styles.statusLight,
+          { backgroundColor: githubStatus === 'connected' ? '#10b981' : githubStatus === 'checking' ? '#f59e0b' : '#ef4444' }
+        ]} />
         <View style={styles.backSpacer} />
       </View>
 
@@ -364,6 +400,7 @@ function Field({ children, label }: { children: React.ReactNode; label: string }
 }
 
 const styles = StyleSheet.create({
+  statusLight: { width: 10, height: 10, borderRadius: 5, marginLeft: 8 },
   backSpacer: { width: 24 },
   bold: { color: '#cbd5e1', fontWeight: '700' },
   card: { backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: 12, borderWidth: 1, marginBottom: 16, padding: 16 },
