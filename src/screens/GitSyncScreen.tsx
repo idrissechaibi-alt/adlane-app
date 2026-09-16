@@ -339,6 +339,16 @@ export default function GitSyncScreen({ navigation }: any) {
             <Text style={styles.statusLabel}>Fréquence</Text>
             <Text style={styles.statusValue}>Toutes les 20 min</Text>
           </View>
+          <View style={styles.statusRow}>
+            <Text style={styles.statusLabel}>Version App</Text>
+            <Text style={styles.statusValue}>{Updates.runtimeVersion || '1.0.0'}</Text>
+          </View>
+          {Updates.updateId && (
+            <View style={styles.statusRow}>
+              <Text style={styles.statusLabel}>ID Mise à jour</Text>
+              <Text style={styles.statusValue} numberOfLines={1}>{Updates.updateId.substring(0, 8)}</Text>
+            </View>
+          )}
         </View>
 
         {logs.length > 0 && (
