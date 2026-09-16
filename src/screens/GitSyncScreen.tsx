@@ -15,6 +15,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as SecureStore from 'expo-secure-store';
 import {
   getGitHubSyncConfig,
   getLastSyncTime,
