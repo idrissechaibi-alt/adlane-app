@@ -16,78 +16,83 @@ let db: SQLite.SQLiteDatabase | null = null;
 export async function initDatabase(): Promise<void> {
   if (db) return;
 
-  db = await SQLite.openDatabaseAsync(DB_NAME);
+  try {
+    db = await SQLite.openDatabaseAsync(DB_NAME);
 
-  // Table des paris
-  await db.execAsync(`
-    CREATE TABLE IF NOT EXISTS bets (
-      id TEXT PRIMARY KEY,
-      version INTEGER NOT NULL,
-      date TEXT NOT NULL,
-      creneau_utc TEXT NOT NULL,
-      creneau_display TEXT NOT NULL,
-      league TEXT NOT NULL,
-      legs TEXT NOT NULL,
-      odds REAL,
-      stake REAL,
-      payout REAL,
-      net_pnl REAL,
-      excluded_from_pnl INTEGER NOT NULL,
-      status TEXT NOT NULL,
-      played INTEGER NOT NULL,
-      confiance INTEGER,
-      confidence_level TEXT NOT NULL,
-      analysis TEXT NOT NULL,
-      resultat_verif TEXT,
-      validation_flags TEXT NOT NULL,
-      createdAt TEXT NOT NULL,
-      updatedAt TEXT NOT NULL
-    );
-  `);
+    // Table des paris
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS bets (
+        id TEXT PRIMARY KEY,
+        version INTEGER NOT NULL,
+        date TEXT NOT NULL,
+        creneau_utc TEXT NOT NULL,
+        creneau_display TEXT NOT NULL,
+        league TEXT NOT NULL,
+        legs TEXT NOT NULL,
+        odds REAL,
+        stake REAL,
+        payout REAL,
+        net_pnl REAL,
+        excluded_from_pnl INTEGER NOT NULL,
+        status TEXT NOT NULL,
+        played INTEGER NOT NULL,
+        confiance INTEGER,
+        confidence_level TEXT NOT NULL,
+        analysis TEXT NOT NULL,
+        resultat_verif TEXT,
+        validation_flags TEXT NOT NULL,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      );
+    `);
 
-  // Table des leçons
-  await db.execAsync(`
-    CREATE TABLE IF NOT EXISTS lessons (
-      doc_id TEXT PRIMARY KEY,
-      motif TEXT NOT NULL,
-      occurrences INTEGER NOT NULL,
-      regle_validation TEXT NOT NULL,
-      detail TEXT NOT NULL,
-      derniere_maj TEXT NOT NULL
-    );
-  `);
+    // Table des leçons
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS lessons (
+        doc_id TEXT PRIMARY KEY,
+        motif TEXT NOT NULL,
+        occurrences INTEGER NOT NULL,
+        regle_validation TEXT NOT NULL,
+        detail TEXT NOT NULL,
+        derniere_maj TEXT NOT NULL
+      );
+    `);
 
-  // Table des calibrations
-  await db.execAsync(`
-    CREATE TABLE IF NOT EXISTS calibrations (
-      market TEXT PRIMARY KEY,
-      league TEXT,
-      total_predictions INTEGER NOT NULL,
-      predictions_won INTEGER NOT NULL,
-      actual_success_rate REAL NOT NULL,
-      avg_predicted_prob REAL NOT NULL,
-      calibration_status TEXT NOT NULL,
-      last_updated TEXT NOT NULL
-    );
-  `);
+    // Table des calibrations
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS calibrations (
+        market TEXT PRIMARY KEY,
+        league TEXT,
+        total_predictions INTEGER NOT NULL,
+        predictions_won INTEGER NOT NULL,
+        actual_success_rate REAL NOT NULL,
+        avg_predicted_prob REAL NOT NULL,
+        calibration_status TEXT NOT NULL,
+        last_updated TEXT NOT NULL
+      );
+    `);
 
-  // Table des rapports quotidiens
-  await db.execAsync(`
-    CREATE TABLE IF NOT EXISTS daily_reports (
-      date TEXT PRIMARY KEY,
-      bets_settled INTEGER NOT NULL,
-      bets_won INTEGER NOT NULL,
-      bets_lost INTEGER NOT NULL,
-      total_stake REAL NOT NULL,
-      total_return REAL NOT NULL,
-      net_pnl REAL NOT NULL,
-      roi REAL NOT NULL,
-      lessons_learned TEXT NOT NULL,
-      details TEXT NOT NULL
-    );
-  `);
+    // Table des rapports quotidiens
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS daily_reports (
+        date TEXT PRIMARY KEY,
+        bets_settled INTEGER NOT NULL,
+        bets_won INTEGER NOT NULL,
+        bets_lost INTEGER NOT NULL,
+        total_stake REAL NOT NULL,
+        total_return REAL NOT NULL,
+        net_pnl REAL NOT NULL,
+        roi REAL NOT NULL,
+        lessons_learned TEXT NOT NULL,
+        details TEXT NOT NULL
+      );
+    `);
 
-  console.log('✅ Base de données locale initialisée');
+    console.log('✅ Base de données locale initialisée');
+  } catch (error) {
+    console.error('Erreur initialisation base de données:', error);
+    throw error;
+  }
 }
 
 /**
@@ -104,11 +109,10 @@ export async function seedDatabaseIfEmpty(): Promise<void> {
 
   console.log('🌱 Alimentation de la base de données...');
 
-  // Utilisation de withTransactionAsync (plus compatible)
-  await db!.withTransactionAsync(async () => {
+  await db!.withExclusiveTransactionAsync(async (txn) => {
     // Import des paris
     for (const bet of HISTORICAL_BETS) {
-      await db!.runAsync(
+      await txn.runAsync(
         `INSERT INTO bets VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           bet.id, bet.version, bet.date, bet.creneau_utc, bet.creneau_display,
@@ -123,7 +127,7 @@ export async function seedDatabaseIfEmpty(): Promise<void> {
 
     // Import des leçons
     for (const lesson of HISTORICAL_LESSONS) {
-      await db!.runAsync(
+      await txn.runAsync(
         `INSERT INTO lessons VALUES (?,?,?,?,?,?)`,
         [lesson.doc_id, lesson.motif, lesson.occurrences, lesson.regle_validation, lesson.detail, lesson.derniere_maj]
       );
@@ -131,7 +135,7 @@ export async function seedDatabaseIfEmpty(): Promise<void> {
 
     // Import des calibrations
     for (const cal of INITIAL_CALIBRATIONS) {
-      await db!.runAsync(
+      await txn.runAsync(
         `INSERT INTO calibrations VALUES (?,?,?,?,?,?,?,?)`,
         [cal.market, cal.league ?? null, cal.total_predictions, cal.predictions_won,
          cal.actual_success_rate, cal.avg_predicted_prob, cal.calibration_status, cal.last_updated]
@@ -318,16 +322,16 @@ export async function restoreSnapshot(data: {
 }): Promise<void> {
   if (!db) await initDatabase();
 
-  await db!.withTransactionAsync(async () => {
+  await db!.withExclusiveTransactionAsync(async (txn) => {
     // Nettoyage complet
-    await db!.runAsync('DELETE FROM bets');
-    await db!.runAsync('DELETE FROM lessons');
-    await db!.runAsync('DELETE FROM calibrations');
-    await db!.runAsync('DELETE FROM daily_reports');
+    await txn.runAsync('DELETE FROM bets');
+    await txn.runAsync('DELETE FROM lessons');
+    await txn.runAsync('DELETE FROM calibrations');
+    await txn.runAsync('DELETE FROM daily_reports');
 
     // Restauration des paris
     for (const bet of data.bets) {
-      await db!.runAsync(
+      await txn.runAsync(
         `INSERT INTO bets VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           bet.id, bet.version, bet.date, bet.creneau_utc, bet.creneau_display,
@@ -342,7 +346,7 @@ export async function restoreSnapshot(data: {
 
     // Restauration des leçons
     for (const lesson of data.lessons) {
-      await db!.runAsync(
+      await txn.runAsync(
         `INSERT INTO lessons VALUES (?,?,?,?,?,?)`,
         [lesson.doc_id, lesson.motif, lesson.occurrences, lesson.regle_validation, lesson.detail, lesson.derniere_maj]
       );
@@ -350,7 +354,7 @@ export async function restoreSnapshot(data: {
 
     // Restauration des calibrations
     for (const cal of data.calibrations) {
-      await db!.runAsync(
+      await txn.runAsync(
         `INSERT INTO calibrations VALUES (?,?,?,?,?,?,?,?)`,
         [cal.market, cal.league ?? null, cal.total_predictions, cal.predictions_won,
          cal.actual_success_rate, cal.avg_predicted_prob, cal.calibration_status, cal.last_updated]
@@ -359,7 +363,7 @@ export async function restoreSnapshot(data: {
 
     // Restauration des rapports
     for (const report of data.dailyReports) {
-      await db!.runAsync(
+      await txn.runAsync(
         `INSERT INTO daily_reports VALUES (?,?,?,?,?,?,?,?,?,?)`,
         [report.date, report.bets_settled, report.bets_won, report.bets_lost,
          report.total_stake, report.total_return, report.net_pnl, report.roi,
