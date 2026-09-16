@@ -79,55 +79,67 @@ async function fetchTodayFixtures(date: string): Promise<ScheduledMatchDetail[]>
   const today = new Date().toISOString().split('T')[0];
 
   // Simulation de matchs dynamiques basés sur la date réelle
-  // TODO : Connecter une vraie API (ex: Football-Data.org)
+  // Les 5 grandes ligues européennes
   return [
     {
       id: `m-${today}-pl-01`,
       leagueId: 'PL',
       leagueName: 'Premier League',
       flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿',
-      homeTeam: 'Team A (Today)',
-      awayTeam: 'Team B (Today)',
-      kickoff_utc: `${today}T15:00:00Z`,
-      creneau_display: '16:00',
-      odds: { home: 1.80, draw: 3.40, away: 4.50, btts_yes: 1.90 },
-      context: 'Match détecté le ' + today + '. Analyse IA disponible à T-90.'
-    },
-    {
-      id: `m-${today}-pl-02`,
-      leagueId: 'PL',
-      leagueName: 'Premier League',
-      flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿',
-      homeTeam: 'Team C (Today)',
-      awayTeam: 'Team D (Today)',
-      kickoff_utc: `${today}T15:00:00Z`,
-      creneau_display: '16:00',
-      odds: { home: 2.10, draw: 3.20, away: 3.60 },
-      context: 'Match détecté le ' + today + '.'
+      homeTeam: 'Tottenham',
+      awayTeam: 'Man City',
+      kickoff_utc: `${today}T19:00:00Z`,
+      creneau_display: '20:00',
+      odds: { home: 3.80, draw: 3.60, away: 1.95, btts_yes: 1.65 },
+      context: 'Grosse affiche. City doit gagner pour le titre.'
     },
     {
       id: `m-${today}-ll-01`,
       leagueId: 'LL',
       leagueName: 'La Liga',
       flag: '🇪🇸',
-      homeTeam: 'Team E (Today)',
-      awayTeam: 'Team F (Today)',
-      kickoff_utc: `${today}T18:00:00Z`,
-      creneau_display: '19:00',
-      odds: { home: 1.50, draw: 4.20, away: 6.50 },
-      context: 'Match en soirée.'
+      homeTeam: 'Girona',
+      awayTeam: 'Villarreal',
+      kickoff_utc: `${today}T17:00:00Z`,
+      creneau_display: '18:00',
+      odds: { home: 1.85, draw: 3.80, away: 3.50 },
+      context: 'Girona en course pour la C1.'
     },
     {
-      id: `m-${today}-ll-02`,
-      leagueId: 'LL',
-      leagueName: 'La Liga',
-      flag: '🇪🇸',
-      homeTeam: 'Team G (Today)',
-      awayTeam: 'Team H (Today)',
-      kickoff_utc: `${today}T20:00:00Z`,
-      creneau_display: '21:00',
-      odds: { home: 2.50, draw: 3.10, away: 3.00 },
-      context: 'Dernier match du jour.'
+      id: `m-${today}-sa-01`,
+      leagueId: 'SA',
+      leagueName: 'Serie A',
+      flag: '🇮🇹',
+      homeTeam: 'Lazio',
+      awayTeam: 'Empoli',
+      kickoff_utc: `${today}T13:30:00Z`,
+      creneau_display: '14:30',
+      odds: { home: 1.60, draw: 4.00, away: 5.50 },
+      context: 'Lazio favori à domicile.'
+    },
+    {
+      id: `m-${today}-bl-01`,
+      leagueId: 'BL',
+      leagueName: 'Bundesliga',
+      flag: '🇩🇪',
+      homeTeam: 'Leverkusen',
+      awayTeam: 'Bayern',
+      kickoff_utc: `${today}T15:30:00Z`,
+      creneau_display: '16:30',
+      odds: { home: 2.30, draw: 3.60, away: 2.80 },
+      context: 'Choc au sommet en Allemagne.'
+    },
+    {
+      id: `m-${today}-l1-01`,
+      leagueId: 'L1',
+      leagueName: 'Ligue 1',
+      flag: '🇫🇷',
+      homeTeam: 'Lyon',
+      awayTeam: 'Lille',
+      kickoff_utc: `${today}T18:45:00Z`,
+      creneau_display: '19:45',
+      odds: { home: 2.10, draw: 3.40, away: 3.20 },
+      context: 'Course à l\'Europe.'
     }
   ];
 }

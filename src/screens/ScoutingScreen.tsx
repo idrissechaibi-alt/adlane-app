@@ -16,9 +16,13 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { analyzeMatchWithOmniroute, DEFAULT_OMNIROUTE_CONFIG, AIAnalysisOutput } from '../core/omniroute';
+import { analyzeMatchWithGemini } from '../core/gemini';
 import { HISTORICAL_LESSONS } from '../data/historical';
 import { getDailyPlan } from '../core/scheduler';
 import { ScheduledMatchDetail } from '../types/database';
+import * as SecureStore from 'expo-secure-store';
+
+const GEMINI_KEY_STORAGE = 'app-adlane.gemini-api-key';
 
 export default function ScoutingScreen() {
   const [matches, setMatches] = useState<ScheduledMatchDetail[]>([]);
@@ -69,6 +73,7 @@ export default function ScoutingScreen() {
     setLoading(true);
     setAnalysisResult(null);
     try {
+      const geminiApiKey = await SecureStore.getItemAsync(GEMINI_KEY_STORAGE);
       const matchInput = {
         homeTeam: match.homeTeam,
         awayTeam: match.awayTeam,
@@ -83,11 +88,23 @@ export default function ScoutingScreen() {
         contextInfo: match.context || undefined
       };
 
-      const result = await analyzeMatchWithOmniroute(
-        matchInput,
-        HISTORICAL_LESSONS,
-        DEFAULT_OMNIROUTE_CONFIG
-      );
+      let result: AIAnalysisOutput;
+
+      if (geminiApiKey) {
+        console.log('Utilisation de Gemini Direct...');
+        result = await analyzeMatchWithGemini(
+          matchInput,
+          HISTORICAL_LESSONS,
+          geminiApiKey
+        );
+      } else {
+        console.log('Utilisation de Omniroute...');
+        result = await analyzeMatchWithOmniroute(
+          matchInput,
+          HISTORICAL_LESSONS,
+          DEFAULT_OMNIROUTE_CONFIG
+        );
+      }
 
       setAnalysisResult(result);
     } catch (error: any) {

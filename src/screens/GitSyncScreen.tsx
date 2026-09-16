@@ -29,10 +29,14 @@ import {
 } from '../core/gitAutoSync';
 import * as Updates from 'expo-updates';
 
+const GEMINI_KEY_STORAGE = 'app-adlane.gemini-api-key';
+
 export default function GitSyncScreen({ navigation }: any) {
   const [config, setConfig] = useState<GitHubDataSyncConfig | null>(null);
   const [token, setToken] = useState('');
+  const [geminiKey, setGeminiKey] = useState('');
   const [tokenConfigured, setTokenConfigured] = useState(false);
+  const [geminiConfigured, setGeminiConfigured] = useState(false);
   const [showToken, setShowToken] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
@@ -46,43 +50,18 @@ export default function GitSyncScreen({ navigation }: any) {
     void loadData();
   }, []);
 
-  const checkConnection = async (tokenToCheck?: string) => {
-    setGithubStatus('checking');
-    try {
-      const config = await getGitHubSyncConfig();
-      const actualToken = tokenToCheck || await SecureStore.getItemAsync('app-adlane.github-token');
-
-      if (!actualToken) {
-        setGithubStatus('disconnected');
-        return;
-      }
-
-      const response = await fetch(
-        `https://api.github.com/repos/${encodeURIComponent(config.repoOwner)}/${encodeURIComponent(config.repoName)}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${actualToken}`,
-            'Accept': 'application/vnd.github+json'
-          }
-        }
-      );
-
-      setGithubStatus(response.ok ? 'connected' : 'disconnected');
-    } catch {
-      setGithubStatus('disconnected');
-    }
-  };
-
   const loadData = async () => {
     try {
-      const [storedConfig, hasToken, syncTime] = await Promise.all([
+      const [storedConfig, hasToken, syncTime, storedGeminiKey] = await Promise.all([
         getGitHubSyncConfig(),
         isGitHubTokenConfigured(),
         getLastSyncTime(),
+        SecureStore.getItemAsync(GEMINI_KEY_STORAGE)
       ]);
       setConfig(storedConfig);
       setTokenConfigured(hasToken);
       setLastSync(syncTime);
+      setGeminiConfigured(!!storedGeminiKey);
 
       if (hasToken) {
         void checkConnection();
@@ -94,30 +73,21 @@ export default function GitSyncScreen({ navigation }: any) {
     }
   };
 
-  const updateConfig = (updates: Partial<GitHubDataSyncConfig>) => {
-    setConfig((current) => (current ? { ...current, ...updates } : current));
-  };
-
-  const formatTimeAgo = (value: string | null): string => {
-    if (!value) return 'Jamais';
-
-    const minutes = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 60_000));
-    if (minutes < 1) return 'À l’instant';
-    if (minutes < 60) return `Il y a ${minutes} min`;
-    if (minutes < 1_440) return `Il y a ${Math.floor(minutes / 60)} h`;
-    return `Il y a ${Math.floor(minutes / 1_440)} j`;
-  };
-
   const handleSave = async () => {
     if (!config) return;
     setSaving(true);
 
     try {
       await saveGitHubSyncConfig({ ...config, token: token || undefined });
+      if (geminiKey) {
+        await SecureStore.setItemAsync(GEMINI_KEY_STORAGE, geminiKey.trim());
+      }
       setToken('');
+      setGeminiKey('');
       setTokenConfigured(await isGitHubTokenConfigured());
+      setGeminiConfigured(!!(await SecureStore.getItemAsync(GEMINI_KEY_STORAGE)));
       await startAutoSync();
-      Alert.alert('✅ Configuration enregistrée', 'La sauvegarde automatique est configurée sur cet appareil.');
+      Alert.alert('✅ Configuration enregistrée', 'Les clés ont été mises à jour.');
     } catch (error) {
       Alert.alert('❌ Erreur', 'La configuration n’a pas pu être enregistrée.');
     } finally {
@@ -182,17 +152,11 @@ export default function GitSyncScreen({ navigation }: any) {
   const handleCheckUpdate = async () => {
     setUpdating(true);
     try {
-      console.log('--- Diagnostic OTA ---');
-      console.log('Project ID:', Updates.projectId);
-      console.log('Runtime Version:', Updates.runtimeVersion);
-      console.log('Channel:', Updates.channel);
-      console.log('Update URL:', Updates.updateUrl);
-
       const update = await Updates.checkForUpdateAsync();
       if (update.isAvailable) {
         Alert.alert(
           '🚀 Mise à jour disponible',
-          `Une nouvelle version (${update.manifest?.id || 'ID inconnu'}) est prête. Voulez-vous l’installer ?`,
+          `Une nouvelle version est prête. Voulez-vous l’installer ?`,
           [
             { text: 'Plus tard', style: 'cancel' },
             {
@@ -205,7 +169,7 @@ export default function GitSyncScreen({ navigation }: any) {
           ]
         );
       } else {
-        Alert.alert('✅ À jour', `Aucune mise à jour trouvée sur le canal "${Updates.channel || 'inconnu'}".`);
+        Alert.alert('✅ À jour', `Aucune mise à jour sur le canal "${Updates.channel}".`);
       }
     } catch (error) {
       console.error('Erreur check updates:', error);
@@ -213,11 +177,11 @@ export default function GitSyncScreen({ navigation }: any) {
 
       Alert.alert(
         '❌ Erreur Mise à jour',
-        `Échec de la vérification.\n\n` +
-        `ID Projet : ${Updates.projectId || 'Manquant'}\n` +
-        `Canal : ${Updates.channel || 'Manquant'}\n` +
-        `Version : ${Updates.runtimeVersion || 'Manquant'}\n\n` +
-        `Détail : ${detail}`
+        `Détails techniques :\n` +
+        `ID Projet : ${Updates.projectId || 'N/A'}\n` +
+        `Canal : ${Updates.channel || 'N/A'}\n` +
+        `Runtime : ${Updates.runtimeVersion || 'N/A'}\n\n` +
+        `Erreur : ${detail}`
       );
     } finally {
       setUpdating(false);
@@ -313,6 +277,24 @@ export default function GitSyncScreen({ navigation }: any) {
             </View>
             <Text style={styles.fieldHint}>
               Statut : {tokenConfigured ? 'token sécurisé enregistré sur cet appareil' : 'aucun token enregistré'}.
+            </Text>
+          </Field>
+
+          <Field label="Clé API Google Gemini">
+            <View style={styles.tokenField}>
+              <TextInput
+                autoCapitalize="none"
+                autoCorrect={false}
+                onChangeText={setGeminiKey}
+                placeholder={geminiConfigured ? 'Clé Gemini déjà enregistrée' : 'AIzaSy…'}
+                placeholderTextColor="#64748b"
+                secureTextEntry={!showToken}
+                style={styles.tokenInput}
+                value={geminiKey}
+              />
+            </View>
+            <Text style={styles.fieldHint}>
+              Statut : {geminiConfigured ? 'configurée' : 'non configurée'}. Utilisée pour le Scouting réel.
             </Text>
           </Field>
 

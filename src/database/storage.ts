@@ -92,7 +92,6 @@ export async function initDatabase(): Promise<void> {
 
 /**
  * Remplit la base de données avec les données historiques si elle est vide.
- * Cela permet d'éviter d'avoir un Dashboard vide au premier lancement.
  */
 export async function seedDatabaseIfEmpty(): Promise<void> {
   if (!db) await initDatabase();
@@ -103,12 +102,13 @@ export async function seedDatabaseIfEmpty(): Promise<void> {
     return;
   }
 
-  console.log('🌱 Alimentation de la base de données avec les données historiques...');
+  console.log('🌱 Alimentation de la base de données...');
 
-  await db!.transactionAsync(async (tx) => {
+  // Utilisation de withTransactionAsync (plus compatible)
+  await db!.withTransactionAsync(async () => {
     // Import des paris
     for (const bet of HISTORICAL_BETS) {
-      await tx.runAsync(
+      await db!.runAsync(
         `INSERT INTO bets VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           bet.id, bet.version, bet.date, bet.creneau_utc, bet.creneau_display,
@@ -123,7 +123,7 @@ export async function seedDatabaseIfEmpty(): Promise<void> {
 
     // Import des leçons
     for (const lesson of HISTORICAL_LESSONS) {
-      await tx.runAsync(
+      await db!.runAsync(
         `INSERT INTO lessons VALUES (?,?,?,?,?,?)`,
         [lesson.doc_id, lesson.motif, lesson.occurrences, lesson.regle_validation, lesson.detail, lesson.derniere_maj]
       );
@@ -131,7 +131,7 @@ export async function seedDatabaseIfEmpty(): Promise<void> {
 
     // Import des calibrations
     for (const cal of INITIAL_CALIBRATIONS) {
-      await tx.runAsync(
+      await db!.runAsync(
         `INSERT INTO calibrations VALUES (?,?,?,?,?,?,?,?)`,
         [cal.market, cal.league ?? null, cal.total_predictions, cal.predictions_won,
          cal.actual_success_rate, cal.avg_predicted_prob, cal.calibration_status, cal.last_updated]
@@ -145,9 +145,8 @@ export async function seedDatabaseIfEmpty(): Promise<void> {
 // ==================== BETS ====================
 
 export async function saveBet(bet: Bet): Promise<void> {
-  if (!db) throw new Error('Database not initialized');
-
-  await db.runAsync(
+  if (!db) await initDatabase();
+  await db!.runAsync(
     `INSERT OR REPLACE INTO bets VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       bet.id, bet.version, bet.date, bet.creneau_utc, bet.creneau_display,
@@ -161,9 +160,8 @@ export async function saveBet(bet: Bet): Promise<void> {
 }
 
 export async function getAllBets(): Promise<Bet[]> {
-  if (!db) throw new Error('Database not initialized');
-
-  const rows = await db.getAllAsync('SELECT * FROM bets ORDER BY createdAt DESC');
+  if (!db) await initDatabase();
+  const rows = await db!.getAllAsync('SELECT * FROM bets ORDER BY createdAt DESC');
   return rows.map((row: any) => ({
     id: row.id,
     version: row.version,
@@ -190,9 +188,8 @@ export async function getAllBets(): Promise<Bet[]> {
 }
 
 export async function getBetById(id: string): Promise<Bet | null> {
-  if (!db) throw new Error('Database not initialized');
-
-  const row = await db.getFirstAsync('SELECT * FROM bets WHERE id = ?', [id]);
+  if (!db) await initDatabase();
+  const row = await db!.getFirstAsync('SELECT * FROM bets WHERE id = ?', [id]);
   if (!row) return null;
 
   return {
@@ -223,18 +220,16 @@ export async function getBetById(id: string): Promise<Bet | null> {
 // ==================== LESSONS ====================
 
 export async function saveLesson(lesson: Lesson): Promise<void> {
-  if (!db) throw new Error('Database not initialized');
-
-  await db.runAsync(
+  if (!db) await initDatabase();
+  await db!.runAsync(
     `INSERT OR REPLACE INTO lessons VALUES (?,?,?,?,?,?)`,
     [lesson.doc_id, lesson.motif, lesson.occurrences, lesson.regle_validation, lesson.detail, lesson.derniere_maj]
   );
 }
 
 export async function getAllLessons(): Promise<Lesson[]> {
-  if (!db) throw new Error('Database not initialized');
-
-  const rows = await db.getAllAsync('SELECT * FROM lessons ORDER BY occurrences DESC');
+  if (!db) await initDatabase();
+  const rows = await db!.getAllAsync('SELECT * FROM lessons ORDER BY occurrences DESC');
   return rows.map((row: any) => ({
     doc_id: row.doc_id,
     motif: row.motif,
@@ -248,9 +243,8 @@ export async function getAllLessons(): Promise<Lesson[]> {
 // ==================== CALIBRATIONS ====================
 
 export async function saveCalibration(cal: MarketCalibration): Promise<void> {
-  if (!db) throw new Error('Database not initialized');
-
-  await db.runAsync(
+  if (!db) await initDatabase();
+  await db!.runAsync(
     `INSERT OR REPLACE INTO calibrations VALUES (?,?,?,?,?,?,?,?)`,
     [cal.market, cal.league ?? null, cal.total_predictions, cal.predictions_won,
      cal.actual_success_rate, cal.avg_predicted_prob, cal.calibration_status, cal.last_updated]
@@ -258,9 +252,8 @@ export async function saveCalibration(cal: MarketCalibration): Promise<void> {
 }
 
 export async function getAllCalibrations(): Promise<MarketCalibration[]> {
-  if (!db) throw new Error('Database not initialized');
-
-  const rows = await db.getAllAsync('SELECT * FROM calibrations');
+  if (!db) await initDatabase();
+  const rows = await db!.getAllAsync('SELECT * FROM calibrations');
   return rows.map((row: any) => ({
     market: row.market,
     league: row.league,
@@ -276,9 +269,8 @@ export async function getAllCalibrations(): Promise<MarketCalibration[]> {
 // ==================== DAILY REPORTS ====================
 
 export async function saveDailyReport(report: DailyReport): Promise<void> {
-  if (!db) throw new Error('Database not initialized');
-
-  await db.runAsync(
+  if (!db) await initDatabase();
+  await db!.runAsync(
     `INSERT OR REPLACE INTO daily_reports VALUES (?,?,?,?,?,?,?,?,?,?)`,
     [report.date, report.bets_settled, report.bets_won, report.bets_lost,
      report.total_stake, report.total_return, report.net_pnl, report.roi,
@@ -287,9 +279,8 @@ export async function saveDailyReport(report: DailyReport): Promise<void> {
 }
 
 export async function getDailyReports(limit: number = 30): Promise<DailyReport[]> {
-  if (!db) throw new Error('Database not initialized');
-
-  const rows = await db.getAllAsync('SELECT * FROM daily_reports ORDER BY date DESC LIMIT ?', [limit]);
+  if (!db) await initDatabase();
+  const rows = await db!.getAllAsync('SELECT * FROM daily_reports ORDER BY date DESC LIMIT ?', [limit]);
   return rows.map((row: any) => ({
     date: row.date,
     bets_settled: row.bets_settled,
@@ -325,18 +316,18 @@ export async function restoreSnapshot(data: {
   calibrations: MarketCalibration[];
   dailyReports: DailyReport[];
 }): Promise<void> {
-  if (!db) throw new Error('Database not initialized');
+  if (!db) await initDatabase();
 
-  await db.transactionAsync(async (tx) => {
+  await db!.withTransactionAsync(async () => {
     // Nettoyage complet
-    await tx.runAsync('DELETE FROM bets');
-    await tx.runAsync('DELETE FROM lessons');
-    await tx.runAsync('DELETE FROM calibrations');
-    await tx.runAsync('DELETE FROM daily_reports');
+    await db!.runAsync('DELETE FROM bets');
+    await db!.runAsync('DELETE FROM lessons');
+    await db!.runAsync('DELETE FROM calibrations');
+    await db!.runAsync('DELETE FROM daily_reports');
 
     // Restauration des paris
     for (const bet of data.bets) {
-      await tx.runAsync(
+      await db!.runAsync(
         `INSERT INTO bets VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           bet.id, bet.version, bet.date, bet.creneau_utc, bet.creneau_display,
@@ -351,7 +342,7 @@ export async function restoreSnapshot(data: {
 
     // Restauration des leçons
     for (const lesson of data.lessons) {
-      await tx.runAsync(
+      await db!.runAsync(
         `INSERT INTO lessons VALUES (?,?,?,?,?,?)`,
         [lesson.doc_id, lesson.motif, lesson.occurrences, lesson.regle_validation, lesson.detail, lesson.derniere_maj]
       );
@@ -359,7 +350,7 @@ export async function restoreSnapshot(data: {
 
     // Restauration des calibrations
     for (const cal of data.calibrations) {
-      await tx.runAsync(
+      await db!.runAsync(
         `INSERT INTO calibrations VALUES (?,?,?,?,?,?,?,?)`,
         [cal.market, cal.league ?? null, cal.total_predictions, cal.predictions_won,
          cal.actual_success_rate, cal.avg_predicted_prob, cal.calibration_status, cal.last_updated]
@@ -368,7 +359,7 @@ export async function restoreSnapshot(data: {
 
     // Restauration des rapports
     for (const report of data.dailyReports) {
-      await tx.runAsync(
+      await db!.runAsync(
         `INSERT INTO daily_reports VALUES (?,?,?,?,?,?,?,?,?,?)`,
         [report.date, report.bets_settled, report.bets_won, report.bets_lost,
          report.total_stake, report.total_return, report.net_pnl, report.roi,
