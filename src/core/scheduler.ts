@@ -28,8 +28,6 @@ export async function executeMorningScan(targetDate?: string): Promise<DailyPlan
   const today = targetDate || new Date().toISOString().split('T')[0];
 
   // 1. RÉCUPÉRATION DES MATCHS DU JOUR
-  // TODO : Connexion API-Football / TheOddsAPI / Football-Data
-  // Pour l'instant : matchs d'exemple
   const rawMatches = await fetchTodayFixtures(today);
 
   console.log(`📊 ${rawMatches.length} matchs détectés pour le ${today}`);
@@ -38,14 +36,12 @@ export async function executeMorningScan(targetDate?: string): Promise<DailyPlan
   const teamsDb = await getTeamsDatabase();
 
   for (const match of rawMatches) {
-    // Actualiser les données si nécessaire (nouvelles blessures, form)
-    // Exemple : si une équipe n'est pas dans la DB, on la crée
     if (!teamsDb[match.homeTeam.toLowerCase().replace(/\s/g, '-')]) {
-      console.log(`⚠️ Équipe inconnue : ${match.homeTeam} (à enrichir via API)`);
+      console.log(`⚠️ Équipe inconnue : ${match.homeTeam}`);
     }
   }
 
-  // 3. REGROUPEMENT PAR CRÉNEAUX HORAIRES (tolérance ±15 min)
+  // 3. REGROUPEMENT PAR CRÉNEAUX HORAIRES
   const slots = groupMatchesIntoSlots(rawMatches);
 
   const plan: DailyPlan = {
@@ -78,132 +74,60 @@ export async function getDailyPlan(): Promise<DailyPlan | null> {
 
 /**
  * Simule la récupération des matchs du jour via API externe
- * TODO : Remplacer par un vrai appel API (API-Football, TheOddsAPI)
  */
 async function fetchTodayFixtures(date: string): Promise<ScheduledMatchDetail[]> {
-  // Détection de la date système
   const today = new Date().toISOString().split('T')[0];
 
+  // Simulation de matchs dynamiques basés sur la date réelle
+  // TODO : Connecter une vraie API (ex: Football-Data.org)
   return [
     {
       id: `m-${today}-pl-01`,
       leagueId: 'PL',
       leagueName: 'Premier League',
       flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿',
-      homeTeam: 'Liverpool',
-      awayTeam: 'Nottingham Forest',
-      kickoff_utc: `${today}T14:00:00Z`,
-      creneau_display: '15:00',
-      odds: {
-        home: 1.35,
-        draw: 5.20,
-        away: 8.50,
-        btts_yes: 1.85,
-        btts_no: 1.95,
-        over_2_5: 1.55,
-        under_2_5: 2.40
-      },
-      context: 'Liverpool invaincu à domicile. Salah de retour.'
+      homeTeam: 'Team A (Today)',
+      awayTeam: 'Team B (Today)',
+      kickoff_utc: `${today}T15:00:00Z`,
+      creneau_display: '16:00',
+      odds: { home: 1.80, draw: 3.40, away: 4.50, btts_yes: 1.90 },
+      context: 'Match détecté le ' + today + '. Analyse IA disponible à T-90.'
     },
     {
       id: `m-${today}-pl-02`,
       leagueId: 'PL',
       leagueName: 'Premier League',
       flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿',
-      homeTeam: 'Brighton',
-      awayTeam: 'Ipswich Town',
-      kickoff_utc: `${today}T14:00:00Z`,
-      creneau_display: '15:00',
-      odds: {
-        home: 1.65,
-        draw: 4.00,
-        away: 5.00,
-        btts_yes: 1.70,
-        btts_no: 2.10,
-        over_2_5: 1.68,
-        under_2_5: 2.15
-      },
-      context: 'Brighton intense à domicile, Ipswich fragile.'
-    },
-    {
-      id: `m-${today}-pl-03`,
-      leagueId: 'PL',
-      leagueName: 'Premier League',
-      flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿',
-      homeTeam: 'Southampton',
-      awayTeam: 'Manchester United',
-      kickoff_utc: `${today}T16:30:00Z`,
-      creneau_display: '17:30',
-      odds: {
-        home: 4.50,
-        draw: 3.80,
-        away: 1.75,
-        btts_yes: 1.75,
-        btts_no: 2.05,
-        over_2_5: 1.70,
-        under_2_5: 2.10
-      },
-      context: 'Arbitre Michael Oliver. Rashford incertain.'
+      homeTeam: 'Team C (Today)',
+      awayTeam: 'Team D (Today)',
+      kickoff_utc: `${today}T15:00:00Z`,
+      creneau_display: '16:00',
+      odds: { home: 2.10, draw: 3.20, away: 3.60 },
+      context: 'Match détecté le ' + today + '.'
     },
     {
       id: `m-${today}-ll-01`,
       leagueId: 'LL',
       leagueName: 'La Liga',
       flag: '🇪🇸',
-      homeTeam: 'Real Madrid',
-      awayTeam: 'Real Sociedad',
-      kickoff_utc: `${today}T19:00:00Z`,
-      creneau_display: '20:00',
-      odds: {
-        home: 1.30,
-        draw: 5.50,
-        away: 10.00,
-        btts_yes: 1.95,
-        btts_no: 1.85,
-        over_2_5: 1.50,
-        under_2_5: 2.50
-      },
-      context: 'Mbappé et Vinicius titulaires. Real Sociedad défensive.'
+      homeTeam: 'Team E (Today)',
+      awayTeam: 'Team F (Today)',
+      kickoff_utc: `${today}T18:00:00Z`,
+      creneau_display: '19:00',
+      odds: { home: 1.50, draw: 4.20, away: 6.50 },
+      context: 'Match en soirée.'
     },
     {
-      id: `m-${today}-sa-01`,
-      leagueId: 'SA',
-      leagueName: 'Serie A',
-      flag: '🇮🇹',
-      homeTeam: 'Inter Milan',
-      awayTeam: 'Monza',
-      kickoff_utc: `${today}T19:00:00Z`,
-      creneau_display: '20:00',
-      odds: {
-        home: 1.28,
-        draw: 5.75,
-        away: 11.00,
-        btts_yes: 2.05,
-        btts_no: 1.75,
-        over_2_5: 1.48,
-        under_2_5: 2.60
-      },
-      context: 'Inter en forme, 6 victoires consécutives. Lautaro en feu.'
-    },
-    {
-      id: `m-${today}-l1-01`,
-      leagueId: 'L1',
-      leagueName: 'Ligue 1',
-      flag: '🇫🇷',
-      homeTeam: 'PSG',
-      awayTeam: 'Brest',
-      kickoff_utc: `${today}T18:45:00Z`,
-      creneau_display: '19:45',
-      odds: {
-        home: 1.22,
-        draw: 6.50,
-        away: 13.00,
-        btts_yes: 2.15,
-        btts_no: 1.68,
-        over_2_5: 1.40,
-        under_2_5: 2.90
-      },
-      context: 'PSG au Parc. Barcola et Dembélé alignés.'
+      id: `m-${today}-ll-02`,
+      leagueId: 'LL',
+      leagueName: 'La Liga',
+      flag: '🇪🇸',
+      homeTeam: 'Team G (Today)',
+      awayTeam: 'Team H (Today)',
+      kickoff_utc: `${today}T20:00:00Z`,
+      creneau_display: '21:00',
+      odds: { home: 2.50, draw: 3.10, away: 3.00 },
+      context: 'Dernier match du jour.'
     }
   ];
 }
@@ -235,16 +159,13 @@ function groupMatchesIntoSlots(matches: ScheduledMatchDetail[]): DailyScheduleSl
       matchesCount: slotMatches.length,
       matches: slotMatches,
       isT90Reached: now >= t90,
-      lineupsConfirmed: false // Sera mis à jour à T-90
+      lineupsConfirmed: false
     });
   }
 
   return slots.sort((a, b) => a.slotKickoffUtc.localeCompare(b.slotKickoffUtc));
 }
 
-/**
- * Vérifie si T-90 min est atteint pour un créneau et met à jour le flag
- */
 export async function checkAndUpdateT90Status(): Promise<void> {
   const plan = await getDailyPlan();
   if (!plan) return;
@@ -259,8 +180,7 @@ export async function checkAndUpdateT90Status(): Promise<void> {
     if (now >= t90 && !slot.isT90Reached) {
       slot.isT90Reached = true;
       updated = true;
-      console.log(`⏰ [T-90] Créneau ${slot.slotTimeDisplay} : T-90 atteint ! Génération des propositions...`);
-      // TODO : Déclencher la génération des combinés et solos (Phase 3)
+      console.log(`⏰ [T-90] Créneau ${slot.slotTimeDisplay} : T-90 atteint !`);
     }
   }
 

@@ -179,18 +179,19 @@ export default function GitSyncScreen({ navigation }: any) {
   };
 
   const handleCheckUpdate = async () => {
-    if (__DEV__) {
-      Alert.alert('Mises à jour indisponibles', 'En mode développement, les mises à jour OTA ne sont pas actives.');
-      return;
-    }
-
     setUpdating(true);
     try {
+      console.log('--- Diagnostic OTA ---');
+      console.log('Project ID:', Updates.projectId);
+      console.log('Runtime Version:', Updates.runtimeVersion);
+      console.log('Channel:', Updates.channel);
+      console.log('Update URL:', Updates.updateUrl);
+
       const update = await Updates.checkForUpdateAsync();
       if (update.isAvailable) {
         Alert.alert(
           '🚀 Mise à jour disponible',
-          'Une nouvelle version de l’application est prête. Voulez-vous l’installer maintenant ?',
+          `Une nouvelle version (${update.manifest?.id || 'ID inconnu'}) est prête. Voulez-vous l’installer ?`,
           [
             { text: 'Plus tard', style: 'cancel' },
             {
@@ -203,13 +204,19 @@ export default function GitSyncScreen({ navigation }: any) {
           ]
         );
       } else {
-        Alert.alert('✅ À jour', 'Vous utilisez déjà la dernière version disponible.');
+        Alert.alert('✅ À jour', `Aucune mise à jour trouvée sur le canal "${Updates.channel || 'inconnu'}".`);
       }
     } catch (error) {
       console.error('Erreur check updates:', error);
+      const detail = error instanceof Error ? error.message : String(error);
+
       Alert.alert(
-        '❌ Erreur',
-        `Impossible de vérifier les mises à jour.\n\nDétail : ${error instanceof Error ? error.message : String(error)}`
+        '❌ Erreur Mise à jour',
+        `Échec de la vérification.\n\n` +
+        `ID Projet : ${Updates.projectId || 'Manquant'}\n` +
+        `Canal : ${Updates.channel || 'Manquant'}\n` +
+        `Version : ${Updates.runtimeVersion || 'Manquant'}\n\n` +
+        `Détail : ${detail}`
       );
     } finally {
       setUpdating(false);
