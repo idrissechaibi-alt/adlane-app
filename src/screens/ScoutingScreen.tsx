@@ -231,9 +231,9 @@ export default function ScoutingScreen() {
         {/* Formulaire Match (affiché seulement si un match est sélectionné) */}
         {selectedMatch && (
           <View style={styles.card}>
-          <Text style={styles.cardTitle}>Détails de la Rencontre</Text>
+            <Text style={styles.cardTitle}>Détails de la Rencontre</Text>
 
-          <View style={styles.row}>
+            <View style={styles.row}>
             <View style={styles.inputContainer}>
               <Text style={styles.label}>Équipe Domicile</Text>
               <TextInput
