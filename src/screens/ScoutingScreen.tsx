@@ -334,6 +334,7 @@ export default function ScoutingScreen() {
             )}
           </TouchableOpacity>
         </View>
+        )}
 
         {/* Résultat de l'analyse */}
         {analysisResult && (
