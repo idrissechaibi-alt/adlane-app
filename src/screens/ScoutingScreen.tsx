@@ -1,7 +1,7 @@
 // Écran Scouting & Analyse IA
 // Permet d'interroger les IA sur Omniroute pour évaluer les probabilités d'un match
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -16,21 +16,59 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { analyzeMatchWithOmniroute, DEFAULT_OMNIROUTE_CONFIG, AIAnalysisOutput } from '../core/omniroute';
 import { HISTORICAL_LESSONS } from '../data/historical';
-import { lintContent } from '../core/validator';
+import { getDailyPlan, DailyPlan } from '../core/scheduler';
+import { ScheduledMatchDetail } from '../types/database';
 
 export default function ScoutingScreen() {
-  const [homeTeam, setHomeTeam] = useState('Manchester City');
-  const [awayTeam, setAwayTeam] = useState('Arsenal');
-  const [league, setLeague] = useState('Premier League');
-  const [kickoff, setKickoff] = useState('2026-09-20T16:30:00Z');
-  const [oddsHome, setOddsHome] = useState('1.95');
-  const [oddsDraw, setOddsDraw] = useState('3.50');
-  const [oddsAway, setOddsAway] = useState('4.10');
-  const [oddsBTTS, setOddsBTTS] = useState('1.72');
-  const [contextInfo, setContextInfo] = useState('Arbitre Michael Oliver. Rodri incertain.');
+  const [matches, setMatches] = useState<ScheduledMatchDetail[]>([]);
+  const [selectedMatch, setSelectedMatch] = useState<ScheduledMatchDetail | null>(null);
+
+  const [homeTeam, setHomeTeam] = useState('');
+  const [awayTeam, setAwayTeam] = useState('');
+  const [league, setLeague] = useState('');
+  const [kickoff, setKickoff] = useState('');
+  const [oddsHome, setOddsHome] = useState('');
+  const [oddsDraw, setOddsDraw] = useState('');
+  const [oddsAway, setOddsAway] = useState('');
+  const [oddsBTTS, setOddsBTTS] = useState('');
+  const [contextInfo, setContextInfo] = useState('');
 
   const [loading, setLoading] = useState(false);
+  const [planLoading, setPlanLoading] = useState(true);
   const [analysisResult, setAnalysisResult] = useState<AIAnalysisOutput | null>(null);
+
+  useEffect(() => {
+    void loadMatches();
+  }, []);
+
+  const loadMatches = async () => {
+    try {
+      const plan = await getDailyPlan();
+      if (plan) {
+        setMatches(plan.slots.flatMap(s => s.matches));
+      }
+    } catch (error) {
+      console.error('Erreur chargement matchs scouting:', error);
+    } finally {
+      setPlanLoading(false);
+    }
+  };
+
+  const handleSelectMatch = (match: ScheduledMatchDetail) => {
+    setSelectedMatch(match);
+    setHomeTeam(match.homeTeam);
+    setAwayTeam(match.awayTeam);
+    setLeague(match.leagueName);
+    setKickoff(match.kickoff_utc);
+    setOddsHome(match.odds.home?.toString() || '');
+    setOddsDraw(match.odds.draw?.toString() || '');
+    setOddsAway(match.odds.away?.toString() || '');
+    setOddsBTTS(match.odds.btts_yes?.toString() || '');
+    setContextInfo(match.context || '');
+
+    // Réinitialiser le résultat précédent
+    setAnalysisResult(null);
+  };
 
   const handleAnalyze = async () => {
     if (!homeTeam || !awayTeam) {
@@ -99,12 +137,47 @@ export default function ScoutingScreen() {
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
-          <Text style={styles.title}>Scouting & Analyse IA</Text>
+          <View style={styles.headerTop}>
+            <Text style={styles.title}>Scouting & Analyse IA</Text>
+            <TouchableOpacity onPress={() => { setSelectedMatch(null); setAnalysisResult(null); }}>
+              <Ionicons name="close-circle-outline" size={24} color="#94a3b8" />
+            </TouchableOpacity>
+          </View>
           <Text style={styles.subtitle}>Évaluation probabiliste assistée par Omniroute</Text>
         </View>
 
-        {/* Formulaire Match */}
-        <View style={styles.card}>
+        {/* Liste des matchs du jour si aucun n'est sélectionné */}
+        {!selectedMatch && (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Sélectionner un match du jour</Text>
+            {planLoading ? (
+              <ActivityIndicator color="#3b82f6" />
+            ) : matches.length > 0 ? (
+              matches.map((m) => (
+                <TouchableOpacity
+                  key={m.id}
+                  style={styles.matchPickerItem}
+                  onPress={() => handleSelectMatch(m)}
+                >
+                  <View style={styles.matchPickerLeft}>
+                    <Text style={styles.matchPickerFlag}>{m.flag}</Text>
+                    <View>
+                      <Text style={styles.matchPickerTeams}>{m.homeTeam} - {m.awayTeam}</Text>
+                      <Text style={styles.matchPickerLeague}>{m.leagueName} • {m.creneau_display}</Text>
+                    </View>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color="#475569" />
+                </TouchableOpacity>
+              ))
+            ) : (
+              <Text style={styles.emptyText}>Aucun match trouvé. Lancez d'abord le scan matinal.</Text>
+            )}
+          </View>
+        )}
+
+        {/* Formulaire Match (affiché seulement si un match est sélectionné) */}
+        {selectedMatch && (
+          <View style={styles.card}>
           <Text style={styles.cardTitle}>Détails de la Rencontre</Text>
 
           <View style={styles.row}>
@@ -268,6 +341,11 @@ const styles = StyleSheet.create({
   header: {
     marginBottom: 16,
   },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
@@ -277,6 +355,38 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#94a3b8',
     marginTop: 2,
+  },
+  matchPickerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#334155',
+  },
+  matchPickerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  matchPickerFlag: {
+    fontSize: 20,
+  },
+  matchPickerTeams: {
+    color: '#f8fafc',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  matchPickerLeague: {
+    color: '#64748b',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  emptyText: {
+    color: '#64748b',
+    fontSize: 13,
+    textAlign: 'center',
+    paddingVertical: 20,
   },
   card: {
     backgroundColor: '#1e293b',
