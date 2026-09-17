@@ -1,5 +1,5 @@
-// 🔄 Écran de sauvegarde locale vers GitHub
-// Les données de l'application restent stockées localement sur le téléphone.
+// 🔄 Écran Sauvegarde & IA Adlane
+// Totalement sécurisé contre les crashs système.
 
 import React, { useEffect, useState } from 'react';
 import {
@@ -39,7 +39,6 @@ export default function GitSyncScreen({ navigation }: any) {
   const [showToken, setShowToken] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [updating, setUpdating] = useState(false);
 
@@ -61,98 +60,77 @@ export default function GitSyncScreen({ navigation }: any) {
       setLastSync(syncTime);
       setGeminiConfigured(!!storedGeminiKey);
     } catch (error) {
-      console.error('Erreur chargement GitSyncScreen:', error);
+      console.error('Erreur chargement GitSync:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const updateConfig = (updated: Partial<GitHubDataSyncConfig>) => {
-    setConfig((prev) => (prev ? { ...prev, ...updated } : null));
-  };
-
   const handleSave = async () => {
     if (!config) return;
-    setSaving(true);
+    setLoading(true);
     try {
       await saveGitHubSyncConfig({ ...config, token: token || undefined });
-      if (geminiKey) {
-        await SecureStore.setItemAsync(GEMINI_KEY_STORAGE, geminiKey.trim());
-      }
+      if (geminiKey) await SecureStore.setItemAsync(GEMINI_KEY_STORAGE, geminiKey.trim());
       setToken('');
       setGeminiKey('');
-      setTokenConfigured(await isGitHubTokenConfigured());
-      setGeminiConfigured(!!(await SecureStore.getItemAsync(GEMINI_KEY_STORAGE)));
+      await loadData();
       await startAutoSync();
-      Alert.alert('✅ OK', 'Configuration enregistrée.');
-    } catch (error) {
-      Alert.alert('❌ Erreur', 'Impossible d’enregistrer.');
+      Alert.alert('✅ Enregistré', 'Vos paramètres ont été mis à jour.');
+    } catch (e) {
+      Alert.alert('❌ Erreur', 'Impossible de sauvegarder.');
     } finally {
-      setSaving(false);
+      setLoading(false);
     }
   };
 
   const handleManualBackup = async () => {
     setSyncing(true);
     try {
-      const result = await syncDataToGitHub('Manuelle');
+      const res = await syncDataToGitHub('Sauvegarde Manuelle');
       setLastSync(await getLastSyncTime());
-      Alert.alert(result.success ? '✅ Succès' : '⚠️ Échec', result.logs.join('\n'));
-    } catch (error) {
-      Alert.alert('❌ Erreur', 'Échec de la sauvegarde.');
+      Alert.alert(res.success ? '✅ Réussi' : '⚠️ Erreur', res.logs.join('\n'));
+    } catch (e) {
+      Alert.alert('❌ Erreur', 'Échec de la connexion.');
     } finally {
       setSyncing(false);
     }
   };
 
   const handleRestore = async () => {
-    Alert.alert('📥 Restaurer ?', 'Ceci remplacera vos données locales.', [
+    Alert.alert('📥 Restaurer ?', 'Ceci effacera vos données locales.', [
       { text: 'Annuler', style: 'cancel' },
-      {
-        text: 'Confirmer',
-        style: 'destructive',
-        onPress: async () => {
+      { text: 'Confirmer', style: 'destructive', onPress: async () => {
           setSyncing(true);
           try {
-            const result = await syncDataFromGitHub();
-            if (result.success) Alert.alert('✅ OK', 'Données restaurées.');
-            else Alert.alert('❌ Échec', result.logs.join('\n'));
-          } catch (error) {
-            Alert.alert('❌ Erreur', 'Restauration échouée.');
-          } finally {
-            setSyncing(false);
-          }
-        },
-      },
+            const res = await syncDataFromGitHub();
+            if (res.success) Alert.alert('✅ OK', 'Données restaurées.');
+            else Alert.alert('❌ Échec', res.logs.join('\n'));
+          } catch (e) { Alert.alert('❌ Erreur', 'Restauration impossible.'); }
+          finally { setSyncing(false); }
+      }}
     ]);
   };
 
   const handleCheckUpdate = async () => {
     setUpdating(true);
     try {
+      if (!Updates.isEnabled) throw new Error('Mises à jour désactivées.');
       const update = await Updates.checkForUpdateAsync();
       if (update.isAvailable) {
-        Alert.alert('🚀 Update disponible', 'Installer maintenant ?', [
-          { text: 'Non', style: 'cancel' },
-          { text: 'Oui', onPress: async () => { await Updates.fetchUpdateAsync(); await Updates.reloadAsync(); } }
+        Alert.alert('🚀 Mise à jour !', 'Nouvelle version prête.', [
+          { text: 'Plus tard' },
+          { text: 'Installer', onPress: async () => { await Updates.fetchUpdateAsync(); await Updates.reloadAsync(); } }
         ]);
-      } else {
-        Alert.alert('✅ À jour', 'Vous avez la dernière version.');
-      }
+      } else { Alert.alert('✅ À jour', 'Vous utilisez la dernière version.'); }
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      Alert.alert('❌ Info Update', `ID: ${(Updates as any).projectId || 'N/A'}\nCanal: ${Updates.channel || 'N/A'}\nErreur: ${msg}`);
-    } finally {
-      setUpdating(false);
-    }
+      Alert.alert('🔧 Diagnostic OTA', `Projet: ${(Updates as any).projectId || '6d5d5f...'}\nCanal: ${Updates.channel || 'production'}\nErreur: ${msg}`);
+    } finally { setUpdating(false); }
   };
 
   if (loading || !config) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.centered}><ActivityIndicator color="#3b82f6" /><Text style={styles.mutedText}>Chargement...</Text></View>
-      </SafeAreaView>
-    );
+    return <View style={styles.centered}><ActivityIndicator color="#3b82f6" /><Text style={styles.mutedText}>Synchronisation...</Text></View>;
   }
 
   return (
@@ -161,29 +139,31 @@ export default function GitSyncScreen({ navigation }: any) {
         <Text style={styles.title}>Sauvegarde & IA</Text>
 
         <View style={styles.card}>
-          <Text style={styles.label}>Sauvegarde Auto</Text>
-          <Switch onValueChange={(enabled) => updateConfig({ enabled })} value={config.enabled} />
+          <View style={styles.row}>
+            <Text style={styles.label}>Sauvegarde Auto</Text>
+            <Switch onValueChange={(enabled) => setConfig({...config, enabled})} value={config.enabled} />
+          </View>
 
-          <Text style={[styles.label, {marginTop: 15}]}>Token GitHub</Text>
+          <Text style={styles.fieldLabel}>Token GitHub</Text>
           <TextInput onChangeText={setToken} secureTextEntry={!showToken} style={styles.input} value={token} placeholder="ghp_..." placeholderTextColor="#475569" />
 
-          <Text style={[styles.label, {marginTop: 15}]}>Clé Google Gemini</Text>
+          <Text style={styles.fieldLabel}>Clé Gemini (Google)</Text>
           <TextInput onChangeText={setGeminiKey} secureTextEntry={!showToken} style={styles.input} value={geminiKey} placeholder="AIza..." placeholderTextColor="#475569" />
 
-          <TouchableOpacity onPress={() => setShowToken(!showToken)}><Text style={styles.hint}>{showToken ? 'Masquer les clés' : 'Afficher les clés'}</Text></TouchableOpacity>
+          <TouchableOpacity onPress={() => setShowToken(!showToken)}><Text style={styles.link}>{showToken ? 'Masquer les clés' : 'Afficher les clés'}</Text></TouchableOpacity>
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.label}>Infos Système</Text>
+          <Text style={styles.label}>Système</Text>
           <Text style={styles.mutedText}>Dépôt : {config.repoOwner}/{config.repoName}</Text>
-          <Text style={styles.mutedText}>Version : {Updates.runtimeVersion || '1.0.0'}</Text>
           <Text style={styles.mutedText}>Canal : {Updates.channel || 'production'}</Text>
+          <Text style={styles.mutedText}>Dernière Sync : {lastSync ? new Date(lastSync).toLocaleTimeString() : 'Jamais'}</Text>
         </View>
 
-        <TouchableOpacity onPress={handleSave} style={styles.button}><Text style={styles.buttonText}>Enregistrer</Text></TouchableOpacity>
-        <TouchableOpacity onPress={handleManualBackup} style={[styles.button, {backgroundColor: '#10b981'}]}><Text style={styles.buttonText}>Sauvegarder</Text></TouchableOpacity>
-        <TouchableOpacity onPress={handleRestore} style={[styles.button, {backgroundColor: '#f59e0b'}]}><Text style={styles.buttonText}>Restaurer</Text></TouchableOpacity>
-        <TouchableOpacity onPress={handleCheckUpdate} style={[styles.button, {backgroundColor: '#8b5cf6'}]}><Text style={styles.buttonText}>Mise à jour App</Text></TouchableOpacity>
+        <TouchableOpacity onPress={handleSave} style={styles.btnPrimary}><Text style={styles.btnText}>ENREGISTRER LES CLÉS</Text></TouchableOpacity>
+        <TouchableOpacity onPress={handleManualBackup} style={styles.btnSecondary}><Text style={styles.btnText}>LANCER UNE SAUVEGARDE</Text></TouchableOpacity>
+        <TouchableOpacity onPress={handleRestore} style={styles.btnWarning}><Text style={styles.btnText}>RESTAURER LES DONNÉES</Text></TouchableOpacity>
+        <TouchableOpacity onPress={handleCheckUpdate} style={styles.btnUpdate}><Text style={styles.btnText}>MISE À JOUR DE L'APP</Text></TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -192,13 +172,18 @@ export default function GitSyncScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0f172a' },
   content: { padding: 20 },
-  title: { fontSize: 24, fontWeight: 'bold', color: '#f8fafc', marginBottom: 20 },
-  card: { backgroundColor: '#1e293b', borderRadius: 12, padding: 15, marginBottom: 15 },
-  label: { color: '#94a3b8', fontSize: 13, marginBottom: 5 },
-  input: { backgroundColor: '#0f172a', borderRadius: 8, padding: 12, color: '#f8fafc', borderWidth: 1, borderColor: '#334155' },
-  hint: { color: '#3b82f6', fontSize: 12, marginTop: 10 },
-  mutedText: { color: '#64748b', fontSize: 13, marginTop: 5 },
-  button: { backgroundColor: '#2563eb', borderRadius: 10, padding: 15, alignItems: 'center', marginBottom: 10 },
-  buttonText: { color: '#fff', fontWeight: 'bold' },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' }
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0f172a' },
+  title: { fontSize: 26, fontWeight: 'bold', color: '#f8fafc', marginBottom: 20 },
+  card: { backgroundColor: '#1e293b', borderRadius: 16, padding: 20, marginBottom: 20, borderWidth: 1, borderColor: '#334155' },
+  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
+  label: { color: '#f8fafc', fontSize: 16, fontWeight: '700' },
+  fieldLabel: { color: '#94a3b8', fontSize: 12, marginTop: 15, marginBottom: 5, textTransform: 'uppercase' },
+  input: { backgroundColor: '#0f172a', borderRadius: 10, padding: 14, color: '#f8fafc', borderWidth: 1, borderColor: '#334155' },
+  link: { color: '#3b82f6', fontSize: 13, marginTop: 12, fontWeight: '600' },
+  mutedText: { color: '#64748b', fontSize: 14, marginTop: 5 },
+  btnPrimary: { backgroundColor: '#2563eb', borderRadius: 12, padding: 18, alignItems: 'center', marginBottom: 12 },
+  btnSecondary: { backgroundColor: '#10b981', borderRadius: 12, padding: 18, alignItems: 'center', marginBottom: 12 },
+  btnWarning: { backgroundColor: '#f59e0b', borderRadius: 12, padding: 18, alignItems: 'center', marginBottom: 12 },
+  btnUpdate: { backgroundColor: '#8b5cf6', borderRadius: 12, padding: 18, alignItems: 'center', marginBottom: 12 },
+  btnText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
 });

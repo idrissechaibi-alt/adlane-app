@@ -34,6 +34,7 @@ export async function initDatabase(): Promise<void> {
         total_stake REAL, total_return REAL, net_pnl REAL, roi REAL, lessons_learned TEXT, details TEXT
       );
     `);
+    console.log('✅ Base de données locale initialisée');
   } catch (error) {
     console.error('DB Init Error:', error);
   }
@@ -44,9 +45,9 @@ export async function seedDatabaseIfEmpty(): Promise<void> {
   const bets = await getAllBets();
   if (bets.length > 0) return;
 
-  await db!.withTransactionAsync(async () => {
+  await db!.withExclusiveTransactionAsync(async (txn) => {
     for (const bet of HISTORICAL_BETS) {
-      await db!.runAsync(`INSERT INTO bets VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
+      await txn.runAsync(`INSERT OR REPLACE INTO bets VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
         bet.id, bet.version, bet.date, bet.creneau_utc, bet.creneau_display, bet.league, JSON.stringify(bet.legs),
         bet.odds, bet.stake, bet.payout, bet.net_pnl, bet.excluded_from_pnl ? 1 : 0, bet.status, bet.played ? 1 : 0,
         bet.confiance, bet.confidence_level, bet.analysis, bet.resultat_verif, JSON.stringify(bet.validation_flags),
@@ -56,21 +57,82 @@ export async function seedDatabaseIfEmpty(): Promise<void> {
   });
 }
 
+// ==================== BETS ====================
+
+export async function saveBet(bet: Bet): Promise<void> {
+  if (!db) await initDatabase();
+  await db!.runAsync(`INSERT OR REPLACE INTO bets VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
+    bet.id, bet.version, bet.date, bet.creneau_utc, bet.creneau_display, bet.league, JSON.stringify(bet.legs),
+    bet.odds, bet.stake, bet.payout, bet.net_pnl, bet.excluded_from_pnl ? 1 : 0, bet.status, bet.played ? 1 : 0,
+    bet.confiance, bet.confidence_level, bet.analysis, bet.resultat_verif, JSON.stringify(bet.validation_flags),
+    bet.createdAt, bet.updatedAt
+  ]);
+}
+
 export async function getAllBets(): Promise<Bet[]> {
   if (!db) await initDatabase();
   const rows = await db!.getAllAsync('SELECT * FROM bets ORDER BY createdAt DESC');
-  return rows.map((r: any) => ({ ...r, legs: JSON.parse(r.legs), excluded_from_pnl: r.excluded_from_pnl === 1, played: r.played === 1, validation_flags: JSON.parse(r.validation_flags) }));
+  return rows.map((r: any) => ({
+    ...r,
+    legs: JSON.parse(r.legs),
+    excluded_from_pnl: r.excluded_from_pnl === 1,
+    played: r.played === 1,
+    validation_flags: JSON.parse(r.validation_flags)
+  }));
+}
+
+export async function getBetById(id: string): Promise<Bet | null> {
+  if (!db) await initDatabase();
+  const row = await db!.getFirstAsync('SELECT * FROM bets WHERE id = ?', [id]);
+  if (!row) return null;
+  const r = row as any;
+  return {
+    ...r,
+    legs: JSON.parse(r.legs),
+    excluded_from_pnl: r.excluded_from_pnl === 1,
+    played: r.played === 1,
+    validation_flags: JSON.parse(r.validation_flags)
+  };
+}
+
+// ==================== LESSONS ====================
+
+export async function saveLesson(lesson: Lesson): Promise<void> {
+  if (!db) await initDatabase();
+  await db!.runAsync(`INSERT OR REPLACE INTO lessons VALUES (?,?,?,?,?,?)`, [
+    lesson.doc_id, lesson.motif, lesson.occurrences, lesson.regle_validation, lesson.detail, lesson.derniere_maj
+  ]);
 }
 
 export async function getAllLessons(): Promise<Lesson[]> {
   if (!db) await initDatabase();
-  const rows = await db!.getAllAsync('SELECT * FROM lessons ORDER BY occurrences DESC');
-  return rows.map((r: any) => r as Lesson);
+  return await db!.getAllAsync('SELECT * FROM lessons ORDER BY occurrences DESC');
+}
+
+// ==================== CALIBRATIONS ====================
+
+export async function saveCalibration(cal: MarketCalibration): Promise<void> {
+  if (!db) await initDatabase();
+  await db!.runAsync(`INSERT OR REPLACE INTO calibrations VALUES (?,?,?,?,?,?,?,?)`, [
+    cal.market, cal.league, cal.total_predictions, cal.predictions_won,
+    cal.actual_success_rate, cal.avg_predicted_prob, cal.calibration_status, cal.last_updated
+  ]);
 }
 
 export async function getAllCalibrations(): Promise<MarketCalibration[]> {
   if (!db) await initDatabase();
   return await db!.getAllAsync('SELECT * FROM calibrations');
+}
+
+// ==================== DAILY REPORTS ====================
+
+export async function saveDailyReport(report: DailyReport): Promise<void> {
+  if (!db) await initDatabase();
+  await db!.runAsync(`INSERT OR REPLACE INTO daily_reports VALUES (?,?,?,?,?,?,?,?,?,?)`, [
+    report.date, report.bets_settled, report.bets_won, report.bets_lost,
+    report.total_stake, report.total_return, report.net_pnl, report.roi,
+    JSON.stringify(report.lessons_learned), report.details
+  ]);
 }
 
 export async function getDailyReports(limit: number = 30): Promise<DailyReport[]> {
@@ -79,31 +141,50 @@ export async function getDailyReports(limit: number = 30): Promise<DailyReport[]
   return rows.map((r: any) => ({ ...r, lessons_learned: JSON.parse(r.lessons_learned) }));
 }
 
+// ==================== RESTORE ====================
+
 export async function restoreSnapshot(data: any): Promise<void> {
   if (!db) await initDatabase();
-  await db!.withTransactionAsync(async () => {
-    await db!.runAsync('DELETE FROM bets');
-    await db!.runAsync('DELETE FROM lessons');
-    await db!.runAsync('DELETE FROM calibrations');
-    await db!.runAsync('DELETE FROM daily_reports');
+  await db!.withExclusiveTransactionAsync(async (txn) => {
+    await txn.runAsync('DELETE FROM bets');
+    await txn.runAsync('DELETE FROM lessons');
+    await txn.runAsync('DELETE FROM calibrations');
+    await txn.runAsync('DELETE FROM daily_reports');
 
-    for (const b of data.bets) {
-      await db!.runAsync(`INSERT INTO bets VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
+    for (const b of data.bets || []) {
+      await txn.runAsync(`INSERT INTO bets VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
         b.id, b.version, b.date, b.creneau_utc, b.creneau_display, b.league, JSON.stringify(b.legs),
         b.odds, b.stake, b.payout, b.net_pnl, b.excluded_from_pnl ? 1 : 0, b.status, b.played ? 1 : 0,
         b.confiance, b.confidence_level, b.analysis, b.resultat_verif, JSON.stringify(b.validation_flags),
         b.createdAt, b.updatedAt
       ]);
     }
-    // ... lessons, calibrations, daily_reports would follow same pattern
+    for (const l of data.lessons || []) {
+      await txn.runAsync(`INSERT INTO lessons VALUES (?,?,?,?,?,?)`, [
+        l.doc_id, l.motif, l.occurrences, l.regle_validation, l.detail, l.derniere_maj
+      ]);
+    }
+    for (const c of data.calibrations || []) {
+      await txn.runAsync(`INSERT INTO calibrations VALUES (?,?,?,?,?,?,?,?)`, [
+        c.market, c.league, c.total_predictions, c.predictions_won,
+        c.actual_success_rate, c.avg_predicted_prob, c.calibration_status, c.last_updated
+      ]);
+    }
+    for (const r of data.dailyReports || []) {
+      await txn.runAsync(`INSERT INTO daily_reports VALUES (?,?,?,?,?,?,?,?,?,?)`, [
+        r.date, r.bets_settled, r.bets_won, r.bets_lost, r.total_stake, r.total_return,
+        r.net_pnl, r.roi, JSON.stringify(r.lessons_learned), r.details
+      ]);
+    }
   });
 }
 
-// Minimal helpers for other functions to avoid crashes
-export async function saveBet(bet: Bet) {}
-export async function getBetById(id: string) { return null; }
-export async function saveLesson(lesson: Lesson) {}
-export async function saveCalibration(cal: MarketCalibration) {}
-export async function saveDailyReport(report: DailyReport) {}
-export async function saveOmnirouteConfig(config: any) {}
-export async function getOmnirouteConfig() { return null; }
+// CONFIG OMNIROUTE
+const CONFIG_KEY = '@omniroute_config';
+export async function saveOmnirouteConfig(config: OmnirouteConfig): Promise<void> {
+  await AsyncStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+}
+export async function getOmnirouteConfig(): Promise<OmnirouteConfig | null> {
+  const json = await AsyncStorage.getItem(CONFIG_KEY);
+  return json ? JSON.parse(json) : null;
+}
