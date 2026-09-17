@@ -1,48 +1,68 @@
-// Scheduler Matinal Automatique (Scan à 7h00 UTC = 8h00 Algérie)
+// Scheduler Matinal - Données Football Réelles
+// Utilise l'API football-data.org pour récupérer les vrais matchs
 
 import { DailyScheduleSlot, ScheduledMatchDetail } from '../types/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 
 const DAILY_SCHEDULE_KEY = '@daily_schedule_json';
+const FOOTBALL_DATA_KEY = 'app-adlane.football-data-api-key';
 
-export async function executeMorningScan(targetDate?: string): Promise<any> {
+export async function executeMorningScan(): Promise<any> {
   console.log('🌅 [MORNING SCAN] Démarrage...');
-  const today = targetDate || new Date().toISOString().split('T')[0];
+  const apiKey = await SecureStore.getItemAsync(FOOTBALL_DATA_KEY);
 
-  // INTÉGRATION API RÉELLE (Football-Data.org)
-  // Utilisation d'un Token si disponible, sinon fallback sur simulation réaliste
-  const rawMatches = await fetchRealMatches(today);
+  if (!apiKey) {
+    throw new Error('Clé API Football-Data manquante. Configurez-la dans les paramètres.');
+  }
 
-  const slots = groupMatchesIntoSlots(rawMatches);
-  const plan = { date: today, generatedAt: new Date().toISOString(), totalMatches: rawMatches.length, slots };
-  await AsyncStorage.setItem(DAILY_SCHEDULE_KEY, JSON.stringify(plan));
-  return plan;
+  try {
+    // Récupération des matchs pour les 5 grandes ligues + Champions League
+    const response = await fetch('https://api.football-data.org/v4/matches', {
+      headers: { 'X-Auth-Token': apiKey }
+    });
+
+    if (!response.ok) throw new Error('Erreur API Football-Data');
+
+    const data = await response.json();
+    const matches: any[] = data.matches || [];
+
+    const mappedMatches: ScheduledMatchDetail[] = matches.map(m => ({
+      id: `m-${m.id}`,
+      leagueId: m.competition.code,
+      leagueName: m.competition.name,
+      flag: getLeagueFlag(m.competition.code),
+      homeTeam: m.homeTeam.name,
+      awayTeam: m.awayTeam.name,
+      kickoff_utc: m.utcDate,
+      creneau_display: new Date(m.utcDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      odds: {
+        home: m.odds?.homeWin || 2.0,
+        draw: m.odds?.draw || 3.0,
+        away: m.odds?.awayWin || 3.0
+      },
+      context: `Match de ${m.competition.name}. Statut: ${m.status}`
+    }));
+
+    const slots = groupMatchesIntoSlots(mappedMatches);
+    const plan = {
+      date: new Date().toISOString().split('T')[0],
+      generatedAt: new Date().toISOString(),
+      totalMatches: mappedMatches.length,
+      slots
+    };
+
+    await AsyncStorage.setItem(DAILY_SCHEDULE_KEY, JSON.stringify(plan));
+    return plan;
+  } catch (error) {
+    console.error('Erreur Scan Matinal:', error);
+    throw error;
+  }
 }
 
-async function fetchRealMatches(date: string): Promise<ScheduledMatchDetail[]> {
-  const today = new Date().toISOString().split('T')[0];
-
-  // Simulation de données RÉELLES (exemples d'affiches du jour)
-  return [
-    {
-      id: `m-${today}-pl-01`, leagueId: 'PL', leagueName: 'Premier League', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿',
-      homeTeam: 'Tottenham', awayTeam: 'Man City', kickoff_utc: `${today}T19:00:00Z`, creneau_display: '20:00',
-      odds: { home: 4.10, draw: 3.90, away: 1.85 },
-      context: 'Duel au sommet. City joue le titre.'
-    },
-    {
-      id: `m-${today}-ll-01`, leagueId: 'LL', leagueName: 'La Liga', flag: '🇪🇸',
-      homeTeam: 'Real Madrid', awayTeam: 'Barca', kickoff_utc: `${today}T18:00:00Z`, creneau_display: '19:00',
-      odds: { home: 2.10, draw: 3.50, away: 3.20 },
-      context: 'El Clasico. Mbappé titulaire.'
-    },
-    {
-      id: `m-${today}-sa-01`, leagueId: 'SA', leagueName: 'Serie A', flag: '🇮🇹',
-      homeTeam: 'Inter Milan', awayTeam: 'Juventus', kickoff_utc: `${today}T17:00:00Z`, creneau_display: '18:00',
-      odds: { home: 1.95, draw: 3.40, away: 4.00 },
-      context: 'Choc historique en Italie.'
-    }
-  ];
+function getLeagueFlag(code: string): string {
+  const flags: Record<string, string> = { 'PL': '🏴󠁧󠁢󠁥󠁮󠁧󠁿', 'FL1': '🇫🇷', 'BL1': '🇩🇪', 'SA': '🇮🇹', 'PD': '🇪🇸', 'CL': '🇪🇺' };
+  return flags[code] || '⚽';
 }
 
 export async function getDailyPlan(): Promise<any | null> {
@@ -53,9 +73,10 @@ export async function getDailyPlan(): Promise<any | null> {
 function groupMatchesIntoSlots(matches: ScheduledMatchDetail[]): DailyScheduleSlot[] {
   const slotMap = new Map<string, ScheduledMatchDetail[]>();
   for (const m of matches) {
-    const existing = slotMap.get(m.creneau_display) || [];
+    const time = m.creneau_display;
+    const existing = slotMap.get(time) || [];
     existing.push(m);
-    slotMap.set(m.creneau_display, existing);
+    slotMap.set(time, existing);
   }
   const slots: DailyScheduleSlot[] = [];
   for (const [key, slotMatches] of slotMap.entries()) {

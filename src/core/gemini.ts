@@ -1,4 +1,4 @@
-// Connecteur direct Google Gemini API
+// Connecteur Google Gemini API Pro - Analyse Haute Précision
 
 import { Lesson } from '../types';
 import { buildSystemPrompt, AIAnalysisOutput, MatchScoutInput } from './omniroute';
@@ -6,16 +6,26 @@ import { buildSystemPrompt, AIAnalysisOutput, MatchScoutInput } from './omnirout
 export async function analyzeMatchWithGemini(
   matchInput: MatchScoutInput,
   lessons: Lesson[],
-  apiKey: string,
-  model: string = 'gemini-1.5-flash'
+  apiKey: string
 ): Promise<AIAnalysisOutput> {
+  const model = 'gemini-1.5-pro'; // PASSAGE EN VERSION PRO
   const systemPrompt = buildSystemPrompt(lessons);
-  const userPrompt = `Analyse ce match de football :
-Match : ${matchInput.homeTeam} vs ${matchInput.awayTeam}
-Compétition : ${matchInput.league}
-Coup d'envoi (UTC) : ${matchInput.kickoff_utc}
-Cotes bookmakers fournies : ${JSON.stringify(matchInput.odds || 'donnée indisponible')}
-Contexte (arbitre/compos/absences) : ${matchInput.contextInfo || 'donnée indisponible'}`;
+
+  const detailedPrompt = `Tu es l'IA Adlane, un expert mondial en probabilités sportives.
+Analyse ce match avec une précision mathématique en utilisant les données fournies et tes connaissances sur les dynamiques d'équipes.
+
+DONNÉES DU MATCH :
+- Équipes : ${matchInput.homeTeam} vs ${matchInput.awayTeam}
+- Ligue : ${matchInput.league}
+- Coup d'envoi : ${matchInput.kickoff_utc}
+- Cotes actuelles : ${JSON.stringify(matchInput.odds)}
+- Contexte : ${matchInput.contextInfo}
+
+CONSIGNES :
+1. Calcule la probabilité réelle (%) pour la Victoire Domicile, Nul et Extérieur.
+2. Identifie si une "Value" existe par rapport aux cotes du bookmaker.
+3. Applique les leçons apprises (historique fourni dans le system prompt).
+4. Retourne une analyse synthétique et tes marchés recommandés.`;
 
   try {
     const response = await fetch(
@@ -25,10 +35,10 @@ Contexte (arbitre/compos/absences) : ${matchInput.contextInfo || 'donnée indisp
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{
-            parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }]
+            parts: [{ text: `${systemPrompt}\n\n${detailedPrompt}` }]
           }],
           generationConfig: {
-            temperature: 0.2,
+            temperature: 0.15, // Plus précis, moins créatif
             responseMimeType: "application/json",
           }
         })
@@ -36,8 +46,8 @@ Contexte (arbitre/compos/absences) : ${matchInput.contextInfo || 'donnée indisp
     );
 
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(`Erreur Gemini API : ${errorData.error?.message || response.statusText}`);
+      const err = await response.json();
+      throw new Error(`Erreur API Gemini Pro : ${err.error?.message || 'Inconnue'}`);
     }
 
     const data = await response.json();
@@ -48,12 +58,12 @@ Contexte (arbitre/compos/absences) : ${matchInput.contextInfo || 'donnée indisp
       match: `${matchInput.homeTeam} - ${matchInput.awayTeam}`,
       kickoff_utc: matchInput.kickoff_utc,
       markets: parsed.markets || [],
-      generalAnalysis: parsed.generalAnalysis || 'Analyse effectuée par Gemini.',
+      generalAnalysis: parsed.generalAnalysis || 'Analyse effectuée par Gemini Pro.',
       lessonsApplied: parsed.lessonsApplied || [],
       rawResponse: content
     };
   } catch (error: any) {
-    console.error('Erreur appel Gemini:', error);
-    throw new Error(`Analyse Gemini échouée : ${error.message}`);
+    console.error('Erreur Gemini Pro:', error);
+    throw new Error(`Analyse IA échouée : ${error.message}`);
   }
 }
