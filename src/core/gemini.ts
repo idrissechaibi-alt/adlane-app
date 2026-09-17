@@ -1,4 +1,4 @@
-// Connecteur Google Gemini API Pro - Analyse Haute Précision
+// Connecteur Google Gemini API Pro - Analyse Multi-Marchés Haute Précision
 
 import { Lesson } from '../types';
 import { buildSystemPrompt, AIAnalysisOutput, MatchScoutInput } from './omniroute';
@@ -8,24 +8,29 @@ export async function analyzeMatchWithGemini(
   lessons: Lesson[],
   apiKey: string
 ): Promise<AIAnalysisOutput> {
-  const model = 'gemini-1.5-pro'; // PASSAGE EN VERSION PRO
+  const model = 'gemini-1.5-pro'; // Utilisation obligatoire du modèle PRO
   const systemPrompt = buildSystemPrompt(lessons);
 
-  const detailedPrompt = `Tu es l'IA Adlane, un expert mondial en probabilités sportives.
-Analyse ce match avec une précision mathématique en utilisant les données fournies et tes connaissances sur les dynamiques d'équipes.
+  const detailedPrompt = `Tu es l'IA Adlane Pro, expert mondial en data-scouting et analyse probabiliste.
+Analyse ce match avec une précision mathématique.
 
 DONNÉES DU MATCH :
 - Équipes : ${matchInput.homeTeam} vs ${matchInput.awayTeam}
-- Ligue : ${matchInput.league}
+- Compétition : ${matchInput.league}
 - Coup d'envoi : ${matchInput.kickoff_utc}
-- Cotes actuelles : ${JSON.stringify(matchInput.odds)}
+- Cotes : ${JSON.stringify(matchInput.odds || 'indisponible')}
 - Contexte : ${matchInput.contextInfo}
 
-CONSIGNES :
-1. Calcule la probabilité réelle (%) pour la Victoire Domicile, Nul et Extérieur.
-2. Identifie si une "Value" existe par rapport aux cotes du bookmaker.
-3. Applique les leçons apprises (historique fourni dans le system prompt).
-4. Retourne une analyse synthétique et tes marchés recommandés.`;
+TES MISSIONS (OBLIGATOIRE) :
+Pour chaque marché ci-dessous, calcule la probabilité réelle (%) et justifie avec des stats (xG, cartons moyens, corners concédés) :
+1. Résultat Final (1X2)
+2. Les deux équipes marquent (BTTS)
+3. Total de Buts (Over/Under 2.5 et Total exact estimé)
+4. Corners (Estimation du nombre total basé sur le style de jeu)
+5. Cartons Jaunes (Estimation basée sur l'arbitre et l'agressivité des équipes)
+6. Buts en 1ère mi-temps (Probabilité d'au moins 1 but avant la pause)
+
+FORMAT DE RÉPONSE : JSON Strict uniquement.`;
 
   try {
     const response = await fetch(
@@ -38,7 +43,7 @@ CONSIGNES :
             parts: [{ text: `${systemPrompt}\n\n${detailedPrompt}` }]
           }],
           generationConfig: {
-            temperature: 0.15, // Plus précis, moins créatif
+            temperature: 0.1, // Stabilité maximale des résultats
             responseMimeType: "application/json",
           }
         })
@@ -58,7 +63,7 @@ CONSIGNES :
       match: `${matchInput.homeTeam} - ${matchInput.awayTeam}`,
       kickoff_utc: matchInput.kickoff_utc,
       markets: parsed.markets || [],
-      generalAnalysis: parsed.generalAnalysis || 'Analyse effectuée par Gemini Pro.',
+      generalAnalysis: parsed.generalAnalysis || 'Analyse multi-marchés effectuée par Gemini Pro.',
       lessonsApplied: parsed.lessonsApplied || [],
       rawResponse: content
     };

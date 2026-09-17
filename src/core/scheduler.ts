@@ -1,5 +1,5 @@
-// Scheduler Matinal - Données Football Réelles
-// Utilise l'API football-data.org pour récupérer les vrais matchs
+// Scheduler Matinal - Données Football Réelles (Big 5 + Cups)
+// Utilise l'API football-data.org filtrée par codes de compétition
 
 import { DailyScheduleSlot, ScheduledMatchDetail } from '../types/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -8,21 +8,27 @@ import * as SecureStore from 'expo-secure-store';
 const DAILY_SCHEDULE_KEY = '@daily_schedule_json';
 const FOOTBALL_DATA_KEY = 'app-adlane.football-data-api-key';
 
+// Codes officiels Football-Data pour les Big 5 + Cups majeures
+const COMPETITIONS = 'PL,PD,BL1,SA,FL1,CL,FAC,CDR,DFB,CIT,CDF';
+
 export async function executeMorningScan(): Promise<any> {
-  console.log('🌅 [MORNING SCAN] Démarrage...');
+  console.log('🌅 [MORNING SCAN] Récupération des Big 5 + Cups...');
   const apiKey = await SecureStore.getItemAsync(FOOTBALL_DATA_KEY);
 
   if (!apiKey) {
-    throw new Error('Clé API Football-Data manquante. Configurez-la dans les paramètres.');
+    throw new Error('Clé API Football-Data manquante dans les paramètres.');
   }
 
   try {
-    // Récupération des matchs pour les 5 grandes ligues + Champions League
-    const response = await fetch('https://api.football-data.org/v4/matches', {
+    // Appel filtré uniquement sur les compétitions demandées
+    const response = await fetch(`https://api.football-data.org/v4/matches?competitions=${COMPETITIONS}`, {
       headers: { 'X-Auth-Token': apiKey }
     });
 
-    if (!response.ok) throw new Error('Erreur API Football-Data');
+    if (!response.ok) {
+      if (response.status === 403) throw new Error('API Football-Data : Votre plan ne permet pas d\'accéder à certaines coupes. Vérifiez votre clé.');
+      throw new Error(`Erreur API (${response.status})`);
+    }
 
     const data = await response.json();
     const matches: any[] = data.matches || [];
@@ -37,11 +43,11 @@ export async function executeMorningScan(): Promise<any> {
       kickoff_utc: m.utcDate,
       creneau_display: new Date(m.utcDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       odds: {
-        home: m.odds?.homeWin || 2.0,
-        draw: m.odds?.draw || 3.0,
-        away: m.odds?.awayWin || 3.0
+        home: m.odds?.homeWin || 0,
+        draw: m.odds?.draw || 0,
+        away: m.odds?.awayWin || 0
       },
-      context: `Match de ${m.competition.name}. Statut: ${m.status}`
+      context: `Match de ${m.competition.name}. ${m.homeTeam.name} vs ${m.awayTeam.name}.`
     }));
 
     const slots = groupMatchesIntoSlots(mappedMatches);
@@ -54,14 +60,17 @@ export async function executeMorningScan(): Promise<any> {
 
     await AsyncStorage.setItem(DAILY_SCHEDULE_KEY, JSON.stringify(plan));
     return plan;
-  } catch (error) {
-    console.error('Erreur Scan Matinal:', error);
+  } catch (error: any) {
+    console.error('Erreur Scan Matinal:', error.message);
     throw error;
   }
 }
 
 function getLeagueFlag(code: string): string {
-  const flags: Record<string, string> = { 'PL': '🏴󠁧󠁢󠁥󠁮󠁧󠁿', 'FL1': '🇫🇷', 'BL1': '🇩🇪', 'SA': '🇮🇹', 'PD': '🇪🇸', 'CL': '🇪🇺' };
+  const flags: Record<string, string> = {
+    'PL': '🏴󠁧󠁢󠁥󠁮󠁧󠁿', 'FL1': '🇫🇷', 'BL1': '🇩🇪', 'SA': '🇮🇹', 'PD': '🇪🇸',
+    'CL': '🇪🇺', 'FAC': '🏴󠁧󠁢󠁥󠁮󠁧󠁿', 'CDR': '🇪🇸', 'DFB': '🇩🇪', 'CIT': '🇮🇹', 'CDF': '🇫🇷'
+  };
   return flags[code] || '⚽';
 }
 
@@ -73,10 +82,9 @@ export async function getDailyPlan(): Promise<any | null> {
 function groupMatchesIntoSlots(matches: ScheduledMatchDetail[]): DailyScheduleSlot[] {
   const slotMap = new Map<string, ScheduledMatchDetail[]>();
   for (const m of matches) {
-    const time = m.creneau_display;
-    const existing = slotMap.get(time) || [];
+    const existing = slotMap.get(m.creneau_display) || [];
     existing.push(m);
-    slotMap.set(time, existing);
+    slotMap.set(m.creneau_display, existing);
   }
   const slots: DailyScheduleSlot[] = [];
   for (const [key, slotMatches] of slotMap.entries()) {
