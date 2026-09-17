@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-09-16T14:28:33.903Z",
+  "exportedAt": "2026-09-17T01:44:33.429Z",
   "formatVersion": 1,
   "source": "APP adlane",
   "data": {
@@ -578,92 +578,8 @@
         "updatedAt": "2026-09-12T18:00:00Z"
       }
     ],
-    "calibrations": [
-      {
-        "market": "1X2",
-        "league": null,
-        "total_predictions": 9,
-        "predictions_won": 4,
-        "actual_success_rate": 0.444,
-        "avg_predicted_prob": 0.58,
-        "calibration_status": "calibre",
-        "last_updated": "2026-09-14T00:00:00Z"
-      },
-      {
-        "market": "BTTS",
-        "league": null,
-        "total_predictions": 9,
-        "predictions_won": 5,
-        "actual_success_rate": 0.556,
-        "avg_predicted_prob": 0.65,
-        "calibration_status": "suspect",
-        "last_updated": "2026-09-14T00:00:00Z"
-      },
-      {
-        "market": "OU_2_5",
-        "league": null,
-        "total_predictions": 9,
-        "predictions_won": 5,
-        "actual_success_rate": 0.556,
-        "avg_predicted_prob": 0.62,
-        "calibration_status": "calibre",
-        "last_updated": "2026-09-14T00:00:00Z"
-      },
-      {
-        "market": "corners",
-        "league": null,
-        "total_predictions": 0,
-        "predictions_won": 0,
-        "actual_success_rate": 0,
-        "avg_predicted_prob": 0,
-        "calibration_status": "non_calibre",
-        "last_updated": "2026-09-14T00:00:00Z"
-      },
-      {
-        "market": "shots_on_target",
-        "league": null,
-        "total_predictions": 1,
-        "predictions_won": 1,
-        "actual_success_rate": 1,
-        "avg_predicted_prob": 0.7,
-        "calibration_status": "non_calibre",
-        "last_updated": "2026-09-14T00:00:00Z"
-      }
-    ],
+    "calibrations": [],
     "dailyReports": [],
-    "lessons": [
-      {
-        "doc_id": "btts-equipe-en-disette",
-        "motif": "BTTS Oui surestimé sur équipes en disette ou face à de grands gardiens",
-        "occurrences": 3,
-        "regle_validation": "WARN_BTTS_NON_CALIBRE",
-        "detail": "Sur 5 sélections BTTS récentes, 3 ont échoué (Tottenham-Everton 0-0, Man Utd-Man City 0-1, Real Sociedad-Atlético 0-3). Malus automatique si >=3 matchs sans but ou gardien à 2+ clean sheets. Une expulsion adverse n'est pas haussière.",
-        "derniere_maj": "2026-09-14"
-      },
-      {
-        "doc_id": "j4-echec-taches-planifiees-14h",
-        "motif": "Pronostic émis après coup d'envoi suite à échec de tâche planifiée",
-        "occurrences": 3,
-        "regle_validation": "BLOCK_KICKOFF_DEPASSE",
-        "detail": "Garde-fou dur : avant publication, now_utc >= kickoff_utc entraîne un refus strict. Tout état de tâche doit être observable (SUCCEEDED/FAILED/TIMEOUT).",
-        "derniere_maj": "2026-09-14"
-      },
-      {
-        "doc_id": "leg-1x2-sous-50-pourcent",
-        "motif": "Jambe 1X2 sous 50% dans un combiné est le point de rupture systématique",
-        "occurrences": 2,
-        "regle_validation": "BLOCK_1X2_SOUS_50",
-        "detail": "Cas Crystal Palace 48.5% (rouge 34e, 2-3) et Nul Sassuolo-Juve 27% (3 buts après 89e). Un 1X2 < 50% ou un nul sec est interdit dans tout combiné car trop exposé aux faits de jeu (VAR, rouge, penalty).",
-        "derniere_maj": "2026-09-14"
-      },
-      {
-        "doc_id": "faux-combines-memes-matchs",
-        "motif": "Diversification illusoire : plusieurs combinés sur le même groupe de matchs",
-        "occurrences": 1,
-        "regle_validation": "WARN_EXPOSITION_MATCH",
-        "detail": "5 combinés bâtis sur les 3 mêmes rencontres le 13/09. Deux issues mal anticipées ont détruit 3 slips simultanément. Alerte dès qu'un match dépasse 2 slips et blocage si auto-annulation.",
-        "derniere_maj": "2026-09-14"
-      }
-    ]
+    "lessons": []
   }
 }
