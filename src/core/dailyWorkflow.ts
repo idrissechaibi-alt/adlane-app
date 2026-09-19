@@ -239,8 +239,12 @@ export function generateDailyProposals(
     const devigOU = devigOddsTwoWay(match.odds.over_2_5, match.odds.under_2_5);
 
     // Évaluation 1X2 Domicile
+    // Note : sans source de xG indépendante du marché, computeEdge() ne peut pas
+    // servir de filtre (les buts attendus sont eux-mêmes dérivés des cotes,
+    // donc modèle ≈ marché par construction). On sélectionne sur la probabilité
+    // seule ; edgeRatio reste calculé pour l'affichage, sans être un filtre.
     const edgeHome = computeEdge(poisson.prob1X2.home, devig1X2.home);
-    if (poisson.prob1X2.home >= 0.50 && edgeHome.hasEdge) {
+    if (poisson.prob1X2.home >= 0.50) {
       evaluatedSelections.push({
         match,
         market: '1X2',
@@ -255,7 +259,7 @@ export function generateDailyProposals(
 
     // Évaluation 1X2 Extérieur
     const edgeAway = computeEdge(poisson.prob1X2.away, devig1X2.away);
-    if (poisson.prob1X2.away >= 0.50 && edgeAway.hasEdge) {
+    if (poisson.prob1X2.away >= 0.50) {
       evaluatedSelections.push({
         match,
         market: '1X2',
@@ -270,7 +274,7 @@ export function generateDailyProposals(
 
     // Évaluation Over 2.5
     const edgeOver = computeEdge(poisson.probOU25.over, devigOU.yes);
-    if (poisson.probOU25.over >= 0.55 && edgeOver.hasEdge) {
+    if (poisson.probOU25.over >= 0.55) {
       evaluatedSelections.push({
         match,
         market: 'OU_2_5',
@@ -285,7 +289,7 @@ export function generateDailyProposals(
 
     // Évaluation BTTS (avec malus de calibration §4.1)
     const edgeBTTS = computeEdge(poisson.probBTTS.yes, devigBTTS.yes);
-    if (poisson.probBTTS.yes >= 0.58 && edgeBTTS.hasEdge) {
+    if (poisson.probBTTS.yes >= 0.58) {
       evaluatedSelections.push({
         match,
         market: 'BTTS',
@@ -329,7 +333,9 @@ export function generateDailyProposals(
       played: false,
       confiance: Math.round(sel.modelProb * 100),
       confidence_level: sel.confidence,
-      analysis: `Edge estimé +${((sel.edgeRatio - 1) * 100).toFixed(1)}%. Proba modèle ${(sel.modelProb * 100).toFixed(1)}%.`,
+      analysis: sel.edgeRatio > 1.05
+        ? `Edge estimé +${((sel.edgeRatio - 1) * 100).toFixed(1)}%. Proba modèle ${(sel.modelProb * 100).toFixed(1)}%.`
+        : `Proba modèle ${(sel.modelProb * 100).toFixed(1)}% (alignée avec le marché, aucune divergence détectée sans stats indépendantes des cotes).`,
       validation_flags: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()

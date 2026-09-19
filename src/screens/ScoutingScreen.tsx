@@ -17,6 +17,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { analyzeMatchWithOmniroute, DEFAULT_OMNIROUTE_CONFIG, AIAnalysisOutput } from '../core/omniroute';
 import { analyzeMatchWithGemini } from '../core/gemini';
+import { fetchMatchContext, PerplexitySearchResult } from '../core/perplexity';
+import { getAPIConfig } from '../api/multiAPIManager';
 import { HISTORICAL_LESSONS } from '../data/historical';
 import { getDailyPlan } from '../core/scheduler';
 import { ScheduledMatchDetail } from '../types/database';
@@ -52,6 +54,7 @@ export default function ScoutingScreen() {
   const [analysisResult, setAnalysisResult] = useState<AIAnalysisOutput | null>(null);
   const [diagnostic, setDiagnostic] = useState<AIDiagnostic | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [webSources, setWebSources] = useState<PerplexitySearchResult[]>([]);
 
   // Formulaire (caché mais utilisé pour l'auto-remplissage/ajustement)
   const [oddsHome, setOddsHome] = useState('');
@@ -94,6 +97,22 @@ export default function ScoutingScreen() {
     setLoading(true);
     setAnalysisResult(null);
     setAnalysisError(null);
+    setWebSources([]);
+
+    // Recherche web en direct (compositions probables, actualités/blessures)
+    // via Perplexity si une clé est configurée, pour donner à l'IA de vraies
+    // infos à jour plutôt que sa seule connaissance figée.
+    let webContext = '';
+    try {
+      const apiConfig = await getAPIConfig();
+      if (apiConfig.perplexity) {
+        const { contextText, sources } = await fetchMatchContext(match.homeTeam, match.awayTeam, apiConfig.perplexity);
+        webContext = contextText;
+        setWebSources(sources);
+      }
+    } catch (error: any) {
+      console.warn('Recherche web Perplexity échouée:', error.message);
+    }
 
     const matchInput = {
       homeTeam: match.homeTeam,
@@ -106,7 +125,9 @@ export default function ScoutingScreen() {
         away: match.odds.away || undefined,
         btts_yes: match.odds.btts_yes || undefined,
       },
-      contextInfo: match.context || undefined
+      contextInfo: [match.context, webContext ? `Recherche web en direct :\n${webContext}` : '']
+        .filter(Boolean)
+        .join('\n\n') || undefined
     };
 
     // Détermine le moteur IA à utiliser : Gemini (clé directe) en priorité,
@@ -211,7 +232,7 @@ export default function ScoutingScreen() {
     <View>
       <TouchableOpacity
         style={styles.backButton}
-        onPress={() => { setSelectedMatch(null); setAnalysisResult(null); setAnalysisError(null); setDiagnostic(null); }}
+        onPress={() => { setSelectedMatch(null); setAnalysisResult(null); setAnalysisError(null); setDiagnostic(null); setWebSources([]); }}
       >
         <Ionicons name="arrow-back" size={20} color="#3b82f6" />
         <Text style={styles.backButtonText}>Retour à la liste</Text>
@@ -256,6 +277,18 @@ export default function ScoutingScreen() {
             ))}
           </View>
         ) : null}
+
+        {webSources.length > 0 && (
+          <View style={styles.webSourcesBox}>
+            <Text style={styles.sectionSubTitle}>Sources web utilisées ({webSources.length}) :</Text>
+            {webSources.map((s, idx) => (
+              <View key={idx} style={styles.webSourceRow}>
+                <Ionicons name="globe-outline" size={12} color="#14b8a6" />
+                <Text style={styles.webSourceText} numberOfLines={2}>{s.title}</Text>
+              </View>
+            ))}
+          </View>
+        )}
 
         {diagnostic && (
           <View style={styles.diagnosticBox}>
@@ -327,4 +360,7 @@ const styles = StyleSheet.create({
   retryButtonText: { color: '#ffffff', fontSize: 13, fontWeight: 'bold' },
   diagnosticBox: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#334155' },
   diagnosticText: { color: '#64748b', fontSize: 11 },
+  webSourcesBox: { marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#334155' },
+  webSourceRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
+  webSourceText: { color: '#94a3b8', fontSize: 11, flex: 1 },
 });

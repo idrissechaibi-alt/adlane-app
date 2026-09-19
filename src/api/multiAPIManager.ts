@@ -11,6 +11,7 @@ export interface APIConfig {
   footballData: string;
   sportmonks: string;
   sofaScore: string;
+  perplexity: string;
   fallbackEnabled: boolean;
   maxRetries: number;
 }
@@ -21,6 +22,7 @@ const DEFAULT_CONFIG: APIConfig = {
   footballData: '',
   sportmonks: '',
   sofaScore: '',
+  perplexity: '',
   fallbackEnabled: true,
   maxRetries: 2
 };
@@ -150,6 +152,19 @@ export async function testAPIConnection(
       case 'sofaScore':
         // SofaScore n'a pas de test de connexion simple
         return true;
+
+      case 'perplexity':
+        if (!config.perplexity) return false;
+        await incrementRequestCount('perplexity');
+        const res4 = await fetch('https://api.perplexity.ai/search', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${config.perplexity}`
+          },
+          body: JSON.stringify({ query: 'test', max_results: 1 })
+        });
+        return res4.ok;
 
       default:
         return false;
