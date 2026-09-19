@@ -3,12 +3,20 @@
 import { Lesson } from '../types';
 import { buildSystemPrompt, AIAnalysisOutput, MatchScoutInput } from './omniroute';
 
+// Google retire régulièrement les anciennes versions de Gemini. On pointe sur un
+// modèle stable précis (recommandé par Google pour la prod), avec des secours
+// en cas de retrait, pour ne pas dépendre d'un correctif manuel à chaque fois.
+const GEMINI_MODEL_CANDIDATES = ['gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-flash-latest'];
+
+function isModelUnavailableError(message: string): boolean {
+  return /no longer available|not found|deprecated/i.test(message);
+}
+
 export async function analyzeMatchWithGemini(
   matchInput: MatchScoutInput,
   lessons: Lesson[],
   apiKey: string
 ): Promise<AIAnalysisOutput> {
-  const model = 'gemini-2.5-flash'; // Modèle Gemini actif (gemini-1.5-* a été retiré par Google)
   const systemPrompt = buildSystemPrompt(lessons);
 
   const detailedPrompt = `Tu es l'IA Adlane Pro, expert mondial en data-scouting et analyse probabiliste.
@@ -38,43 +46,60 @@ Ne renvoie JAMAIS moins de 10 marchés. Si une donnée manque, estime prudemment
 
 FORMAT DE RÉPONSE : JSON Strict uniquement.`;
 
-  try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{
-            parts: [{ text: `${systemPrompt}\n\n${detailedPrompt}` }]
-          }],
-          generationConfig: {
-            temperature: 0.1, // Stabilité maximale des résultats
-            responseMimeType: "application/json",
-          }
-        })
+  let lastError: Error | null = null;
+
+  for (const model of GEMINI_MODEL_CANDIDATES) {
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{
+              parts: [{ text: `${systemPrompt}\n\n${detailedPrompt}` }]
+            }],
+            generationConfig: {
+              temperature: 0.1, // Stabilité maximale des résultats
+              responseMimeType: "application/json",
+            }
+          })
+        }
+      );
+
+      if (!response.ok) {
+        const err = await response.json();
+        const message = err.error?.message || `HTTP ${response.status}`;
+        if (isModelUnavailableError(message)) {
+          console.warn(`[Gemini] Modèle "${model}" indisponible, tentative du suivant...`);
+          lastError = new Error(`Erreur API Gemini Pro : ${message}`);
+          continue;
+        }
+        throw new Error(`Erreur API Gemini Pro : ${message}`);
       }
-    );
 
-    if (!response.ok) {
-      const err = await response.json();
-      throw new Error(`Erreur API Gemini Pro : ${err.error?.message || 'Inconnue'}`);
+      const data = await response.json();
+      const content = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+      const parsed = JSON.parse(content);
+
+      return {
+        match: `${matchInput.homeTeam} - ${matchInput.awayTeam}`,
+        kickoff_utc: matchInput.kickoff_utc,
+        markets: parsed.markets || [],
+        generalAnalysis: parsed.generalAnalysis || 'Analyse multi-marchés effectuée par Gemini Pro.',
+        lessonsApplied: parsed.lessonsApplied || [],
+        rawResponse: content
+      };
+    } catch (error: any) {
+      if (isModelUnavailableError(error.message || '')) {
+        lastError = error;
+        continue;
+      }
+      console.error('Erreur Gemini Pro:', error);
+      throw new Error(`Analyse IA échouée : ${error.message}`);
     }
-
-    const data = await response.json();
-    const content = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-    const parsed = JSON.parse(content);
-
-    return {
-      match: `${matchInput.homeTeam} - ${matchInput.awayTeam}`,
-      kickoff_utc: matchInput.kickoff_utc,
-      markets: parsed.markets || [],
-      generalAnalysis: parsed.generalAnalysis || 'Analyse multi-marchés effectuée par Gemini Pro.',
-      lessonsApplied: parsed.lessonsApplied || [],
-      rawResponse: content
-    };
-  } catch (error: any) {
-    console.error('Erreur Gemini Pro:', error);
-    throw new Error(`Analyse IA échouée : ${error.message}`);
   }
+
+  console.error('Erreur Gemini Pro: tous les modèles candidats sont indisponibles', lastError);
+  throw new Error(`Analyse IA échouée : ${lastError?.message || 'Aucun modèle Gemini disponible'}`);
 }
