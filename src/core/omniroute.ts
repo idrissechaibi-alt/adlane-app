@@ -226,11 +226,51 @@ function mergeMarkets(results: RawAgentResult[]): AIAnalysisOutput['markets'] {
   return merged;
 }
 
+// Modèles jamais utilisés (consomment les crédits Anthropic de l'utilisateur
+// via son propre compte relié à Omniroute, contrairement aux autres providers).
+const NEVER_USE_PATTERN = /claude|anthropic/i;
+
+// Heuristique de qualité pour prioriser les "meilleurs" modèles dans la ronde :
+// on reconnaît les familles de modèles haut de gamme connues par leur nom
+// (peu importe le préfixe/provider exact du déploiement Omniroute de
+// l'utilisateur) et on leur donne un score plus élevé. Les noms non reconnus
+// (agents custom type "Clodiko") gardent un score neutre et restent dans
+// l'ordre où l'utilisateur les a sélectionnés.
+const QUALITY_PATTERNS: Array<{ pattern: RegExp; score: number }> = [
+  { pattern: /gpt-?5|o3|gpt-4\.5/i, score: 100 },
+  { pattern: /gemini-?3|gemini-2\.5-pro/i, score: 95 },
+  { pattern: /gpt-4o|gemini-2\.5-flash|mercury-2\.5|deepseek-r1/i, score: 85 },
+  { pattern: /llama-3\.1-405b|mixtral-8x22b|qwen-?2\.5-72b/i, score: 80 },
+  { pattern: /mercury-2|gemini-flash|gpt-4-turbo/i, score: 70 },
+];
+
+function scoreModel(model: string): number {
+  for (const { pattern, score } of QUALITY_PATTERNS) {
+    if (pattern.test(model)) return score;
+  }
+  return 50; // score neutre pour un agent non reconnu
+}
+
 /**
- * Envoie une requête d'analyse à Omniroute. Si config.selectedModel contient
- * plusieurs noms de modèles séparés par une virgule, ils sont tous interrogés
- * en parallèle et leurs réponses fusionnées (moyenne des probabilités par
- * marché, confiance la plus prudente retenue).
+ * Trie les modèles du plus prioritaire (meilleure qualité connue) au moins
+ * prioritaire, en conservant l'ordre de sélection de l'utilisateur pour les
+ * égalités (tri stable).
+ */
+function rankModels(models: string[]): string[] {
+  return models
+    .map((model, index) => ({ model, index, score: scoreModel(model) }))
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .map((m) => m.model);
+}
+
+/**
+ * Envoie une requête d'analyse à Omniroute. Système de "ronde" : les modèles
+ * configurés dans config.selectedModel sont essayés UN PAR UN, dans l'ordre
+ * de priorité (meilleurs modèles connus en premier), en s'arrêtant au premier
+ * succès — pas d'appel parallèle à tous les agents (ça coûterait un crédit
+ * par agent à chaque analyse pour rien). Si un agent échoue, on passe au
+ * suivant dans la ronde. Claude/Anthropic est systématiquement exclu pour ne
+ * jamais consommer les crédits Anthropic de l'utilisateur.
  */
 export async function analyzeMatchWithOmniroute(
   matchInput: MatchScoutInput,
@@ -248,48 +288,43 @@ Stats disponibles :
 - Domicile (${matchInput.homeTeam}) : ${JSON.stringify(matchInput.homeStats || 'donnée indisponible')}
 - Extérieur (${matchInput.awayTeam}) : ${JSON.stringify(matchInput.awayStats || 'donnée indisponible')}`;
 
-  const models = config.selectedModel
+  const allModels = config.selectedModel
     .split(/[,\n]/)
     .map((m) => m.trim())
     .filter(Boolean);
 
+  const models = rankModels(allModels.filter((m) => !NEVER_USE_PATTERN.test(m)));
+  const excludedClaude = allModels.filter((m) => NEVER_USE_PATTERN.test(m));
+
   if (models.length === 0) {
-    throw new Error('Aucun modèle Omniroute configuré.');
+    throw new Error(
+      excludedClaude.length > 0
+        ? 'Aucun modèle Omniroute utilisable : seuls des modèles Claude/Anthropic sont configurés, et ils sont exclus pour ne pas consommer tes crédits.'
+        : 'Aucun modèle Omniroute configuré.'
+    );
   }
 
-  const settled = await Promise.allSettled(
-    models.map((model) => callSingleAgent(model, systemPrompt, userPrompt, config))
-  );
-
-  const succeeded: RawAgentResult[] = [];
   const failed: Array<{ model: string; error: string }> = [];
 
-  settled.forEach((outcome, idx) => {
-    if (outcome.status === 'fulfilled') {
-      succeeded.push(outcome.value);
-    } else {
-      failed.push({ model: models[idx], error: outcome.reason?.message || String(outcome.reason) });
-      console.warn(`[Omniroute] Agent "${models[idx]}" a échoué:`, outcome.reason);
+  for (const model of models) {
+    try {
+      const result = await callSingleAgent(model, systemPrompt, userPrompt, config);
+      return {
+        match: `${matchInput.homeTeam} - ${matchInput.awayTeam}`,
+        kickoff_utc: matchInput.kickoff_utc,
+        markets: mergeMarkets([result]),
+        generalAnalysis: result.generalAnalysis,
+        lessonsApplied: result.lessonsApplied,
+        rawResponse: result.rawResponse,
+        agentsUsed: [result.model],
+        agentsFailed: failed.length > 0 ? failed : undefined
+      };
+    } catch (error: any) {
+      failed.push({ model, error: error?.message || String(error) });
+      console.warn(`[Omniroute] Agent "${model}" a échoué, passage au suivant dans la ronde:`, error);
     }
-  });
-
-  if (succeeded.length === 0) {
-    const summary = failed.map((f) => `${f.model} → ${f.error}`).join(' ; ');
-    throw new Error(`Connexion Omniroute échouée (${failed.length} agent(s)) : ${summary}`);
   }
 
-  const generalAnalysis = succeeded.length === 1
-    ? succeeded[0].generalAnalysis
-    : `Consensus de ${succeeded.length} agent(s) (${succeeded.map((r) => r.model).join(', ')}). ${succeeded[0].generalAnalysis}`;
-
-  return {
-    match: `${matchInput.homeTeam} - ${matchInput.awayTeam}`,
-    kickoff_utc: matchInput.kickoff_utc,
-    markets: mergeMarkets(succeeded),
-    generalAnalysis,
-    lessonsApplied: Array.from(new Set(succeeded.flatMap((r) => r.lessonsApplied))),
-    rawResponse: succeeded.map((r) => `--- ${r.model} ---\n${r.rawResponse}`).join('\n\n'),
-    agentsUsed: succeeded.map((r) => r.model),
-    agentsFailed: failed.length > 0 ? failed : undefined
-  };
+  const summary = failed.map((f) => `${f.model} → ${f.error}`).join(' ; ');
+  throw new Error(`Connexion Omniroute échouée (${failed.length} agent(s), ronde complète) : ${summary}`);
 }

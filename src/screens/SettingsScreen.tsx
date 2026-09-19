@@ -142,10 +142,13 @@ export default function SettingsScreen({ navigation }: any) {
       const ids: string[] = (data.data || data.models || [])
         .map((m: any) => (typeof m === 'string' ? m : m.id || m.name))
         .filter(Boolean)
+        // Claude/Anthropic jamais proposé : consommerait les crédits Anthropic
+        // de l'utilisateur au lieu des autres providers déjà payés sur Omniroute.
+        .filter((id: string) => !/claude|anthropic/i.test(id))
         .sort();
 
       if (ids.length === 0) {
-        Alert.alert('⚠️ Liste vide', "Omniroute n'a renvoyé aucun modèle. Vérifie l'endpoint et la clé API.");
+        Alert.alert('⚠️ Liste vide', "Omniroute n'a renvoyé aucun modèle utilisable (hors Claude/Anthropic, exclu). Vérifie l'endpoint et la clé API.");
         return;
       }
 
@@ -177,6 +180,11 @@ export default function SettingsScreen({ navigation }: any) {
   const handleApplyModelSelection = () => {
     setOmniroute({ ...omniroute, selectedModel: Array.from(pendingSelection).join(', ') });
     setModelPickerVisible(false);
+  };
+
+  /** Sélectionne tous les agents actuellement affichés (respecte la recherche en cours). */
+  const handleSelectAllFiltered = () => {
+    setPendingSelection((prev) => new Set([...prev, ...filteredModels]));
   };
 
   const filteredModels = useMemo(() => {
@@ -313,7 +321,7 @@ export default function SettingsScreen({ navigation }: any) {
               multiline
             />
             <Text style={styles.fieldHint}>
-              Plusieurs modèles = interrogés en parallèle, réponses fusionnées (moyenne des probabilités, avertissements cumulés). Un seul nom = un seul agent. Les noms exacts dépendent de ton serveur Omniroute : utilise le sélecteur ci-dessous plutôt que de deviner un préfixe.
+              Système de ronde : les modèles sont essayés un par un, du meilleur connu au moins bon, et le premier qui répond est utilisé (pas d'appel parallèle qui consommerait un crédit par agent). Claude/Anthropic est toujours exclu, même si sélectionné. Les noms exacts dépendent de ton serveur Omniroute : utilise le sélecteur ci-dessous plutôt que de deviner un préfixe.
             </Text>
           </View>
 
@@ -534,7 +542,7 @@ export default function SettingsScreen({ navigation }: any) {
             style={[styles.input, styles.modalSearchInput]}
             value={modelSearch}
             onChangeText={setModelSearch}
-            placeholder="Rechercher un agent (ex: claude, gpt, deepseek...)"
+            placeholder="Rechercher un agent (ex: gpt, gemini, deepseek...)"
             placeholderTextColor="#64748b"
             autoCapitalize="none"
             autoCorrect={false}
@@ -568,18 +576,27 @@ export default function SettingsScreen({ navigation }: any) {
           <View style={styles.modalFooter}>
             <TouchableOpacity
               style={styles.modalClearButton}
+              onPress={handleSelectAllFiltered}
+            >
+              <Text style={styles.modalClearButtonText}>
+                Tout sélectionner{modelSearch.trim() ? ' (filtré)' : ''}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.modalClearButton}
               onPress={() => setPendingSelection(new Set())}
             >
               <Text style={styles.modalClearButtonText}>Tout désélectionner</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.modalApplyButton}
-              onPress={handleApplyModelSelection}
-            >
-              <Ionicons name="checkmark" size={18} color="#ffffff" />
-              <Text style={styles.testButtonText}>Valider la sélection</Text>
-            </TouchableOpacity>
           </View>
+
+          <TouchableOpacity
+            style={styles.modalApplyButton}
+            onPress={handleApplyModelSelection}
+          >
+            <Ionicons name="checkmark" size={18} color="#ffffff" />
+            <Text style={styles.testButtonText}>Valider la sélection</Text>
+          </TouchableOpacity>
         </SafeAreaView>
       </Modal>
     </SafeAreaView>
@@ -840,7 +857,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   modalApplyButton: {
-    flex: 1,
     backgroundColor: '#3b82f6',
     flexDirection: 'row',
     alignItems: 'center',
@@ -848,5 +864,6 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 8,
     gap: 8,
+    marginTop: 10,
   },
 });
