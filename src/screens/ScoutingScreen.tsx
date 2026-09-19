@@ -120,13 +120,9 @@ export default function ScoutingScreen() {
       omnirouteConfig = null;
     }
 
-    const engine: Engine = geminiApiKey
-      ? 'gemini'
-      : omnirouteConfig?.enabled && omnirouteConfig.endpoint
-      ? 'omniroute'
-      : 'aucun';
+    const omnirouteAvailable = Boolean(omnirouteConfig?.enabled && omnirouteConfig.endpoint);
 
-    if (engine === 'aucun') {
+    if (!geminiApiKey && !omnirouteAvailable) {
       setLoading(false);
       const message = "Aucun moteur IA configuré. Renseignez une clé Google Gemini (Paramètres → Sauvegarde & IA) ou activez Omniroute (Paramètres → Configuration Omniroute).";
       setAnalysisError(message);
@@ -134,37 +130,52 @@ export default function ScoutingScreen() {
       return;
     }
 
-    try {
-      let result: AIAnalysisOutput;
+    // Cascade : Gemini d'abord si une clé est configurée, puis Omniroute en
+    // dernier recours si Gemini est absent ou échoue (jamais l'inverse : on
+    // ne remplace jamais une donnée factuelle par une invention de l'IA,
+    // ceci reste une analyse probabiliste de scouting).
+    let lastEngine: Engine = 'aucun';
+    let lastMessage = '';
 
-      if (engine === 'gemini') {
+    if (geminiApiKey) {
+      lastEngine = 'gemini';
+      try {
         console.log('Utilisation de Gemini Direct...');
-        result = await analyzeMatchWithGemini(matchInput, HISTORICAL_LESSONS, geminiApiKey!);
-      } else {
+        const result = await analyzeMatchWithGemini(matchInput, HISTORICAL_LESSONS, geminiApiKey);
+        setAnalysisResult(result);
+        setDiagnostic({ engine: 'gemini', status: 'success', message: `${result.markets.length} marché(s) reçu(s).`, timestamp: new Date().toISOString() });
+        setLoading(false);
+        return;
+      } catch (error: any) {
+        lastMessage = error?.message || 'Erreur inconnue';
+        console.warn('Gemini a échoué, tentative Omniroute si disponible:', lastMessage);
+      }
+    }
+
+    if (omnirouteAvailable) {
+      lastEngine = 'omniroute';
+      try {
         console.log('Utilisation de Omniroute...');
-        result = await analyzeMatchWithOmniroute(matchInput, HISTORICAL_LESSONS, {
+        const result = await analyzeMatchWithOmniroute(matchInput, HISTORICAL_LESSONS, {
           ...DEFAULT_OMNIROUTE_CONFIG,
           endpoint: omnirouteConfig!.endpoint,
           apiKey: omnirouteConfig!.apiKey,
           selectedModel: omnirouteConfig!.selectedModel || DEFAULT_OMNIROUTE_CONFIG.selectedModel,
         });
+        setAnalysisResult(result);
+        setDiagnostic({ engine: 'omniroute', status: 'success', message: `${result.markets.length} marché(s) reçu(s)${geminiApiKey ? ' (via secours Omniroute)' : ''}.`, timestamp: new Date().toISOString() });
+        setLoading(false);
+        return;
+      } catch (error: any) {
+        lastMessage = error?.message || 'Erreur inconnue';
+        console.error('Omniroute a également échoué:', lastMessage);
       }
-
-      setAnalysisResult(result);
-      setDiagnostic({
-        engine,
-        status: 'success',
-        message: `${result.markets.length} marché(s) reçu(s).`,
-        timestamp: new Date().toISOString()
-      });
-    } catch (error: any) {
-      const message = error?.message || 'Erreur inconnue';
-      console.error(`Erreur analyse IA (${engine}):`, message);
-      setAnalysisError(message);
-      setDiagnostic({ engine, status: 'error', message, timestamp: new Date().toISOString() });
-    } finally {
-      setLoading(false);
     }
+
+    console.error(`Erreur analyse IA (${lastEngine}):`, lastMessage);
+    setAnalysisError(lastMessage);
+    setDiagnostic({ engine: lastEngine, status: 'error', message: lastMessage, timestamp: new Date().toISOString() });
+    setLoading(false);
   };
 
   const renderMatchList = () => (

@@ -15,15 +15,41 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { executeMorningScan, getDailyPlan, checkAndUpdateT90Status, DailyPlan } from '../core/scheduler';
 import { generateDailyProposals, ScheduledMatch } from '../core/dailyWorkflow';
-import { DailyScheduleSlot } from '../types/database';
+import { estimateExpectedGoalsFromMarket } from '../core/poisson';
+import { DailyScheduleSlot, ScheduledMatchDetail } from '../types/database';
 import { ProposedSlip } from '../core/dailyWorkflow';
 import { HISTORICAL_BETS } from '../data/historical';
+
+/**
+ * Convertit les matchs planifiés en entrées exploitables par le moteur de
+ * propositions. Les buts attendus sont dérivés des cotes du marché (jamais
+ * inventés) ; un match sans cotes 1X2 + Over/Under exploitables est exclu
+ * plutôt que de produire une "proposition" basée sur des données fictives.
+ */
+function buildScheduledMatches(slots: DailyScheduleSlot[]): { matches: ScheduledMatch[]; skippedNoOdds: number } {
+  const matches: ScheduledMatch[] = [];
+  let skippedNoOdds = 0;
+
+  for (const slot of slots) {
+    for (const m of slot.matches as ScheduledMatchDetail[]) {
+      const estimated = estimateExpectedGoalsFromMarket(m.odds);
+      if (!estimated) {
+        skippedNoOdds++;
+        continue;
+      }
+      matches.push({ ...m, expectedHomeGoals: estimated.home, expectedAwayGoals: estimated.away });
+    }
+  }
+
+  return { matches, skippedNoOdds };
+}
 
 export default function DailyPlanScreen() {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [plan, setPlan] = useState<DailyPlan | null>(null);
   const [proposals, setProposals] = useState<ProposedSlip[]>([]);
+  const [matchesMissingOdds, setMatchesMissingOdds] = useState(0);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
 
   useEffect(() => {
@@ -42,17 +68,11 @@ export default function DailyPlanScreen() {
     const existing = await getDailyPlan();
     if (existing) {
       setPlan(existing);
-      // Si un créneau a atteint T-90, générer les propositions
-      const t90Slots = existing.slots.filter(s => s.isT90Reached);
-      if (t90Slots.length > 0 && proposals.length === 0) {
-        const allMatches: ScheduledMatch[] = existing.slots.flatMap(s => s.matches.map(m => ({
-          ...m,
-          expectedHomeGoals: 1.5, // TODO: calculer via xG de la base équipes
-          expectedAwayGoals: 1.2
-        })));
-        const generated = generateDailyProposals(allMatches, HISTORICAL_BETS);
-        setProposals(generated);
-      }
+      // Propositions générées dès que des matchs sont disponibles (pas besoin d'attendre T-90) :
+      // le compte à rebours T-90 reste affiché à titre indicatif par créneau.
+      const { matches, skippedNoOdds } = buildScheduledMatches(existing.slots);
+      setMatchesMissingOdds(skippedNoOdds);
+      setProposals(matches.length > 0 ? generateDailyProposals(matches, HISTORICAL_BETS) : []);
     }
   };
 
@@ -61,6 +81,9 @@ export default function DailyPlanScreen() {
     try {
       const newPlan = await executeMorningScan();
       setPlan(newPlan);
+      const { matches, skippedNoOdds } = buildScheduledMatches(newPlan.slots);
+      setMatchesMissingOdds(skippedNoOdds);
+      setProposals(matches.length > 0 ? generateDailyProposals(matches, HISTORICAL_BETS) : []);
     } catch (error) {
       console.error('Erreur refresh:', error);
     } finally {
@@ -73,12 +96,9 @@ export default function DailyPlanScreen() {
     try {
       const newPlan = await executeMorningScan();
       setPlan(newPlan);
-      const allMatches: ScheduledMatch[] = newPlan.slots.flatMap(s => s.matches.map(m => ({
-        ...m,
-        expectedHomeGoals: 1.5,
-        expectedAwayGoals: 1.2
-      })));
-      const generated = generateDailyProposals(allMatches, HISTORICAL_BETS);
+      const { matches, skippedNoOdds } = buildScheduledMatches(newPlan.slots);
+      setMatchesMissingOdds(skippedNoOdds);
+      const generated = matches.length > 0 ? generateDailyProposals(matches, HISTORICAL_BETS) : [];
       setProposals(generated);
     } catch (error) {
       console.error('Erreur scan matinal:', error);
@@ -156,7 +176,7 @@ export default function DailyPlanScreen() {
             ))}
 
             {/* Propositions si T-90 atteint */}
-            {slot.isT90Reached && slotProposals.length > 0 && (
+            {slotProposals.length > 0 && (
               <View style={styles.proposalsSection}>
                 <Text style={styles.proposalsTitle}>💡 Propositions Générées :</Text>
                 {slotProposals.map((prop, idx) => (
@@ -258,6 +278,17 @@ export default function DailyPlanScreen() {
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#3b82f6" />}
       >
+        {matchesMissingOdds > 0 && (
+          <View style={styles.oddsWarningBox}>
+            <Ionicons name="information-circle" size={20} color="#f59e0b" />
+            <Text style={styles.oddsWarningText}>
+              {matchesMissingOdds} match{matchesMissingOdds > 1 ? 's' : ''} sans cotes exploitables (1X2 + Over/Under) —
+              aucune proposition ne peut être calculée pour {matchesMissingOdds > 1 ? 'eux' : 'lui'}. Configurez TheOddsAPI
+              ou API-Football dans Paramètres → Gestion des API pour des cotes réelles.
+            </Text>
+          </View>
+        )}
+
         {plan && plan.slots.length > 0 ? (
           plan.slots.map(renderSlot)
         ) : (
@@ -531,5 +562,22 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#64748b',
     marginTop: 4,
+  },
+  oddsWarningBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.35)',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 12,
+  },
+  oddsWarningText: {
+    flex: 1,
+    color: '#fde68a',
+    fontSize: 12,
+    lineHeight: 18,
   },
 });

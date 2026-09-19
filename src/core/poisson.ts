@@ -118,6 +118,58 @@ export function devigOddsTwoWay(oddsYes: number, oddsNo: number): {
 }
 
 /**
+ * Estime les buts attendus (home/away) à partir des cotes du marché,
+ * quand aucune donnée xG réelle n'est disponible.
+ *
+ * Principe : le total de buts (home+away) suit une loi de Poisson de
+ * paramètre lambda_total, donc P(total > 2.5) ne dépend que de
+ * lambda_total. On recherche la paire (home, away) qui reproduit à la
+ * fois cette probabilité "Over 2.5" dévigée ET les probabilités 1X2
+ * dévigées. C'est un dévigage plus honnête qu'une valeur fixe : les
+ * buts attendus reflètent le marché réel, ils ne sont pas inventés.
+ */
+export function estimateExpectedGoalsFromMarket(odds: {
+  home: number;
+  draw: number;
+  away: number;
+  over_2_5: number;
+  under_2_5: number;
+}): { home: number; away: number } | null {
+  if (
+    !odds.home || !odds.draw || !odds.away ||
+    !odds.over_2_5 || !odds.under_2_5 ||
+    odds.home <= 1 || odds.draw <= 1 || odds.away <= 1 ||
+    odds.over_2_5 <= 1 || odds.under_2_5 <= 1
+  ) {
+    return null; // Cotes absentes ou invalides : impossible d'estimer honnêtement
+  }
+
+  const fair1X2 = devigOdds1X2(odds.home, odds.draw, odds.away);
+  const fairOU = devigOddsTwoWay(odds.over_2_5, odds.under_2_5);
+
+  let best = { home: 1.3, away: 1.1 };
+  let bestError = Infinity;
+
+  for (let home = 0.3; home <= 4.0; home += 0.1) {
+    for (let away = 0.3; away <= 4.0; away += 0.1) {
+      const model = computePoissonModel(home, away);
+      const error =
+        Math.pow(model.prob1X2.home - fair1X2.home, 2) +
+        Math.pow(model.prob1X2.draw - fair1X2.draw, 2) +
+        Math.pow(model.prob1X2.away - fair1X2.away, 2) +
+        Math.pow(model.probOU25.over - fairOU.yes, 2);
+
+      if (error < bestError) {
+        bestError = error;
+        best = { home, away };
+      }
+    }
+  }
+
+  return best;
+}
+
+/**
  * Calcule l'edge (écart entre modèle et marché dévigué)
  */
 export function computeEdge(modelProb: number, fairMarketProb: number): {

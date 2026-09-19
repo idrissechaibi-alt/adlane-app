@@ -7,10 +7,19 @@ import {
   Text, TextInput, TouchableOpacity, View
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   getAPIConfig, saveAPIConfig, testAPIConnection, APIConfig,
   getAllRequestCounts, resetRequestCount
 } from '../api/multiAPIManager';
+
+const OMNIROUTE_CONFIG_KEY = '@omniroute_config';
+
+interface PersistedOmnirouteConfig {
+  endpoint: string;
+  selectedModel: string;
+  enabled: boolean;
+}
 
 interface APISourceMeta {
   id: keyof Omit<APIConfig, 'fallbackEnabled' | 'maxRetries'>;
@@ -48,15 +57,21 @@ const API_SOURCES: APISourceMeta[] = [
 export default function APIManagementScreen({ navigation }: any) {
   const [config, setConfig] = useState<APIConfig | null>(null);
   const [counts, setCounts] = useState<Record<string, number>>({});
+  const [omniroute, setOmniroute] = useState<PersistedOmnirouteConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState<string | null>(null);
 
   const loadAll = useCallback(async () => {
     try {
-      const [cfg, reqCounts] = await Promise.all([getAPIConfig(), getAllRequestCounts()]);
+      const [cfg, reqCounts, omniRaw] = await Promise.all([
+        getAPIConfig(),
+        getAllRequestCounts(),
+        AsyncStorage.getItem(OMNIROUTE_CONFIG_KEY),
+      ]);
       setConfig(cfg);
       setCounts(reqCounts);
+      setOmniroute(omniRaw ? JSON.parse(omniRaw) : null);
     } catch {
       // conserve l'état précédent si la lecture échoue
     } finally {
@@ -139,6 +154,42 @@ export default function APIManagementScreen({ navigation }: any) {
             Clés stockées localement uniquement. Chiffrées sur Android. Jamais transmises à des tiers.
             Cette configuration alimente l'onglet "Données Foot".
           </Text>
+        </View>
+
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Ionicons name="flask" size={22} color="#3b82f6" />
+            <View style={{ flex: 1, marginLeft: 10 }}>
+              <Text style={styles.sourceName}>Omniroute (moteur IA de secours)</Text>
+              <Text style={styles.sourceDesc}>
+                Utilisé uniquement pour l'analyse Scouting IA, en secours si Gemini est absent ou échoue.
+                Ne fournit jamais de données factuelles (calendriers, scores).
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.counterRow}>
+            <View style={styles.counterLeft}>
+              <Ionicons
+                name={omniroute?.enabled && omniroute.endpoint ? 'checkmark-circle' : 'close-circle'}
+                size={14}
+                color={omniroute?.enabled && omniroute.endpoint ? '#10b981' : '#64748b'}
+              />
+              <Text style={styles.counterText}>
+                {omniroute?.enabled && omniroute.endpoint
+                  ? `Actif • ${omniroute.selectedModel || 'modèle par défaut'}`
+                  : 'Non configuré / désactivé'}
+              </Text>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={[styles.testBtn, { backgroundColor: '#3b82f6' }]}
+            onPress={() => navigation.navigate('SettingsMain')}
+          >
+            <Ionicons name="settings-outline" size={16} color="#fff" />
+            <Text style={styles.testBtnText}>Configurer dans Paramètres</Text>
+          </TouchableOpacity>
         </View>
 
         {API_SOURCES.map((source) => {
