@@ -66,6 +66,11 @@ export class FootballAPIManager {
     date: string
   ): Promise<APIResponse<FootballMatch[]>> {
     const results: APIResponse<FootballMatch[]>[] = [];
+    // Une réponse "réussie" mais avec 0 match (ex : mauvais league ID pour la
+    // source, ou paramètre manquant côté API) ne doit PAS arrêter la
+    // cascade — sinon les sources suivantes qui ont de vraies données ne sont
+    // jamais essayées. On la garde de côté comme dernier recours seulement.
+    let lastEmptySuccess: APIResponse<FootballMatch[]> | null = null;
 
     for (const source of this.config.priority!) {
       let result: APIResponse<FootballMatch[]>;
@@ -100,15 +105,25 @@ export class FootballAPIManager {
 
       results.push(result);
 
-      if (result.success) {
+      if (result.success && result.data && result.data.length > 0) {
         console.log(`[API] Got fixtures from ${source}`);
         return result;
       }
 
-      console.warn(`[API] ${source} failed: ${result.error}`);
+      if (result.success) {
+        console.log(`[API] ${source} répond mais 0 match, on essaie la source suivante`);
+        lastEmptySuccess = result;
+      } else {
+        console.warn(`[API] ${source} failed: ${result.error}`);
+      }
     }
 
-    // Si aucune API n'a réussi
+    // Aucune source n'a de match : si au moins une a réellement répondu (juste
+    // vide), on renvoie ce résultat honnête plutôt qu'une fausse erreur.
+    if (lastEmptySuccess) {
+      return lastEmptySuccess;
+    }
+
     return {
       success: false,
       error: `All API sources failed: ${results.map(r => r.error).join(', ')}`,

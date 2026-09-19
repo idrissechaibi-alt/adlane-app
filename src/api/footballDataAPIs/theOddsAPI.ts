@@ -222,3 +222,93 @@ function mapOddsMarket(key: string): MarketOdds['market'] {
   };
   return marketMap[key] || '1X2';
 }
+
+// Codes de compétition football-data.org -> clé "sport" TheOddsAPI. Les
+// coupes nationales (FAC, CDR, DFB, CIT, CDF) ne sont volontairement pas
+// mappées : TheOddsAPI ne les couvre pas de façon fiable.
+export const FOOTBALL_DATA_TO_ODDS_SPORT_KEY: Record<string, string> = {
+  PL: 'soccer_epl',
+  PD: 'soccer_spain_la_liga',
+  SA: 'soccer_italy_serie_a',
+  BL1: 'soccer_germany_bundesliga',
+  FL1: 'soccer_france_ligue_one',
+  CL: 'soccer_uefa_champs_league',
+};
+
+export interface SimpleMatchOdds {
+  homeTeam: string;
+  awayTeam: string;
+  kickoff_utc: string;
+  home?: number;
+  draw?: number;
+  away?: number;
+  over_2_5?: number;
+  under_2_5?: number;
+}
+
+/**
+ * Récupère les cotes 1X2 + Over/Under 2.5 pour TOUS les matchs à venir d'une
+ * compétition (une seule requête par compétition, pas par match — TheOddsAPI
+ * n'expose pas de recherche par équipe). Le marché h2h pour le foot est à 3
+ * issues (home/draw/away, "Draw" n'étant ni l'équipe domicile ni l'équipe
+ * extérieure) — contrairement au sport US par défaut de ce fichier, d'où un
+ * traitement dédié de l'issue "Draw".
+ */
+export async function fetchCompetitionOdds(
+  apiKey: string,
+  sportKey: string,
+  region: 'us' | 'uk' | 'eu' | 'au' = 'eu'
+): Promise<APIResponse<SimpleMatchOdds[]>> {
+  try {
+    const response = await fetch(
+      `${BASE_URL}/sports/${sportKey}/odds?apiKey=${apiKey}&regions=${region}&markets=h2h,totals&oddsFormat=decimal`
+    );
+
+    if (!response.ok) {
+      return { success: false, error: `HTTP ${response.status}`, source: 'theOddsAPI', timestamp: new Date().toISOString() };
+    }
+
+    const data = await response.json();
+    const results: SimpleMatchOdds[] = (data || []).map((event: any) => {
+      const entry: SimpleMatchOdds = {
+        homeTeam: event.home_team,
+        awayTeam: event.away_team,
+        kickoff_utc: event.commence_time
+      };
+
+      // Prend le premier bookmaker disponible pour chaque marché (suffisant
+      // pour une estimation, pas pour un comparatif multi-bookmakers).
+      for (const bookmaker of event.bookmakers || []) {
+        const h2h = bookmaker.markets?.find((m: any) => m.key === 'h2h');
+        if (h2h && entry.home == null) {
+          for (const o of h2h.outcomes || []) {
+            if (o.name === event.home_team) entry.home = o.price;
+            else if (o.name === event.away_team) entry.away = o.price;
+            else if (o.name === 'Draw') entry.draw = o.price;
+          }
+        }
+
+        const totals = bookmaker.markets?.find((m: any) => m.key === 'totals');
+        if (totals && entry.over_2_5 == null) {
+          const line = totals.outcomes?.find((o: any) => Math.abs((o.point ?? -1) - 2.5) < 0.01);
+          if (line) {
+            for (const o of totals.outcomes || []) {
+              if (Math.abs((o.point ?? -1) - 2.5) < 0.01) {
+                if (o.name === 'Over') entry.over_2_5 = o.price;
+                else if (o.name === 'Under') entry.under_2_5 = o.price;
+              }
+            }
+          }
+        }
+
+        if (entry.home != null && entry.over_2_5 != null) break;
+      }
+
+      return entry;
+    });
+
+    return { success: true, data: results, source: 'theOddsAPI', timestamp: new Date().toISOString() };
+  } catch (error: any) {
+    return { success: false, error: error.message, source: 'theOddsAPI', timestamp: new Date().toISOString() };
+  }
+}

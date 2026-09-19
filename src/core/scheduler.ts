@@ -4,12 +4,81 @@
 import { DailyScheduleSlot, ScheduledMatchDetail } from '../types/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
+import { getAPIConfig, incrementRequestCount } from '../api/multiAPIManager';
+import { fetchCompetitionOdds, FOOTBALL_DATA_TO_ODDS_SPORT_KEY, SimpleMatchOdds } from '../api/footballDataAPIs/theOddsAPI';
 
 const DAILY_SCHEDULE_KEY = '@daily_schedule_json';
 const FOOTBALL_DATA_KEY = 'app-adlane.football-data-api-key';
 
 // Codes officiels Football-Data pour les Big 5 + Cups majeures
 const COMPETITIONS = 'PL,PD,BL1,SA,FL1,CL,FAC,CDR,DFB,CIT,CDF';
+
+/**
+ * Normalise un nom d'équipe pour le comparer entre deux sources différentes
+ * (football-data.org vs TheOddsAPI n'utilisent pas exactement les mêmes
+ * libellés : "Arsenal FC" vs "Arsenal"). Best-effort : une équipe qui ne
+ * matche pas reste simplement sans cotes, jamais de donnée inventée.
+ */
+function normalizeTeamName(name: string): string {
+  return name
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/\b(fc|cf|afc|sc|ac|cd|ud|rc|ssd|calcio|club|ss|as)\b/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
+/**
+ * football-data.org (fixtures/résultats) ne fournit AUCUNE cote — l'ancien
+ * code lisait m.odds.* qui n'existe simplement pas dans sa réponse, d'où des
+ * cotes toujours à 0. On récupère les vraies cotes séparément via TheOddsAPI
+ * (une requête par compétition présente dans le scan du jour) et on les
+ * associe aux matchs par nom d'équipe normalisé.
+ */
+async function enrichWithRealOdds(
+  matches: Array<{ leagueId: string; homeTeam: string; awayTeam: string; odds: ScheduledMatchDetail['odds'] }>
+): Promise<void> {
+  const apiConfig = await getAPIConfig();
+  if (!apiConfig.theOddsApi) return;
+
+  const competitionsPresent = Array.from(new Set(
+    matches.map((m) => m.leagueId).filter((code) => FOOTBALL_DATA_TO_ODDS_SPORT_KEY[code])
+  ));
+  if (competitionsPresent.length === 0) return;
+
+  const oddsIndex = new Map<string, SimpleMatchOdds>();
+
+  for (const competitionCode of competitionsPresent) {
+    const sportKey = FOOTBALL_DATA_TO_ODDS_SPORT_KEY[competitionCode];
+    try {
+      await incrementRequestCount('theOddsApi');
+      const result = await fetchCompetitionOdds(apiConfig.theOddsApi, sportKey);
+      if (result.success && result.data) {
+        for (const entry of result.data) {
+          const key = `${normalizeTeamName(entry.homeTeam)}|${normalizeTeamName(entry.awayTeam)}`;
+          oddsIndex.set(key, entry);
+        }
+      } else {
+        console.warn(`[Scan Matinal] TheOddsAPI (${sportKey}) sans résultat: ${result.error}`);
+      }
+    } catch (error: any) {
+      console.warn(`[Scan Matinal] TheOddsAPI (${sportKey}) échec:`, error.message);
+    }
+  }
+
+  for (const match of matches) {
+    const key = `${normalizeTeamName(match.homeTeam)}|${normalizeTeamName(match.awayTeam)}`;
+    const found = oddsIndex.get(key);
+    if (found) {
+      if (found.home != null) match.odds.home = found.home;
+      if (found.draw != null) match.odds.draw = found.draw;
+      if (found.away != null) match.odds.away = found.away;
+      if (found.over_2_5 != null) match.odds.over_2_5 = found.over_2_5;
+      if (found.under_2_5 != null) match.odds.under_2_5 = found.under_2_5;
+    }
+  }
+}
 
 export interface DailyPlan {
   date: string;
@@ -28,6 +97,7 @@ export async function executeMorningScan(): Promise<DailyPlan> {
 
   try {
     // Appel filtré uniquement sur les compétitions demandées
+    await incrementRequestCount('footballData');
     const response = await fetch(`https://api.football-data.org/v4/matches?competitions=${COMPETITIONS}`, {
       headers: { 'X-Auth-Token': apiKey }
     });
@@ -49,17 +119,22 @@ export async function executeMorningScan(): Promise<DailyPlan> {
       awayTeam: m.awayTeam.name,
       kickoff_utc: m.utcDate,
       creneau_display: new Date(m.utcDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      // football-data.org ne fournit aucune cote (son API n'expose pas ce
+      // champ) : on part de 0 puis enrichWithRealOdds() remplit les vraies
+      // valeurs via TheOddsAPI juste après, si une clé est configurée.
       odds: {
-        home: m.odds?.homeWin || 0,
-        draw: m.odds?.draw || 0,
-        away: m.odds?.awayWin || 0,
-        btts_yes: m.odds?.bttsYes || 0,
-        btts_no: m.odds?.bttsNo || 0,
-        over_2_5: m.odds?.over25 || 0,
-        under_2_5: m.odds?.under25 || 0
+        home: 0,
+        draw: 0,
+        away: 0,
+        btts_yes: 0,
+        btts_no: 0,
+        over_2_5: 0,
+        under_2_5: 0
       },
       context: `Match de ${m.competition.name}. ${m.homeTeam.name} vs ${m.awayTeam.name}.`
     }));
+
+    await enrichWithRealOdds(mappedMatches);
 
     const slots = groupMatchesIntoSlots(mappedMatches);
     const plan: DailyPlan = {
