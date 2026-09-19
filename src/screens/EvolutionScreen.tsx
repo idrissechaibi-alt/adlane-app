@@ -11,7 +11,10 @@ import {
   SafeAreaView,
   ActivityIndicator
 } from 'react-native';
+import { Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import MarketTrendChart from '../components/MarketTrendChart';
+import { MarketDayPoint, TRACKED_MARKETS, readMarketSeries } from '../core/learnStore';
 import { getAllBets, getAllLessons, getAllCalibrations } from '../database/storage';
 import { computeMarketCalibrations } from '../core/calibration';
 import { generateDailyReport, generateImprovementReport } from '../core/reporter';
@@ -24,11 +27,17 @@ export default function EvolutionScreen() {
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [bets, setBets] = useState<Bet[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedTab, setSelectedTab] = useState<'calibration' | 'lessons' | 'report'>('calibration');
+  const [selectedTab, setSelectedTab] = useState<'courbes' | 'calibration' | 'lessons' | 'report'>('courbes');
+  const [marketSeries, setMarketSeries] = useState<MarketDayPoint[]>([]);
 
   useEffect(() => {
     if (isFocused) {
       void loadData();
+      try {
+        setMarketSeries(readMarketSeries());
+      } catch (error) {
+        console.warn('Série des marchés indisponible:', error);
+      }
     }
   }, [isFocused]);
 
@@ -183,6 +192,36 @@ export default function EvolutionScreen() {
     </View>
   );
 
+  const renderCurvesView = () => {
+    const chartWidth = Dimensions.get('window').width - 32 - 24; // marges écran + carte
+    const lastUpdate = marketSeries.length > 0
+      ? marketSeries[marketSeries.length - 1].date
+      : null;
+
+    return (
+      <View>
+        <View style={styles.curvesIntro}>
+          <Text style={styles.curvesIntroTitle}>Évolution de l'IA, marché par marché</Text>
+          <Text style={styles.curvesIntroText}>
+            Taux de réussite des prédictions réglées, mis à jour au bilan de minuit sur la journée
+            écoulée. Le pointillé marque le seuil de 60%. Chaque point compte uniquement les
+            prédictions dont le résultat réel est connu.
+            {lastUpdate ? ` Dernier bilan : ${lastUpdate}.` : ' Aucun bilan encore effectué.'}
+          </Text>
+        </View>
+
+        {TRACKED_MARKETS.map((market) => (
+          <MarketTrendChart
+            key={market.key}
+            label={market.label}
+            width={chartWidth}
+            points={marketSeries.filter((p) => p.market === market.key)}
+          />
+        ))}
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -192,6 +231,20 @@ export default function EvolutionScreen() {
 
       {/* Tabs */}
       <View style={styles.tabBar}>
+        <TouchableOpacity
+          style={[styles.tab, selectedTab === 'courbes' && styles.activeTab]}
+          onPress={() => setSelectedTab('courbes')}
+        >
+          <Ionicons
+            name="trending-up"
+            size={18}
+            color={selectedTab === 'courbes' ? '#3b82f6' : '#64748b'}
+          />
+          <Text style={[styles.tabText, selectedTab === 'courbes' && styles.activeTabText]}>
+            Courbes
+          </Text>
+        </TouchableOpacity>
+
         <TouchableOpacity
           style={[styles.tab, selectedTab === 'calibration' && styles.activeTab]}
           onPress={() => setSelectedTab('calibration')}
@@ -236,6 +289,7 @@ export default function EvolutionScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
+        {selectedTab === 'courbes' && renderCurvesView()}
         {selectedTab === 'calibration' && renderCalibrationView()}
         {selectedTab === 'lessons' && renderLessonsView()}
         {selectedTab === 'report' && renderReportView()}
@@ -245,6 +299,25 @@ export default function EvolutionScreen() {
 }
 
 const styles = StyleSheet.create({
+  curvesIntro: {
+    backgroundColor: 'rgba(96, 165, 250, 0.08)',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(96, 165, 250, 0.25)',
+    padding: 12,
+    marginBottom: 12,
+  },
+  curvesIntroTitle: {
+    color: '#bfdbfe',
+    fontSize: 13,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  curvesIntroText: {
+    color: '#94a3b8',
+    fontSize: 11,
+    lineHeight: 16,
+  },
   container: {
     flex: 1,
     backgroundColor: '#0f172a',

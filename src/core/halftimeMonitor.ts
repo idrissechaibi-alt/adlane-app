@@ -1,14 +1,10 @@
 // Moniteur mi-temps — détecte quand un match du plan du jour atteint la
 // mi-temps, récupère le score + les stats déjà jouées via API-Football
 // (source live), recalibre l'estimation de 2ème mi-temps (src/core/poisson.ts)
-// et envoie une notification locale si une opportunité claire ressort.
+// et propose un COMBO portant sur la suite du match.
 //
-// LIMITE CONNUE : ceci ne tourne que pendant que l'app est ouverte (premier
-// plan ou arrière-plan récent) — Android tue les timers JS d'une app
-// totalement fermée depuis longtemps. Une vraie notification "app fermée"
-// nécessiterait une tâche native planifiée (expo-task-manager +
-// expo-background-fetch), qui demande son propre build natif et n'est pas
-// mise en place ici.
+// Tourne aussi bien depuis la tâche native planifiée (app fermée) que depuis
+// la boucle de premier plan.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getDailyPlan } from './scheduler';
@@ -16,38 +12,24 @@ import { getAPIConfig } from '../api/multiAPIManager';
 import { estimateExpectedGoalsFromMarket, estimateSecondHalfMarket, SecondHalfMarket } from './poisson';
 import { normalizeTeamName } from './teamNameMatch';
 import { sendLocalNotification } from './notifications';
+import { InPlayProposal, TrackedMarket, readInPlayProposals, writeInPlayProposals } from './learnStore';
 import { ScheduledMatchDetail } from '../types/database';
 
+/**
+ * Traduit un marché de la re-projection de mi-temps (poisson.ts) vers le
+ * marché suivi dans la courbe d'évolution.
+ */
+function marketForHalftimeMarket(market: string): TrackedMarket {
+  if (market.includes('1X2')) return '1X2';
+  if (market.includes('btts')) return 'btts';
+  if (market.includes('over_2_5')) return 'total_buts';
+  return 'buts_1ere_mt';
+}
+
 const NOTIFIED_KEY_PREFIX = '@halftime_notified_';
-const ALERTS_LOG_KEY = '@halftime_alerts_log';
-const MAX_LOG_ENTRIES = 50;
-
-export interface HalftimeAlertLogEntry {
-  matchId: string;
-  homeTeam: string;
-  awayTeam: string;
-  htScore: { home: number; away: number };
-  market: string;
-  selection: string;
-  estimated_prob: number;
-  confidence: 'Faible' | 'Moyen' | 'Élevé';
-  timestamp: string;
-}
-
-export async function getHalftimeAlertsLog(): Promise<HalftimeAlertLogEntry[]> {
-  try {
-    const raw = await AsyncStorage.getItem(ALERTS_LOG_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-async function appendToAlertsLog(entry: HalftimeAlertLogEntry): Promise<void> {
-  const log = await getHalftimeAlertsLog();
-  log.unshift(entry);
-  await AsyncStorage.setItem(ALERTS_LOG_KEY, JSON.stringify(log.slice(0, MAX_LOG_ENTRIES)));
-}
+/** Probabilité minimale pour qu'un marché entre dans le combo de mi-temps. */
+const MIN_LEG_PROB = 0.55;
+const MAX_LEGS = 3;
 
 // Fenêtre de détection : la mi-temps réelle tombe généralement entre 45 et
 // 55 minutes après le coup d'envoi (temps additionnel compris) ; on élargit
@@ -211,29 +193,52 @@ export async function checkHalftimeOpportunities(): Promise<void> {
       htStats
     });
 
-    const top = pickTopMarket(estimate.markets);
     // On marque comme "traité" dans tous les cas pour ne jamais renvoyer une
     // notification en boucle sur ce même match, même si le seuil n'est pas atteint.
     await markNotified(match.id);
 
-    if (top.estimated_prob < NOTIFY_PROB_THRESHOLD) continue;
+    // Combo portant sur la SUITE DU MATCH : on retient les marchés les plus
+    // probables issus de la re-projection (2ème MT seule + fin de match).
+    const legs = estimate.markets
+      .filter((m) => m.estimated_prob >= MIN_LEG_PROB)
+      .sort((a, b) => b.estimated_prob - a.estimated_prob)
+      .slice(0, MAX_LEGS);
 
-    await sendLocalNotification(
-      `⏸️ Mi-temps : ${match.homeTeam} ${live.homeGoals}-${live.awayGoals} ${match.awayTeam}`,
-      `${top.selection} — ${(top.estimated_prob * 100).toFixed(0)}% (${top.confidence}). ${top.reasoning}`,
-      { matchId: match.id, market: top.market }
-    );
+    if (legs.length < 2) continue; // pas de combo lisible, on se tait
 
-    await appendToAlertsLog({
-      matchId: match.id,
+    const combinedProb = legs.reduce((product, leg) => product * leg.estimated_prob, 1);
+    const scoreLabel = `${live.homeGoals}-${live.awayGoals}`;
+
+    const proposal: InPlayProposal = {
+      id: `inplay-ht-${live.fixtureId}`,
+      kind: 'halftime',
+      createdAt: new Date().toISOString(),
+      fixtureId: live.fixtureId,
+      league: match.leagueName,
       homeTeam: match.homeTeam,
       awayTeam: match.awayTeam,
-      htScore: { home: live.homeGoals, away: live.awayGoals },
-      market: top.market,
-      selection: top.selection,
-      estimated_prob: top.estimated_prob,
-      confidence: top.confidence,
-      timestamp: new Date().toISOString()
-    });
+      minute: 45,
+      scoreLabel,
+      window: 'mi-temps → fin de match',
+      legs: legs.map((leg) => ({
+        market: marketForHalftimeMarket(leg.market),
+        selection: leg.selection,
+        prob: leg.estimated_prob,
+        evidence: leg.reasoning,
+      })),
+      combinedProb,
+    };
+
+    writeInPlayProposals([...readInPlayProposals(), proposal]);
+
+    const legsText = legs
+      .map((leg) => `• ${leg.selection} (${(leg.estimated_prob * 100).toFixed(0)}%)`)
+      .join('\n');
+
+    await sendLocalNotification(
+      `⏸️ Mi-temps : ${match.homeTeam} ${scoreLabel} ${match.awayTeam}`,
+      `Combo sur la suite du match — ${(combinedProb * 100).toFixed(0)}% combiné\n${legsText}`,
+      { matchId: match.id, kind: 'halftime' }
+    );
   }
 }

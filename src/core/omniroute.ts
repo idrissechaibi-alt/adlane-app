@@ -264,6 +264,37 @@ function rankModels(models: string[]): string[] {
 }
 
 /**
+ * Requête légère (texte libre) au premier agent qui répond, en suivant la même
+ * ronde de priorité que l'analyse complète et la même exclusion de
+ * Claude/Anthropic. Sert à l'enrichissement de contexte des matchs suivis :
+ * une réponse courte, pas les 10 marchés structurés.
+ */
+export async function askOmnirouteLight(
+  systemPrompt: string,
+  userPrompt: string,
+  config: OmnirouteConfig
+): Promise<{ text: string; model: string } | null> {
+  const models = rankModels(
+    config.selectedModel
+      .split(/[,\n]/)
+      .map((m) => m.trim())
+      .filter(Boolean)
+      .filter((m) => !NEVER_USE_PATTERN.test(m))
+  );
+
+  for (const model of models) {
+    try {
+      const result = await callSingleAgent(model, systemPrompt, userPrompt, config);
+      return { text: result.rawResponse, model };
+    } catch (error: any) {
+      console.warn(`[Omniroute] Enrichissement "${model}" a échoué:`, error?.message);
+    }
+  }
+
+  return null;
+}
+
+/**
  * Envoie une requête d'analyse à Omniroute. Système de "ronde" : les modèles
  * configurés dans config.selectedModel sont essayés UN PAR UN, dans l'ordre
  * de priorité (meilleurs modèles connus en premier), en s'arrêtant au premier

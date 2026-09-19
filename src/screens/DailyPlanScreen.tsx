@@ -16,7 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { executeMorningScan, getDailyPlan, checkAndUpdateT90Status, DailyPlan } from '../core/scheduler';
 import { generateDailyProposals, ScheduledMatch } from '../core/dailyWorkflow';
 import { estimateExpectedGoalsFromMarket } from '../core/poisson';
-import { getHalftimeAlertsLog, HalftimeAlertLogEntry } from '../core/halftimeMonitor';
+import { InPlayProposal, readInPlayProposals } from '../core/learnStore';
 import { DailyScheduleSlot, ScheduledMatchDetail } from '../types/database';
 import { ProposedSlip } from '../core/dailyWorkflow';
 import { HISTORICAL_BETS } from '../data/historical';
@@ -52,27 +52,26 @@ export default function DailyPlanScreen() {
   const [proposals, setProposals] = useState<ProposedSlip[]>([]);
   const [matchesMissingOdds, setMatchesMissingOdds] = useState(0);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
-  const [halftimeAlerts, setHalftimeAlerts] = useState<HalftimeAlertLogEntry[]>([]);
+  const [inPlayProposals, setInPlayProposals] = useState<InPlayProposal[]>([]);
 
   useEffect(() => {
     loadDailyPlan();
-    loadHalftimeAlerts();
+    loadInPlayProposals();
 
     // Vérifier T-90 toutes les 30 secondes, et relire les alertes mi-temps
     // au même rythme (le moniteur tourne en tâche de fond dans App.tsx).
     const interval = setInterval(() => {
       checkAndUpdateT90Status();
       loadDailyPlan();
-      loadHalftimeAlerts();
+      loadInPlayProposals();
     }, 30000);
 
     return () => clearInterval(interval);
   }, []);
 
-  const loadHalftimeAlerts = async () => {
-    const log = await getHalftimeAlertsLog();
+  const loadInPlayProposals = () => {
     const today = new Date().toISOString().split('T')[0];
-    setHalftimeAlerts(log.filter((a) => a.timestamp.startsWith(today)));
+    setInPlayProposals(readInPlayProposals().filter((p) => p.createdAt.startsWith(today)));
   };
 
   const loadDailyPlan = async () => {
@@ -289,22 +288,27 @@ export default function DailyPlanScreen() {
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#3b82f6" />}
       >
-        {halftimeAlerts.length > 0 && (
+        {inPlayProposals.length > 0 && (
           <View style={styles.halftimeAlertsBox}>
             <View style={styles.halftimeAlertsHeader}>
-              <Ionicons name="notifications" size={18} color="#a78bfa" />
+              <Ionicons name="flash" size={18} color="#a78bfa" />
               <Text style={styles.halftimeAlertsTitle}>
-                Alertes mi-temps du jour ({halftimeAlerts.length})
+                Combos en direct du jour ({inPlayProposals.length})
               </Text>
             </View>
-            {halftimeAlerts.map((alert, idx) => (
-              <View key={`${alert.matchId}-${idx}`} style={styles.halftimeAlertRow}>
+            {inPlayProposals.map((proposal) => (
+              <View key={proposal.id} style={styles.halftimeAlertRow}>
                 <Text style={styles.halftimeAlertMatch}>
-                  {alert.homeTeam} {alert.htScore.home}-{alert.htScore.away} {alert.awayTeam}
+                  {proposal.kind === 'halftime' ? '⏸️' : '⚡'} {proposal.homeTeam} {proposal.scoreLabel} {proposal.awayTeam}
                 </Text>
-                <Text style={styles.halftimeAlertSelection}>
-                  {alert.selection} — {(alert.estimated_prob * 100).toFixed(0)}% ({alert.confidence})
+                <Text style={styles.halftimeAlertWindow}>
+                  {proposal.window} — {(proposal.combinedProb * 100).toFixed(0)}% combiné
                 </Text>
+                {proposal.legs.map((leg, legIdx) => (
+                  <Text key={legIdx} style={styles.halftimeAlertSelection}>
+                    • {leg.selection} ({(leg.prob * 100).toFixed(0)}%) — {leg.evidence}
+                  </Text>
+                ))}
               </View>
             ))}
           </View>
@@ -641,9 +645,16 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
+  halftimeAlertWindow: {
+    color: '#ddd6fe',
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 2,
+  },
   halftimeAlertSelection: {
     color: '#c4b5fd',
-    fontSize: 12,
+    fontSize: 11,
     marginTop: 2,
+    lineHeight: 15,
   },
 });

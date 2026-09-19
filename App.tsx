@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { initDatabase, seedDatabaseIfEmpty } from './src/database/storage';
 import { startAutoSync } from './src/core/gitAutoSync';
 import { ensureNotificationPermissions } from './src/core/notifications';
-import { checkHalftimeOpportunities } from './src/core/halftimeMonitor';
+import { registerBackgroundAutoLearn, runAutoLearnTick } from './src/core/backgroundTasks';
 import DashboardScreen from './src/screens/DashboardScreen';
 import DailyPlanScreen from './src/screens/DailyPlanScreen';
 import ScoutingScreen from './src/screens/ScoutingScreen';
@@ -31,9 +31,10 @@ function SettingsStack() {
   );
 }
 
-// Fréquence de vérification des opportunités mi-temps pendant que l'app est
-// ouverte. Ne fonctionne pas app totalement fermée (voir halftimeMonitor.ts).
-const HALFTIME_POLL_INTERVAL_MS = 3 * 60 * 1000;
+// Pas rapide de 3 minutes, actif seulement quand l'app est ouverte. En
+// arrière-plan c'est la tâche native (backgroundTasks.ts) qui prend le relais,
+// au plancher imposé par Android (~15 min).
+const FOREGROUND_TICK_INTERVAL_MS = 3 * 60 * 1000;
 
 export default function App() {
   useEffect(() => {
@@ -43,17 +44,18 @@ export default function App() {
         await seedDatabaseIfEmpty();
         await startAutoSync();
         await ensureNotificationPermissions();
+        await registerBackgroundAutoLearn();
       } catch (error) { console.error('Erreur initialisation App:', error); }
     };
     setupApp();
 
-    const runCheck = () => {
-      checkHalftimeOpportunities().catch((error) =>
-        console.warn('Erreur moniteur mi-temps:', error)
+    const runTick = () => {
+      runAutoLearnTick().catch((error) =>
+        console.warn('Erreur tour auto-apprentissage:', error)
       );
     };
-    runCheck();
-    const interval = setInterval(runCheck, HALFTIME_POLL_INTERVAL_MS);
+    runTick();
+    const interval = setInterval(runTick, FOREGROUND_TICK_INTERVAL_MS);
     return () => clearInterval(interval);
   }, []);
 
