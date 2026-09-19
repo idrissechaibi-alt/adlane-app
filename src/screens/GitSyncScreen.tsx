@@ -105,7 +105,7 @@ export default function GitSyncScreen({ navigation }: any) {
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.header}>
             <TouchableOpacity onPress={() => navigation.goBack()}><Ionicons name="arrow-back" size={24} color="#fff" /></TouchableOpacity>
-            <Text style={styles.title}>Configuration ✅ Test OTA</Text>
+            <Text style={styles.title}>Configuration</Text>
             <View style={{width: 24}} />
         </View>
 
