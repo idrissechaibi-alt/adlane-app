@@ -25,6 +25,29 @@ export interface MarkerSet {
   possessionHome?: number;
   cardsHome?: number;
   cardsAway?: number;
+  foulsHome?: number;
+  foulsAway?: number;
+}
+
+/**
+ * Marchés suivis dans la courbe d'évolution. Chaque prédiction émise par l'IA
+ * est rattachée à l'un d'eux pour qu'on puisse juger sa fiabilité marché par
+ * marché, et pas seulement globalement.
+ */
+export const TRACKED_MARKETS = [
+  { key: '1X2', label: 'Victoire (1X2)' },
+  { key: 'total_buts', label: 'Total de buts' },
+  { key: 'btts', label: 'Les deux marquent' },
+  { key: 'buts_1ere_mt', label: 'Buts 1ère mi-temps' },
+  { key: 'corners', label: 'Corners' },
+  { key: 'cartons', label: 'Cartons' },
+  { key: 'fautes', label: 'Fautes' },
+] as const;
+
+export type TrackedMarket = (typeof TRACKED_MARKETS)[number]['key'];
+
+export function marketLabel(key: string): string {
+  return TRACKED_MARKETS.find((m) => m.key === key)?.label ?? key;
 }
 
 /** Instantané d'un match en cours, pris pendant la 1ère mi-temps. */
@@ -48,6 +71,7 @@ export interface EventDeltas {
   goals: number;
   corners: number;
   cards: number;
+  fouls: number;
   /** true si la fenêtre a été coupée (mi-temps atteinte avant son terme). */
   truncated: boolean;
 }
@@ -67,6 +91,7 @@ export type LearningHorizon = (typeof LEARNING_HORIZONS)[number];
 export interface PendingObservation extends MarkerSnapshot {
   baselineCorners: number;
   baselineCards: number;
+  baselineFouls: number;
   /** Horizon (en minutes, clé texte) -> ce qui s'est produit pendant celui-ci. */
   frozen: Record<string, EventDeltas>;
 }
@@ -264,11 +289,45 @@ export interface InPlayProposal {
   /** Fenêtre couverte, en clair ("20e → 45e", "2ème mi-temps + fin de match"). */
   window: string;
   legs: Array<{
+    /** Marché suivi auquel cette jambe est rattachée (voir TRACKED_MARKETS). */
+    market: TrackedMarket;
     selection: string;
     prob: number;
     evidence: string;
+    /** Rempli au bilan de minuit : la jambe est-elle passée ? */
+    settled?: boolean;
+    won?: boolean;
   }>;
   combinedProb: number;
+  /** true une fois la journée close et les jambes réglées. */
+  reviewed?: boolean;
+}
+
+// ==================== COURBE D'ÉVOLUTION PAR MARCHÉ ====================
+
+/** Un point de courbe : une journée, un marché. */
+export interface MarketDayPoint {
+  date: string;
+  market: TrackedMarket;
+  predictions: number;
+  correct: number;
+  hitRate: number;
+  /** Probabilité moyenne annoncée ce jour-là (pour juger la calibration). */
+  meanPredicted: number;
+}
+
+export function readMarketSeries(): MarketDayPoint[] {
+  const content = readTextSafe(fileIn('market-series.json'));
+  if (!content) return [];
+  try {
+    return JSON.parse(content);
+  } catch {
+    return [];
+  }
+}
+
+export function writeMarketSeries(points: MarketDayPoint[]): void {
+  writeText(fileIn('market-series.json'), JSON.stringify(points.slice(-400)));
 }
 
 export function readInPlayProposals(): InPlayProposal[] {

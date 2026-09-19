@@ -14,6 +14,7 @@ import { consolidateLearning } from './autoLearn';
 import { checkHalftimeOpportunities } from './halftimeMonitor';
 import { enrichFocusMatches } from './focusEnrichment';
 import { runInPlayComboTick } from './inPlayCombos';
+import { runNightlyReviewIfDue } from './dailyReview';
 import { readLearnedModel } from './learnStore';
 
 export const AUTOLEARN_TASK_NAME = 'adlane-autolearn-tick';
@@ -60,6 +61,13 @@ export async function runAutoLearnTick(): Promise<void> {
     await checkHalftimeOpportunities();
   } catch (error: any) {
     console.warn('[Tâche de fond] Vérification mi-temps échouée:', error.message);
+  }
+
+  // Bilan de la journée écoulée : se déclenche au premier tour après minuit.
+  try {
+    await runNightlyReviewIfDue();
+  } catch (error: any) {
+    console.warn('[Tâche de fond] Bilan de minuit échoué:', error.message);
   }
 }
 

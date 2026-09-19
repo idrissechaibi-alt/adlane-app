@@ -84,6 +84,7 @@ function buildComboForObservation(
     scoreLabel: scoreLabel(obs),
     window: `${obs.minute}e → ${obs.minute + COMBO_HORIZON}e minute`,
     legs: scored.map((leg) => ({
+      market: leg.market,
       selection: `${leg.label} d'ici la ${obs.minute + COMBO_HORIZON}e`,
       prob: leg.prob,
       evidence: `${leg.rule.marker} → ${(leg.rule.hitRate * 100).toFixed(0)}% observé ` +

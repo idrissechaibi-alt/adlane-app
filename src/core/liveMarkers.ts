@@ -99,6 +99,8 @@ async function fetchMarkers(apiKey: string, fixtureId: number): Promise<MarkerSe
       possessionHome: pick(home, 'Ball Possession'),
       cardsHome: entries.length > 0 ? cardsOf(home) : undefined,
       cardsAway: entries.length > 1 ? cardsOf(away) : undefined,
+      foulsHome: pick(home, 'Fouls'),
+      foulsAway: pick(away, 'Fouls'),
     };
   } catch {
     return {};
@@ -115,6 +117,11 @@ function totalCards(markers: MarkerSet): number | undefined {
   return (markers.cardsHome ?? 0) + (markers.cardsAway ?? 0);
 }
 
+function totalFouls(markers: MarkerSet): number | undefined {
+  if (markers.foulsHome == null && markers.foulsAway == null) return undefined;
+  return (markers.foulsHome ?? 0) + (markers.foulsAway ?? 0);
+}
+
 /**
  * Met à jour les fenêtres ouvertes d'un instantané à la lumière de l'état
  * courant. Une fenêtre est figée dès que sa durée est écoulée, ou tronquée si
@@ -129,11 +136,13 @@ function updateHorizons(
   const goalsNow = live ? live.goalsHome + live.goalsAway : pending.goalsHome + pending.goalsAway;
   const cornersNow = currentMarkers ? totalCorners(currentMarkers) : undefined;
   const cardsNow = currentMarkers ? totalCards(currentMarkers) : undefined;
+  const foulsNow = currentMarkers ? totalFouls(currentMarkers) : undefined;
 
   const deltas: EventDeltas = {
     goals: goalsNow - (pending.goalsHome + pending.goalsAway),
     corners: cornersNow != null ? cornersNow - pending.baselineCorners : 0,
     cards: cardsNow != null ? cardsNow - pending.baselineCards : 0,
+    fouls: foulsNow != null ? foulsNow - pending.baselineFouls : 0,
     truncated: false,
   };
 
@@ -161,7 +170,7 @@ function isClosed(pending: PendingObservation): boolean {
 }
 
 function toTrainingRow(pending: PendingObservation): TrainingRow {
-  const { baselineCorners, baselineCards, frozen, ...snapshot } = pending;
+  const { baselineCorners, baselineCards, baselineFouls, frozen, ...snapshot } = pending;
   return { ...snapshot, horizons: frozen, closedAt: new Date().toISOString() };
 }
 
@@ -250,6 +259,7 @@ export async function runLiveMarkerTick(): Promise<{ observed: number; closed: n
       focus: focusLeagues.has(meta.league.toLowerCase()),
       baselineCorners: totalCorners(markers) ?? 0,
       baselineCards: totalCards(markers) ?? 0,
+      baselineFouls: totalFouls(markers) ?? 0,
       frozen: {},
     });
   }

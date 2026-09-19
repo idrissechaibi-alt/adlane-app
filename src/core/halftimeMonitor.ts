@@ -12,8 +12,19 @@ import { getAPIConfig } from '../api/multiAPIManager';
 import { estimateExpectedGoalsFromMarket, estimateSecondHalfMarket, SecondHalfMarket } from './poisson';
 import { normalizeTeamName } from './teamNameMatch';
 import { sendLocalNotification } from './notifications';
-import { InPlayProposal, readInPlayProposals, writeInPlayProposals } from './learnStore';
+import { InPlayProposal, TrackedMarket, readInPlayProposals, writeInPlayProposals } from './learnStore';
 import { ScheduledMatchDetail } from '../types/database';
+
+/**
+ * Traduit un marché de la re-projection de mi-temps (poisson.ts) vers le
+ * marché suivi dans la courbe d'évolution.
+ */
+function marketForHalftimeMarket(market: string): TrackedMarket {
+  if (market.includes('1X2')) return '1X2';
+  if (market.includes('btts')) return 'btts';
+  if (market.includes('over_2_5')) return 'total_buts';
+  return 'buts_1ere_mt';
+}
 
 const NOTIFIED_KEY_PREFIX = '@halftime_notified_';
 /** Probabilité minimale pour qu'un marché entre dans le combo de mi-temps. */
@@ -210,6 +221,7 @@ export async function checkHalftimeOpportunities(): Promise<void> {
       scoreLabel,
       window: 'mi-temps → fin de match',
       legs: legs.map((leg) => ({
+        market: marketForHalftimeMarket(leg.market),
         selection: leg.selection,
         prob: leg.estimated_prob,
         evidence: leg.reasoning,

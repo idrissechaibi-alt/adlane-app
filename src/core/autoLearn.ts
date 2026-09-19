@@ -20,6 +20,7 @@ import {
   MarkerRule,
   MarkerSnapshot,
   PaperBet,
+  TrackedMarket,
   TrainingRow,
   readAgentDigest,
   readLearnedModel,
@@ -74,6 +75,12 @@ const MARKER_CANDIDATES: MarkerCandidate[] = [
     thresholds: [1, 2, 3],
   },
   {
+    name: 'fouls_total',
+    label: 'fautes cumulées',
+    value: (s) => sumDefined(s.markers.foulsHome, s.markers.foulsAway),
+    thresholds: [5, 8, 12],
+  },
+  {
     name: 'possession_imbalance',
     label: 'déséquilibre de possession (écart à 50%)',
     value: (s) =>
@@ -92,17 +99,26 @@ const MARKER_CANDIDATES: MarkerCandidate[] = [
 interface LearningTarget {
   key: string;
   label: string;
+  /** Marché suivi dans la courbe d'évolution. */
+  market: TrackedMarket;
   hit: (deltas: EventDeltas) => boolean;
 }
 
 const LEARNING_TARGETS: LearningTarget[] = [
-  { key: 'goals>=1', label: 'au moins 1 but', hit: (d) => d.goals >= 1 },
-  { key: 'goals>=2', label: 'au moins 2 buts', hit: (d) => d.goals >= 2 },
-  { key: 'corners>=2', label: 'au moins 2 corners', hit: (d) => d.corners >= 2 },
-  { key: 'corners>=3', label: 'au moins 3 corners', hit: (d) => d.corners >= 3 },
-  { key: 'cards>=1', label: 'au moins 1 carton', hit: (d) => d.cards >= 1 },
-  { key: 'cards>=2', label: 'au moins 2 cartons', hit: (d) => d.cards >= 2 },
+  { key: 'goals>=1', label: 'au moins 1 but', market: 'buts_1ere_mt', hit: (d) => d.goals >= 1 },
+  { key: 'goals>=2', label: 'au moins 2 buts', market: 'buts_1ere_mt', hit: (d) => d.goals >= 2 },
+  { key: 'corners>=2', label: 'au moins 2 corners', market: 'corners', hit: (d) => d.corners >= 2 },
+  { key: 'corners>=3', label: 'au moins 3 corners', market: 'corners', hit: (d) => d.corners >= 3 },
+  { key: 'cards>=1', label: 'au moins 1 carton', market: 'cartons', hit: (d) => d.cards >= 1 },
+  { key: 'cards>=2', label: 'au moins 2 cartons', market: 'cartons', hit: (d) => d.cards >= 2 },
+  { key: 'fouls>=3', label: 'au moins 3 fautes', market: 'fautes', hit: (d) => d.fouls >= 3 },
+  { key: 'fouls>=5', label: 'au moins 5 fautes', market: 'fautes', hit: (d) => d.fouls >= 5 },
 ];
+
+/** Marché suivi correspondant à une cible apprise. */
+export function marketForTarget(targetKey: string): TrackedMarket {
+  return LEARNING_TARGETS.find((t) => t.key === targetKey)?.market ?? 'buts_1ere_mt';
+}
 
 function sumDefined(a?: number, b?: number): number | undefined {
   if (a == null && b == null) return undefined;
@@ -227,13 +243,19 @@ export function scoreAllTargets(
   snapshot: MarkerSnapshot,
   model: LearnedModel | null,
   horizon: number
-): Array<{ target: string; label: string; prob: number; rule: MarkerRule }> {
-  const results: Array<{ target: string; label: string; prob: number; rule: MarkerRule }> = [];
+): Array<{ target: string; label: string; market: TrackedMarket; prob: number; rule: MarkerRule }> {
+  const results: Array<{ target: string; label: string; market: TrackedMarket; prob: number; rule: MarkerRule }> = [];
 
   for (const target of LEARNING_TARGETS) {
     const scored = scoreSnapshot(snapshot, model, target.key, horizon);
     if (scored) {
-      results.push({ target: target.key, label: target.label, prob: scored.prob, rule: scored.rule });
+      results.push({
+        target: target.key,
+        label: target.label,
+        market: target.market,
+        prob: scored.prob,
+        rule: scored.rule,
+      });
     }
   }
 
