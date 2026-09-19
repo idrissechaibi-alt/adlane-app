@@ -2,7 +2,7 @@
 // Browse les 5 championnats, découpe en créneaux, génère et valide les propositions
 
 import { Bet, BetLeg, Market } from '../types';
-import { computePoissonModel, devigOdds1X2, devigOddsTwoWay, computeEdge } from './poisson';
+import { computeDixonColesModel, devigOdds1X2Shin, devigOddsTwoWayShin, computeEdge } from './poisson';
 import { validateBet } from './validator';
 
 export interface LeagueInfo {
@@ -233,10 +233,16 @@ export function generateDailyProposals(
   }> = [];
 
   for (const match of matches) {
-    const poisson = computePoissonModel(match.expectedHomeGoals, match.expectedAwayGoals);
-    const devig1X2 = devigOdds1X2(match.odds.home, match.odds.draw, match.odds.away);
-    const devigBTTS = devigOddsTwoWay(match.odds.btts_yes, match.odds.btts_no);
-    const devigOU = devigOddsTwoWay(match.odds.over_2_5, match.odds.under_2_5);
+    // Dixon-Coles (item D) plutôt que le Poisson indépendant simple : corrige
+    // la légère sur/sous-estimation des scores bas (0-0, 1-0, 0-1, 1-1), qui
+    // touche directement les seuils utilisés ci-dessous (BTTS, Over 1.5/2.5).
+    // Dévigage de Shin (item F) plutôt que le dévigage proportionnel : modélise
+    // explicitement le biais favori-outsider du bookmaker au lieu de répartir
+    // la marge au prorata, donc une estimation "juste" plus fidèle.
+    const poisson = computeDixonColesModel(match.expectedHomeGoals, match.expectedAwayGoals);
+    const devig1X2 = devigOdds1X2Shin(match.odds.home, match.odds.draw, match.odds.away);
+    const devigBTTS = devigOddsTwoWayShin(match.odds.btts_yes, match.odds.btts_no);
+    const devigOU = devigOddsTwoWayShin(match.odds.over_2_5, match.odds.under_2_5);
 
     // Évaluation 1X2 Domicile
     // Note : sans source de xG indépendante du marché, computeEdge() ne peut pas

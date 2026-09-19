@@ -14,6 +14,7 @@ import {
   GitHubDataSyncConfig,
 } from '../core/gitAutoSync';
 import * as Updates from 'expo-updates';
+import { FREE_LLM_PROVIDERS, getFreeLLMKey, setFreeLLMKey } from '../core/freeLLMProviders';
 
 const GEMINI_KEY_STORAGE = 'app-adlane.gemini-api-key';
 const FOOTBALL_DATA_KEY = 'app-adlane.football-data-api-key';
@@ -23,6 +24,7 @@ export default function GitSyncScreen({ navigation }: any) {
   const [token, setToken] = useState('');
   const [geminiKey, setGeminiKey] = useState('');
   const [footballKey, setFootballKey] = useState('');
+  const [freeLLMKeys, setFreeLLMKeys] = useState<Record<string, string>>({});
   const [showKeys, setShowKeys] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -33,16 +35,20 @@ export default function GitSyncScreen({ navigation }: any) {
 
   const loadAllData = async () => {
     try {
-      const [storedConfig, syncTime, gKey, fKey] = await Promise.all([
+      const [storedConfig, syncTime, gKey, fKey, freeKeys] = await Promise.all([
         getGitHubSyncConfig().catch(() => null),
         getLastSyncTime().catch(() => null),
         SecureStore.getItemAsync(GEMINI_KEY_STORAGE).catch(() => null),
-        SecureStore.getItemAsync(FOOTBALL_DATA_KEY).catch(() => null)
+        SecureStore.getItemAsync(FOOTBALL_DATA_KEY).catch(() => null),
+        Promise.all(FREE_LLM_PROVIDERS.map((p) => getFreeLLMKey(p).catch(() => null)))
       ]);
       setConfig(storedConfig);
       setLastSync(syncTime);
       if (gKey) setGeminiKey('********');
       if (fKey) setFootballKey('********');
+      const freeKeysMasked: Record<string, string> = {};
+      FREE_LLM_PROVIDERS.forEach((p, i) => { if (freeKeys[i]) freeKeysMasked[p.id] = '********'; });
+      setFreeLLMKeys(freeKeysMasked);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   };
@@ -54,6 +60,10 @@ export default function GitSyncScreen({ navigation }: any) {
       await saveGitHubSyncConfig({ ...config, token: token || undefined });
       if (geminiKey && geminiKey !== '********') await SecureStore.setItemAsync(GEMINI_KEY_STORAGE, geminiKey.trim());
       if (footballKey && footballKey !== '********') await SecureStore.setItemAsync(FOOTBALL_DATA_KEY, footballKey.trim());
+      for (const provider of FREE_LLM_PROVIDERS) {
+        const value = freeLLMKeys[provider.id];
+        if (value && value !== '********') await setFreeLLMKey(provider, value.trim());
+      }
       Alert.alert('✅ Succès', 'Toutes les clés ont été sécurisées.');
       await loadAllData();
       await startAutoSync();
@@ -122,6 +132,26 @@ export default function GitSyncScreen({ navigation }: any) {
           <TextInput onChangeText={setFootballKey} secureTextEntry={!showKeys} style={styles.input} value={footballKey} placeholder="Clé Football-Data..." placeholderTextColor="#475569" />
 
           <TouchableOpacity onPress={() => setShowKeys(!showKeys)}><Text style={styles.link}>{showKeys ? 'Cacher les clés' : 'Modifier les clés'}</Text></TouchableOpacity>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>🆓 IA de secours gratuites</Text>
+          <Text style={styles.mutedText}>
+            Essayées automatiquement si Gemini échoue (quota épuisé, panne), avant Omniroute. Facultatif : laisse vide ce que tu n'utilises pas.
+          </Text>
+          {FREE_LLM_PROVIDERS.map((provider) => (
+            <View key={provider.id}>
+              <Text style={styles.label}>{provider.label.toUpperCase()} KEY</Text>
+              <TextInput
+                onChangeText={(v) => setFreeLLMKeys((prev) => ({ ...prev, [provider.id]: v }))}
+                secureTextEntry={!showKeys}
+                style={styles.input}
+                value={freeLLMKeys[provider.id] || ''}
+                placeholder={provider.signupHint}
+                placeholderTextColor="#475569"
+              />
+            </View>
+          ))}
         </View>
 
         <View style={styles.card}>

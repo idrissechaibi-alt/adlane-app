@@ -15,6 +15,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getAPIConfig } from '../api/multiAPIManager';
 import { spendBudget } from './requestBudget';
+import { syncEloForAllCoveredLeagues } from './eloRatings';
 import {
   InPlayProposal,
   MarketDayPoint,
@@ -27,6 +28,7 @@ import {
 } from './learnStore';
 
 const LAST_REVIEW_KEY = '@last_daily_review';
+const LAST_ELO_SYNC_KEY = '@last_elo_sync';
 /** Nombre maximum de journées rattrapées d'un coup (app restée fermée). */
 const MAX_CATCHUP_DAYS = 7;
 /** Horizon couvert par un combo de la 20e minute. */
@@ -189,6 +191,19 @@ function buildDayPoints(date: string, proposals: InPlayProposal[]): MarketDayPoi
 export async function runNightlyReviewIfDue(): Promise<number> {
   const today = dayKey(new Date());
   const yesterday = dayKey(new Date(Date.now() - 86_400_000));
+
+  // Synchro Elo (item E) : gratuite (openfootball, pas de quota API), une
+  // fois par jour suffit largement puisque les championnats couverts ne
+  // jouent pas plus d'une fois par jour de toute façon.
+  const lastEloSync = await AsyncStorage.getItem(LAST_ELO_SYNC_KEY);
+  if (lastEloSync !== today) {
+    try {
+      await syncEloForAllCoveredLeagues();
+    } catch (error: any) {
+      console.warn('[Bilan] Synchro Elo échouée:', error.message);
+    }
+    await AsyncStorage.setItem(LAST_ELO_SYNC_KEY, today);
+  }
 
   // Au tout premier bilan, on part de l'avant-veille pour que la journée
   // d'hier soit bien traitée (partir d'hier la ferait sauter définitivement).

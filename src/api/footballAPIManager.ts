@@ -6,6 +6,7 @@ import * as ballDontLie from './footballDataAPIs/ballDontLie';
 import * as sofaScore from './footballDataAPIs/sofaScore';
 import * as footballData from './footballDataAPIs/footballData';
 import * as theOddsAPI from './footballDataAPIs/theOddsAPI';
+import * as openFootball from '../core/openFootballFallback';
 import { incrementRequestCount } from './multiAPIManager';
 
 // Sources exposées par multiAPIManager.ts (compteurs de requêtes / config utilisateur)
@@ -25,7 +26,7 @@ export interface FootballAPIConfig {
   theOddsAPI?: theOddsAPI.TheOddsAPIConfig;
 
   // Ordre de priorité des API
-  priority?: ('ballDontLie' | 'sofaScore' | 'footballData' | 'theOddsAPI')[];
+  priority?: ('ballDontLie' | 'sofaScore' | 'footballData' | 'theOddsAPI' | 'openFootball')[];
 
   // Fallback settings
   enableFallback: boolean;
@@ -37,7 +38,9 @@ export const DEFAULT_CONFIG: FootballAPIConfig = {
   sofaScore: { useScrapingFallback: true },
   footballData: { apiKey: '' },
   theOddsAPI: { apiKey: '', region: 'us' },
-  priority: ['ballDontLie', 'footballData', 'sofaScore', 'theOddsAPI'],
+  // openFootball en tout dernier : ni cotes ni stats, juste un filet de
+  // sécurité pour ne jamais afficher 0 match quand tout le reste est indisponible.
+  priority: ['ballDontLie', 'footballData', 'sofaScore', 'theOddsAPI', 'openFootball'],
   enableFallback: true,
   maxRetries: 2
 };
@@ -97,6 +100,10 @@ export class FootballAPIManager {
         case 'sofaScore':
           await incrementRequestCount(REQUEST_COUNTER_SOURCE.sofaScore);
           result = await sofaScore.getTodayFixtures(this.config.sofaScore || {}, leagueId);
+          break;
+
+        case 'openFootball':
+          result = await openFootball.getFixturesByDate(leagueId, date);
           break;
 
         default:

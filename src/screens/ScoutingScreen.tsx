@@ -17,8 +17,11 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { analyzeMatchWithOmniroute, DEFAULT_OMNIROUTE_CONFIG, AIAnalysisOutput } from '../core/omniroute';
 import { analyzeMatchWithGemini, fetchGoogleSearchContext } from '../core/gemini';
+import { analyzeMatchWithFreeLLMPool, getConfiguredFreeLLMProviders } from '../core/freeLLMProviders';
 import { fetchMatchContext, PerplexitySearchResult } from '../core/perplexity';
 import { getAgentLearningDigest } from '../core/autoLearn';
+import { getHistoricalPriors } from '../core/footballDataCoUk';
+import { getSecondOpinion } from '../core/eloRatings';
 import { getAPIConfig } from '../api/multiAPIManager';
 import { HISTORICAL_LESSONS } from '../data/historical';
 import { getDailyPlan } from '../core/scheduler';
@@ -30,7 +33,7 @@ const GEMINI_KEY_STORAGE = 'app-adlane.gemini-api-key';
 // Même clé que celle utilisée par SettingsScreen pour sauvegarder la config Omniroute
 const OMNIROUTE_CONFIG_KEY = '@omniroute_config';
 
-type Engine = 'gemini' | 'omniroute' | 'aucun';
+type Engine = 'gemini' | 'freeLLM' | 'omniroute' | 'aucun';
 
 interface PersistedOmnirouteConfig {
   endpoint: string;
@@ -151,6 +154,43 @@ export default function ScoutingScreen() {
       console.warn('Digest auto-apprentissage indisponible:', error.message);
     }
 
+    // Priors pré-match (Football-Data.co.uk, item A) et second avis Elo
+    // (item E) : deux sources gratuites, indépendantes du marché et de
+    // Gemini/Omniroute. Étiquetées explicitement dans le prompt plutôt que
+    // fondues dans les autres chiffres, pour que l'IA (et l'utilisateur) sache
+    // d'où elles viennent. Silencieuses si la ligue/l'équipe n'est pas
+    // couverte (5 grands championnats) — jamais d'estimation approximative.
+    let priorsText = '';
+    try {
+      const [priors, eloOpinion] = await Promise.all([
+        getHistoricalPriors(match.leagueId, match.homeTeam, match.awayTeam),
+        getSecondOpinion(match.homeTeam, match.awayTeam),
+      ]);
+
+      const parts: string[] = [];
+      if (priors) {
+        parts.push(
+          `Moyennes saison en cours (Football-Data.co.uk) — ${match.homeTeam} : ` +
+          `${priors.home.cornersFor.toFixed(1)} corners/match, ${priors.home.cardsFor.toFixed(1)} cartons/match, ${priors.home.foulsFor.toFixed(1)} fautes/match ` +
+          `(${priors.home.matchesPlayed} matchs) ; ${match.awayTeam} : ` +
+          `${priors.away.cornersFor.toFixed(1)} corners/match, ${priors.away.cardsFor.toFixed(1)} cartons/match, ${priors.away.foulsFor.toFixed(1)} fautes/match ` +
+          `(${priors.away.matchesPlayed} matchs)` +
+          (priors.refereeCardAvg != null ? ` ; arbitre habituel : ${priors.refereeCardAvg.toFixed(1)} cartons/match en moyenne` : '')
+        );
+      }
+      if (eloOpinion) {
+        parts.push(
+          `Second avis Elo (indépendant du marché, calculé sur les résultats réels) — ` +
+          `1X2 estimé : ${match.homeTeam} ${(eloOpinion.home * 100).toFixed(0)}% / Nul ${(eloOpinion.draw * 100).toFixed(0)}% / ${match.awayTeam} ${(eloOpinion.away * 100).toFixed(0)}% ` +
+          `(notes Elo : ${eloOpinion.ratingHome.toFixed(0)} vs ${eloOpinion.ratingAway.toFixed(0)}). ` +
+          `Si cette estimation diverge fortement des cotes du marché, signale-le comme point de vigilance plutôt que de l'ignorer.`
+        );
+      }
+      priorsText = parts.join('\n');
+    } catch (error: any) {
+      console.warn('Priors historiques/Elo indisponibles:', error.message);
+    }
+
     const matchInput = {
       homeTeam: match.homeTeam,
       awayTeam: match.awayTeam,
@@ -165,6 +205,7 @@ export default function ScoutingScreen() {
       contextInfo: [
         match.context,
         webContext ? `Recherche web en direct :\n${webContext}` : '',
+        priorsText ? `Données historiques & second avis (gratuites, indépendantes du marché) :\n${priorsText}` : '',
         learningDigest ? `Mémoire d'auto-apprentissage (marqueurs observés en direct) :\n${learningDigest}` : ''
       ]
         .filter(Boolean)
@@ -191,19 +232,23 @@ export default function ScoutingScreen() {
     const omnirouteAvailable = Boolean(
       omnirouteConfig?.endpoint && omnirouteConfig.selectedModel?.trim()
     );
+    const freeLLMConfigured = (await getConfiguredFreeLLMProviders()).length > 0;
 
-    if (!geminiApiKey && !omnirouteAvailable) {
+    if (!geminiApiKey && !freeLLMConfigured && !omnirouteAvailable) {
       setLoading(false);
-      const message = "Aucun moteur IA configuré. Renseignez une clé Google Gemini (Paramètres → Sauvegarde & IA) ou configurez Omniroute (Paramètres → Configuration Omniroute → endpoint + agents).";
+      const message = "Aucun moteur IA configuré. Renseignez une clé Google Gemini, Groq, OpenRouter ou Cerebras (Paramètres → Sauvegarde & IA), ou configurez Omniroute (Paramètres → Configuration Omniroute → endpoint + agents).";
       setAnalysisError(message);
       setDiagnostic({ engine: 'aucun', status: 'error', message, timestamp: new Date().toISOString() });
       return;
     }
 
-    // Cascade : Gemini d'abord si une clé est configurée, puis Omniroute en
-    // dernier recours si Gemini est absent ou échoue (jamais l'inverse : on
-    // ne remplace jamais une donnée factuelle par une invention de l'IA,
-    // ceci reste une analyse probabiliste de scouting).
+    // Cascade : Gemini d'abord si une clé est configurée, puis le pool de
+    // moteurs gratuits (Groq/OpenRouter/Cerebras, item G — toujours gratuits,
+    // ne dépendent pas d'un quota qui peut s'épuiser comme Gemini), et enfin
+    // Omniroute (config personnelle de l'utilisateur, potentiellement payante)
+    // en dernier recours. Jamais l'inverse : on ne remplace jamais une donnée
+    // factuelle par une invention de l'IA, ceci reste une analyse probabiliste
+    // de scouting.
     let lastEngine: Engine = 'aucun';
     let lastMessage = '';
 
@@ -218,7 +263,30 @@ export default function ScoutingScreen() {
         return;
       } catch (error: any) {
         lastMessage = error?.message || 'Erreur inconnue';
-        console.warn('Gemini a échoué, tentative Omniroute si disponible:', lastMessage);
+        console.warn('Gemini a échoué, tentative du pool IA gratuit / Omniroute si disponible:', lastMessage);
+      }
+    }
+
+    if (freeLLMConfigured) {
+      lastEngine = 'freeLLM';
+      try {
+        console.log('Utilisation du pool IA gratuit (Groq/OpenRouter/Cerebras)...');
+        const outcome = await analyzeMatchWithFreeLLMPool(matchInput, HISTORICAL_LESSONS);
+        if (outcome) {
+          setAnalysisResult(outcome.result);
+          setDiagnostic({
+            engine: 'freeLLM',
+            status: 'success',
+            message: `${outcome.result.markets.length} marché(s) reçu(s) via ${outcome.providerLabel}${geminiApiKey ? ' (secours gratuit)' : ''}.`,
+            timestamp: new Date().toISOString(),
+          });
+          setLoading(false);
+          return;
+        }
+        lastMessage = 'Tous les providers gratuits configurés ont échoué.';
+      } catch (error: any) {
+        lastMessage = error?.message || 'Erreur inconnue';
+        console.warn('Pool IA gratuit a échoué, tentative Omniroute si disponible:', lastMessage);
       }
     }
 
@@ -245,12 +313,12 @@ export default function ScoutingScreen() {
       }
     }
 
-    // Gemini a échoué et Omniroute n'a pas pu être essayé (rien de configuré) :
-    // le dire explicitement plutôt que de laisser croire qu'il n'y a aucune
-    // solution, puisque la config Omniroute d'une précédente installation peut
-    // avoir été perdue sans que l'utilisateur s'en rende compte.
-    const finalMessage = lastEngine === 'gemini' && !omnirouteAvailable
-      ? `${lastMessage}\n\nSecours Omniroute non disponible : configure un endpoint et au moins un agent dans Paramètres → Configuration Omniroute.`
+    // Aucun secours n'a pu être essayé (rien de configuré) : le dire
+    // explicitement plutôt que de laisser croire qu'il n'y a aucune solution,
+    // puisque la config Omniroute d'une précédente installation peut avoir
+    // été perdue sans que l'utilisateur s'en rende compte.
+    const finalMessage = (lastEngine === 'gemini' || lastEngine === 'freeLLM') && !omnirouteAvailable
+      ? `${lastMessage}\n\nSecours Omniroute non disponible : configure un endpoint et au moins un agent dans Paramètres → Configuration Omniroute.${!freeLLMConfigured ? ' Tu peux aussi ajouter une clé Groq/OpenRouter/Cerebras gratuite dans Paramètres → Sauvegarde & IA.' : ''}`
       : lastMessage;
 
     console.error(`Erreur analyse IA (${lastEngine}):`, lastMessage);
@@ -358,7 +426,7 @@ export default function ScoutingScreen() {
               color={diagnostic.status === 'success' ? '#10b981' : '#ef4444'}
             />
             <Text style={styles.diagnosticText}>
-              Moteur : {diagnostic.engine === 'gemini' ? 'Google Gemini' : diagnostic.engine === 'omniroute' ? 'Omniroute' : 'Aucun'}
+              Moteur : {diagnostic.engine === 'gemini' ? 'Google Gemini' : diagnostic.engine === 'freeLLM' ? 'Pool IA gratuit' : diagnostic.engine === 'omniroute' ? 'Omniroute' : 'Aucun'}
               {' • '}{new Date(diagnostic.timestamp).toLocaleTimeString('fr-FR')}
             </Text>
           </View>
