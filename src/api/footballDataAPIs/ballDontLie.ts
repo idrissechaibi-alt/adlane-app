@@ -17,10 +17,20 @@ const DEFAULT_CONFIG: BallDontLieConfig = {
   apiHost: 'v3.football.api-sports.io'
 };
 
+/**
+ * API-Football a DEUX portes d'entrée avec des en-têtes différents : via
+ * RapidAPI (x-rapidapi-key + x-rapidapi-host) ou en direct sur le dashboard
+ * api-sports.io (x-apisports-key seul, sans host). On appelle toujours le
+ * domaine direct (v3.football.api-sports.io), donc une clé du dashboard
+ * direct renvoie "Missing application key" si on n'envoie que les en-têtes
+ * RapidAPI. On envoie les deux jeux d'en-têtes : le serveur ignore ceux qu'il
+ * ne reconnaît pas, donc ça marche quel que soit le type de clé de l'utilisateur.
+ */
 function buildHeaders(config: BallDontLieConfig): Record<string, string> {
   return {
     'x-rapidapi-key': config.apiKey,
-    'x-rapidapi-host': config.apiHost
+    'x-rapidapi-host': config.apiHost,
+    'x-apisports-key': config.apiKey
   };
 }
 
