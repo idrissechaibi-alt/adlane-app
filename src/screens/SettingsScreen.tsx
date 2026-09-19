@@ -1,7 +1,7 @@
 // Écran Paramètres : Configuration Omniroute + API Football
 // Configure Omniroute, clés API football, et préférences système
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   StyleSheet,
   Text,
@@ -12,10 +12,13 @@ import {
   SafeAreaView,
   Alert,
   Switch,
-  ActivityIndicator
+  ActivityIndicator,
+  Modal,
+  FlatList
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getAPIConfig, saveAPIConfig, APIConfig, incrementRequestCount } from '../api/multiAPIManager';
+import { DEFAULT_OMNIROUTE_CONFIG } from '../core/omniroute';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const OMNIROUTE_CONFIG_KEY = '@omniroute_config';
@@ -27,10 +30,13 @@ interface OmnirouteConfig {
   enabled: boolean;
 }
 
+// Mêmes valeurs par défaut que src/core/omniroute.ts (endpoint Termux local +
+// les 5 agents de base), pour que le premier écran affiché avant toute
+// sauvegarde corresponde à ce que ScoutingScreen utilisera réellement.
 const DEFAULT_OMNIROUTE: OmnirouteConfig = {
-  endpoint: 'https://api.omniroute.io',
+  endpoint: DEFAULT_OMNIROUTE_CONFIG.endpoint,
   apiKey: '',
-  selectedModel: 'gpt-4',
+  selectedModel: DEFAULT_OMNIROUTE_CONFIG.selectedModel,
   enabled: false
 };
 
@@ -43,6 +49,14 @@ export default function SettingsScreen({ navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+
+  // Sélecteur de modèles Omniroute (endpoint /models expose parfois 1000+ agents,
+  // impossible à taper à la main : on charge la liste et on coche dedans)
+  const [modelPickerVisible, setModelPickerVisible] = useState(false);
+  const [loadingModels, setLoadingModels] = useState(false);
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [modelSearch, setModelSearch] = useState('');
+  const [pendingSelection, setPendingSelection] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     loadConfigs();
@@ -105,6 +119,71 @@ export default function SettingsScreen({ navigation }: any) {
       setTesting(false);
     }
   };
+
+  /**
+   * Charge la liste réelle des agents exposés par ce serveur Omniroute
+   * (endpoint OpenAI-compatible GET /models) et ouvre le sélecteur à cocher,
+   * pour éviter de devoir taper à la main les 1000+ noms de modèles.
+   */
+  const handleOpenModelPicker = async () => {
+    setLoadingModels(true);
+    try {
+      const response = await fetch(`${omniroute.endpoint}/models`, {
+        headers: omniroute.apiKey ? { 'Authorization': `Bearer ${omniroute.apiKey}` } : {},
+        timeout: 15000
+      } as any);
+
+      if (!response.ok) {
+        Alert.alert('⚠️ Erreur', `HTTP ${response.status}: ${response.statusText}`);
+        return;
+      }
+
+      const data = await response.json();
+      const ids: string[] = (data.data || data.models || [])
+        .map((m: any) => (typeof m === 'string' ? m : m.id || m.name))
+        .filter(Boolean)
+        .sort();
+
+      if (ids.length === 0) {
+        Alert.alert('⚠️ Liste vide', "Omniroute n'a renvoyé aucun modèle. Vérifie l'endpoint et la clé API.");
+        return;
+      }
+
+      setAvailableModels(ids);
+      setPendingSelection(new Set(
+        omniroute.selectedModel.split(/[,\n]/).map((m) => m.trim()).filter(Boolean)
+      ));
+      setModelSearch('');
+      setModelPickerVisible(true);
+    } catch (error: any) {
+      Alert.alert('❌ Échec', error.message || 'Impossible de charger la liste des modèles Omniroute');
+    } finally {
+      setLoadingModels(false);
+    }
+  };
+
+  const toggleModelSelection = (modelId: string) => {
+    setPendingSelection((prev) => {
+      const next = new Set(prev);
+      if (next.has(modelId)) {
+        next.delete(modelId);
+      } else {
+        next.add(modelId);
+      }
+      return next;
+    });
+  };
+
+  const handleApplyModelSelection = () => {
+    setOmniroute({ ...omniroute, selectedModel: Array.from(pendingSelection).join(', ') });
+    setModelPickerVisible(false);
+  };
+
+  const filteredModels = useMemo(() => {
+    const q = modelSearch.trim().toLowerCase();
+    if (!q) return availableModels;
+    return availableModels.filter((m) => m.toLowerCase().includes(q));
+  }, [availableModels, modelSearch]);
 
   const handleTestAPIFootball = async () => {
     if (!apiConfig?.apiFootball) {
@@ -237,6 +316,21 @@ export default function SettingsScreen({ navigation }: any) {
               Plusieurs modèles = interrogés en parallèle, réponses fusionnées (moyenne des probabilités, avertissements cumulés). Un seul nom = un seul agent.
             </Text>
           </View>
+
+          <TouchableOpacity
+            style={[styles.testButton, styles.testButtonPurple, loadingModels && styles.testButtonDisabled]}
+            onPress={handleOpenModelPicker}
+            disabled={loadingModels}
+          >
+            {loadingModels ? (
+              <ActivityIndicator color="#ffffff" size="small" />
+            ) : (
+              <>
+                <Ionicons name="list" size={18} color="#ffffff" />
+                <Text style={styles.testButtonText}>Choisir les agents dans la liste (1000+)</Text>
+              </>
+            )}
+          </TouchableOpacity>
 
           <View style={styles.switchRow}>
             <Text style={styles.switchLabel}>Activer Omniroute</Text>
@@ -420,6 +514,74 @@ export default function SettingsScreen({ navigation }: any) {
         </TouchableOpacity>
 
       </ScrollView>
+
+      <Modal
+        visible={modelPickerVisible}
+        animationType="slide"
+        onRequestClose={() => setModelPickerVisible(false)}
+      >
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>
+              Agents Omniroute ({pendingSelection.size} sélectionné{pendingSelection.size > 1 ? 's' : ''} / {availableModels.length})
+            </Text>
+            <TouchableOpacity onPress={() => setModelPickerVisible(false)}>
+              <Ionicons name="close" size={26} color="#f8fafc" />
+            </TouchableOpacity>
+          </View>
+
+          <TextInput
+            style={[styles.input, styles.modalSearchInput]}
+            value={modelSearch}
+            onChangeText={setModelSearch}
+            placeholder="Rechercher un agent (ex: claude, gpt, deepseek...)"
+            placeholderTextColor="#64748b"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+
+          <FlatList
+            data={filteredModels}
+            keyExtractor={(item) => item}
+            style={styles.modalList}
+            renderItem={({ item }) => {
+              const checked = pendingSelection.has(item);
+              return (
+                <TouchableOpacity
+                  style={styles.modelRow}
+                  onPress={() => toggleModelSelection(item)}
+                >
+                  <Ionicons
+                    name={checked ? 'checkbox' : 'square-outline'}
+                    size={22}
+                    color={checked ? '#3b82f6' : '#64748b'}
+                  />
+                  <Text style={styles.modelRowText}>{item}</Text>
+                </TouchableOpacity>
+              );
+            }}
+            ListEmptyComponent={
+              <Text style={styles.modalEmptyText}>Aucun agent ne correspond à cette recherche.</Text>
+            }
+          />
+
+          <View style={styles.modalFooter}>
+            <TouchableOpacity
+              style={styles.modalClearButton}
+              onPress={() => setPendingSelection(new Set())}
+            >
+              <Text style={styles.modalClearButtonText}>Tout désélectionner</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.modalApplyButton}
+              onPress={handleApplyModelSelection}
+            >
+              <Ionicons name="checkmark" size={18} color="#ffffff" />
+              <Text style={styles.testButtonText}>Valider la sélection</Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -558,6 +720,9 @@ const styles = StyleSheet.create({
   testButtonGreen: {
     backgroundColor: '#10b981',
   },
+  testButtonPurple: {
+    backgroundColor: '#7c3aed',
+  },
   testButtonDisabled: {
     opacity: 0.6,
   },
@@ -611,5 +776,77 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#0f172a',
+    padding: 16,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#f8fafc',
+    flex: 1,
+    marginRight: 12,
+  },
+  modalSearchInput: {
+    marginBottom: 12,
+  },
+  modalList: {
+    flex: 1,
+  },
+  modelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1e293b',
+  },
+  modelRowText: {
+    color: '#e2e8f0',
+    fontSize: 14,
+    flex: 1,
+  },
+  modalEmptyText: {
+    color: '#64748b',
+    textAlign: 'center',
+    marginTop: 40,
+    fontSize: 13,
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 12,
+  },
+  modalClearButton: {
+    flex: 1,
+    backgroundColor: '#334155',
+    padding: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalClearButtonText: {
+    color: '#e2e8f0',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  modalApplyButton: {
+    flex: 1,
+    backgroundColor: '#3b82f6',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 14,
+    borderRadius: 8,
+    gap: 8,
   },
 });
