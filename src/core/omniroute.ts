@@ -4,16 +4,20 @@
 import { Lesson, OmnirouteConfig } from '../types';
 import { lintContent } from './validator';
 
+// Le préfixe "in-ai/" correspond au provider configuré sur CE serveur Omniroute
+// précis (renvoyé par son propre message d'erreur "Ambiguous model ... use
+// provider/model prefix"). Si ton instance Omniroute utilise un autre alias
+// (t3chat/, openrouter/, etc.), remplace le préfixe dans Paramètres.
 export const DEFAULT_OMNIROUTE_CONFIG: OmnirouteConfig = {
   endpoint: 'http://localhost:8000/v1', // URL par défaut modifiable dans les paramètres
   apiKey: '',
-  selectedModel: 'gemini-2.5-flash', // Gemini par défaut (gemini-1.5-* a été retiré)
+  selectedModel: 'in-ai/gemini-2.5-flash',
   availableModels: [
-    'gemini-2.5-flash',
-    'gemini-2.5-pro',
-    'claude-sonnet-5',
-    'gpt-4o',
-    'deepseek-r1'
+    'in-ai/gemini-2.5-flash',
+    'in-ai/gemini-2.5-pro',
+    'in-ai/claude-sonnet-5',
+    'in-ai/gpt-4o',
+    'in-ai/deepseek-r1'
   ]
 };
 

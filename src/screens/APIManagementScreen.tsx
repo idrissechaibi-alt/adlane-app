@@ -51,6 +51,10 @@ const API_SOURCES: APISourceMeta[] = [
   {
     id: 'sofaScore', name: 'SofaScore (secours)', icon: 'stats-chart', color: '#ec4899',
     desc: 'Scraping de secours, sans clé requise', placeholder: 'Non requis', testable: false
+  },
+  {
+    id: 'perplexity', name: 'Perplexity (recherche web)', icon: 'globe', color: '#14b8a6',
+    desc: 'Compositions probables + actualités en direct pour le Scouting IA', placeholder: 'pplx-...', testable: true
   }
 ];
 
