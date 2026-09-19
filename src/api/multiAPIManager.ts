@@ -114,6 +114,115 @@ export async function resetRequestCount(source: string): Promise<void> {
   await writeRequestCounts(store);
 }
 
+// ==================== QUOTAS / CONSOMMATION DE CRÉDIT ====================
+// Barre de progression par source : quand l'API expose elle-même son quota
+// réel (API-Football, TheOddsAPI, Football-Data.org), on l'utilise tel quel.
+// Sinon, on retombe sur le compteur local de requêtes comparé à une limite
+// que l'utilisateur règle lui-même pour coller à son plan exact.
+
+export type QuotaPeriod = 'hour' | 'day' | 'month';
+
+export interface QuotaSetting {
+  limit: number;
+  period: QuotaPeriod;
+}
+
+export interface QuotaUsage {
+  used: number;
+  limit: number;
+  period: QuotaPeriod;
+  live: boolean; // true = quota lu en direct depuis l'API, false = estimation locale
+}
+
+const QUOTA_CONFIG_KEY = '@api_quota_config';
+
+// Limites par défaut des plans gratuits usuels — modifiables dans l'écran
+// Gestion des API pour coller au plan réellement souscrit par l'utilisateur.
+export const DEFAULT_QUOTAS: Record<string, QuotaSetting> = {
+  apiFootball: { limit: 100, period: 'day' },
+  footballData: { limit: 10, period: 'hour' },
+  theOddsApi: { limit: 500, period: 'month' },
+  sportmonks: { limit: 3000, period: 'day' },
+  perplexity: { limit: 100, period: 'month' },
+};
+
+export async function getQuotaConfig(): Promise<Record<string, QuotaSetting>> {
+  try {
+    const raw = await AsyncStorage.getItem(QUOTA_CONFIG_KEY);
+    const stored = raw ? JSON.parse(raw) : {};
+    return { ...DEFAULT_QUOTAS, ...stored };
+  } catch {
+    return DEFAULT_QUOTAS;
+  }
+}
+
+export async function setQuotaSetting(source: string, setting: QuotaSetting): Promise<void> {
+  const all = await getQuotaConfig();
+  all[source] = setting;
+  await AsyncStorage.setItem(QUOTA_CONFIG_KEY, JSON.stringify(all));
+}
+
+/**
+ * Interroge le quota RÉEL directement depuis l'API quand elle l'expose,
+ * sans compter cette vérification elle-même dans le compteur local (pour ne
+ * pas fausser la conso affichée).
+ */
+async function fetchLiveQuota(source: string, config: APIConfig): Promise<QuotaUsage | null> {
+  try {
+    if (source === 'apiFootball' && config.apiFootball) {
+      const res = await fetch('https://v3.football.api-sports.io/status', {
+        headers: { 'x-rapidapi-key': config.apiFootball, 'x-rapidapi-host': 'v3.football.api-sports.io' }
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      const requests = data.response?.requests;
+      if (!requests || typeof requests.limit_day !== 'number') return null;
+      return { used: requests.current || 0, limit: requests.limit_day, period: 'day', live: true };
+    }
+
+    if (source === 'theOddsApi' && config.theOddsApi) {
+      const res = await fetch(`https://api.the-odds-api.com/v4/sports?apiKey=${config.theOddsApi}`);
+      const used = Number(res.headers.get('x-requests-used'));
+      const remaining = Number(res.headers.get('x-requests-remaining'));
+      if (!Number.isFinite(used) || !Number.isFinite(remaining)) return null;
+      return { used, limit: used + remaining, period: 'month', live: true };
+    }
+
+    if (source === 'footballData' && config.footballData) {
+      const res = await fetch('https://api.football-data.org/v4/competitions', {
+        headers: { 'X-Auth-Token': config.footballData }
+      });
+      const remaining = Number(res.headers.get('x-requests-available-minute'));
+      if (!Number.isFinite(remaining)) return null;
+      // Fenêtre glissante par minute (pas une vraie limite horaire), mais
+      // c'est la seule donnée réelle exposée par cette API en accès gratuit.
+      const quota = (await getQuotaConfig())[source] || DEFAULT_QUOTAS[source];
+      const limit = quota.period === 'hour' ? quota.limit : 10;
+      return { used: Math.max(0, limit - remaining), limit, period: 'hour', live: true };
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+/**
+ * Renvoie la conso à afficher pour une source : quota réel si l'API l'expose,
+ * sinon compteur local de requêtes comparé à la limite réglée par l'utilisateur.
+ * Renvoie null si la source n'a pas de clé configurée (rien à afficher).
+ */
+export async function getQuotaUsage(source: string, config: APIConfig): Promise<QuotaUsage | null> {
+  const hasKey = Boolean((config as any)[source]);
+  if (!hasKey) return null;
+
+  const live = await fetchLiveQuota(source, config);
+  if (live) return live;
+
+  const setting = (await getQuotaConfig())[source] || { limit: 100, period: 'day' as QuotaPeriod };
+  const used = await getRequestCount(source);
+  return { used, limit: setting.limit, period: setting.period, live: false };
+}
+
 /**
  * Test de connexion avec retry automatique
  */

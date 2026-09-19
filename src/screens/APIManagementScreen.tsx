@@ -10,7 +10,8 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   getAPIConfig, saveAPIConfig, testAPIConnection, APIConfig,
-  getAllRequestCounts, resetRequestCount
+  getAllRequestCounts, resetRequestCount,
+  getQuotaConfig, setQuotaSetting, getQuotaUsage, QuotaUsage, QuotaPeriod
 } from '../api/multiAPIManager';
 
 const OMNIROUTE_CONFIG_KEY = '@omniroute_config';
@@ -65,6 +66,24 @@ export default function APIManagementScreen({ navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState<string | null>(null);
+  const [quotas, setQuotas] = useState<Record<string, QuotaUsage | null>>({});
+  const [quotaSettings, setQuotaSettingsState] = useState<Record<string, { limit: number; period: QuotaPeriod }>>({});
+  const [loadingQuotas, setLoadingQuotas] = useState(false);
+
+  const loadQuotas = useCallback(async (cfg: APIConfig) => {
+    setLoadingQuotas(true);
+    try {
+      const settings = await getQuotaConfig();
+      setQuotaSettingsState(settings);
+
+      const entries = await Promise.all(
+        API_SOURCES.map(async (source) => [source.id, await getQuotaUsage(source.id, cfg)] as const)
+      );
+      setQuotas(Object.fromEntries(entries));
+    } finally {
+      setLoadingQuotas(false);
+    }
+  }, []);
 
   const loadAll = useCallback(async () => {
     try {
@@ -76,12 +95,13 @@ export default function APIManagementScreen({ navigation }: any) {
       setConfig(cfg);
       setCounts(reqCounts);
       setOmniroute(omniRaw ? JSON.parse(omniRaw) : null);
+      void loadQuotas(cfg);
     } catch {
       // conserve l'état précédent si la lecture échoue
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [loadQuotas]);
 
   React.useEffect(() => {
     const unsubscribe = navigation.addListener('focus', loadAll);
@@ -112,6 +132,7 @@ export default function APIManagementScreen({ navigation }: any) {
       setTesting(null);
       const reqCounts = await getAllRequestCounts();
       setCounts(reqCounts);
+      if (config) void loadQuotas(config);
     }
   };
 
@@ -127,11 +148,36 @@ export default function APIManagementScreen({ navigation }: any) {
           onPress: async () => {
             await resetRequestCount(source.id);
             setCounts(await getAllRequestCounts());
+            if (config) void loadQuotas(config);
           }
         }
       ]
     );
   };
+
+  const handleQuotaLimitChange = (source: APISourceMeta, text: string) => {
+    const limit = parseInt(text.replace(/[^0-9]/g, ''), 10);
+    const period = quotaSettings[source.id]?.period || 'day';
+    setQuotaSettingsState({ ...quotaSettings, [source.id]: { limit: Number.isFinite(limit) ? limit : 0, period } });
+  };
+
+  const handleQuotaLimitCommit = async (source: APISourceMeta) => {
+    const setting = quotaSettings[source.id];
+    if (!setting) return;
+    await setQuotaSetting(source.id, setting);
+    if (config) void loadQuotas(config);
+  };
+
+  const handleQuotaPeriodChange = async (source: APISourceMeta, period: QuotaPeriod) => {
+    const setting = { limit: quotaSettings[source.id]?.limit || 100, period };
+    setQuotaSettingsState({ ...quotaSettings, [source.id]: setting });
+    await setQuotaSetting(source.id, setting);
+    if (config) void loadQuotas(config);
+  };
+
+  const periodLabel = (period: QuotaPeriod) => period === 'hour' ? '/h' : period === 'month' ? '/mois' : '/jour';
+
+  const quotaBarColor = (pct: number) => pct >= 90 ? '#ef4444' : pct >= 70 ? '#f59e0b' : '#10b981';
 
   if (loading || !config) {
     return (
@@ -233,6 +279,53 @@ export default function APIManagementScreen({ navigation }: any) {
                 </TouchableOpacity>
               </View>
 
+              {source.id !== 'sofaScore' && (() => {
+                const quota = quotas[source.id];
+                const setting = quotaSettings[source.id] || { limit: 100, period: 'day' as QuotaPeriod };
+                const pct = quota && quota.limit > 0 ? Math.min(100, Math.round((quota.used / quota.limit) * 100)) : 0;
+
+                return (
+                  <View style={styles.quotaBlock}>
+                    <View style={styles.quotaHeaderRow}>
+                      <Text style={styles.quotaLabel}>
+                        {quota
+                          ? `Conso : ${quota.used} / ${quota.limit}${periodLabel(quota.period)} ${quota.live ? '• temps réel' : '• estimation locale'}`
+                          : 'Renseigne une clé pour suivre la conso'}
+                      </Text>
+                      {loadingQuotas && <ActivityIndicator size="small" color="#64748b" />}
+                    </View>
+
+                    {quota && (
+                      <View style={styles.quotaTrack}>
+                        <View style={[styles.quotaFill, { width: `${pct}%`, backgroundColor: quotaBarColor(pct) }]} />
+                      </View>
+                    )}
+
+                    <View style={styles.quotaSettingsRow}>
+                      <Text style={styles.quotaSettingsLabel}>Limite de ton plan :</Text>
+                      <TextInput
+                        style={styles.quotaLimitInput}
+                        value={String(setting.limit)}
+                        onChangeText={(t) => handleQuotaLimitChange(source, t)}
+                        onEndEditing={() => handleQuotaLimitCommit(source)}
+                        keyboardType="numeric"
+                      />
+                      {(['hour', 'day', 'month'] as QuotaPeriod[]).map((p) => (
+                        <TouchableOpacity
+                          key={p}
+                          style={[styles.periodChip, setting.period === p && styles.periodChipActive]}
+                          onPress={() => handleQuotaPeriodChange(source, p)}
+                        >
+                          <Text style={[styles.periodChipText, setting.period === p && styles.periodChipTextActive]}>
+                            {periodLabel(p)}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                );
+              })()}
+
               {source.testable && (
                 <TouchableOpacity
                   style={[styles.testBtn, { backgroundColor: source.color }, !config[source.id] && styles.testBtnDisabled]}
@@ -288,6 +381,21 @@ const styles = StyleSheet.create({
   counterLeft: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   counterText: { color: '#94a3b8', fontSize: 12 },
   counterResetBtn: { padding: 6 },
+  quotaBlock: { marginBottom: 10 },
+  quotaHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
+  quotaLabel: { color: '#94a3b8', fontSize: 11, flex: 1 },
+  quotaTrack: { height: 6, borderRadius: 3, backgroundColor: '#0f172a', overflow: 'hidden', marginBottom: 8 },
+  quotaFill: { height: '100%', borderRadius: 3 },
+  quotaSettingsRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  quotaSettingsLabel: { color: '#64748b', fontSize: 10, marginRight: 2 },
+  quotaLimitInput: {
+    backgroundColor: '#0f172a', borderRadius: 6, borderWidth: 1, borderColor: '#334155',
+    color: '#f8fafc', fontSize: 12, paddingHorizontal: 8, paddingVertical: 4, width: 60, textAlign: 'center'
+  },
+  periodChip: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: '#0f172a', borderWidth: 1, borderColor: '#334155' },
+  periodChipActive: { backgroundColor: '#3b82f6', borderColor: '#3b82f6' },
+  periodChipText: { color: '#64748b', fontSize: 10, fontWeight: '600' },
+  periodChipTextActive: { color: '#fff' },
   testBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 10, borderRadius: 8, marginTop: 4, gap: 6 },
   testBtnDisabled: { opacity: 0.4 },
   testBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 13 },
