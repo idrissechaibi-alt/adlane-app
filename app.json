@@ -6,11 +6,6 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#0f172a"
-    },
     "assetBundlePatterns": [
       "**/*"
     ],
@@ -38,20 +33,16 @@
     "plugins": [
       "expo-sqlite",
       "expo-secure-store",
-      "expo-updates"
+      "expo-updates",
+      "expo-font"
     ],
     "updates": {
       "url": "https://u.expo.dev/6d5d5f8b-3c39-48c6-913f-204edebcb63f",
       "enabled": true,
-      "checkOnLaunch": "ALWAYS",
-      "codeSigningCertificate": null,
-      "codeSigningMetadata": null
+      "checkAutomatically": "ON_LOAD"
     },
     "runtimeVersion": "1.0.0",
     "owner": "adlane300",
-    "cli": {
-      "appVersionSource": "remote"
-    },
     "extra": {
       "eas": {
         "projectId": "6d5d5f8b-3c39-48c6-913f-204edebcb63f"

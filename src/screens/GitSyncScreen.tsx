@@ -72,6 +72,16 @@ export default function GitSyncScreen({ navigation }: any) {
   };
 
   const handleCheckUpdate = async () => {
+    if (!Updates.isEnabled) {
+      Alert.alert(
+        'ℹ️ OTA indisponible sur ce build',
+        "Les mises à jour automatiques sont désactivées dans un build de développement (installé via Android Studio / expo run:android). " +
+        "Elles ne fonctionnent que sur un APK/AAB de production généré avec 'eas build --profile production'. " +
+        "Installez ce build pour activer les mises à jour automatiques."
+      );
+      return;
+    }
+
     setUpdating(true);
     try {
       const update = await Updates.checkForUpdateAsync();
@@ -82,7 +92,7 @@ export default function GitSyncScreen({ navigation }: any) {
         ]);
       } else { Alert.alert('✅ À jour', 'L’application est déjà à la dernière version.'); }
     } catch (e) {
-      Alert.alert('🔧 Diagnostic', `ID: ${(Updates as any).projectId || '6d5d5f...'}\nCanal: ${Updates.channel || 'production'}\nErreur: ${e instanceof Error ? e.message : 'Timeout'}`);
+      Alert.alert('🔧 Diagnostic', `ID: ${(Updates as any).projectId || '6d5d5f...'}\nCanal: ${Updates.channel || '(non défini)'}\nErreur: ${e instanceof Error ? e.message : 'Timeout'}`);
     } finally { setUpdating(false); }
   };
 
@@ -120,7 +130,9 @@ export default function GitSyncScreen({ navigation }: any) {
             <Switch onValueChange={(enabled) => setConfig({...config, enabled})} value={config.enabled} />
           </View>
           <Text style={styles.mutedText}>Dépôt : {config.repoOwner}/{config.repoName}</Text>
-          <Text style={styles.mutedText}>Canal OTA : {Updates.channel || 'production'}</Text>
+          <Text style={styles.mutedText}>
+            Canal OTA : {Updates.isEnabled ? (Updates.channel || 'production') : 'désactivé (build de développement)'}
+          </Text>
         </View>
 
         <TouchableOpacity onPress={handleSave} style={styles.btnPrimary}><Text style={styles.btnText}>VALIDER LA CONFIGURATION</Text></TouchableOpacity>

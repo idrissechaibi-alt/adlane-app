@@ -49,8 +49,8 @@ export async function seedDatabaseIfEmpty(): Promise<void> {
     for (const bet of HISTORICAL_BETS) {
       await txn.runAsync(`INSERT OR REPLACE INTO bets VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
         bet.id, bet.version, bet.date, bet.creneau_utc, bet.creneau_display, bet.league, JSON.stringify(bet.legs),
-        bet.odds, bet.stake, bet.payout, bet.net_pnl, bet.excluded_from_pnl ? 1 : 0, bet.status, bet.played ? 1 : 0,
-        bet.confiance, bet.confidence_level, bet.analysis, bet.resultat_verif, JSON.stringify(bet.validation_flags),
+        bet.odds, bet.stake, bet.payout ?? null, bet.net_pnl ?? null, bet.excluded_from_pnl ? 1 : 0, bet.status, bet.played ? 1 : 0,
+        bet.confiance, bet.confidence_level, bet.analysis, bet.resultat_verif ?? null, JSON.stringify(bet.validation_flags),
         bet.createdAt, bet.updatedAt
       ]);
     }
@@ -63,8 +63,8 @@ export async function saveBet(bet: Bet): Promise<void> {
   if (!db) await initDatabase();
   await db!.runAsync(`INSERT OR REPLACE INTO bets VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
     bet.id, bet.version, bet.date, bet.creneau_utc, bet.creneau_display, bet.league, JSON.stringify(bet.legs),
-    bet.odds, bet.stake, bet.payout, bet.net_pnl, bet.excluded_from_pnl ? 1 : 0, bet.status, bet.played ? 1 : 0,
-    bet.confiance, bet.confidence_level, bet.analysis, bet.resultat_verif, JSON.stringify(bet.validation_flags),
+    bet.odds, bet.stake, bet.payout ?? null, bet.net_pnl ?? null, bet.excluded_from_pnl ? 1 : 0, bet.status, bet.played ? 1 : 0,
+    bet.confiance, bet.confidence_level, bet.analysis, bet.resultat_verif ?? null, JSON.stringify(bet.validation_flags),
     bet.createdAt, bet.updatedAt
   ]);
 }
@@ -114,7 +114,7 @@ export async function getAllLessons(): Promise<Lesson[]> {
 export async function saveCalibration(cal: MarketCalibration): Promise<void> {
   if (!db) await initDatabase();
   await db!.runAsync(`INSERT OR REPLACE INTO calibrations VALUES (?,?,?,?,?,?,?,?)`, [
-    cal.market, cal.league, cal.total_predictions, cal.predictions_won,
+    cal.market, cal.league ?? null, cal.total_predictions, cal.predictions_won,
     cal.actual_success_rate, cal.avg_predicted_prob, cal.calibration_status, cal.last_updated
   ]);
 }
@@ -154,8 +154,8 @@ export async function restoreSnapshot(data: any): Promise<void> {
     for (const b of data.bets || []) {
       await txn.runAsync(`INSERT INTO bets VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
         b.id, b.version, b.date, b.creneau_utc, b.creneau_display, b.league, JSON.stringify(b.legs),
-        b.odds, b.stake, b.payout, b.net_pnl, b.excluded_from_pnl ? 1 : 0, b.status, b.played ? 1 : 0,
-        b.confiance, b.confidence_level, b.analysis, b.resultat_verif, JSON.stringify(b.validation_flags),
+        b.odds, b.stake, b.payout ?? null, b.net_pnl ?? null, b.excluded_from_pnl ? 1 : 0, b.status, b.played ? 1 : 0,
+        b.confiance, b.confidence_level, b.analysis, b.resultat_verif ?? null, JSON.stringify(b.validation_flags),
         b.createdAt, b.updatedAt
       ]);
     }
@@ -166,7 +166,7 @@ export async function restoreSnapshot(data: any): Promise<void> {
     }
     for (const c of data.calibrations || []) {
       await txn.runAsync(`INSERT INTO calibrations VALUES (?,?,?,?,?,?,?,?)`, [
-        c.market, c.league, c.total_predictions, c.predictions_won,
+        c.market, c.league ?? null, c.total_predictions, c.predictions_won,
         c.actual_success_rate, c.avg_predicted_prob, c.calibration_status, c.last_updated
       ]);
     }

@@ -7,12 +7,11 @@ import { lintContent } from './validator';
 export const DEFAULT_OMNIROUTE_CONFIG: OmnirouteConfig = {
   endpoint: 'http://localhost:8000/v1', // URL par défaut modifiable dans les paramètres
   apiKey: '',
-  selectedModel: 'gemini-1.5-flash', // Gemini par défaut
+  selectedModel: 'gemini-2.5-flash', // Gemini par défaut (gemini-1.5-* a été retiré)
   availableModels: [
-    'gemini-1.5-flash',
-    'gemini-1.5-pro',
-    'claude-3-5-sonnet',
-    'claude-3-opus',
+    'gemini-2.5-flash',
+    'gemini-2.5-pro',
+    'claude-sonnet-5',
     'gpt-4o',
     'deepseek-r1'
   ]
@@ -75,12 +74,24 @@ CADRE DE RÉPONSE :
 - 1X2 : Si la probabilité estimée est < 50%, signale un risque élevé.
 - ANALYSE FACTUELLE : Cite des chiffres récents (xG, clean sheets, forme sur 5 matchs).
 
+Le tableau "markets" DOIT contenir EXACTEMENT ces 10 marchés (un objet par marché, jamais moins) :
+1. 1X2 (résultat final)
+2. Double Chance
+3. BTTS (les deux équipes marquent)
+4. Over/Under 2.5 buts
+5. Over/Under 1.5 buts
+6. Over/Under 0.5 but en 1ère mi-temps
+7. Résultat à la mi-temps (1X2 MT1)
+8. Corners Over/Under
+9. Cartons (jaunes + rouges) Over/Under
+10. Handicap asiatique simplifié (-1/+1)
+
 Format attendu (JSON strict) :
 {
   "generalAnalysis": "Explication synthétique et chiffrée",
   "markets": [
     {
-      "market": "1X2" | "BTTS" | "OU_2_5",
+      "market": "1X2" | "double_chance" | "BTTS" | "OU_2_5" | "OU_1_5" | "1ere_mi_temps" | "mi_temps_1X2" | "corners" | "cartons" | "handicap",
       "selection": "string",
       "estimated_prob": number (0 à 1),
       "odds": number | null,
@@ -88,6 +99,7 @@ Format attendu (JSON strict) :
       "reasoning": "Détail chiffré",
       "warnings": ["string"]
     }
+    // ... 10 objets au total, un par marché listé ci-dessus
   ],
   "lessonsApplied": ["doc_id des leçons utilisées"]
 }`;

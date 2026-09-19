@@ -11,7 +11,14 @@ const FOOTBALL_DATA_KEY = 'app-adlane.football-data-api-key';
 // Codes officiels Football-Data pour les Big 5 + Cups majeures
 const COMPETITIONS = 'PL,PD,BL1,SA,FL1,CL,FAC,CDR,DFB,CIT,CDF';
 
-export async function executeMorningScan(): Promise<any> {
+export interface DailyPlan {
+  date: string;
+  generatedAt: string;
+  totalMatches: number;
+  slots: DailyScheduleSlot[];
+}
+
+export async function executeMorningScan(): Promise<DailyPlan> {
   console.log('🌅 [MORNING SCAN] Récupération des Big 5 + Cups...');
   const apiKey = await SecureStore.getItemAsync(FOOTBALL_DATA_KEY);
 
@@ -45,13 +52,17 @@ export async function executeMorningScan(): Promise<any> {
       odds: {
         home: m.odds?.homeWin || 0,
         draw: m.odds?.draw || 0,
-        away: m.odds?.awayWin || 0
+        away: m.odds?.awayWin || 0,
+        btts_yes: m.odds?.bttsYes || 0,
+        btts_no: m.odds?.bttsNo || 0,
+        over_2_5: m.odds?.over25 || 0,
+        under_2_5: m.odds?.under25 || 0
       },
       context: `Match de ${m.competition.name}. ${m.homeTeam.name} vs ${m.awayTeam.name}.`
     }));
 
     const slots = groupMatchesIntoSlots(mappedMatches);
-    const plan = {
+    const plan: DailyPlan = {
       date: new Date().toISOString().split('T')[0],
       generatedAt: new Date().toISOString(),
       totalMatches: mappedMatches.length,
@@ -74,7 +85,7 @@ function getLeagueFlag(code: string): string {
   return flags[code] || '⚽';
 }
 
-export async function getDailyPlan(): Promise<any | null> {
+export async function getDailyPlan(): Promise<DailyPlan | null> {
   const raw = await AsyncStorage.getItem(DAILY_SCHEDULE_KEY);
   return raw ? JSON.parse(raw) : null;
 }

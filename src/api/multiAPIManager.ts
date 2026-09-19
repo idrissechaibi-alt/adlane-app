@@ -38,6 +38,80 @@ export async function saveAPIConfig(config: APIConfig): Promise<void> {
   await AsyncStorage.setItem(API_CONFIG_KEY, JSON.stringify(config));
 }
 
+// ==================== COMPTEUR DE REQUÊTES ====================
+// Compte les requêtes envoyées à chaque source, remis à zéro chaque jour
+// (les quotas des API football sont quasiment tous exprimés en requêtes/jour).
+
+const REQUEST_COUNT_KEY = '@api_request_counts';
+
+interface RequestCountEntry {
+  date: string; // YYYY-MM-DD
+  count: number;
+}
+
+type RequestCountStore = Record<string, RequestCountEntry>;
+
+function todayKey(): string {
+  return new Date().toISOString().split('T')[0];
+}
+
+async function readRequestCounts(): Promise<RequestCountStore> {
+  try {
+    const raw = await AsyncStorage.getItem(REQUEST_COUNT_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+async function writeRequestCounts(store: RequestCountStore): Promise<void> {
+  await AsyncStorage.setItem(REQUEST_COUNT_KEY, JSON.stringify(store));
+}
+
+/**
+ * Incrémente le compteur de requêtes d'une source pour la journée en cours.
+ */
+export async function incrementRequestCount(source: string): Promise<number> {
+  const store = await readRequestCounts();
+  const today = todayKey();
+  const entry = store[source];
+  const nextCount = entry && entry.date === today ? entry.count + 1 : 1;
+  store[source] = { date: today, count: nextCount };
+  await writeRequestCounts(store);
+  return nextCount;
+}
+
+/**
+ * Retourne le nombre de requêtes envoyées aujourd'hui pour une source (0 si aucune ou jour différent).
+ */
+export async function getRequestCount(source: string): Promise<number> {
+  const store = await readRequestCounts();
+  const entry = store[source];
+  return entry && entry.date === todayKey() ? entry.count : 0;
+}
+
+/**
+ * Retourne les compteurs du jour pour toutes les sources connues.
+ */
+export async function getAllRequestCounts(): Promise<Record<string, number>> {
+  const store = await readRequestCounts();
+  const today = todayKey();
+  const result: Record<string, number> = {};
+  for (const [source, entry] of Object.entries(store)) {
+    result[source] = entry.date === today ? entry.count : 0;
+  }
+  return result;
+}
+
+/**
+ * Remet à zéro le compteur d'une source (ex : après renouvellement de quota).
+ */
+export async function resetRequestCount(source: string): Promise<void> {
+  const store = await readRequestCounts();
+  delete store[source];
+  await writeRequestCounts(store);
+}
+
 /**
  * Test de connexion avec retry automatique
  */
@@ -50,6 +124,7 @@ export async function testAPIConnection(
     switch (source) {
       case 'apiFootball':
         if (!config.apiFootball) return false;
+        await incrementRequestCount('apiFootball');
         const res1 = await fetch('https://v3.football.api-sports.io/status', {
           headers: {
             'x-rapidapi-key': config.apiFootball,
@@ -60,6 +135,7 @@ export async function testAPIConnection(
 
       case 'footballData':
         if (!config.footballData) return false;
+        await incrementRequestCount('footballData');
         const res2 = await fetch('https://api.football-data.org/v4/competitions', {
           headers: { 'X-Auth-Token': config.footballData }
         });
@@ -67,6 +143,7 @@ export async function testAPIConnection(
 
       case 'theOddsApi':
         if (!config.theOddsApi) return false;
+        await incrementRequestCount('theOddsApi');
         const res3 = await fetch(`https://api.the-odds-api.com/v4/sports?apiKey=${config.theOddsApi}`);
         return res3.ok;
 

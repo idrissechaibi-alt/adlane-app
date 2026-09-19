@@ -8,7 +8,7 @@ export async function analyzeMatchWithGemini(
   lessons: Lesson[],
   apiKey: string
 ): Promise<AIAnalysisOutput> {
-  const model = 'gemini-1.5-pro'; // Utilisation obligatoire du modèle PRO
+  const model = 'gemini-2.5-flash'; // Modèle Gemini actif (gemini-1.5-* a été retiré par Google)
   const systemPrompt = buildSystemPrompt(lessons);
 
   const detailedPrompt = `Tu es l'IA Adlane Pro, expert mondial en data-scouting et analyse probabiliste.
@@ -22,13 +22,19 @@ DONNÉES DU MATCH :
 - Contexte : ${matchInput.contextInfo}
 
 TES MISSIONS (OBLIGATOIRE) :
-Pour chaque marché ci-dessous, calcule la probabilité réelle (%) et justifie avec des stats (xG, cartons moyens, corners concédés) :
-1. Résultat Final (1X2)
-2. Les deux équipes marquent (BTTS)
-3. Total de Buts (Over/Under 2.5 et Total exact estimé)
-4. Corners (Estimation du nombre total basé sur le style de jeu)
-5. Cartons Jaunes (Estimation basée sur l'arbitre et l'agressivité des équipes)
-6. Buts en 1ère mi-temps (Probabilité d'au moins 1 but avant la pause)
+Le tableau "markets" de ta réponse JSON DOIT contenir EXACTEMENT ces 10 marchés (un objet par marché, dans cet ordre), chacun avec une probabilité réelle (%) justifiée par des stats (xG, forme, cartons moyens, corners concédés) :
+1. Résultat Final (1X2) — victoire la plus probable
+2. Double Chance (1X ou X2 ou 12)
+3. Les deux équipes marquent (BTTS Oui/Non)
+4. Total de buts Over/Under 2.5
+5. Total de buts Over/Under 1.5
+6. Buts en 1ère mi-temps : Over/Under 0.5 but avant la pause
+7. Résultat à la mi-temps (1X2 mi-temps)
+8. Corners : Over/Under (choisis une ligne réaliste, ex. 9.5)
+9. Cartons (jaunes + rouges) : Over/Under (choisis une ligne réaliste, ex. 3.5)
+10. Handicap asiatique simplifié (-1 ou +1 sur l'équipe la plus probable)
+
+Ne renvoie JAMAIS moins de 10 marchés. Si une donnée manque, estime prudemment et baisse la confiance à "Faible" plutôt que d'omettre le marché.
 
 FORMAT DE RÉPONSE : JSON Strict uniquement.`;
 

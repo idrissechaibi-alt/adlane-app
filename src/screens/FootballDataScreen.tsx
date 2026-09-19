@@ -12,12 +12,12 @@ import {
   StyleSheet,
   RefreshControl
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 import { FootballAPIManager, createFootballAPIManager } from '../api';
 import { FootballMatch, MarketOdds } from '../api/types';
+import { getAPIConfig } from '../api/multiAPIManager';
 import { EdgeCalculator, SurebetCalculator, ProbabilityCalculator } from '../calc/advancedCalculations';
 
 export default function FootballDataScreen({ navigation }: any) {
@@ -28,6 +28,7 @@ export default function FootballDataScreen({ navigation }: any) {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedLeague, setSelectedLeague] = useState('39'); // Premier League par défaut
   const [error, setError] = useState<string | null>(null);
+  const [hasConfiguredKeys, setHasConfiguredKeys] = useState(true);
 
   // Ligue disponibles
   const leagues = [
@@ -43,6 +44,7 @@ export default function FootballDataScreen({ navigation }: any) {
     // Initialiser le manager API
     const initManager = async () => {
       const config = await getAPIConfig();
+      setHasConfiguredKeys(Boolean(config.apiFootball || config.footballData || config.theOddsApi));
       const manager = createFootballAPIManager({
         ballDontLie: config.apiFootball ? { apiKey: config.apiFootball, apiHost: 'v3.football.api-sports.io' } : undefined,
         footballData: config.footballData ? { apiKey: config.footballData } : undefined,
@@ -55,14 +57,15 @@ export default function FootballDataScreen({ navigation }: any) {
     initManager();
   }, [selectedLeague]);
 
-  const getAPIConfig = async () => {
-    try {
-      const raw = await AsyncStorage.getItem('@multi_api_manager_config');
-      return raw ? JSON.parse(raw) : { apiFootball: '', footballData: '', theOddsApi: '' };
-    } catch {
-      return { apiFootball: '', footballData: '', theOddsApi: '' };
-    }
-  };
+  useEffect(() => {
+    // Recharge la config quand l'utilisateur revient de "Gestion des API"
+    const unsubscribe = navigation.addListener('focus', () => {
+      getAPIConfig().then((config) => {
+        setHasConfiguredKeys(Boolean(config.apiFootball || config.footballData || config.theOddsApi));
+      });
+    });
+    return unsubscribe;
+  }, [navigation]);
 
   const fetchFixtures = async (mgr: FootballAPIManager, forceRefresh = false) => {
     if (!forceRefresh && fixtures.length > 0 && !refreshing) return;
@@ -214,10 +217,22 @@ export default function FootballDataScreen({ navigation }: any) {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Football Data</Text>
-        <TouchableOpacity onPress={() => navigation.openDrawer()}>
-          <Ionicons name="menu" size={24} color="white" />
+        <TouchableOpacity onPress={() => navigation.navigate('Paramètres', { screen: 'APIManagement' })}>
+          <Ionicons name="settings-outline" size={24} color="white" />
         </TouchableOpacity>
       </View>
+
+      {!hasConfiguredKeys && (
+        <TouchableOpacity
+          style={styles.noKeysBanner}
+          onPress={() => navigation.navigate('Paramètres', { screen: 'APIManagement' })}
+        >
+          <Ionicons name="key-outline" size={18} color="#fbbf24" />
+          <Text style={styles.noKeysBannerText}>
+            Aucune clé API configurée. Touchez ici pour ajouter API-Football ou Football-Data.org dans "Gestion des API".
+          </Text>
+        </TouchableOpacity>
+      )}
 
       {/* League Selector */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.leagueSelector}>
@@ -379,6 +394,24 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     color: '#ef4444',
     fontWeight: '500'
+  },
+  noKeysBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    marginHorizontal: 16,
+    marginTop: 12,
+    backgroundColor: '#78350f40',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#fbbf2440',
+    gap: 8
+  },
+  noKeysBannerText: {
+    flex: 1,
+    color: '#fde68a',
+    fontSize: 12,
+    lineHeight: 17
   },
   section: {
     padding: 16

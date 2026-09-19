@@ -5,7 +5,6 @@ import { Directory, EncodingType, File, Paths } from 'expo-file-system';
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getAllBets, getAllCalibrations, getAllLessons, getDailyReports, restoreSnapshot } from '../database/storage';
-import * as Buffer from 'buffer';
 
 const SYNC_CONFIG_KEY = '@github_data_sync_config';
 const LAST_SYNC_KEY = '@last_github_data_sync';

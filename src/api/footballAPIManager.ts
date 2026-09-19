@@ -6,6 +6,15 @@ import * as ballDontLie from './footballDataAPIs/ballDontLie';
 import * as sofaScore from './footballDataAPIs/sofaScore';
 import * as footballData from './footballDataAPIs/footballData';
 import * as theOddsAPI from './footballDataAPIs/theOddsAPI';
+import { incrementRequestCount } from './multiAPIManager';
+
+// Sources exposées par multiAPIManager.ts (compteurs de requêtes / config utilisateur)
+const REQUEST_COUNTER_SOURCE: Record<string, string> = {
+  ballDontLie: 'apiFootball',
+  footballData: 'footballData',
+  theOddsAPI: 'theOddsApi',
+  sofaScore: 'sofaScore',
+};
 
 // ==================== CONFIGURATION ====================
 
@@ -64,6 +73,7 @@ export class FootballAPIManager {
       switch (source) {
         case 'ballDontLie':
           if (this.config.ballDontLie?.apiKey) {
+            await incrementRequestCount(REQUEST_COUNTER_SOURCE.ballDontLie);
             result = await ballDontLie.getFixturesByDate(this.config.ballDontLie, leagueId, date);
           } else {
             continue;
@@ -72,6 +82,7 @@ export class FootballAPIManager {
 
         case 'footballData':
           if (this.config.footballData?.apiKey) {
+            await incrementRequestCount(REQUEST_COUNTER_SOURCE.footballData);
             result = await footballData.getFixturesByDate(this.config.footballData, leagueId, date);
           } else {
             continue;
@@ -79,6 +90,7 @@ export class FootballAPIManager {
           break;
 
         case 'sofaScore':
+          await incrementRequestCount(REQUEST_COUNTER_SOURCE.sofaScore);
           result = await sofaScore.getTodayFixtures(this.config.sofaScore || {}, leagueId);
           break;
 
@@ -117,6 +129,7 @@ export class FootballAPIManager {
       switch (source) {
         case 'ballDontLie':
           if (this.config.ballDontLie?.apiKey) {
+            await incrementRequestCount(REQUEST_COUNTER_SOURCE.ballDontLie);
             result = await ballDontLie.getMatchStatistics(this.config.ballDontLie, matchId);
           } else {
             continue;
@@ -125,6 +138,7 @@ export class FootballAPIManager {
 
         case 'footballData':
           if (this.config.footballData?.apiKey) {
+            await incrementRequestCount(REQUEST_COUNTER_SOURCE.footballData);
             result = await footballData.getMatchStatistics(this.config.footballData, matchId);
           } else {
             continue;
@@ -132,6 +146,7 @@ export class FootballAPIManager {
           break;
 
         case 'sofaScore':
+          await incrementRequestCount(REQUEST_COUNTER_SOURCE.sofaScore);
           result = await sofaScore.getMatchStatistics(this.config.sofaScore || {}, matchId);
           break;
 
@@ -165,6 +180,7 @@ export class FootballAPIManager {
       switch (source) {
         case 'theOddsAPI':
           if (this.config.theOddsAPI?.apiKey) {
+            await incrementRequestCount(REQUEST_COUNTER_SOURCE.theOddsAPI);
             result = await theOddsAPI.getMatchOdds(this.config.theOddsAPI, matchId);
           } else {
             continue;
@@ -172,6 +188,7 @@ export class FootballAPIManager {
           break;
 
         case 'sofaScore':
+          await incrementRequestCount(REQUEST_COUNTER_SOURCE.sofaScore);
           result = await sofaScore.getMatchOdds(this.config.sofaScore || {}, matchId);
           break;
 
@@ -205,6 +222,7 @@ export class FootballAPIManager {
       switch (source) {
         case 'ballDontLie':
           if (this.config.ballDontLie?.apiKey) {
+            await incrementRequestCount(REQUEST_COUNTER_SOURCE.ballDontLie);
             result = await ballDontLie.getTeamInfo(this.config.ballDontLie, teamId);
           } else {
             continue;
@@ -213,6 +231,7 @@ export class FootballAPIManager {
 
         case 'footballData':
           if (this.config.footballData?.apiKey) {
+            await incrementRequestCount(REQUEST_COUNTER_SOURCE.footballData);
             result = await footballData.getTeamInfo(this.config.footballData, teamId);
           } else {
             continue;
@@ -220,6 +239,7 @@ export class FootballAPIManager {
           break;
 
         case 'sofaScore':
+          await incrementRequestCount(REQUEST_COUNTER_SOURCE.sofaScore);
           result = await sofaScore.getTeamInfo(this.config.sofaScore || {}, teamId);
           break;
 
@@ -247,6 +267,7 @@ export class FootballAPIManager {
     playerId: string
   ): Promise<APIResponse<Player>> {
     // SofaScore est la principale source pour les joueurs
+    await incrementRequestCount(REQUEST_COUNTER_SOURCE.sofaScore);
     const result = await sofaScore.getPlayerInfo(this.config.sofaScore || {}, playerId);
 
     if (result.success) {

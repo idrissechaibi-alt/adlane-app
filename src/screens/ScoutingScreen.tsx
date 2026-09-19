@@ -21,8 +21,27 @@ import { HISTORICAL_LESSONS } from '../data/historical';
 import { getDailyPlan } from '../core/scheduler';
 import { ScheduledMatchDetail } from '../types/database';
 import * as SecureStore from 'expo-secure-store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const GEMINI_KEY_STORAGE = 'app-adlane.gemini-api-key';
+// Même clé que celle utilisée par SettingsScreen pour sauvegarder la config Omniroute
+const OMNIROUTE_CONFIG_KEY = '@omniroute_config';
+
+type Engine = 'gemini' | 'omniroute' | 'aucun';
+
+interface PersistedOmnirouteConfig {
+  endpoint: string;
+  apiKey: string;
+  selectedModel: string;
+  enabled: boolean;
+}
+
+interface AIDiagnostic {
+  engine: Engine;
+  status: 'success' | 'error';
+  message: string;
+  timestamp: string;
+}
 
 export default function ScoutingScreen() {
   const [matches, setMatches] = useState<ScheduledMatchDetail[]>([]);
@@ -31,6 +50,8 @@ export default function ScoutingScreen() {
   const [planLoading, setPlanLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<AIAnalysisOutput | null>(null);
+  const [diagnostic, setDiagnostic] = useState<AIDiagnostic | null>(null);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
 
   // Formulaire (caché mais utilisé pour l'auto-remplissage/ajustement)
   const [oddsHome, setOddsHome] = useState('');
@@ -72,61 +93,75 @@ export default function ScoutingScreen() {
   const triggerAnalysis = async (match: ScheduledMatchDetail) => {
     setLoading(true);
     setAnalysisResult(null);
-    try {
-      const geminiApiKey = await SecureStore.getItemAsync(GEMINI_KEY_STORAGE);
-      const matchInput = {
-        homeTeam: match.homeTeam,
-        awayTeam: match.awayTeam,
-        league: match.leagueName,
-        kickoff_utc: match.kickoff_utc,
-        odds: {
-          home: match.odds.home || undefined,
-          draw: match.odds.draw || undefined,
-          away: match.odds.away || undefined,
-          btts_yes: match.odds.btts_yes || undefined,
-        },
-        contextInfo: match.context || undefined
-      };
+    setAnalysisError(null);
 
+    const matchInput = {
+      homeTeam: match.homeTeam,
+      awayTeam: match.awayTeam,
+      league: match.leagueName,
+      kickoff_utc: match.kickoff_utc,
+      odds: {
+        home: match.odds.home || undefined,
+        draw: match.odds.draw || undefined,
+        away: match.odds.away || undefined,
+        btts_yes: match.odds.btts_yes || undefined,
+      },
+      contextInfo: match.context || undefined
+    };
+
+    // Détermine le moteur IA à utiliser : Gemini (clé directe) en priorité,
+    // sinon Omniroute si configuré ET activé dans Paramètres, sinon aucun.
+    const geminiApiKey = await SecureStore.getItemAsync(GEMINI_KEY_STORAGE);
+    let omnirouteConfig: PersistedOmnirouteConfig | null = null;
+    try {
+      const raw = await AsyncStorage.getItem(OMNIROUTE_CONFIG_KEY);
+      omnirouteConfig = raw ? JSON.parse(raw) : null;
+    } catch {
+      omnirouteConfig = null;
+    }
+
+    const engine: Engine = geminiApiKey
+      ? 'gemini'
+      : omnirouteConfig?.enabled && omnirouteConfig.endpoint
+      ? 'omniroute'
+      : 'aucun';
+
+    if (engine === 'aucun') {
+      setLoading(false);
+      const message = "Aucun moteur IA configuré. Renseignez une clé Google Gemini (Paramètres → Sauvegarde & IA) ou activez Omniroute (Paramètres → Configuration Omniroute).";
+      setAnalysisError(message);
+      setDiagnostic({ engine: 'aucun', status: 'error', message, timestamp: new Date().toISOString() });
+      return;
+    }
+
+    try {
       let result: AIAnalysisOutput;
 
-      if (geminiApiKey) {
+      if (engine === 'gemini') {
         console.log('Utilisation de Gemini Direct...');
-        result = await analyzeMatchWithGemini(
-          matchInput,
-          HISTORICAL_LESSONS,
-          geminiApiKey
-        );
+        result = await analyzeMatchWithGemini(matchInput, HISTORICAL_LESSONS, geminiApiKey!);
       } else {
         console.log('Utilisation de Omniroute...');
-        result = await analyzeMatchWithOmniroute(
-          matchInput,
-          HISTORICAL_LESSONS,
-          DEFAULT_OMNIROUTE_CONFIG
-        );
+        result = await analyzeMatchWithOmniroute(matchInput, HISTORICAL_LESSONS, {
+          ...DEFAULT_OMNIROUTE_CONFIG,
+          endpoint: omnirouteConfig!.endpoint,
+          apiKey: omnirouteConfig!.apiKey,
+          selectedModel: omnirouteConfig!.selectedModel || DEFAULT_OMNIROUTE_CONFIG.selectedModel,
+        });
       }
 
       setAnalysisResult(result);
-    } catch (error: any) {
-      console.log('Mode fallback analyse locale');
-      // Simulation pour le test si Omniroute est off
-      setAnalysisResult({
-        match: `${match.homeTeam} - ${match.awayTeam}`,
-        kickoff_utc: match.kickoff_utc,
-        generalAnalysis: `Analyse locale pour ${match.homeTeam} vs ${match.awayTeam}. Tendance statistique positive.`,
-        markets: [
-          {
-            market: '1X2',
-            selection: `Victoire ${match.homeTeam}`,
-            estimated_prob: 0.53,
-            odds: match.odds.home || null,
-            confidence: 'Moyen',
-            reasoning: 'Basé sur les données de formulaire récentes.'
-          }
-        ],
-        lessonsApplied: [],
-        rawResponse: ''
+      setDiagnostic({
+        engine,
+        status: 'success',
+        message: `${result.markets.length} marché(s) reçu(s).`,
+        timestamp: new Date().toISOString()
       });
+    } catch (error: any) {
+      const message = error?.message || 'Erreur inconnue';
+      console.error(`Erreur analyse IA (${engine}):`, message);
+      setAnalysisError(message);
+      setDiagnostic({ engine, status: 'error', message, timestamp: new Date().toISOString() });
     } finally {
       setLoading(false);
     }
@@ -165,7 +200,7 @@ export default function ScoutingScreen() {
     <View>
       <TouchableOpacity
         style={styles.backButton}
-        onPress={() => { setSelectedMatch(null); setAnalysisResult(null); }}
+        onPress={() => { setSelectedMatch(null); setAnalysisResult(null); setAnalysisError(null); setDiagnostic(null); }}
       >
         <Ionicons name="arrow-back" size={20} color="#3b82f6" />
         <Text style={styles.backButtonText}>Retour à la liste</Text>
@@ -182,11 +217,23 @@ export default function ScoutingScreen() {
             <ActivityIndicator size="large" color="#3b82f6" />
             <Text style={styles.loadingText}>L'IA Adlane analyse le match...</Text>
           </View>
+        ) : analysisError ? (
+          <View style={styles.errorBox}>
+            <Ionicons name="alert-circle" size={22} color="#ef4444" />
+            <Text style={styles.errorTitle}>Analyse impossible</Text>
+            <Text style={styles.errorMessage}>{analysisError}</Text>
+            {selectedMatch && (
+              <TouchableOpacity style={styles.retryButton} onPress={() => triggerAnalysis(selectedMatch)}>
+                <Ionicons name="refresh" size={16} color="#ffffff" />
+                <Text style={styles.retryButtonText}>Réessayer</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         ) : analysisResult ? (
           <View>
             <Text style={styles.generalAnalysisText}>{analysisResult.generalAnalysis}</Text>
 
-            <Text style={styles.sectionSubTitle}>Probabilités par Marché :</Text>
+            <Text style={styles.sectionSubTitle}>Probabilités par Marché ({analysisResult.markets.length}) :</Text>
             {analysisResult.markets.map((m, idx) => (
               <View key={idx} style={styles.marketBox}>
                 <View style={styles.marketTop}>
@@ -198,6 +245,20 @@ export default function ScoutingScreen() {
             ))}
           </View>
         ) : null}
+
+        {diagnostic && (
+          <View style={styles.diagnosticBox}>
+            <Ionicons
+              name={diagnostic.status === 'success' ? 'checkmark-circle' : 'close-circle'}
+              size={14}
+              color={diagnostic.status === 'success' ? '#10b981' : '#ef4444'}
+            />
+            <Text style={styles.diagnosticText}>
+              Moteur : {diagnostic.engine === 'gemini' ? 'Google Gemini' : diagnostic.engine === 'omniroute' ? 'Omniroute' : 'Aucun'}
+              {' • '}{new Date(diagnostic.timestamp).toLocaleTimeString('fr-FR')}
+            </Text>
+          </View>
+        )}
       </View>
     </View>
   );
@@ -248,4 +309,11 @@ const styles = StyleSheet.create({
   marketName: { fontSize: 13, fontWeight: 'bold', color: '#f8fafc' },
   marketProb: { fontSize: 13, fontWeight: 'bold', color: '#10b981' },
   marketReason: { fontSize: 11, color: '#94a3b8', lineHeight: 16 },
+  errorBox: { alignItems: 'center', paddingVertical: 20, gap: 8 },
+  errorTitle: { color: '#ef4444', fontSize: 14, fontWeight: 'bold' },
+  errorMessage: { color: '#94a3b8', fontSize: 12, textAlign: 'center', lineHeight: 18, paddingHorizontal: 8 },
+  retryButton: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#3b82f6', borderRadius: 8, paddingVertical: 10, paddingHorizontal: 18, marginTop: 8 },
+  retryButtonText: { color: '#ffffff', fontSize: 13, fontWeight: 'bold' },
+  diagnosticBox: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#334155' },
+  diagnosticText: { color: '#64748b', fontSize: 11 },
 });

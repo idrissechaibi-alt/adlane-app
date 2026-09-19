@@ -1,104 +1,126 @@
 // Écran de Gestion Avancée des API Multi-Sources
-// Configure et teste toutes les sources de données
+// Configure et teste toutes les sources de données, avec compteur de requêtes du jour
 
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   ActivityIndicator, Alert, SafeAreaView, ScrollView, StyleSheet,
-  Switch, Text, TextInput, TouchableOpacity, View
+  Text, TextInput, TouchableOpacity, View
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  getAPIConfig, saveAPIConfig, testAPIConnection, APIConfig,
+  getAllRequestCounts, resetRequestCount
+} from '../api/multiAPIManager';
 
-const API_STORAGE_KEY = '@multi_api_config';
-
-interface APIConfig {
-  apiFootball: string;
-  theOddsApi: string;
-  footballData: string;
-  sportmonks: string;
-  apiKey: string;
+interface APISourceMeta {
+  id: keyof Omit<APIConfig, 'fallbackEnabled' | 'maxRetries'>;
+  name: string;
+  icon: string;
+  color: string;
+  desc: string;
+  placeholder: string;
+  testable: boolean;
 }
 
-const DEFAULT_CONFIG: APIConfig = {
-  apiFootball: '', theOddsApi: '', footballData: '', sportmonks: '', apiKey: ''
-};
+const API_SOURCES: APISourceMeta[] = [
+  {
+    id: 'apiFootball', name: 'API-Football (RapidAPI)', icon: 'football', color: '#3b82f6',
+    desc: 'Source principale • 100 req/jour gratuites', placeholder: 'x-rapidapi-key...', testable: true
+  },
+  {
+    id: 'footballData', name: 'Football-Data.org', icon: 'trophy', color: '#10b981',
+    desc: 'Gratuit 10 req/min • Top 5 ligues', placeholder: 'Votre token...', testable: true
+  },
+  {
+    id: 'theOddsApi', name: 'TheOddsAPI', icon: 'trending-up', color: '#f59e0b',
+    desc: 'Cotes temps réel • $30/mois', placeholder: 'Votre clé...', testable: true
+  },
+  {
+    id: 'sportmonks', name: 'Sportmonks', icon: 'server', color: '#8b5cf6',
+    desc: 'API complète pro • $40/mois', placeholder: 'Votre token...', testable: false
+  },
+  {
+    id: 'sofaScore', name: 'SofaScore (secours)', icon: 'stats-chart', color: '#ec4899',
+    desc: 'Scraping de secours, sans clé requise', placeholder: 'Non requis', testable: false
+  }
+];
 
 export default function APIManagementScreen({ navigation }: any) {
-  const [config, setConfig] = useState<APIConfig>(DEFAULT_CONFIG);
+  const [config, setConfig] = useState<APIConfig | null>(null);
+  const [counts, setCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState<string | null>(null);
 
-  React.useEffect(() => {
-    loadConfig();
+  const loadAll = useCallback(async () => {
+    try {
+      const [cfg, reqCounts] = await Promise.all([getAPIConfig(), getAllRequestCounts()]);
+      setConfig(cfg);
+      setCounts(reqCounts);
+    } catch {
+      // conserve l'état précédent si la lecture échoue
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const loadConfig = async () => {
-    try {
-      const raw = await AsyncStorage.getItem(API_STORAGE_KEY);
-      if (raw) setConfig({ ...DEFAULT_CONFIG, ...JSON.parse(raw) });
-    } catch {}
-    setLoading(false);
-  };
+  React.useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', loadAll);
+    return unsubscribe;
+  }, [navigation, loadAll]);
 
   const handleSave = async () => {
+    if (!config) return;
     setSaving(true);
     try {
-      await AsyncStorage.setItem(API_STORAGE_KEY, JSON.stringify(config));
-      Alert.alert('✅ Sauvegardé', 'Configuration API enregistrée');
+      await saveAPIConfig(config);
+      Alert.alert('✅ Sauvegardé', 'Configuration API enregistrée. Elle sera utilisée par l\'onglet Données Foot.');
     } catch {
       Alert.alert('❌ Erreur', 'Sauvegarde échouée');
     }
     setSaving(false);
   };
 
-  const handleTest = async (source: string, endpoint: string, key: string) => {
-    setTesting(source);
+  const handleTest = async (source: APISourceMeta) => {
+    if (!config) return;
+    setTesting(source.id);
     try {
-      const response = await fetch(endpoint, {
-        headers: source === 'apiFootball'
-          ? { 'x-rapidapi-key': key, 'x-rapidapi-host': 'v3.football.api-sports.io' }
-          : source === 'footballData'
-          ? { 'X-Auth-Token': key }
-          : {}
-      });
-      Alert.alert(response.ok ? '✅ Connexion OK' : '⚠️ Erreur', `HTTP ${response.status}`);
+      const ok = await testAPIConnection(source.id, config);
+      Alert.alert(ok ? '✅ Connexion OK' : '⚠️ Échec', ok ? `${source.name} répond correctement.` : `Impossible de joindre ${source.name}. Vérifiez la clé.`);
     } catch (e: any) {
-      Alert.alert('❌ Échec', e.message);
+      Alert.alert('❌ Échec', e.message || `Impossible de joindre ${source.name}`);
+    } finally {
+      setTesting(null);
+      const reqCounts = await getAllRequestCounts();
+      setCounts(reqCounts);
     }
-    setTesting(null);
   };
 
-  if (loading) {
+  const handleResetCount = (source: APISourceMeta) => {
+    Alert.alert(
+      'Réinitialiser le compteur ?',
+      `Remet à zéro le compteur de requêtes du jour pour ${source.name}.`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Réinitialiser',
+          style: 'destructive',
+          onPress: async () => {
+            await resetRequestCount(source.id);
+            setCounts(await getAllRequestCounts());
+          }
+        }
+      ]
+    );
+  };
+
+  if (loading || !config) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.center}><ActivityIndicator size="large" color="#3b82f6" /></View>
       </SafeAreaView>
     );
   }
-
-  const apiSources = [
-    {
-      id: 'apiFootball', name: 'API-Football (RapidAPI)', icon: 'football', color: '#3b82f6',
-      desc: 'Source principale • 100 req/jour gratuites', endpoint: 'https://v3.football.api-sports.io/status',
-      fields: [{ key: 'apiFootball' as keyof APIConfig, label: 'Clé RapidAPI', placeholder: 'x-rapidapi-key...' }]
-    },
-    {
-      id: 'footballData', name: 'Football-Data.org', icon: 'trophy', color: '#10b981',
-      desc: 'Gratuit 10 req/min • Top 5 ligues', endpoint: 'https://api.football-data.org/v4/competitions',
-      fields: [{ key: 'footballData' as keyof APIConfig, label: 'Token API', placeholder: 'Votre token...' }]
-    },
-    {
-      id: 'theOddsApi', name: 'TheOddsAPI', icon: 'trending-up', color: '#f59e0b',
-      desc: 'Cotes temps réel • $30/mois', endpoint: 'https://api.the-odds-api.com/v4/sports',
-      fields: [{ key: 'theOddsApi' as keyof APIConfig, label: 'API Key', placeholder: 'Votre clé...' }]
-    },
-    {
-      id: 'sportmonks', name: 'Sportmonks', icon: 'server', color: '#8b5cf6',
-      desc: 'API complète pro • $40/mois', endpoint: '',
-      fields: [{ key: 'sportmonks' as keyof APIConfig, label: 'API Token', placeholder: 'Votre token...' }]
-    }
-  ];
 
   return (
     <SafeAreaView style={styles.container}>
@@ -115,48 +137,62 @@ export default function APIManagementScreen({ navigation }: any) {
           <Ionicons name="shield-checkmark" size={20} color="#60a5fa" />
           <Text style={styles.noticeText}>
             Clés stockées localement uniquement. Chiffrées sur Android. Jamais transmises à des tiers.
+            Cette configuration alimente l'onglet "Données Foot".
           </Text>
         </View>
 
-        {apiSources.map((source) => (
-          <View key={source.id} style={styles.card}>
-            <View style={styles.cardHeader}>
-              <Ionicons name={source.icon as any} size={22} color={source.color} />
-              <View style={{ flex: 1, marginLeft: 10 }}>
-                <Text style={styles.sourceName}>{source.name}</Text>
-                <Text style={styles.sourceDesc}>{source.desc}</Text>
+        {API_SOURCES.map((source) => {
+          const count = counts[source.id] || 0;
+          return (
+            <View key={source.id} style={styles.card}>
+              <View style={styles.cardHeader}>
+                <Ionicons name={source.icon as any} size={22} color={source.color} />
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={styles.sourceName}>{source.name}</Text>
+                  <Text style={styles.sourceDesc}>{source.desc}</Text>
+                </View>
               </View>
+
+              {source.id !== 'sofaScore' && (
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Clé / Token</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={config[source.id] as string}
+                    onChangeText={(t) => setConfig({ ...config, [source.id]: t })}
+                    placeholder={source.placeholder}
+                    placeholderTextColor="#64748b"
+                    secureTextEntry
+                    autoCapitalize="none"
+                  />
+                </View>
+              )}
+
+              <View style={styles.counterRow}>
+                <View style={styles.counterLeft}>
+                  <Ionicons name="pulse-outline" size={14} color="#94a3b8" />
+                  <Text style={styles.counterText}>{count} requête{count > 1 ? 's' : ''} aujourd'hui</Text>
+                </View>
+                <TouchableOpacity onPress={() => handleResetCount(source)} style={styles.counterResetBtn}>
+                  <Ionicons name="refresh-outline" size={14} color="#64748b" />
+                </TouchableOpacity>
+              </View>
+
+              {source.testable && (
+                <TouchableOpacity
+                  style={[styles.testBtn, { backgroundColor: source.color }, !config[source.id] && styles.testBtnDisabled]}
+                  onPress={() => handleTest(source)}
+                  disabled={testing === source.id || !config[source.id]}
+                >
+                  {testing === source.id
+                    ? <ActivityIndicator color="#fff" size="small" />
+                    : <><Ionicons name="checkmark-circle" size={16} color="#fff" /><Text style={styles.testBtnText}>Tester</Text></>
+                  }
+                </TouchableOpacity>
+              )}
             </View>
-
-            {source.fields.map((field) => (
-              <View key={field.key} style={styles.inputGroup}>
-                <Text style={styles.label}>{field.label}</Text>
-                <TextInput
-                  style={styles.input}
-                  value={config[field.key] || ''}
-                  onChangeText={(t) => setConfig({ ...config, [field.key]: t })}
-                  placeholder={field.placeholder}
-                  placeholderTextColor="#64748b"
-                  secureTextEntry
-                  autoCapitalize="none"
-                />
-              </View>
-            ))}
-
-            {source.endpoint && config[source.fields[0].key] && (
-              <TouchableOpacity
-                style={[styles.testBtn, { backgroundColor: source.color }]}
-                onPress={() => handleTest(source.id, source.endpoint, config[source.fields[0].key])}
-                disabled={testing === source.id}
-              >
-                {testing === source.id
-                  ? <ActivityIndicator color="#fff" size="small" />
-                  : <><Ionicons name="checkmark-circle" size={16} color="#fff" /><Text style={styles.testBtnText}>Tester</Text></>
-                }
-              </TouchableOpacity>
-            )}
-          </View>
-        ))}
+          );
+        })}
 
         <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={saving}>
           {saving ? <ActivityIndicator color="#fff" />
@@ -193,7 +229,12 @@ const styles = StyleSheet.create({
   inputGroup: { marginBottom: 12 },
   label: { fontSize: 12, color: '#94a3b8', marginBottom: 6 },
   input: { backgroundColor: '#0f172a', borderRadius: 8, borderWidth: 1, borderColor: '#334155', padding: 12, color: '#f8fafc', fontSize: 14 },
+  counterRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8, borderTopWidth: 1, borderTopColor: '#334155', marginBottom: 4 },
+  counterLeft: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  counterText: { color: '#94a3b8', fontSize: 12 },
+  counterResetBtn: { padding: 6 },
   testBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 10, borderRadius: 8, marginTop: 4, gap: 6 },
+  testBtnDisabled: { opacity: 0.4 },
   testBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 13 },
   saveBtn: { backgroundColor: '#10b981', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 16, borderRadius: 12, gap: 10, marginBottom: 16 },
   saveBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },

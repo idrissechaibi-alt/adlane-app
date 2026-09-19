@@ -15,7 +15,7 @@ import {
   ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { getAPIConfig, saveAPIConfig, APIConfig } from '../api/multiAPIManager';
+import { getAPIConfig, saveAPIConfig, APIConfig, incrementRequestCount } from '../api/multiAPIManager';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const OMNIROUTE_CONFIG_KEY = '@omniroute_config';
@@ -114,6 +114,7 @@ export default function SettingsScreen({ navigation }: any) {
 
     setTesting(true);
     try {
+      await incrementRequestCount('apiFootball');
       const response = await fetch('https://v3.football.api-sports.io/status', {
         headers: {
           'x-rapidapi-key': apiConfig.apiFootball,
