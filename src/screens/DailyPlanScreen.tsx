@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { executeMorningScan, getDailyPlan, checkAndUpdateT90Status, DailyPlan } from '../core/scheduler';
 import { generateDailyProposals, ScheduledMatch } from '../core/dailyWorkflow';
 import { estimateExpectedGoalsFromMarket } from '../core/poisson';
+import { getHalftimeAlertsLog, HalftimeAlertLogEntry } from '../core/halftimeMonitor';
 import { DailyScheduleSlot, ScheduledMatchDetail } from '../types/database';
 import { ProposedSlip } from '../core/dailyWorkflow';
 import { HISTORICAL_BETS } from '../data/historical';
@@ -51,18 +52,28 @@ export default function DailyPlanScreen() {
   const [proposals, setProposals] = useState<ProposedSlip[]>([]);
   const [matchesMissingOdds, setMatchesMissingOdds] = useState(0);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
+  const [halftimeAlerts, setHalftimeAlerts] = useState<HalftimeAlertLogEntry[]>([]);
 
   useEffect(() => {
     loadDailyPlan();
+    loadHalftimeAlerts();
 
-    // Vérifier T-90 toutes les 30 secondes
+    // Vérifier T-90 toutes les 30 secondes, et relire les alertes mi-temps
+    // au même rythme (le moniteur tourne en tâche de fond dans App.tsx).
     const interval = setInterval(() => {
       checkAndUpdateT90Status();
       loadDailyPlan();
+      loadHalftimeAlerts();
     }, 30000);
 
     return () => clearInterval(interval);
   }, []);
+
+  const loadHalftimeAlerts = async () => {
+    const log = await getHalftimeAlertsLog();
+    const today = new Date().toISOString().split('T')[0];
+    setHalftimeAlerts(log.filter((a) => a.timestamp.startsWith(today)));
+  };
 
   const loadDailyPlan = async () => {
     const existing = await getDailyPlan();
@@ -278,6 +289,27 @@ export default function DailyPlanScreen() {
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#3b82f6" />}
       >
+        {halftimeAlerts.length > 0 && (
+          <View style={styles.halftimeAlertsBox}>
+            <View style={styles.halftimeAlertsHeader}>
+              <Ionicons name="notifications" size={18} color="#a78bfa" />
+              <Text style={styles.halftimeAlertsTitle}>
+                Alertes mi-temps du jour ({halftimeAlerts.length})
+              </Text>
+            </View>
+            {halftimeAlerts.map((alert, idx) => (
+              <View key={`${alert.matchId}-${idx}`} style={styles.halftimeAlertRow}>
+                <Text style={styles.halftimeAlertMatch}>
+                  {alert.homeTeam} {alert.htScore.home}-{alert.htScore.away} {alert.awayTeam}
+                </Text>
+                <Text style={styles.halftimeAlertSelection}>
+                  {alert.selection} — {(alert.estimated_prob * 100).toFixed(0)}% ({alert.confidence})
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
+
         {matchesMissingOdds > 0 && (
           <View style={styles.oddsWarningBox}>
             <Ionicons name="information-circle" size={20} color="#f59e0b" />
@@ -579,5 +611,39 @@ const styles = StyleSheet.create({
     color: '#fde68a',
     fontSize: 12,
     lineHeight: 18,
+  },
+  halftimeAlertsBox: {
+    backgroundColor: 'rgba(167, 139, 250, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(167, 139, 250, 0.35)',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 12,
+  },
+  halftimeAlertsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  halftimeAlertsTitle: {
+    color: '#e9d5ff',
+    fontSize: 13,
+    fontWeight: 'bold',
+  },
+  halftimeAlertRow: {
+    paddingVertical: 6,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(167, 139, 250, 0.2)',
+  },
+  halftimeAlertMatch: {
+    color: '#f8fafc',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  halftimeAlertSelection: {
+    color: '#c4b5fd',
+    fontSize: 12,
+    marginTop: 2,
   },
 });

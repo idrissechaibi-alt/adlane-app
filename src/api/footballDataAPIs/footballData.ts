@@ -38,7 +38,7 @@ function resolveCompetitionId(leagueId: string): string {
 
 export async function testConnection(config: FootballDataConfig): Promise<boolean> {
   try {
-    const response = await fetch(`${config.endpoint}/competitions`, {
+    const response = await fetch(`${config.endpoint || BASE_URL}/competitions`, {
       headers: {
         'X-Auth-Token': config.apiKey
       }
@@ -69,7 +69,7 @@ export async function getFixturesByDate(
     // L'endpoint /competitions/{id}/fixtures ne filtre pas par un seul jour :
     // on demande une fenêtre [date, date] via dateFrom/dateTo.
     const response = await fetch(
-      `${config.endpoint}/competitions/${competitionId}/matches?dateFrom=${date}&dateTo=${date}`,
+      `${config.endpoint || BASE_URL}/competitions/${competitionId}/matches?dateFrom=${date}&dateTo=${date}`,
       { headers: { 'X-Auth-Token': config.apiKey } }
     );
 
@@ -103,7 +103,7 @@ export async function getFixturesBySeason(
 ): Promise<APIResponse<FootballMatch[]>> {
   try {
     const competitionId = resolveCompetitionId(leagueId);
-    const response = await fetch(`${config.endpoint}/competitions/${competitionId}/matches?season=${season}`, {
+    const response = await fetch(`${config.endpoint || BASE_URL}/competitions/${competitionId}/matches?season=${season}`, {
       headers: {
         'X-Auth-Token': config.apiKey
       }
@@ -135,7 +135,7 @@ export async function getMatchStatistics(
   matchId: string
 ): Promise<APIResponse<MatchStatistics>> {
   try {
-    const response = await fetch(`${config.endpoint}/matches/${matchId}`, {
+    const response = await fetch(`${config.endpoint || BASE_URL}/matches/${matchId}`, {
       headers: {
         'X-Auth-Token': config.apiKey
       }
@@ -167,7 +167,7 @@ export async function getTeamInfo(
   teamId: string
 ): Promise<APIResponse<Team>> {
   try {
-    const response = await fetch(`${config.endpoint}/teams/${teamId}`, {
+    const response = await fetch(`${config.endpoint || BASE_URL}/teams/${teamId}`, {
       headers: {
         'X-Auth-Token': config.apiKey
       }
@@ -200,7 +200,7 @@ export async function getTeamLastMatches(
   count: number = 5
 ): Promise<APIResponse<FootballMatch[]>> {
   try {
-    const response = await fetch(`${config.endpoint}/teams/${teamId}/matches?limit=${count}`, {
+    const response = await fetch(`${config.endpoint || BASE_URL}/teams/${teamId}/matches?limit=${count}`, {
       headers: {
         'X-Auth-Token': config.apiKey
       }

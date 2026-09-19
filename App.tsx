@@ -7,6 +7,8 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
 import { initDatabase, seedDatabaseIfEmpty } from './src/database/storage';
 import { startAutoSync } from './src/core/gitAutoSync';
+import { ensureNotificationPermissions } from './src/core/notifications';
+import { checkHalftimeOpportunities } from './src/core/halftimeMonitor';
 import DashboardScreen from './src/screens/DashboardScreen';
 import DailyPlanScreen from './src/screens/DailyPlanScreen';
 import ScoutingScreen from './src/screens/ScoutingScreen';
@@ -29,6 +31,10 @@ function SettingsStack() {
   );
 }
 
+// Fréquence de vérification des opportunités mi-temps pendant que l'app est
+// ouverte. Ne fonctionne pas app totalement fermée (voir halftimeMonitor.ts).
+const HALFTIME_POLL_INTERVAL_MS = 3 * 60 * 1000;
+
 export default function App() {
   useEffect(() => {
     const setupApp = async () => {
@@ -36,9 +42,19 @@ export default function App() {
         await initDatabase();
         await seedDatabaseIfEmpty();
         await startAutoSync();
+        await ensureNotificationPermissions();
       } catch (error) { console.error('Erreur initialisation App:', error); }
     };
     setupApp();
+
+    const runCheck = () => {
+      checkHalftimeOpportunities().catch((error) =>
+        console.warn('Erreur moniteur mi-temps:', error)
+      );
+    };
+    runCheck();
+    const interval = setInterval(runCheck, HALFTIME_POLL_INTERVAL_MS);
+    return () => clearInterval(interval);
   }, []);
 
   return (
