@@ -1,21 +1,23 @@
-// Observation en direct + étiquetage automatique.
+// Observation en direct + étiquetage automatique multi-événements.
 //
-// Objectif : apprendre QUELS MARQUEURS précèdent un but de 1ère mi-temps.
-// À chaque tour, on prend un instantané des matchs de l'univers du jour qui
-// sont en 1ère mi-temps, puis on étiquette a posteriori les instantanés
-// précédents : "un but est-il tombé dans les 10 minutes qui ont suivi ?".
+// Objectif : apprendre quels marqueurs précèdent un BUT, un CORNER ou un
+// CARTON, sur deux fenêtres :
+//   - 10 minutes : signal court.
+//   - 25 minutes : la fenêtre de pari visée (décision à la 20e, jusqu'à la pause).
 //
 // Économie de requêtes : UN SEUL appel /fixtures?live=all ramène tous les
-// matchs en direct de la planète. Les statistiques détaillées (tirs, corners)
-// coûtent un appel par match : elles ne sont donc récupérées que pour un
-// nombre borné de rencontres prioritaires à chaque tour.
+// matchs en direct de la planète. Les statistiques détaillées (tirs, corners,
+// cartons) coûtent un appel par match : elles sont donc réservées en priorité
+// aux matchs des ligues sur lesquelles l'utilisateur joue vraiment.
 
 import { getAPIConfig } from '../api/multiAPIManager';
 import { spendBudget } from './requestBudget';
 import { getStoredUniverse, UniverseMatch } from './matchUniverse';
 import {
+  EventDeltas,
+  LEARNING_HORIZONS,
   MarkerSet,
-  MarkerSnapshot,
+  PendingObservation,
   TrainingRow,
   appendTrainingRows,
   readLearnedModel,
@@ -24,10 +26,9 @@ import {
 } from './learnStore';
 import { maybePlacePaperBets } from './autoLearn';
 
-/** Fenêtre d'étiquetage : un but dans les N minutes suivant l'instantané. */
-const GOAL_WINDOW_MINUTES = 10;
 /** Nombre maximum de matchs enrichis en statistiques détaillées par tour. */
-const MAX_DETAILED_STATS_PER_TICK = 8;
+const MAX_DETAILED_STATS_PER_TICK = 10;
+const LONGEST_HORIZON = Math.max(...LEARNING_HORIZONS);
 
 interface LiveSnapshotInput {
   fixtureId: number;
@@ -85,6 +86,9 @@ async function fetchMarkers(apiKey: string, fixtureId: number): Promise<MarkerSe
     const pick = (entry: any, type: string) =>
       parseStatValue(entry?.statistics?.find((s: any) => s.type === type)?.value);
 
+    const cardsOf = (entry: any) =>
+      (pick(entry, 'Yellow Cards') ?? 0) + (pick(entry, 'Red Cards') ?? 0);
+
     return {
       shotsOnTargetHome: pick(home, 'Shots on Goal'),
       shotsOnTargetAway: pick(away, 'Shots on Goal'),
@@ -93,110 +97,144 @@ async function fetchMarkers(apiKey: string, fixtureId: number): Promise<MarkerSe
       cornersHome: pick(home, 'Corner Kicks'),
       cornersAway: pick(away, 'Corner Kicks'),
       possessionHome: pick(home, 'Ball Possession'),
-      cardsHome: pick(home, 'Yellow Cards'),
-      cardsAway: pick(away, 'Yellow Cards'),
+      cardsHome: entries.length > 0 ? cardsOf(home) : undefined,
+      cardsAway: entries.length > 1 ? cardsOf(away) : undefined,
     };
   } catch {
     return {};
   }
 }
 
+function totalCorners(markers: MarkerSet): number | undefined {
+  if (markers.cornersHome == null && markers.cornersAway == null) return undefined;
+  return (markers.cornersHome ?? 0) + (markers.cornersAway ?? 0);
+}
+
+function totalCards(markers: MarkerSet): number | undefined {
+  if (markers.cardsHome == null && markers.cardsAway == null) return undefined;
+  return (markers.cardsHome ?? 0) + (markers.cardsAway ?? 0);
+}
+
 /**
- * Étiquette les instantanés en attente à la lumière de l'observation courante.
- * Renvoie les lignes d'entraînement prêtes + les instantanés encore en attente.
+ * Met à jour les fenêtres ouvertes d'un instantané à la lumière de l'état
+ * courant. Une fenêtre est figée dès que sa durée est écoulée, ou tronquée si
+ * la mi-temps arrive avant (marquée comme telle, jamais complétée au hasard).
  */
-function labelPending(
-  pending: MarkerSnapshot[],
-  liveByFixture: Map<number, LiveSnapshotInput>
-): { rows: TrainingRow[]; stillPending: MarkerSnapshot[] } {
-  const rows: TrainingRow[] = [];
-  const stillPending: MarkerSnapshot[] = [];
-  const now = new Date().toISOString();
+function updateHorizons(
+  pending: PendingObservation,
+  live: LiveSnapshotInput | undefined,
+  currentMarkers: MarkerSet | undefined,
+  halfEnded: boolean
+): PendingObservation {
+  const goalsNow = live ? live.goalsHome + live.goalsAway : pending.goalsHome + pending.goalsAway;
+  const cornersNow = currentMarkers ? totalCorners(currentMarkers) : undefined;
+  const cardsNow = currentMarkers ? totalCards(currentMarkers) : undefined;
 
-  for (const snap of pending) {
-    const live = liveByFixture.get(snap.fixtureId);
+  const deltas: EventDeltas = {
+    goals: goalsNow - (pending.goalsHome + pending.goalsAway),
+    corners: cornersNow != null ? cornersNow - pending.baselineCorners : 0,
+    cards: cardsNow != null ? cardsNow - pending.baselineCards : 0,
+    truncated: false,
+  };
 
-    // Match disparu du direct (mi-temps atteinte, ou fini) : on clôt
-    // l'observation avec ce qu'on sait, sans inventer.
-    if (!live) {
-      const tooOld = Date.now() - new Date(snap.ts).getTime() > 45 * 60_000;
-      if (tooOld) {
-        rows.push({ ...snap, label_goal_next_10: 0, labelledAt: now });
-      } else {
-        stillPending.push(snap);
-      }
-      continue;
+  const elapsed = live ? live.minute - pending.minute : LONGEST_HORIZON;
+  const frozen = { ...pending.frozen };
+
+  for (const horizon of LEARNING_HORIZONS) {
+    const key = String(horizon);
+    if (frozen[key]) continue;
+
+    if (elapsed >= horizon) {
+      frozen[key] = { ...deltas };
+    } else if (halfEnded) {
+      // Pause atteinte avant la fin de la fenêtre : on fige ce qu'on a en le
+      // signalant tronqué, pour ne pas polluer l'apprentissage.
+      frozen[key] = { ...deltas, truncated: true };
     }
-
-    const goalsAtSnapshot = snap.goalsHome + snap.goalsAway;
-    const goalsNow = live.goalsHome + live.goalsAway;
-    const elapsedSinceSnapshot = live.minute - snap.minute;
-
-    if (goalsNow > goalsAtSnapshot && elapsedSinceSnapshot <= GOAL_WINDOW_MINUTES) {
-      rows.push({ ...snap, label_goal_next_10: 1, labelledAt: now });
-      continue;
-    }
-
-    // Fenêtre écoulée sans but, ou 1ère mi-temps terminée : étiquette négative.
-    if (elapsedSinceSnapshot > GOAL_WINDOW_MINUTES || live.statusShort !== '1H') {
-      rows.push({ ...snap, label_goal_next_10: 0, labelledAt: now });
-      continue;
-    }
-
-    stillPending.push(snap);
   }
 
-  return { rows, stillPending };
+  return { ...pending, frozen };
+}
+
+function isClosed(pending: PendingObservation): boolean {
+  return LEARNING_HORIZONS.every((h) => pending.frozen[String(h)] != null);
+}
+
+function toTrainingRow(pending: PendingObservation): TrainingRow {
+  const { baselineCorners, baselineCards, frozen, ...snapshot } = pending;
+  return { ...snapshot, horizons: frozen, closedAt: new Date().toISOString() };
 }
 
 /**
  * Un tour d'observation. Appelé par la tâche de fond (toutes les ~15 min,
  * plancher imposé par Android) et par la boucle de premier plan (3 min).
- * Ne fait rien si aucun match de l'univers n'est en 1ère mi-temps.
  */
-export async function runLiveMarkerTick(): Promise<{ observed: number; labelled: number }> {
+export async function runLiveMarkerTick(): Promise<{ observed: number; closed: number }> {
   const config = await getAPIConfig();
-  if (!config.apiFootball) return { observed: 0, labelled: 0 };
+  if (!config.apiFootball) return { observed: 0, closed: 0 };
 
   const universe = await getStoredUniverse();
-  if (!universe || universe.length === 0) return { observed: 0, labelled: 0 };
+  if (!universe || universe.length === 0) return { observed: 0, closed: 0 };
 
-  if (!(await spendBudget('apiFootball'))) return { observed: 0, labelled: 0 };
+  if (!(await spendBudget('apiFootball'))) return { observed: 0, closed: 0 };
 
   let live: LiveSnapshotInput[];
   try {
     live = await fetchAllLive(config.apiFootball);
   } catch (error: any) {
     console.warn('[Marqueurs live] Échec du relevé:', error.message);
-    return { observed: 0, labelled: 0 };
+    return { observed: 0, closed: 0 };
   }
+
+  const model = readLearnedModel();
+  const focusLeagues = new Set((model?.focusLeagues ?? []).map((l) => l.toLowerCase()));
 
   const universeById = new Map<number, UniverseMatch>(universe.map((m) => [m.fixtureId, m]));
   const liveByFixture = new Map<number, LiveSnapshotInput>(live.map((l) => [l.fixtureId, l]));
 
-  // 1) Étiqueter ce qui était en attente, avec les scores qu'on vient de lire.
+  // Matchs de l'univers actuellement en 1ère mi-temps, ligues jouées d'abord :
+  // ce sont eux qui méritent les requêtes de statistiques détaillées.
+  const firstHalf = live
+    .filter((l) => l.statusShort === '1H' && universeById.has(l.fixtureId))
+    .sort((a, b) => {
+      const aFocus = focusLeagues.has(universeById.get(a.fixtureId)!.league.toLowerCase()) ? 0 : 1;
+      const bFocus = focusLeagues.has(universeById.get(b.fixtureId)!.league.toLowerCase()) ? 0 : 1;
+      return aFocus - bFocus;
+    });
+
+  // Statistiques détaillées pour un nombre borné de matchs (budget API).
+  const markersByFixture = new Map<number, MarkerSet>();
+  for (const l of firstHalf.slice(0, MAX_DETAILED_STATS_PER_TICK)) {
+    if (!(await spendBudget('apiFootball'))) break;
+    markersByFixture.set(l.fixtureId, await fetchMarkers(config.apiFootball, l.fixtureId));
+  }
+
+  // 1) Avancer les fenêtres des instantanés déjà ouverts.
   const pending = readPendingSnapshots();
-  const { rows, stillPending } = labelPending(pending, liveByFixture);
-  if (rows.length > 0) appendTrainingRows(rows);
+  const stillPending: PendingObservation[] = [];
+  const closedRows: TrainingRow[] = [];
 
-  // 2) Prendre de nouveaux instantanés sur les matchs en 1ère mi-temps.
-  const firstHalfMatches = live.filter(
-    (l) => l.statusShort === '1H' && universeById.has(l.fixtureId)
-  );
+  for (const obs of pending) {
+    const liveNow = liveByFixture.get(obs.fixtureId);
+    const halfEnded = !liveNow || liveNow.statusShort !== '1H';
+    const updated = updateHorizons(obs, liveNow, markersByFixture.get(obs.fixtureId), halfEnded);
 
-  const enrichCount = Math.min(MAX_DETAILED_STATS_PER_TICK, firstHalfMatches.length);
-  const newSnapshots: MarkerSnapshot[] = [];
+    if (isClosed(updated)) closedRows.push(toTrainingRow(updated));
+    else stillPending.push(updated);
+  }
 
-  for (let i = 0; i < firstHalfMatches.length; i++) {
-    const l = firstHalfMatches[i];
+  if (closedRows.length > 0) appendTrainingRows(closedRows);
+
+  // 2) Ouvrir de nouveaux instantanés.
+  const openFixtures = new Set(stillPending.map((p) => `${p.fixtureId}-${p.minute}`));
+  const newSnapshots: PendingObservation[] = [];
+
+  for (const l of firstHalf) {
     const meta = universeById.get(l.fixtureId)!;
+    const key = `${l.fixtureId}-${l.minute}`;
+    if (openFixtures.has(key)) continue;
 
-    // Statistiques détaillées seulement pour les premiers matchs (budget),
-    // les autres sont enregistrés avec score + minute uniquement.
-    let markers: MarkerSet = {};
-    if (i < enrichCount && (await spendBudget('apiFootball'))) {
-      markers = await fetchMarkers(config.apiFootball, l.fixtureId);
-    }
+    const markers = markersByFixture.get(l.fixtureId) ?? {};
 
     newSnapshots.push({
       ts: new Date().toISOString(),
@@ -209,6 +247,10 @@ export async function runLiveMarkerTick(): Promise<{ observed: number; labelled:
       goalsHome: l.goalsHome,
       goalsAway: l.goalsAway,
       markers,
+      focus: focusLeagues.has(meta.league.toLowerCase()),
+      baselineCorners: totalCorners(markers) ?? 0,
+      baselineCards: totalCards(markers) ?? 0,
+      frozen: {},
     });
   }
 
@@ -216,8 +258,8 @@ export async function runLiveMarkerTick(): Promise<{ observed: number; labelled:
 
   // Boucle silencieuse : le modèle parie sur ses propres instantanés, en
   // avance de phase (jamais de hindsight), et sera noté quand la vérité
-  // terrain arrivera au tour suivant. Aucune notification, aucun argent.
-  maybePlacePaperBets(newSnapshots, readLearnedModel());
+  // terrain arrivera. Aucune notification, aucun argent.
+  maybePlacePaperBets(newSnapshots, model);
 
-  return { observed: newSnapshots.length, labelled: rows.length };
+  return { observed: newSnapshots.length, closed: closedRows.length };
 }

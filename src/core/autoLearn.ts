@@ -1,21 +1,23 @@
-// Boucle d'auto-apprentissage silencieuse.
+// Boucle d'auto-apprentissage silencieuse, multi-marchés.
 //
-// 1. Consolide le corpus étiqueté (liveMarkers) en règles simples et lisibles :
-//    "quand X marqueurs sont réunis avant la 45e, un but tombe dans les 10
-//    minutes dans Y% des cas, soit Z fois le taux de base".
+// 1. Consolide le corpus étiqueté en règles lisibles et comptées :
+//    "quand X marqueurs sont réunis, un CORNER / un BUT / un CARTON survient
+//    dans les N minutes dans Y% des cas, soit Z fois le taux de base".
 // 2. Fait des paris papier en avance de phase (jamais d'argent, jamais de
 //    notification) et les règle quand la vérité terrain arrive -> taux de
 //    réussite réel et facteur de recalibrage.
-// 3. Produit un digest court, injecté aux agents IA pour qu'ils s'appuient sur
-//    ce qui a été observé plutôt que sur leur intuition.
+// 3. Produit un digest court, injecté aux agents IA.
 //
-// Rien ici n'invente de données : une règle sans échantillon suffisant est
-// écartée, et le digest affiche toujours la taille d'échantillon.
+// Rien ici n'invente : une règle sans échantillon suffisant est écartée, une
+// fenêtre tronquée (mi-temps arrivée trop tôt) n'est jamais comptée.
 
 import { getAllBets } from '../database/storage';
 import { HISTORICAL_BETS } from '../data/historical';
 import {
+  EventDeltas,
+  LEARNING_HORIZONS,
   LearnedModel,
+  MarkerRule,
   MarkerSnapshot,
   PaperBet,
   TrainingRow,
@@ -38,46 +40,68 @@ const PAPER_BET_PROB_THRESHOLD = 0.35;
 interface MarkerCandidate {
   name: string;
   label: string;
-  value: (row: TrainingRow) => number | undefined;
+  value: (snapshot: MarkerSnapshot) => number | undefined;
   thresholds: number[];
 }
 
 /**
- * Marqueurs testés. On agrège domicile + extérieur : ce qui précède un but,
- * c'est le volume de jeu dangereux TOTAL, peu importe quelle équipe le produit.
+ * Marqueurs testés. On agrège domicile + extérieur : ce qui précède un
+ * événement, c'est le volume de jeu total, peu importe qui le produit.
  */
 const MARKER_CANDIDATES: MarkerCandidate[] = [
   {
     name: 'shots_on_target_total',
     label: 'tirs cadrés cumulés',
-    value: (r) => sumDefined(r.markers.shotsOnTargetHome, r.markers.shotsOnTargetAway),
+    value: (s) => sumDefined(s.markers.shotsOnTargetHome, s.markers.shotsOnTargetAway),
     thresholds: [2, 3, 4, 5],
   },
   {
     name: 'shots_total',
     label: 'tirs totaux cumulés',
-    value: (r) => sumDefined(r.markers.shotsTotalHome, r.markers.shotsTotalAway),
+    value: (s) => sumDefined(s.markers.shotsTotalHome, s.markers.shotsTotalAway),
     thresholds: [6, 9, 12],
   },
   {
     name: 'corners_total',
     label: 'corners cumulés',
-    value: (r) => sumDefined(r.markers.cornersHome, r.markers.cornersAway),
-    thresholds: [3, 5, 7],
+    value: (s) => sumDefined(s.markers.cornersHome, s.markers.cornersAway),
+    thresholds: [2, 4, 6],
+  },
+  {
+    name: 'cards_total',
+    label: 'cartons cumulés',
+    value: (s) => sumDefined(s.markers.cardsHome, s.markers.cardsAway),
+    thresholds: [1, 2, 3],
   },
   {
     name: 'possession_imbalance',
     label: 'déséquilibre de possession (écart à 50%)',
-    value: (r) =>
-      r.markers.possessionHome == null ? undefined : Math.abs(r.markers.possessionHome - 50),
+    value: (s) =>
+      s.markers.possessionHome == null ? undefined : Math.abs(s.markers.possessionHome - 50),
     thresholds: [10, 15, 20],
   },
   {
     name: 'minute',
     label: 'minute de jeu atteinte',
-    value: (r) => r.minute,
-    thresholds: [20, 30, 35],
+    value: (s) => s.minute,
+    thresholds: [15, 20, 30],
   },
+];
+
+/** Cibles apprises : l'événement à prédire pendant la fenêtre. */
+interface LearningTarget {
+  key: string;
+  label: string;
+  hit: (deltas: EventDeltas) => boolean;
+}
+
+const LEARNING_TARGETS: LearningTarget[] = [
+  { key: 'goals>=1', label: 'au moins 1 but', hit: (d) => d.goals >= 1 },
+  { key: 'goals>=2', label: 'au moins 2 buts', hit: (d) => d.goals >= 2 },
+  { key: 'corners>=2', label: 'au moins 2 corners', hit: (d) => d.corners >= 2 },
+  { key: 'corners>=3', label: 'au moins 3 corners', hit: (d) => d.corners >= 3 },
+  { key: 'cards>=1', label: 'au moins 1 carton', hit: (d) => d.cards >= 1 },
+  { key: 'cards>=2', label: 'au moins 2 cartons', hit: (d) => d.cards >= 2 },
 ];
 
 function sumDefined(a?: number, b?: number): number | undefined {
@@ -85,8 +109,12 @@ function sumDefined(a?: number, b?: number): number | undefined {
   return (a ?? 0) + (b ?? 0);
 }
 
+function baselineKey(target: string, horizon: number): string {
+  return `${target}@${horizon}`;
+}
+
 /** Ligues et marchés sur lesquels l'utilisateur joue réellement. */
-async function getUserFocus(): Promise<{ leagues: string[]; markets: string[] }> {
+export async function getUserFocus(): Promise<{ leagues: string[]; markets: string[] }> {
   let bets = HISTORICAL_BETS;
   try {
     const stored = await getAllBets();
@@ -106,90 +134,144 @@ async function getUserFocus(): Promise<{ leagues: string[]; markets: string[] }>
   return { leagues: Array.from(leagues), markets: Array.from(markets) };
 }
 
-function buildRules(rows: TrainingRow[], baseline: number): LearnedModel['markerRules'] {
-  const rules: LearnedModel['markerRules'] = [];
+/** Lignes exploitables pour un horizon : fenêtre présente et non tronquée. */
+function rowsForHorizon(rows: TrainingRow[], horizon: number): Array<{ row: TrainingRow; deltas: EventDeltas }> {
+  const usable: Array<{ row: TrainingRow; deltas: EventDeltas }> = [];
+  for (const row of rows) {
+    const deltas = row.horizons?.[String(horizon)];
+    if (!deltas || deltas.truncated) continue;
+    usable.push({ row, deltas });
+  }
+  return usable;
+}
 
-  for (const candidate of MARKER_CANDIDATES) {
-    for (const threshold of candidate.thresholds) {
-      const matching = rows.filter((r) => {
-        const value = candidate.value(r);
-        return value != null && value >= threshold;
-      });
+function buildRules(rows: TrainingRow[]): { rules: MarkerRule[]; baselines: Record<string, number> } {
+  const rules: MarkerRule[] = [];
+  const baselines: Record<string, number> = {};
 
-      if (matching.length < MIN_SAMPLES_PER_RULE) continue;
+  for (const horizon of LEARNING_HORIZONS) {
+    const usable = rowsForHorizon(rows, horizon);
+    if (usable.length < MIN_SAMPLES_PER_RULE) continue;
 
-      const goals = matching.filter((r) => r.label_goal_next_10 === 1).length;
-      const goalRate = goals / matching.length;
-      const lift = baseline > 0 ? goalRate / baseline : 1;
+    for (const target of LEARNING_TARGETS) {
+      const baseline = usable.filter(({ deltas }) => target.hit(deltas)).length / usable.length;
+      baselines[baselineKey(target.key, horizon)] = baseline;
+      if (baseline <= 0) continue;
 
-      if (lift < MIN_LIFT) continue;
+      for (const candidate of MARKER_CANDIDATES) {
+        for (const threshold of candidate.thresholds) {
+          const matching = usable.filter(({ row }) => {
+            const value = candidate.value(row);
+            return value != null && value >= threshold;
+          });
 
-      rules.push({
-        marker: `${candidate.name}>=${threshold}`,
-        threshold,
-        samples: matching.length,
-        goalRate,
-        lift,
-      });
+          if (matching.length < MIN_SAMPLES_PER_RULE) continue;
+
+          const hits = matching.filter(({ deltas }) => target.hit(deltas)).length;
+          const hitRate = hits / matching.length;
+          const lift = hitRate / baseline;
+          if (lift < MIN_LIFT) continue;
+
+          rules.push({
+            marker: `${candidate.name}>=${threshold}`,
+            threshold,
+            target: target.key,
+            horizon,
+            samples: matching.length,
+            hitRate,
+            baseline,
+            lift,
+          });
+        }
+      }
     }
   }
 
-  return rules.sort((a, b) => b.lift - a.lift).slice(0, 12);
+  return { rules: rules.sort((a, b) => b.lift - a.lift).slice(0, 40), baselines };
 }
 
 /**
- * Probabilité estimée par le modèle appris pour un instantané donné :
- * on prend la règle déclenchée la plus informative, recalibrée par le bilan
- * réel des paris papier. Renvoie null si aucune règle ne s'applique.
+ * Probabilité estimée par le modèle pour une cible donnée sur un instantané.
+ * Prend la règle déclenchée la plus informative, recalibrée par le bilan réel
+ * des paris papier. Renvoie null si aucune règle ne s'applique.
  */
-export function scoreSnapshot(snapshot: MarkerSnapshot, model: LearnedModel | null): number | null {
+export function scoreSnapshot(
+  snapshot: MarkerSnapshot,
+  model: LearnedModel | null,
+  target: string,
+  horizon: number
+): { prob: number; rule: MarkerRule } | null {
   if (!model || model.markerRules.length === 0) return null;
 
-  const asRow = { ...snapshot, label_goal_next_10: 0, labelledAt: '' } as TrainingRow;
-  let best: number | null = null;
+  let best: { prob: number; rule: MarkerRule } | null = null;
 
   for (const rule of model.markerRules) {
+    if (rule.target !== target || rule.horizon !== horizon) continue;
+
     const [name, thresholdRaw] = rule.marker.split('>=');
     const candidate = MARKER_CANDIDATES.find((c) => c.name === name);
     if (!candidate) continue;
 
-    const value = candidate.value(asRow);
+    const value = candidate.value(snapshot);
     if (value == null || value < Number(thresholdRaw)) continue;
 
-    const calibrated = rule.goalRate * model.paperBets.calibrationFactor;
-    if (best == null || calibrated > best) best = calibrated;
+    const calibrated = Math.min(0.95, rule.hitRate * model.paperBets.calibrationFactor);
+    if (!best || calibrated > best.prob) best = { prob: calibrated, rule };
   }
 
   return best;
 }
 
-/** Enregistre un pari papier si le modèle déclenche (aucune notification). */
+/** Toutes les cibles déclenchées sur un instantané, triées par probabilité. */
+export function scoreAllTargets(
+  snapshot: MarkerSnapshot,
+  model: LearnedModel | null,
+  horizon: number
+): Array<{ target: string; label: string; prob: number; rule: MarkerRule }> {
+  const results: Array<{ target: string; label: string; prob: number; rule: MarkerRule }> = [];
+
+  for (const target of LEARNING_TARGETS) {
+    const scored = scoreSnapshot(snapshot, model, target.key, horizon);
+    if (scored) {
+      results.push({ target: target.key, label: target.label, prob: scored.prob, rule: scored.rule });
+    }
+  }
+
+  return results.sort((a, b) => b.prob - a.prob);
+}
+
+/** Enregistre des paris papier si le modèle déclenche (aucune notification). */
 export function maybePlacePaperBets(snapshots: MarkerSnapshot[], model: LearnedModel | null): void {
   if (!model) return;
 
   const existing = readPaperBets();
-  const known = new Set(existing.map((b) => `${b.fixtureId}-${b.minuteAtPlacement}`));
+  const known = new Set(existing.map((b) => `${b.fixtureId}-${b.minuteAtPlacement}-${b.target}-${b.horizon}`));
   const added: PaperBet[] = [];
 
   for (const snapshot of snapshots) {
-    const prob = scoreSnapshot(snapshot, model);
-    if (prob == null || prob < PAPER_BET_PROB_THRESHOLD) continue;
+    for (const horizon of LEARNING_HORIZONS) {
+      for (const scored of scoreAllTargets(snapshot, model, horizon)) {
+        if (scored.prob < PAPER_BET_PROB_THRESHOLD) continue;
 
-    const key = `${snapshot.fixtureId}-${snapshot.minute}`;
-    if (known.has(key)) continue;
+        const key = `${snapshot.fixtureId}-${snapshot.minute}-${scored.target}-${horizon}`;
+        if (known.has(key)) continue;
+        known.add(key);
 
-    added.push({
-      id: `paper-${snapshot.fixtureId}-${snapshot.minute}-${Date.now()}`,
-      placedAt: snapshot.ts,
-      fixtureId: snapshot.fixtureId,
-      league: snapshot.league,
-      country: snapshot.country,
-      market: 'but_1ere_mi_temps_10min',
-      selection: 'But dans les 10 prochaines minutes',
-      modelProb: prob,
-      minuteAtPlacement: snapshot.minute,
-      settled: false,
-    });
+        added.push({
+          id: `paper-${key}-${Date.now()}`,
+          placedAt: snapshot.ts,
+          fixtureId: snapshot.fixtureId,
+          league: snapshot.league,
+          country: snapshot.country,
+          target: scored.target,
+          horizon,
+          selection: `${scored.label} dans les ${horizon} prochaines minutes`,
+          modelProb: scored.prob,
+          minuteAtPlacement: snapshot.minute,
+          settled: false,
+        });
+      }
+    }
   }
 
   if (added.length > 0) writePaperBets([...existing, ...added]);
@@ -204,11 +286,16 @@ function settlePaperBets(rows: TrainingRow[]): PaperBet[] {
   let changed = false;
   for (const bet of bets) {
     if (bet.settled) continue;
+
     const row = truth.get(`${bet.fixtureId}-${bet.minuteAtPlacement}`);
-    if (!row) continue;
+    const deltas = row?.horizons?.[String(bet.horizon)];
+    if (!deltas || deltas.truncated) continue;
+
+    const target = LEARNING_TARGETS.find((t) => t.key === bet.target);
+    if (!target) continue;
 
     bet.settled = true;
-    bet.won = row.label_goal_next_10 === 1;
+    bet.won = target.hit(deltas);
     bet.settledAt = new Date().toISOString();
     changed = true;
   }
@@ -225,17 +312,14 @@ export async function consolidateLearning(): Promise<LearnedModel | null> {
   const rows = readTrainingRows(14);
   if (rows.length < MIN_SAMPLES_PER_RULE) return readLearnedModel();
 
-  const baseline = rows.filter((r) => r.label_goal_next_10 === 1).length / rows.length;
-  const markerRules = buildRules(rows, baseline);
+  const { rules, baselines } = buildRules(rows);
 
   const bets = settlePaperBets(rows);
   const settled = bets.filter((b) => b.settled);
   const won = settled.filter((b) => b.won).length;
   const hitRate = settled.length > 0 ? won / settled.length : 0;
   const meanPredicted =
-    settled.length > 0
-      ? settled.reduce((sum, b) => sum + b.modelProb, 0) / settled.length
-      : 0;
+    settled.length > 0 ? settled.reduce((sum, b) => sum + b.modelProb, 0) / settled.length : 0;
 
   // Recalibrage : si le modèle annonce 40% et réalise 30%, on rabote d'autant.
   // Borné pour éviter qu'une série de malchance n'effondre le modèle.
@@ -247,8 +331,8 @@ export async function consolidateLearning(): Promise<LearnedModel | null> {
   const model: LearnedModel = {
     updatedAt: new Date().toISOString(),
     totalRows: rows.length,
-    baselineGoalRate: baseline,
-    markerRules,
+    baselines,
+    markerRules: rules,
     paperBets: {
       total: bets.length,
       settled: settled.length,
@@ -269,23 +353,34 @@ function renderDigest(model: LearnedModel, markets: string[], rows: TrainingRow[
   const countriesCovered = new Set(rows.map((r) => r.country)).size;
 
   const lines: string[] = [
-    '# Mémoire d\'auto-apprentissage — marqueurs avant but (1ère mi-temps)',
+    "# Mémoire d'auto-apprentissage — marqueurs observés en direct",
     '',
     `Mis à jour : ${model.updatedAt}`,
-    `Corpus : ${model.totalRows} observations étiquetées sur ${leaguesCovered} ligues / ${countriesCovered} pays.`,
-    `Taux de base observé : ${(model.baselineGoalRate * 100).toFixed(1)}% de chance qu'un but tombe dans les 10 minutes suivant une observation quelconque de 1ère mi-temps.`,
+    `Corpus : ${model.totalRows} observations sur ${leaguesCovered} ligues / ${countriesCovered} pays.`,
     '',
-    '## Marqueurs les plus informatifs',
+    '## Taux de base observés (par fenêtre)',
   ];
+
+  for (const [key, rate] of Object.entries(model.baselines)) {
+    lines.push(`- \`${key}\` : ${(rate * 100).toFixed(1)}%`);
+  }
+
+  lines.push('', '## Marqueurs les plus informatifs');
 
   if (model.markerRules.length === 0) {
     lines.push("Aucune règle ne dépasse encore le seuil d'échantillon : corpus trop jeune.");
   } else {
-    for (const rule of model.markerRules) {
-      lines.push(
-        `- \`${rule.marker}\` → but dans les 10 min : **${(rule.goalRate * 100).toFixed(1)}%** ` +
-          `(×${rule.lift.toFixed(2)} vs base, n=${rule.samples})`
-      );
+    for (const horizon of LEARNING_HORIZONS) {
+      const forHorizon = model.markerRules.filter((r) => r.horizon === horizon).slice(0, 8);
+      if (forHorizon.length === 0) continue;
+
+      lines.push('', `### Fenêtre ${horizon} minutes`);
+      for (const rule of forHorizon) {
+        lines.push(
+          `- \`${rule.marker}\` → \`${rule.target}\` : **${(rule.hitRate * 100).toFixed(1)}%** ` +
+            `(×${rule.lift.toFixed(2)} vs base ${(rule.baseline * 100).toFixed(1)}%, n=${rule.samples})`
+        );
+      }
     }
   }
 
@@ -295,15 +390,15 @@ function renderDigest(model: LearnedModel, markets: string[], rows: TrainingRow[
     `- Paris simulés réglés : ${model.paperBets.settled} / ${model.paperBets.total}`,
     `- Taux de réussite réel : ${(model.paperBets.hitRate * 100).toFixed(1)}%`,
     `- Facteur de recalibrage appliqué : ×${model.paperBets.calibrationFactor.toFixed(2)} ` +
-      `(<1 = le modèle était trop optimiste, ses probabilités sont rabotées)`,
+      '(<1 = le modèle était trop optimiste, ses probabilités sont rabotées)',
     '',
-    '## Périmètre de jeu de l\'utilisateur',
+    "## Périmètre de jeu de l'utilisateur",
     `- Ligues jouées : ${model.focusLeagues.join(', ') || 'non renseigné'}`,
     `- Marchés joués : ${markets.join(', ') || 'non renseigné'}`,
     '',
     '## Consigne aux agents',
-    "Utilise ces taux observés comme prior quand tu évalues un marché lié aux buts de 1ère mi-temps.",
-    "Les probabilités affichées ci-dessus sont empiriques (comptées, pas estimées) : si ton intuition s'en écarte fortement, baisse ta confiance.",
+    'Ces taux sont empiriques (comptés, pas estimés). Utilise-les comme prior sur les marchés buts, corners et cartons en cours de match.',
+    "Si ton intuition s'écarte fortement d'un taux observé sur gros échantillon, baisse ta confiance.",
     "N'extrapole jamais une règle dont l'échantillon (n) est faible.",
   );
 

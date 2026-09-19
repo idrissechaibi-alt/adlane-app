@@ -39,12 +39,42 @@ export interface MarkerSnapshot {
   goalsHome: number;
   goalsAway: number;
   markers: MarkerSet;
+  /** true si le match appartient à une ligue sur laquelle l'utilisateur joue. */
+  focus?: boolean;
 }
 
-/** Instantané + étiquette : un but est-il tombé dans les minutes qui suivent ? */
+/** Ce qui s'est réellement produit pendant une fenêtre d'observation. */
+export interface EventDeltas {
+  goals: number;
+  corners: number;
+  cards: number;
+  /** true si la fenêtre a été coupée (mi-temps atteinte avant son terme). */
+  truncated: boolean;
+}
+
+/**
+ * Horizons d'apprentissage, en minutes de jeu.
+ * 10 = signal court (alerte immédiate).
+ * 25 = fenêtre de pari visée : décision à la 20e, portant jusqu'à la pause.
+ */
+export const LEARNING_HORIZONS = [10, 25] as const;
+export type LearningHorizon = (typeof LEARNING_HORIZONS)[number];
+
+/**
+ * Instantané encore ouvert : on cumule ce qui se passe après lui, fenêtre par
+ * fenêtre, jusqu'à ce que chaque horizon soit atteint.
+ */
+export interface PendingObservation extends MarkerSnapshot {
+  baselineCorners: number;
+  baselineCards: number;
+  /** Horizon (en minutes, clé texte) -> ce qui s'est produit pendant celui-ci. */
+  frozen: Record<string, EventDeltas>;
+}
+
+/** Instantané clôturé : toutes les fenêtres sont figées, prêt pour l'apprentissage. */
 export interface TrainingRow extends MarkerSnapshot {
-  label_goal_next_10: 0 | 1;
-  labelledAt: string;
+  horizons: Record<string, EventDeltas>;
+  closedAt: string;
 }
 
 export interface PaperBet {
@@ -53,7 +83,9 @@ export interface PaperBet {
   fixtureId: number;
   league: string;
   country: string;
-  market: string;
+  /** Cible apprise, ex: 'goals>=1', 'corners>=2', 'cards>=1'. */
+  target: string;
+  horizon: number;
   selection: string;
   modelProb: number;
   minuteAtPlacement: number;
@@ -62,18 +94,26 @@ export interface PaperBet {
   settledAt?: string;
 }
 
+/** Une règle apprise : un marqueur franchi -> un événement observé derrière. */
+export interface MarkerRule {
+  /** Ex: 'shots_on_target_total>=4'. */
+  marker: string;
+  threshold: number;
+  /** Ex: 'goals>=1', 'corners>=2'. */
+  target: string;
+  horizon: number;
+  samples: number;
+  hitRate: number;
+  baseline: number;
+  lift: number;
+}
+
 export interface LearnedModel {
   updatedAt: string;
   totalRows: number;
-  baselineGoalRate: number;
-  /** Chaque règle : un seuil observé sur un marqueur, et le taux de but constaté derrière. */
-  markerRules: Array<{
-    marker: string;
-    threshold: number;
-    samples: number;
-    goalRate: number;
-    lift: number; // goalRate / baseline
-  }>;
+  /** Taux de base par cible et horizon, ex: 'goals>=1@25' -> 0.42. */
+  baselines: Record<string, number>;
+  markerRules: MarkerRule[];
   paperBets: {
     total: number;
     settled: number;
@@ -145,7 +185,7 @@ export function readTrainingRows(days: number = 14): TrainingRow[] {
 
 // ==================== INSTANTANÉS EN ATTENTE ====================
 
-export function readPendingSnapshots(): MarkerSnapshot[] {
+export function readPendingSnapshots(): PendingObservation[] {
   const content = readTextSafe(fileIn('pending.json'));
   if (!content) return [];
   try {
@@ -155,7 +195,7 @@ export function readPendingSnapshots(): MarkerSnapshot[] {
   }
 }
 
-export function writePendingSnapshots(snapshots: MarkerSnapshot[]): void {
+export function writePendingSnapshots(snapshots: PendingObservation[]): void {
   writeText(fileIn('pending.json'), JSON.stringify(snapshots));
 }
 
@@ -174,6 +214,77 @@ export function readPaperBets(): PaperBet[] {
 export function writePaperBets(bets: PaperBet[]): void {
   // Corpus glissant : on garde les 1000 derniers pour ne pas gonfler le fichier.
   writeText(fileIn('paper-bets.json'), JSON.stringify(bets.slice(-1000)));
+}
+
+// ==================== NOTES D'ENRICHISSEMENT (matchs suivis) ====================
+
+/** Contexte récolté par Gemini/Google et/ou Omniroute sur un match suivi. */
+export interface FocusNote {
+  fixtureId: number;
+  league: string;
+  homeTeam: string;
+  awayTeam: string;
+  collectedAt: string;
+  googleContext?: string;
+  googleSources?: Array<{ title: string; url: string }>;
+  omnirouteContext?: string;
+  omnirouteAgent?: string;
+}
+
+export function readFocusNotes(): FocusNote[] {
+  const content = readTextSafe(fileIn('focus-notes.json'));
+  if (!content) return [];
+  try {
+    return JSON.parse(content);
+  } catch {
+    return [];
+  }
+}
+
+export function writeFocusNotes(notes: FocusNote[]): void {
+  // On ne garde qu'une fenêtre glissante : ces notes périment vite.
+  const cutoff = Date.now() - 12 * 3_600_000;
+  const fresh = notes.filter((n) => new Date(n.collectedAt).getTime() > cutoff);
+  writeText(fileIn('focus-notes.json'), JSON.stringify(fresh.slice(-100)));
+}
+
+// ==================== PROPOSITIONS EN COURS DE MATCH ====================
+
+/** Combo proposé en direct (20e minute, ou mi-temps). */
+export interface InPlayProposal {
+  id: string;
+  kind: 'minute20' | 'halftime';
+  createdAt: string;
+  fixtureId: number;
+  league: string;
+  homeTeam: string;
+  awayTeam: string;
+  minute: number;
+  scoreLabel: string;
+  /** Fenêtre couverte, en clair ("20e → 45e", "2ème mi-temps + fin de match"). */
+  window: string;
+  legs: Array<{
+    selection: string;
+    prob: number;
+    evidence: string;
+  }>;
+  combinedProb: number;
+}
+
+export function readInPlayProposals(): InPlayProposal[] {
+  const content = readTextSafe(fileIn('inplay-proposals.json'));
+  if (!content) return [];
+  try {
+    return JSON.parse(content);
+  } catch {
+    return [];
+  }
+}
+
+export function writeInPlayProposals(proposals: InPlayProposal[]): void {
+  const cutoff = Date.now() - 48 * 3_600_000;
+  const fresh = proposals.filter((p) => new Date(p.createdAt).getTime() > cutoff);
+  writeText(fileIn('inplay-proposals.json'), JSON.stringify(fresh.slice(-100)));
 }
 
 // ==================== MODÈLE APPRIS + DIGEST AGENTS ====================

@@ -144,6 +144,10 @@ export const DEFAULT_QUOTAS: Record<string, QuotaSetting> = {
   theOddsApi: { limit: 500, period: 'month' },
   sportmonks: { limit: 3000, period: 'day' },
   perplexity: { limit: 100, period: 'month' },
+  // Moteurs IA : plafonds volontairement prudents pour l'enrichissement
+  // automatique des matchs suivis (modifiables dans Gestion des API).
+  gemini: { limit: 200, period: 'day' },
+  omniroute: { limit: 100, period: 'day' },
 };
 
 export async function getQuotaConfig(): Promise<Record<string, QuotaSetting>> {

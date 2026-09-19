@@ -12,6 +12,8 @@ import { ensureDailyUniverse } from './matchUniverse';
 import { runLiveMarkerTick } from './liveMarkers';
 import { consolidateLearning } from './autoLearn';
 import { checkHalftimeOpportunities } from './halftimeMonitor';
+import { enrichFocusMatches } from './focusEnrichment';
+import { runInPlayComboTick } from './inPlayCombos';
 import { readLearnedModel } from './learnStore';
 
 export const AUTOLEARN_TASK_NAME = 'adlane-autolearn-tick';
@@ -40,6 +42,18 @@ export async function runAutoLearnTick(): Promise<void> {
     await consolidateLearning();
   } catch (error: any) {
     console.warn('[Tâche de fond] Consolidation échouée:', error.message);
+  }
+
+  try {
+    await enrichFocusMatches();
+  } catch (error: any) {
+    console.warn('[Tâche de fond] Enrichissement des matchs suivis échoué:', error.message);
+  }
+
+  try {
+    await runInPlayComboTick();
+  } catch (error: any) {
+    console.warn('[Tâche de fond] Combos en direct échoués:', error.message);
   }
 
   try {
