@@ -256,6 +256,19 @@ export async function getTeamLastMatches(
 
 // ==================== TRANSFORMERS ====================
 
+/**
+ * Date de coup d'envoi en ISO 8601, quelle que soit la forme renvoyée.
+ * Renvoie une chaîne vide plutôt qu'une date invalide : l'affichage saura
+ * dire "horaire indisponible" au lieu d'écrire "Invalid Date".
+ */
+function isoFromFixture(fixture: any): string {
+  if (typeof fixture?.date === 'string' && fixture.date.length > 0) return fixture.date;
+  if (typeof fixture?.timestamp === 'number') {
+    return new Date(fixture.timestamp * 1000).toISOString();
+  }
+  return '';
+}
+
 function transformMatch(item: any): FootballMatch {
   return {
     id: String(item.fixture.id),
@@ -269,8 +282,11 @@ function transformMatch(item: any): FootballMatch {
     awayTeamId: String(item.teams.away.id),
     homeTeamLogo: item.teams.home.logo,
     awayTeamLogo: item.teams.away.logo,
-    kickoff_utc: item.fixture.timestamp + 'Z',
-    kickoff_local: item.fixture.timestamp + 'Z', // API-Football fournit en UTC
+    // API-Football expose `date` (ISO 8601 complet) et `timestamp` (epoch en
+    // SECONDES). L'ancien code concaténait "Z" au timestamp numérique, ce qui
+    // donnait "1758400000Z" -> Invalid Date à l'affichage.
+    kickoff_utc: isoFromFixture(item.fixture),
+    kickoff_local: isoFromFixture(item.fixture),
     status: item.fixture.status.short.toLowerCase() as any,
     scoreFulltime: item.score?.fulltime,
     scoreHalftime: item.score?.halftime,

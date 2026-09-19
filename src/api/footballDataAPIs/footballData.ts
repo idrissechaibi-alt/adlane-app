@@ -239,8 +239,10 @@ function transformMatch(item: any): FootballMatch {
     awayTeamId: String(item.awayTeam?.id),
     homeTeamLogo: item.homeTeam?.logo,
     awayTeamLogo: item.awayTeam?.logo,
-    kickoff_utc: item.utcDate + 'Z',
-    kickoff_local: item.utcDate,
+    // utcDate est déjà une ISO 8601 complète ("2026-09-20T14:00:00Z") :
+    // y recoller un "Z" donnait "…00ZZ" -> Invalid Date.
+    kickoff_utc: item.utcDate || '',
+    kickoff_local: item.utcDate || '',
     status: item.status?.toLowerCase() as any,
     scoreFulltime: item.score?.fulltime ? {
       home: item.score.fulltime.home,

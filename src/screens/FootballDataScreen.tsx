@@ -17,8 +17,21 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { FootballAPIManager, createFootballAPIManager } from '../api';
 import { FootballMatch, MarketOdds } from '../api/types';
-import { getAPIConfig } from '../api/multiAPIManager';
+import { getAPIConfig, incrementRequestCount } from '../api/multiAPIManager';
+import { fetchCompetitionOdds, LEAGUE_ID_TO_ODDS_SPORT_KEY } from '../api/footballDataAPIs/theOddsAPI';
+import { normalizeTeamName } from '../core/teamNameMatch';
 import { EdgeCalculator, SurebetCalculator, ProbabilityCalculator } from '../calc/advancedCalculations';
+
+/**
+ * Heure de coup d'envoi lisible. Une source qui ne fournit pas de date
+ * exploitable doit le dire, pas afficher "Invalid Date".
+ */
+function formatKickoff(kickoffUtc: string): string {
+  if (!kickoffUtc) return 'Horaire inconnu';
+  const date = new Date(kickoffUtc);
+  if (Number.isNaN(date.getTime())) return 'Horaire inconnu';
+  return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+}
 
 export default function FootballDataScreen({ navigation }: any) {
   const [manager, setManager] = useState<FootballAPIManager | null>(null);
@@ -67,6 +80,66 @@ export default function FootballDataScreen({ navigation }: any) {
     return unsubscribe;
   }, [navigation]);
 
+  /**
+   * Cotes de TOUS les matchs de la ligue en UNE requête.
+   *
+   * L'ancienne version bouclait match par match sur getMatchOdds, qui tombait
+   * d'abord sur SofaScore (8 s de timeout chacun) puis sur un endpoint
+   * TheOddsAPI paramétré pour le football américain : la page restait bloquée
+   * des dizaines de secondes et aucune cote n'arrivait jamais.
+   */
+  const loadOddsForLeague = async (matches: FootballMatch[]) => {
+    const sportKey = LEAGUE_ID_TO_ODDS_SPORT_KEY[selectedLeague];
+    if (!sportKey) return;
+
+    const config = await getAPIConfig();
+    if (!config.theOddsApi) return;
+
+    try {
+      await incrementRequestCount('theOddsApi');
+      const result = await fetchCompetitionOdds(config.theOddsApi, sportKey);
+      if (!result.success || !result.data) return;
+
+      const index = new Map(
+        result.data.map((entry) => [
+          `${normalizeTeamName(entry.homeTeam)}|${normalizeTeamName(entry.awayTeam)}`,
+          entry,
+        ])
+      );
+
+      const oddsMap: Record<string, MarketOdds[]> = {};
+      for (const match of matches) {
+        const found = index.get(
+          `${normalizeTeamName(match.homeTeam)}|${normalizeTeamName(match.awayTeam)}`
+        );
+        if (!found) continue;
+
+        const markets: MarketOdds[] = [];
+        if (found.home != null || found.draw != null || found.away != null) {
+          markets.push({
+            market: '1X2',
+            odds: { home: found.home, draw: found.draw, away: found.away },
+            timestamp: new Date().toISOString(),
+            source: 'theOddsAPI',
+          });
+        }
+        if (found.over_2_5 != null || found.under_2_5 != null) {
+          markets.push({
+            market: 'OU_2_5',
+            odds: { over: found.over_2_5, under: found.under_2_5, total: 2.5 },
+            timestamp: new Date().toISOString(),
+            source: 'theOddsAPI',
+          });
+        }
+        if (markets.length > 0) oddsMap[match.id] = markets;
+      }
+
+      setOdds(oddsMap);
+    } catch (error: any) {
+      console.warn('[Données Foot] Cotes indisponibles:', error.message);
+    }
+  };
+
   const fetchFixtures = async (mgr: FootballAPIManager, forceRefresh = false) => {
     if (!forceRefresh && fixtures.length > 0 && !refreshing) return;
 
@@ -79,16 +152,9 @@ export default function FootballDataScreen({ navigation }: any) {
 
       if (result.success && result.data) {
         setFixtures(result.data);
-
-        // Fetch les cotes pour chaque match
-        const oddsMap: Record<string, MarketOdds[]> = {};
-        for (const match of result.data) {
-          const oddsResult = await mgr.getMatchOdds(match.id);
-          if (oddsResult.success && oddsResult.data) {
-            oddsMap[match.id] = oddsResult.data;
-          }
-        }
-        setOdds(oddsMap);
+        // Les cotes arrivent après, en une seule requête : on n'attend pas
+        // qu'elles soient là pour rendre la liste de matchs exploitable.
+        void loadOddsForLeague(result.data);
       } else {
         setError(result.error || 'Erreur lors du chargement des matchs');
       }
@@ -155,12 +221,7 @@ export default function FootballDataScreen({ navigation }: any) {
       <TouchableOpacity style={styles.matchCard} activeOpacity={0.7}>
         <View style={styles.matchHeader}>
           <Text style={styles.leagueName}>{item.leagueName}</Text>
-          <Text style={styles.matchTime}>
-            {new Date(item.kickoff_utc).toLocaleTimeString('fr-FR', {
-              hour: '2-digit',
-              minute: '2-digit'
-            })}
-          </Text>
+          <Text style={styles.matchTime}>{formatKickoff(item.kickoff_utc)}</Text>
         </View>
 
         <View style={styles.matchTeams}>

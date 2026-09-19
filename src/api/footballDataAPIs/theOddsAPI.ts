@@ -235,6 +235,21 @@ export const FOOTBALL_DATA_TO_ODDS_SPORT_KEY: Record<string, string> = {
   CL: 'soccer_uefa_champs_league',
 };
 
+/**
+ * Même table, mais indexée par les identifiants de ligue utilisés dans
+ * l'écran "Données Foot" (identifiants API-Football).
+ */
+export const LEAGUE_ID_TO_ODDS_SPORT_KEY: Record<string, string> = {
+  '39': 'soccer_epl',
+  '140': 'soccer_spain_la_liga',
+  '135': 'soccer_italy_serie_a',
+  '78': 'soccer_germany_bundesliga',
+  '61': 'soccer_france_ligue_one',
+  '101': 'soccer_france_ligue_one',
+  '2': 'soccer_uefa_champs_league',
+  '1': 'soccer_uefa_champs_league',
+};
+
 export interface SimpleMatchOdds {
   homeTeam: string;
   awayTeam: string;
