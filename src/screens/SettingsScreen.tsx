@@ -177,9 +177,21 @@ export default function SettingsScreen({ navigation }: any) {
     });
   };
 
-  const handleApplyModelSelection = () => {
-    setOmniroute({ ...omniroute, selectedModel: Array.from(pendingSelection).join(', ') });
+  /**
+   * Valide la sélection d'agents ET la sauvegarde immédiatement (AsyncStorage),
+   * pour qu'elle reste active telle quelle jusqu'à ce que l'utilisateur la
+   * change lui-même — sans dépendre du bouton "Sauvegarder" plus bas dans
+   * l'écran, qui pourrait ne jamais être pressé après avoir quitté le picker.
+   */
+  const handleApplyModelSelection = async () => {
+    const updated = { ...omniroute, selectedModel: Array.from(pendingSelection).join(', ') };
+    setOmniroute(updated);
     setModelPickerVisible(false);
+    try {
+      await AsyncStorage.setItem(OMNIROUTE_CONFIG_KEY, JSON.stringify(updated));
+    } catch (error) {
+      console.error('Erreur sauvegarde sélection agents Omniroute:', error);
+    }
   };
 
   /** Sélectionne tous les agents actuellement affichés (respecte la recherche en cours). */
