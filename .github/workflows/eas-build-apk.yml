@@ -1,0 +1,30 @@
+name: EAS Build APK (Android production)
+on:
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    name: Build Android APK (production profile)
+    runs-on: ubuntu-latest
+    env:
+      CI: 1
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v9
+        with:
+          eas-version: latest
+          token: ${{ secrets.EAS_TOKEN }}
+
+      - name: Build Android APK (production profile)
+        run: eas build --platform android --profile production --non-interactive --wait
