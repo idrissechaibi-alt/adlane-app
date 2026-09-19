@@ -8,17 +8,22 @@ import { lintContent } from './validator';
 // précis (renvoyé par son propre message d'erreur "Ambiguous model ... use
 // provider/model prefix"). Si ton instance Omniroute utilise un autre alias
 // (t3chat/, openrouter/, etc.), remplace le préfixe dans Paramètres.
+const ALL_DEFAULT_MODELS = [
+  'in-ai/gemini-2.5-flash',
+  'in-ai/gemini-2.5-pro',
+  'in-ai/claude-sonnet-5',
+  'in-ai/gpt-4o',
+  'in-ai/deepseek-r1'
+];
+
 export const DEFAULT_OMNIROUTE_CONFIG: OmnirouteConfig = {
   endpoint: 'http://localhost:8000/v1', // URL par défaut modifiable dans les paramètres
   apiKey: '',
-  selectedModel: 'in-ai/gemini-2.5-flash',
-  availableModels: [
-    'in-ai/gemini-2.5-flash',
-    'in-ai/gemini-2.5-pro',
-    'in-ai/claude-sonnet-5',
-    'in-ai/gpt-4o',
-    'in-ai/deepseek-r1'
-  ]
+  // Tous les agents par défaut (séparés par une virgule) — analyzeMatchWithOmniroute
+  // les interroge en parallèle et fusionne leurs réponses. Retire des modèles
+  // dans Paramètres si tu veux limiter le coût/la latence.
+  selectedModel: ALL_DEFAULT_MODELS.join(', '),
+  availableModels: ALL_DEFAULT_MODELS
 };
 
 export interface MatchScoutInput {
@@ -55,6 +60,9 @@ export interface AIAnalysisOutput {
   generalAnalysis: string;
   lessonsApplied: string[];
   rawResponse: string;
+  // Renseigné quand plusieurs agents Omniroute ont été interrogés en parallèle.
+  agentsUsed?: string[];
+  agentsFailed?: Array<{ model: string; error: string }>;
 }
 
 /**
@@ -109,8 +117,123 @@ Format attendu (JSON strict) :
 }`;
 }
 
+const CONFIDENCE_RANK: Record<string, number> = { 'Faible': 0, 'Moyen': 1, 'Élevé': 2 };
+
+interface RawAgentResult {
+  model: string;
+  generalAnalysis: string;
+  markets: AIAnalysisOutput['markets'];
+  lessonsApplied: string[];
+  rawResponse: string;
+}
+
 /**
- * Envoie une requête d'analyse à Omniroute
+ * Interroge un seul modèle/agent via l'endpoint chat-completions d'Omniroute.
+ */
+async function callSingleAgent(
+  model: string,
+  systemPrompt: string,
+  userPrompt: string,
+  config: OmnirouteConfig
+): Promise<RawAgentResult> {
+  const response = await fetch(`${config.endpoint}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(config.apiKey ? { 'Authorization': `Bearer ${config.apiKey}` } : {})
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ],
+      temperature: 0.2
+    })
+  });
+
+  if (!response.ok) {
+    const bodyText = await response.text().catch(() => '');
+    let detail = bodyText;
+    try {
+      const parsedError = JSON.parse(bodyText);
+      detail = parsedError.error?.message || parsedError.detail || parsedError.message || bodyText;
+    } catch {
+      // corps non-JSON : on garde le texte brut
+    }
+    throw new Error(`HTTP ${response.status}${detail ? ` : ${detail}` : ` (${response.statusText})`}`);
+  }
+
+  const data = await response.json();
+  const content = data.choices?.[0]?.message?.content || '';
+
+  const lint = lintContent(content);
+  if (!lint.valid) {
+    console.warn(`[LINT WARNING] (${model}) Mots interdits détectés :`, lint.bannedWords);
+  }
+
+  let parsed: any;
+  try {
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    parsed = JSON.parse(jsonMatch ? jsonMatch[0] : content);
+  } catch {
+    parsed = { generalAnalysis: content, markets: [], lessonsApplied: [] };
+  }
+
+  return {
+    model,
+    generalAnalysis: parsed.generalAnalysis || 'Analyse effectuée.',
+    markets: parsed.markets || [],
+    lessonsApplied: parsed.lessonsApplied || [],
+    rawResponse: content
+  };
+}
+
+/**
+ * Fusionne les marchés de plusieurs agents : moyenne des probabilités pour
+ * un même marché, confiance la plus prudente retenue, avertissements cumulés.
+ */
+function mergeMarkets(results: RawAgentResult[]): AIAnalysisOutput['markets'] {
+  const byMarket = new Map<string, { entries: AIAnalysisOutput['markets'][number][] }>();
+
+  for (const result of results) {
+    for (const m of result.markets) {
+      const key = (m.market || '').toLowerCase();
+      if (!byMarket.has(key)) byMarket.set(key, { entries: [] });
+      byMarket.get(key)!.entries.push(m);
+    }
+  }
+
+  const merged: AIAnalysisOutput['markets'] = [];
+  for (const { entries } of byMarket.values()) {
+    const avgProb = entries.reduce((sum, e) => sum + (e.estimated_prob || 0), 0) / entries.length;
+    const odds = entries.find((e) => e.odds != null)?.odds ?? null;
+    const worstConfidence = entries.reduce((worst, e) =>
+      (CONFIDENCE_RANK[e.confidence] ?? 1) < (CONFIDENCE_RANK[worst] ?? 1) ? e.confidence : worst
+    , entries[0].confidence);
+    const warnings = Array.from(new Set(entries.flatMap((e) => e.warnings || [])));
+
+    merged.push({
+      market: entries[0].market,
+      selection: entries[0].selection,
+      estimated_prob: avgProb,
+      odds,
+      confidence: worstConfidence,
+      reasoning: entries.length > 1
+        ? `Consensus de ${entries.length} agent(s) : ${entries.map((e) => e.reasoning).join(' | ')}`
+        : entries[0].reasoning,
+      warnings: warnings.length > 0 ? warnings : undefined
+    });
+  }
+
+  return merged;
+}
+
+/**
+ * Envoie une requête d'analyse à Omniroute. Si config.selectedModel contient
+ * plusieurs noms de modèles séparés par une virgule, ils sont tous interrogés
+ * en parallèle et leurs réponses fusionnées (moyenne des probabilités par
+ * marché, confiance la plus prudente retenue).
  */
 export async function analyzeMatchWithOmniroute(
   matchInput: MatchScoutInput,
@@ -128,71 +251,48 @@ Stats disponibles :
 - Domicile (${matchInput.homeTeam}) : ${JSON.stringify(matchInput.homeStats || 'donnée indisponible')}
 - Extérieur (${matchInput.awayTeam}) : ${JSON.stringify(matchInput.awayStats || 'donnée indisponible')}`;
 
-  try {
-    const response = await fetch(`${config.endpoint}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(config.apiKey ? { 'Authorization': `Bearer ${config.apiKey}` } : {})
-      },
-      body: JSON.stringify({
-        model: config.selectedModel,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ],
-        temperature: 0.2
-      })
-    });
+  const models = config.selectedModel
+    .split(/[,\n]/)
+    .map((m) => m.trim())
+    .filter(Boolean);
 
-    if (!response.ok) {
-      const bodyText = await response.text().catch(() => '');
-      let detail = bodyText;
-      try {
-        const parsedError = JSON.parse(bodyText);
-        detail = parsedError.error?.message || parsedError.detail || parsedError.message || bodyText;
-      } catch {
-        // corps non-JSON : on garde le texte brut
-      }
-      throw new Error(`Erreur Omniroute HTTP ${response.status}${detail ? ` : ${detail}` : ` (${response.statusText})`}`);
-    }
-
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content || '';
-
-    // Lint de contenu strict (§0)
-    const lint = lintContent(content);
-    if (!lint.valid) {
-      console.warn(`[LINT WARNING] Mots interdits détectés dans la réponse IA :`, lint.bannedWords);
-    }
-
-    // Extraction du JSON de la réponse
-    let parsed: any;
-    try {
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        parsed = JSON.parse(jsonMatch[0]);
-      } else {
-        parsed = JSON.parse(content);
-      }
-    } catch {
-      parsed = {
-        generalAnalysis: content,
-        markets: [],
-        lessonsApplied: []
-      };
-    }
-
-    return {
-      match: `${matchInput.homeTeam} - ${matchInput.awayTeam}`,
-      kickoff_utc: matchInput.kickoff_utc,
-      markets: parsed.markets || [],
-      generalAnalysis: parsed.generalAnalysis || 'Analyse effectuée.',
-      lessonsApplied: parsed.lessonsApplied || [],
-      rawResponse: content
-    };
-  } catch (error: any) {
-    console.error('Erreur appel Omniroute:', error);
-    throw new Error(`Connexion Omniroute échouée : ${error.message}`);
+  if (models.length === 0) {
+    throw new Error('Aucun modèle Omniroute configuré.');
   }
+
+  const settled = await Promise.allSettled(
+    models.map((model) => callSingleAgent(model, systemPrompt, userPrompt, config))
+  );
+
+  const succeeded: RawAgentResult[] = [];
+  const failed: Array<{ model: string; error: string }> = [];
+
+  settled.forEach((outcome, idx) => {
+    if (outcome.status === 'fulfilled') {
+      succeeded.push(outcome.value);
+    } else {
+      failed.push({ model: models[idx], error: outcome.reason?.message || String(outcome.reason) });
+      console.warn(`[Omniroute] Agent "${models[idx]}" a échoué:`, outcome.reason);
+    }
+  });
+
+  if (succeeded.length === 0) {
+    const summary = failed.map((f) => `${f.model} → ${f.error}`).join(' ; ');
+    throw new Error(`Connexion Omniroute échouée (${failed.length} agent(s)) : ${summary}`);
+  }
+
+  const generalAnalysis = succeeded.length === 1
+    ? succeeded[0].generalAnalysis
+    : `Consensus de ${succeeded.length} agent(s) (${succeeded.map((r) => r.model).join(', ')}). ${succeeded[0].generalAnalysis}`;
+
+  return {
+    match: `${matchInput.homeTeam} - ${matchInput.awayTeam}`,
+    kickoff_utc: matchInput.kickoff_utc,
+    markets: mergeMarkets(succeeded),
+    generalAnalysis,
+    lessonsApplied: Array.from(new Set(succeeded.flatMap((r) => r.lessonsApplied))),
+    rawResponse: succeeded.map((r) => `--- ${r.model} ---\n${r.rawResponse}`).join('\n\n'),
+    agentsUsed: succeeded.map((r) => r.model),
+    agentsFailed: failed.length > 0 ? failed : undefined
+  };
 }

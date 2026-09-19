@@ -223,15 +223,19 @@ export default function SettingsScreen({ navigation }: any) {
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Modèle actif</Text>
+            <Text style={styles.label}>Modèles actifs (séparés par une virgule)</Text>
             <TextInput
               style={styles.input}
               value={omniroute.selectedModel}
               onChangeText={(text) => setOmniroute({ ...omniroute, selectedModel: text })}
-              placeholder="gpt-4"
+              placeholder="in-ai/gemini-2.5-flash, in-ai/claude-sonnet-5, in-ai/gpt-4o"
               placeholderTextColor="#64748b"
               autoCapitalize="none"
+              multiline
             />
+            <Text style={styles.fieldHint}>
+              Plusieurs modèles = interrogés en parallèle, réponses fusionnées (moyenne des probabilités, avertissements cumulés). Un seul nom = un seul agent.
+            </Text>
           </View>
 
           <View style={styles.switchRow}>
@@ -511,6 +515,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#cbd5e1',
     marginBottom: 8,
+  },
+  fieldHint: {
+    fontSize: 11,
+    color: '#64748b',
+    marginTop: 6,
+    lineHeight: 16,
   },
   input: {
     backgroundColor: '#0f172a',
