@@ -181,11 +181,20 @@ export default function ScoutingScreen() {
       omnirouteConfig = null;
     }
 
-    const omnirouteAvailable = Boolean(omnirouteConfig?.enabled && omnirouteConfig.endpoint);
+    // Omniroute sert UNIQUEMENT de secours (jamais de moteur principal) : dès
+    // qu'un endpoint et au moins un agent sont renseignés, il est utilisable
+    // comme filet de sécurité. Le bouton "Activer Omniroute" dans Paramètres
+    // ne conditionne donc plus ce secours — sinon, l'oublier (ou une
+    // réinstallation qui remet la config à zéro) désactive silencieusement le
+    // repli exactement quand on en a besoin, comme constaté avec l'erreur de
+    // facturation Gemini.
+    const omnirouteAvailable = Boolean(
+      omnirouteConfig?.endpoint && omnirouteConfig.selectedModel?.trim()
+    );
 
     if (!geminiApiKey && !omnirouteAvailable) {
       setLoading(false);
-      const message = "Aucun moteur IA configuré. Renseignez une clé Google Gemini (Paramètres → Sauvegarde & IA) ou activez Omniroute (Paramètres → Configuration Omniroute).";
+      const message = "Aucun moteur IA configuré. Renseignez une clé Google Gemini (Paramètres → Sauvegarde & IA) ou configurez Omniroute (Paramètres → Configuration Omniroute → endpoint + agents).";
       setAnalysisError(message);
       setDiagnostic({ engine: 'aucun', status: 'error', message, timestamp: new Date().toISOString() });
       return;
@@ -236,9 +245,17 @@ export default function ScoutingScreen() {
       }
     }
 
+    // Gemini a échoué et Omniroute n'a pas pu être essayé (rien de configuré) :
+    // le dire explicitement plutôt que de laisser croire qu'il n'y a aucune
+    // solution, puisque la config Omniroute d'une précédente installation peut
+    // avoir été perdue sans que l'utilisateur s'en rende compte.
+    const finalMessage = lastEngine === 'gemini' && !omnirouteAvailable
+      ? `${lastMessage}\n\nSecours Omniroute non disponible : configure un endpoint et au moins un agent dans Paramètres → Configuration Omniroute.`
+      : lastMessage;
+
     console.error(`Erreur analyse IA (${lastEngine}):`, lastMessage);
-    setAnalysisError(lastMessage);
-    setDiagnostic({ engine: lastEngine, status: 'error', message: lastMessage, timestamp: new Date().toISOString() });
+    setAnalysisError(finalMessage);
+    setDiagnostic({ engine: lastEngine, status: 'error', message: finalMessage, timestamp: new Date().toISOString() });
     setLoading(false);
   };
 

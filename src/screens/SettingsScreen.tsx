@@ -361,6 +361,11 @@ export default function SettingsScreen({ navigation }: any) {
               thumbColor={omniroute.enabled ? '#ffffff' : '#94a3b8'}
             />
           </View>
+          <Text style={styles.fieldHint}>
+            Ce bouton est indicatif : dès qu'un endpoint et au moins un agent sont renseignés
+            ci-dessus, Omniroute sert automatiquement de secours si Gemini est absent ou en échec —
+            même si ce bouton reste désactivé. Pour couper totalement le secours, vide le champ endpoint.
+          </Text>
 
           <TouchableOpacity
             style={[styles.testButton, testing && styles.testButtonDisabled]}

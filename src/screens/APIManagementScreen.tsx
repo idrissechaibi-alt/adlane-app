@@ -221,14 +221,14 @@ export default function APIManagementScreen({ navigation }: any) {
           <View style={styles.counterRow}>
             <View style={styles.counterLeft}>
               <Ionicons
-                name={omniroute?.enabled && omniroute.endpoint ? 'checkmark-circle' : 'close-circle'}
+                name={omniroute?.endpoint && omniroute.selectedModel ? 'checkmark-circle' : 'close-circle'}
                 size={14}
-                color={omniroute?.enabled && omniroute.endpoint ? '#10b981' : '#64748b'}
+                color={omniroute?.endpoint && omniroute.selectedModel ? '#10b981' : '#64748b'}
               />
               <Text style={styles.counterText}>
-                {omniroute?.enabled && omniroute.endpoint
-                  ? `Actif • ${omniroute.selectedModel || 'modèle par défaut'}`
-                  : 'Non configuré / désactivé'}
+                {omniroute?.endpoint && omniroute.selectedModel
+                  ? `Actif comme secours • ${omniroute.selectedModel}`
+                  : 'Non configuré — le secours Gemini ne se déclenchera pas'}
               </Text>
             </View>
           </View>
