@@ -4,24 +4,21 @@
 import { Lesson, OmnirouteConfig } from '../types';
 import { lintContent } from './validator';
 
-// Le préfixe "in-ai/" correspond au provider configuré sur CE serveur Omniroute
-// précis (renvoyé par son propre message d'erreur "Ambiguous model ... use
-// provider/model prefix"). Si ton instance Omniroute utilise un autre alias
-// (t3chat/, openrouter/, etc.), remplace le préfixe dans Paramètres.
-const ALL_DEFAULT_MODELS = [
-  'in-ai/gemini-2.5-flash',
-  'in-ai/gemini-2.5-pro',
-  'in-ai/claude-sonnet-5',
-  'in-ai/gpt-4o',
-  'in-ai/deepseek-r1'
-];
+// Aucun nom de modèle deviné par défaut : le préfixe "in-ai/" testé
+// précédemment s'est révélé faux sur le serveur réel de l'utilisateur (HTTP
+// 401 "No active credentials for provider: inner-ai" sur les 5 modèles).
+// Chaque déploiement Omniroute expose des noms d'agents différents (ex :
+// "Clodiko", "inception/mercury-2", ...) — on force donc à passer par le
+// sélecteur (Paramètres → "Choisir les agents dans la liste") qui charge la
+// vraie liste depuis /models, plutôt que de shipper un préfixe deviné qui casse.
+const ALL_DEFAULT_MODELS: string[] = [];
 
 export const DEFAULT_OMNIROUTE_CONFIG: OmnirouteConfig = {
   endpoint: 'http://localhost:8000/v1', // URL par défaut modifiable dans les paramètres
   apiKey: '',
-  // Tous les agents par défaut (séparés par une virgule) — analyzeMatchWithOmniroute
-  // les interroge en parallèle et fusionne leurs réponses. Retire des modèles
-  // dans Paramètres si tu veux limiter le coût/la latence.
+  // Vide par défaut — sélectionne tes agents réels via le picker dans
+  // Paramètres. analyzeMatchWithOmniroute interroge en parallèle tous les
+  // modèles listés ici (séparés par une virgule) et fusionne leurs réponses.
   selectedModel: ALL_DEFAULT_MODELS.join(', '),
   availableModels: ALL_DEFAULT_MODELS
 };
