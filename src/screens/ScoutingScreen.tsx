@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { analyzeMatchWithOmniroute, DEFAULT_OMNIROUTE_CONFIG, AIAnalysisOutput } from '../core/omniroute';
 import { analyzeMatchWithGemini, fetchGoogleSearchContext } from '../core/gemini';
 import { fetchMatchContext, PerplexitySearchResult } from '../core/perplexity';
+import { getAgentLearningDigest } from '../core/autoLearn';
 import { getAPIConfig } from '../api/multiAPIManager';
 import { HISTORICAL_LESSONS } from '../data/historical';
 import { getDailyPlan } from '../core/scheduler';
@@ -141,6 +142,15 @@ export default function ScoutingScreen() {
       console.warn('Recherche web échouée:', error.message);
     }
 
+    // Ce que la boucle d'auto-apprentissage a réellement observé en direct
+    // (taux comptés, pas estimés) : injecté tel quel dans le prompt des agents.
+    let learningDigest: string | null = null;
+    try {
+      learningDigest = getAgentLearningDigest();
+    } catch (error: any) {
+      console.warn('Digest auto-apprentissage indisponible:', error.message);
+    }
+
     const matchInput = {
       homeTeam: match.homeTeam,
       awayTeam: match.awayTeam,
@@ -152,7 +162,11 @@ export default function ScoutingScreen() {
         away: match.odds.away || undefined,
         btts_yes: match.odds.btts_yes || undefined,
       },
-      contextInfo: [match.context, webContext ? `Recherche web en direct :\n${webContext}` : '']
+      contextInfo: [
+        match.context,
+        webContext ? `Recherche web en direct :\n${webContext}` : '',
+        learningDigest ? `Mémoire d'auto-apprentissage (marqueurs observés en direct) :\n${learningDigest}` : ''
+      ]
         .filter(Boolean)
         .join('\n\n') || undefined
     };
