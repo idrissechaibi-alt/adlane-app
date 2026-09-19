@@ -6,28 +6,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { getAPIConfig, incrementRequestCount } from '../api/multiAPIManager';
 import { fetchCompetitionOdds, FOOTBALL_DATA_TO_ODDS_SPORT_KEY, SimpleMatchOdds } from '../api/footballDataAPIs/theOddsAPI';
+import { normalizeTeamName } from './teamNameMatch';
 
 const DAILY_SCHEDULE_KEY = '@daily_schedule_json';
 const FOOTBALL_DATA_KEY = 'app-adlane.football-data-api-key';
 
 // Codes officiels Football-Data pour les Big 5 + Cups majeures
 const COMPETITIONS = 'PL,PD,BL1,SA,FL1,CL,FAC,CDR,DFB,CIT,CDF';
-
-/**
- * Normalise un nom d'équipe pour le comparer entre deux sources différentes
- * (football-data.org vs TheOddsAPI n'utilisent pas exactement les mêmes
- * libellés : "Arsenal FC" vs "Arsenal"). Best-effort : une équipe qui ne
- * matche pas reste simplement sans cotes, jamais de donnée inventée.
- */
-function normalizeTeamName(name: string): string {
-  return name
-    .normalize('NFD').replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/\b(fc|cf|afc|sc|ac|cd|ud|rc|ssd|calcio|club|ss|as)\b/g, '')
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim()
-    .replace(/\s+/g, ' ');
-}
 
 /**
  * football-data.org (fixtures/résultats) ne fournit AUCUNE cote — l'ancien

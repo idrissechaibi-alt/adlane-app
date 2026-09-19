@@ -169,6 +169,184 @@ export function estimateExpectedGoalsFromMarket(odds: {
   return best;
 }
 
+// ==================== RECALIBRAGE À LA MI-TEMPS ====================
+
+/**
+ * Part empirique approximative des buts marqués en 2ème mi-temps (les
+ * statistiques agrégées sur les grands championnats européens montrent
+ * historiquement une légère majorité de buts en 2ème période — fatigue,
+ * changements tactiques, remplacements). Valeur ronde volontairement
+ * conservatrice, pas une constante mesurée précisément sur ce jeu de données.
+ */
+const SECOND_HALF_GOAL_SHARE = 0.55;
+
+export interface HalfTimeStats {
+  shotsOnTargetHome?: number;
+  shotsOnTargetAway?: number;
+  possessionHome?: number; // 0-100
+  possessionAway?: number; // 0-100
+  cornersHome?: number;
+  cornersAway?: number;
+}
+
+export interface HalfTimeContext {
+  preMatchExpectedGoals: { home: number; away: number }; // sur 90 minutes, avant match
+  htScore: { home: number; away: number };
+  htStats?: HalfTimeStats;
+}
+
+export interface SecondHalfMarket {
+  market: string;
+  selection: string;
+  estimated_prob: number;
+  confidence: 'Faible' | 'Moyen' | 'Élevé';
+  reasoning: string;
+}
+
+export interface SecondHalfEstimate {
+  secondHalfExpectedGoals: { home: number; away: number };
+  markets: SecondHalfMarket[];
+}
+
+function confidenceFromProb(prob: number): 'Faible' | 'Moyen' | 'Élevé' {
+  if (prob >= 0.65) return 'Élevé';
+  if (prob >= 0.55) return 'Moyen';
+  return 'Faible';
+}
+
+/**
+ * Recalibre les buts attendus de 2ème mi-temps à partir des stats déjà
+ * observées en 1ère mi-temps (tirs cadrés en priorité — plus fiable que la
+ * possession sur un échantillon de 45 minutes). Ajustement volontairement
+ * amorti et plafonné (+/-40%) : 45 minutes de jeu restent un petit
+ * échantillon, on ne veut pas sur-réagir à une séquence ponctuelle.
+ */
+function recalibrateSecondHalfGoals(ctx: HalfTimeContext): { home: number; away: number } {
+  const base = {
+    home: ctx.preMatchExpectedGoals.home * SECOND_HALF_GOAL_SHARE,
+    away: ctx.preMatchExpectedGoals.away * SECOND_HALF_GOAL_SHARE
+  };
+
+  const shotsHome = ctx.htStats?.shotsOnTargetHome;
+  const shotsAway = ctx.htStats?.shotsOnTargetAway;
+
+  if (shotsHome == null || shotsAway == null || shotsHome + shotsAway === 0) {
+    return base; // Pas de stats fiables : on garde la projection pré-match telle quelle
+  }
+
+  const totalPreMatch = ctx.preMatchExpectedGoals.home + ctx.preMatchExpectedGoals.away;
+  const preShareHome = totalPreMatch > 0 ? ctx.preMatchExpectedGoals.home / totalPreMatch : 0.5;
+  const shotShareHome = shotsHome / (shotsHome + shotsAway);
+
+  const rawShift = shotShareHome - preShareHome;
+  const dampedShift = Math.max(-0.4, Math.min(0.4, rawShift * 1.5));
+
+  return {
+    home: Math.max(0.05, base.home * (1 + dampedShift)),
+    away: Math.max(0.05, base.away * (1 - dampedShift))
+  };
+}
+
+/**
+ * Projette les issues finales (résultat, Over/Under 2.5, BTTS) en combinant
+ * le score de mi-temps DÉJÀ ACQUIS (certain, pas aléatoire) avec la
+ * distribution de Poisson des buts de 2ème mi-temps — pas une simple
+ * addition des lambdas, qui fausserait la variance.
+ */
+function projectFullTimeMarkets(
+  htScore: { home: number; away: number },
+  secondHalfModel: PoissonOutput
+): SecondHalfMarket[] {
+  const maxGoals = secondHalfModel.scoreMatrix.length;
+  let pHomeFT = 0, pDrawFT = 0, pAwayFT = 0, pOver25FT = 0, pBttsFT = 0;
+
+  for (let i = 0; i < maxGoals; i++) {
+    for (let j = 0; j < maxGoals; j++) {
+      const p = secondHalfModel.scoreMatrix[i][j];
+      const finalHome = htScore.home + i;
+      const finalAway = htScore.away + j;
+
+      if (finalHome > finalAway) pHomeFT += p;
+      else if (finalHome === finalAway) pDrawFT += p;
+      else pAwayFT += p;
+
+      if (finalHome + finalAway > 2.5) pOver25FT += p;
+      if (finalHome > 0 && finalAway > 0) pBttsFT += p;
+    }
+  }
+
+  const ftFavorite = pHomeFT >= pAwayFT && pHomeFT >= pDrawFT
+    ? { selection: '1 (domicile)', prob: pHomeFT }
+    : pAwayFT >= pDrawFT
+      ? { selection: '2 (extérieur)', prob: pAwayFT }
+      : { selection: 'X (nul)', prob: pDrawFT };
+
+  return [
+    {
+      market: 'FT_1X2_reprojete',
+      selection: ftFavorite.selection,
+      estimated_prob: ftFavorite.prob,
+      confidence: confidenceFromProb(ftFavorite.prob),
+      reasoning: `Score mi-temps ${htScore.home}-${htScore.away} + distribution 2ème MT projetée en fin de match.`
+    },
+    {
+      market: 'FT_over_2_5_reprojete',
+      selection: 'Plus de 2.5 buts (total match)',
+      estimated_prob: pOver25FT,
+      confidence: confidenceFromProb(pOver25FT),
+      reasoning: `${htScore.home + htScore.away} but(s) déjà marqué(s) à la mi-temps, projection sur la suite du match.`
+    },
+    {
+      market: 'FT_btts_reprojete',
+      selection: 'Les deux équipes marquent (BTTS)',
+      estimated_prob: pBttsFT,
+      confidence: confidenceFromProb(pBttsFT),
+      reasoning: 'Probabilité recalculée en tenant compte des buts déjà inscrits à la mi-temps.'
+    }
+  ];
+}
+
+/**
+ * Point d'entrée : à partir du contexte de mi-temps (score, cotes pré-match,
+ * stats optionnelles), renvoie les buts attendus recalibrés pour la 2ème MT
+ * et une liste de marchés exploitables (2ème MT seule + ré-projection fin de
+ * match), chacun avec sa probabilité estimée et son niveau de confiance.
+ */
+export function estimateSecondHalfMarket(ctx: HalfTimeContext): SecondHalfEstimate {
+  const secondHalfExpectedGoals = recalibrateSecondHalfGoals(ctx);
+  const secondHalfModel = computePoissonModel(secondHalfExpectedGoals.home, secondHalfExpectedGoals.away);
+
+  const pAtLeastOneGoal2H = 1 - secondHalfModel.scoreMatrix[0][0];
+
+  const markets: SecondHalfMarket[] = [
+    {
+      market: '2MT_over_0_5',
+      selection: 'Plus de 0.5 but en 2ème mi-temps',
+      estimated_prob: pAtLeastOneGoal2H,
+      confidence: confidenceFromProb(pAtLeastOneGoal2H),
+      reasoning: `Buts attendus 2ème MT : ${secondHalfExpectedGoals.home.toFixed(2)} (dom.) / ${secondHalfExpectedGoals.away.toFixed(2)} (ext.).`
+    },
+    ...(() => {
+      const { home, draw, away } = secondHalfModel.prob1X2;
+      const best = home >= away && home >= draw
+        ? { selection: 'Domicile gagne la 2ème MT', prob: home }
+        : away >= draw
+          ? { selection: 'Extérieur gagne la 2ème MT', prob: away }
+          : { selection: 'Nul en 2ème MT', prob: draw };
+      return [{
+        market: '2MT_1X2',
+        selection: best.selection,
+        estimated_prob: best.prob,
+        confidence: confidenceFromProb(best.prob),
+        reasoning: 'Résultat estimé sur la seule 2ème mi-temps (indépendant du score déjà acquis).'
+      }];
+    })(),
+    ...projectFullTimeMarkets(ctx.htScore, secondHalfModel)
+  ];
+
+  return { secondHalfExpectedGoals, markets };
+}
+
 /**
  * Calcule l'edge (écart entre modèle et marché dévigué)
  */
