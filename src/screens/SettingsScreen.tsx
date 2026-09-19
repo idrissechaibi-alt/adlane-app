@@ -307,13 +307,13 @@ export default function SettingsScreen({ navigation }: any) {
               style={styles.input}
               value={omniroute.selectedModel}
               onChangeText={(text) => setOmniroute({ ...omniroute, selectedModel: text })}
-              placeholder="in-ai/gemini-2.5-flash, in-ai/claude-sonnet-5, in-ai/gpt-4o"
+              placeholder="Utilise le bouton ci-dessous pour choisir tes agents"
               placeholderTextColor="#64748b"
               autoCapitalize="none"
               multiline
             />
             <Text style={styles.fieldHint}>
-              Plusieurs modèles = interrogés en parallèle, réponses fusionnées (moyenne des probabilités, avertissements cumulés). Un seul nom = un seul agent.
+              Plusieurs modèles = interrogés en parallèle, réponses fusionnées (moyenne des probabilités, avertissements cumulés). Un seul nom = un seul agent. Les noms exacts dépendent de ton serveur Omniroute : utilise le sélecteur ci-dessous plutôt que de deviner un préfixe.
             </Text>
           </View>
 
