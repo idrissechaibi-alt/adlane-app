@@ -25,6 +25,19 @@ function buildHeaders(config: BallDontLieConfig): Record<string, string> {
 }
 
 /**
+ * API-Football exige TOUJOURS "season" quand "league" est utilisé (sinon elle
+ * renvoie HTTP 200 avec response: [] et une erreur "season is required" dans
+ * errors — un succès silencieux mais vide, jamais des vrais matchs). La saison
+ * correspond à l'année de DÉBUT de la saison européenne (juillet à juin).
+ */
+function seasonForDate(date: string): number {
+  const d = new Date(date);
+  const year = d.getUTCFullYear();
+  const month = d.getUTCMonth() + 1; // 1-12
+  return month >= 7 ? year : year - 1;
+}
+
+/**
  * Vérifie la validité de la clé API
  */
 export async function testConnection(config: BallDontLieConfig): Promise<boolean> {
@@ -54,7 +67,8 @@ export async function getFixturesByDate(
   }
 
   try {
-    const response = await fetch(`${BASE_URL}/fixtures?league=${leagueId}&date=${date}`, {
+    const season = seasonForDate(date);
+    const response = await fetch(`${BASE_URL}/fixtures?league=${leagueId}&date=${date}&season=${season}`, {
       headers: buildHeaders(config)
     });
 
@@ -63,6 +77,13 @@ export async function getFixturesByDate(
     }
 
     const data = await response.json();
+    const apiError = data.errors && Object.keys(data.errors).length > 0
+      ? Object.values(data.errors).join('; ')
+      : null;
+    if (apiError) {
+      return { success: false, error: `API-Football: ${apiError}`, source: 'ballDontLie', timestamp: new Date().toISOString() };
+    }
+
     const fixtures = data.response?.map((item: any) => transformMatch(item)) || [];
 
     await saveToCache(cacheKey, fixtures);

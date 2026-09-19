@@ -17,6 +17,25 @@ const DEFAULT_CONFIG: FootballDataConfig = {
   endpoint: BASE_URL
 };
 
+// L'écran "Données Foot" identifie les ligues avec les IDs numériques
+// d'API-Football (39, 140, ...) — football-data.org utilise ses propres codes
+// de compétition. Sans cette table, /competitions/39/fixtures vise une
+// compétition inexistante côté football-data.org et échoue systématiquement.
+const API_FOOTBALL_TO_FOOTBALL_DATA_CODE: Record<string, string> = {
+  '39': 'PL',   // Premier League
+  '140': 'PD',  // La Liga
+  '135': 'SA',  // Serie A
+  '78': 'BL1',  // Bundesliga
+  '61': 'FL1',  // Ligue 1 (l'écran envoie parfois "101", cf. mapping ci-dessous)
+  '101': 'FL1', // Ligue 1 (ID utilisé par l'écran Données Foot)
+  '2': 'CL',    // Champions League (ID API-Football réel)
+  '1': 'CL',    // Champions League (ID utilisé par l'écran Données Foot)
+};
+
+function resolveCompetitionId(leagueId: string): string {
+  return API_FOOTBALL_TO_FOOTBALL_DATA_CODE[leagueId] || leagueId;
+}
+
 export async function testConnection(config: FootballDataConfig): Promise<boolean> {
   try {
     const response = await fetch(`${config.endpoint}/competitions`, {
@@ -46,18 +65,20 @@ export async function getFixturesByDate(
   }
 
   try {
-    const response = await fetch(`${config.endpoint}/competitions/${leagueId}/fixtures?date=${date}`, {
-      headers: {
-        'X-Auth-Token': config.apiKey
-      }
-    });
+    const competitionId = resolveCompetitionId(leagueId);
+    // L'endpoint /competitions/{id}/fixtures ne filtre pas par un seul jour :
+    // on demande une fenêtre [date, date] via dateFrom/dateTo.
+    const response = await fetch(
+      `${config.endpoint}/competitions/${competitionId}/matches?dateFrom=${date}&dateTo=${date}`,
+      { headers: { 'X-Auth-Token': config.apiKey } }
+    );
 
     if (!response.ok) {
       return { success: false, error: `HTTP ${response.status}`, source: 'footballData', timestamp: new Date().toISOString() };
     }
 
     const data = await response.json();
-    const fixtures = data.fixtures?.map((item: any) => transformMatch(item)) || [];
+    const fixtures = data.matches?.map((item: any) => transformMatch(item)) || [];
 
     await saveToCache(cacheKey, fixtures);
 
@@ -81,7 +102,8 @@ export async function getFixturesBySeason(
   season: number
 ): Promise<APIResponse<FootballMatch[]>> {
   try {
-    const response = await fetch(`${config.endpoint}/competitions/${leagueId}/fixtures?season=${season}`, {
+    const competitionId = resolveCompetitionId(leagueId);
+    const response = await fetch(`${config.endpoint}/competitions/${competitionId}/matches?season=${season}`, {
       headers: {
         'X-Auth-Token': config.apiKey
       }
@@ -92,7 +114,7 @@ export async function getFixturesBySeason(
     }
 
     const data = await response.json();
-    const fixtures = data.fixtures?.map((item: any) => transformMatch(item)) || [];
+    const fixtures = data.matches?.map((item: any) => transformMatch(item)) || [];
 
     return {
       success: true,
