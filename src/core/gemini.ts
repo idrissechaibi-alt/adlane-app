@@ -12,6 +12,84 @@ function isModelUnavailableError(message: string): boolean {
   return /no longer available|not found|deprecated/i.test(message);
 }
 
+export interface GoogleSearchSource {
+  title: string;
+  url: string;
+}
+
+/**
+ * Recherche Google en direct via l'outil natif "google_search" de Gemini
+ * (le compte de l'utilisateur est déjà lié par sa clé API — aucune clé
+ * supplémentaire nécessaire). Utilisé pour les recherches factuelles de base
+ * (compositions probables, horaires, confrontations précédentes) avant de
+ * lancer l'analyse structurée à 10 marchés.
+ *
+ * Appel séparé, en texte libre (pas de responseSchema/JSON strict) : l'outil
+ * de recherche Google n'est pas garanti compatible avec la sortie JSON forcée
+ * de generateContent, donc on ne mélange jamais les deux dans le même appel.
+ */
+export async function fetchGoogleSearchContext(
+  homeTeam: string,
+  awayTeam: string,
+  apiKey: string
+): Promise<{ contextText: string; sources: GoogleSearchSource[] }> {
+  const prompt = `Recherche sur Google des informations factuelles et à jour pour le match de football ${homeTeam} vs ${awayTeam} :
+1. Compositions probables / titulaires attendus des deux équipes
+2. Horaire exact et lieu du match
+3. Historique des confrontations précédentes (résultats des derniers face-à-face)
+4. Blessures, suspensions ou absences notables
+
+Réponds en français, sous forme de liste factuelle concise (pas de conseil de pari, pas de pronostic). Si une information n'est pas trouvée, dis-le simplement plutôt que d'inventer.`;
+
+  let lastError: Error | null = null;
+
+  for (const model of GEMINI_MODEL_CANDIDATES) {
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            tools: [{ google_search: {} }],
+            generationConfig: { temperature: 0.1 }
+          })
+        }
+      );
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        const message = err.error?.message || `HTTP ${response.status}`;
+        if (isModelUnavailableError(message)) {
+          lastError = new Error(message);
+          continue;
+        }
+        throw new Error(message);
+      }
+
+      const data = await response.json();
+      const parts = data.candidates?.[0]?.content?.parts || [];
+      const contextText = parts.map((p: any) => p.text || '').join('\n').trim();
+
+      const chunks = data.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+      const sources: GoogleSearchSource[] = chunks
+        .map((c: any) => ({ title: c.web?.title || '', url: c.web?.uri || '' }))
+        .filter((s: GoogleSearchSource) => s.url);
+
+      return { contextText, sources };
+    } catch (error: any) {
+      lastError = error;
+      if (isModelUnavailableError(error.message || '')) continue;
+      console.warn('[Gemini] Recherche Google échouée:', error.message);
+      return { contextText: '', sources: [] };
+    }
+  }
+
+  console.warn('[Gemini] Recherche Google indisponible sur tous les modèles candidats:', lastError?.message);
+  return { contextText: '', sources: [] };
+}
+
 export async function analyzeMatchWithGemini(
   matchInput: MatchScoutInput,
   lessons: Lesson[],

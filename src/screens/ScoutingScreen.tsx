@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { analyzeMatchWithOmniroute, DEFAULT_OMNIROUTE_CONFIG, AIAnalysisOutput } from '../core/omniroute';
-import { analyzeMatchWithGemini } from '../core/gemini';
+import { analyzeMatchWithGemini, fetchGoogleSearchContext } from '../core/gemini';
 import { fetchMatchContext, PerplexitySearchResult } from '../core/perplexity';
 import { getAPIConfig } from '../api/multiAPIManager';
 import { HISTORICAL_LESSONS } from '../data/historical';
@@ -99,19 +99,46 @@ export default function ScoutingScreen() {
     setAnalysisError(null);
     setWebSources([]);
 
-    // Recherche web en direct (compositions probables, actualités/blessures)
-    // via Perplexity si une clé est configurée, pour donner à l'IA de vraies
-    // infos à jour plutôt que sa seule connaissance figée.
+    // Clé Gemini lue tôt : sert à la fois à la recherche Google (basique :
+    // compos, horaires, confrontations précédentes) et à l'analyse structurée.
+    const geminiApiKey = await SecureStore.getItemAsync(GEMINI_KEY_STORAGE);
+
+    // Recherche web en direct : Google (via l'outil de recherche natif de
+    // Gemini, gratuit avec le compte déjà lié) pour les infos basiques, et
+    // Perplexity si une clé est configurée pour une recherche plus poussée.
+    // Les deux sont interrogés en parallèle et leurs résultats fusionnés.
     let webContext = '';
+    const combinedSources: PerplexitySearchResult[] = [];
     try {
       const apiConfig = await getAPIConfig();
-      if (apiConfig.perplexity) {
-        const { contextText, sources } = await fetchMatchContext(match.homeTeam, match.awayTeam, apiConfig.perplexity);
-        webContext = contextText;
-        setWebSources(sources);
+
+      const [googleResult, perplexityResult] = await Promise.allSettled([
+        geminiApiKey
+          ? fetchGoogleSearchContext(match.homeTeam, match.awayTeam, geminiApiKey)
+          : Promise.resolve(null),
+        apiConfig.perplexity
+          ? fetchMatchContext(match.homeTeam, match.awayTeam, apiConfig.perplexity)
+          : Promise.resolve(null)
+      ]);
+
+      const contextParts: string[] = [];
+
+      if (googleResult.status === 'fulfilled' && googleResult.value?.contextText) {
+        contextParts.push(`Recherche Google (Gemini) :\n${googleResult.value.contextText}`);
+        combinedSources.push(...googleResult.value.sources.map((s) => ({
+          title: s.title, url: s.url, snippet: '', date: null
+        })));
       }
+
+      if (perplexityResult.status === 'fulfilled' && perplexityResult.value?.contextText) {
+        contextParts.push(`Recherche Perplexity :\n${perplexityResult.value.contextText}`);
+        combinedSources.push(...perplexityResult.value.sources);
+      }
+
+      webContext = contextParts.join('\n\n');
+      setWebSources(combinedSources);
     } catch (error: any) {
-      console.warn('Recherche web Perplexity échouée:', error.message);
+      console.warn('Recherche web échouée:', error.message);
     }
 
     const matchInput = {
@@ -132,7 +159,6 @@ export default function ScoutingScreen() {
 
     // Détermine le moteur IA à utiliser : Gemini (clé directe) en priorité,
     // sinon Omniroute si configuré ET activé dans Paramètres, sinon aucun.
-    const geminiApiKey = await SecureStore.getItemAsync(GEMINI_KEY_STORAGE);
     let omnirouteConfig: PersistedOmnirouteConfig | null = null;
     try {
       const raw = await AsyncStorage.getItem(OMNIROUTE_CONFIG_KEY);
