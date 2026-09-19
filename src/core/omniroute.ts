@@ -142,7 +142,15 @@ Stats disponibles :
     });
 
     if (!response.ok) {
-      throw new Error(`Erreur Omniroute HTTP ${response.status} : ${response.statusText}`);
+      const bodyText = await response.text().catch(() => '');
+      let detail = bodyText;
+      try {
+        const parsedError = JSON.parse(bodyText);
+        detail = parsedError.error?.message || parsedError.detail || parsedError.message || bodyText;
+      } catch {
+        // corps non-JSON : on garde le texte brut
+      }
+      throw new Error(`Erreur Omniroute HTTP ${response.status}${detail ? ` : ${detail}` : ` (${response.statusText})`}`);
     }
 
     const data = await response.json();
