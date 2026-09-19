@@ -184,7 +184,10 @@ export default function ScoutingScreen() {
           selectedModel: omnirouteConfig!.selectedModel || DEFAULT_OMNIROUTE_CONFIG.selectedModel,
         });
         setAnalysisResult(result);
-        setDiagnostic({ engine: 'omniroute', status: 'success', message: `${result.markets.length} marché(s) reçu(s)${geminiApiKey ? ' (via secours Omniroute)' : ''}.`, timestamp: new Date().toISOString() });
+        const agentsNote = result.agentsUsed && result.agentsUsed.length > 0
+          ? ` • ${result.agentsUsed.length} agent(s) : ${result.agentsUsed.join(', ')}${result.agentsFailed ? ` (${result.agentsFailed.length} échec(s))` : ''}`
+          : '';
+        setDiagnostic({ engine: 'omniroute', status: 'success', message: `${result.markets.length} marché(s) reçu(s)${geminiApiKey ? ' (via secours Omniroute)' : ''}${agentsNote}.`, timestamp: new Date().toISOString() });
         setLoading(false);
         return;
       } catch (error: any) {
