@@ -34,6 +34,19 @@ function formatKickoff(kickoffUtc: string): string {
   return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 }
 
+type FormResult = 'V' | 'N' | 'D';
+
+/** V/N/D d'une équipe pour un match terminé donné, vu de son côté (domicile ou extérieur). */
+function resultFor(match: FootballMatch, teamId: string): FormResult | null {
+  if (!match.scoreFulltime) return null;
+  const isHome = String(match.homeTeamId) === teamId;
+  const goalsFor = isHome ? match.scoreFulltime.home : match.scoreFulltime.away;
+  const goalsAgainst = isHome ? match.scoreFulltime.away : match.scoreFulltime.home;
+  if (goalsFor > goalsAgainst) return 'V';
+  if (goalsFor < goalsAgainst) return 'D';
+  return 'N';
+}
+
 export default function FootballDataScreen({ navigation }: any) {
   const [manager, setManager] = useState<FootballAPIManager | null>(null);
   const [fixtures, setFixtures] = useState<FootballMatch[]>([]);
@@ -46,6 +59,7 @@ export default function FootballDataScreen({ navigation }: any) {
   const [standings, setStandings] = useState<StandingEntry[]>([]);
   const [standingsError, setStandingsError] = useState<string | null>(null);
   const [standingsLoading, setStandingsLoading] = useState(false);
+  const [teamForm, setTeamForm] = useState<Record<string, FormResult[]>>({});
 
   // Ligues disponibles — IDs API-Football réels (v3.football.api-sports.io).
   // "101" et "1" étaient utilisés ici pour Ligue 1 / Champions League : ce
@@ -108,6 +122,43 @@ export default function FootballDataScreen({ navigation }: any) {
     } finally {
       setStandingsLoading(false);
     }
+  };
+
+  /**
+   * 3 derniers résultats de chaque équipe présente dans les matchs du jour
+   * (affichés sous son nom dans "Matchs du jour"). Une requête par équipe,
+   * mais mise en cache côté ballDontLie.ts (30 min) : rechargement de
+   * l'écran ou changement de ligue n'implique pas de nouveaux appels tant
+   * que le cache est valide.
+   */
+  const loadTeamForm = async (mgr: FootballAPIManager, matches: FootballMatch[]) => {
+    const teams = new Map<string, string>();
+    matches.forEach((m) => {
+      if (m.homeTeamId) teams.set(m.homeTeamId, m.homeTeam);
+      if (m.awayTeamId) teams.set(m.awayTeamId, m.awayTeam);
+    });
+    if (teams.size === 0) return;
+
+    const entries = await Promise.all(
+      Array.from(teams.keys()).map(async (teamId) => {
+        try {
+          const result = await mgr.getTeamLastMatches(teamId, 3);
+          if (!result.success || !result.data) return null;
+          const form = result.data
+            .map((m) => resultFor(m, teamId))
+            .filter((r): r is FormResult => r !== null);
+          return [teamId, form] as const;
+        } catch {
+          return null;
+        }
+      })
+    );
+
+    const map: Record<string, FormResult[]> = {};
+    entries.forEach((entry) => {
+      if (entry) map[entry[0]] = entry[1];
+    });
+    setTeamForm(map);
   };
 
   /**
@@ -182,9 +233,10 @@ export default function FootballDataScreen({ navigation }: any) {
 
       if (result.success && result.data) {
         setFixtures(result.data);
-        // Les cotes arrivent après, en une seule requête : on n'attend pas
+        // Les cotes et les formes récentes arrivent après : on n'attend pas
         // qu'elles soient là pour rendre la liste de matchs exploitable.
         void loadOddsForLeague(result.data);
+        void loadTeamForm(mgr, result.data);
       } else {
         setError(result.error || 'Erreur lors du chargement des matchs');
       }
@@ -202,6 +254,13 @@ export default function FootballDataScreen({ navigation }: any) {
       await fetchFixtures(manager, true);
     }
   };
+
+  /** Rang au classement par nom d'équipe normalisé, pour l'afficher sous le nom dans les cartes de match. */
+  const rankByTeam = React.useMemo(() => {
+    const map = new Map<string, number>();
+    standings.forEach((row) => map.set(normalizeTeamName(row.teamName), row.rank));
+    return map;
+  }, [standings]);
 
   // Calculer les value bets
   const valueBets = React.useMemo(() => {
@@ -241,11 +300,27 @@ export default function FootballDataScreen({ navigation }: any) {
   }, [fixtures, odds, manager]);
 
   // Afficher un match
+  /** Badges V/N/D (plus récent en dernier), ou rien si l'historique n'est pas encore chargé. */
+  const renderForm = (form: FormResult[] | undefined) => {
+    if (!form || form.length === 0) return null;
+    return (
+      <View style={styles.formRow}>
+        {form.map((r, i) => (
+          <View key={i} style={[styles.formBadge, styles[`formBadge${r}` as const]]}>
+            <Text style={styles.formBadgeText}>{r}</Text>
+          </View>
+        ))}
+      </View>
+    );
+  };
+
   const renderMatch = ({ item }: { item: FootballMatch }) => {
     const matchOdds = odds[item.id] || [];
     const homeOdds = matchOdds.find(o => o.market === '1X2')?.odds.home || '-';
     const drawOdds = matchOdds.find(o => o.market === '1X2')?.odds.draw || '-';
     const awayOdds = matchOdds.find(o => o.market === '1X2')?.odds.away || '-';
+    const homeRank = rankByTeam.get(normalizeTeamName(item.homeTeam));
+    const awayRank = rankByTeam.get(normalizeTeamName(item.awayTeam));
 
     return (
       <TouchableOpacity style={styles.matchCard} activeOpacity={0.7}>
@@ -257,11 +332,15 @@ export default function FootballDataScreen({ navigation }: any) {
         <View style={styles.matchTeams}>
           <View style={styles.teamContainer}>
             <Text style={styles.teamName}>{item.homeTeam}</Text>
+            {homeRank != null && <Text style={styles.teamRank}>{homeRank}e au classement</Text>}
+            {renderForm(item.homeTeamId ? teamForm[item.homeTeamId] : undefined)}
             <Text style={styles.teamOdds}>{homeOdds}</Text>
           </View>
           <Text style={styles.vs}>VS</Text>
           <View style={styles.teamContainer}>
             <Text style={styles.teamName}>{item.awayTeam}</Text>
+            {awayRank != null && <Text style={styles.teamRank}>{awayRank}e au classement</Text>}
+            {renderForm(item.awayTeamId ? teamForm[item.awayTeamId] : undefined)}
             <Text style={styles.teamOdds}>{awayOdds}</Text>
           </View>
         </View>
@@ -692,6 +771,37 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#10b981',
     fontWeight: 'bold'
+  },
+  teamRank: {
+    fontSize: 11,
+    color: '#94a3b8',
+    marginBottom: 4
+  },
+  formRow: {
+    flexDirection: 'row',
+    marginBottom: 6,
+    gap: 3
+  },
+  formBadge: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  formBadgeV: {
+    backgroundColor: '#10b981'
+  },
+  formBadgeN: {
+    backgroundColor: '#64748b'
+  },
+  formBadgeD: {
+    backgroundColor: '#ef4444'
+  },
+  formBadgeText: {
+    fontSize: 9,
+    fontWeight: 'bold',
+    color: 'white'
   },
   vs: {
     fontSize: 14,

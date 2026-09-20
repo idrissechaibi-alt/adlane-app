@@ -302,6 +302,24 @@ export class FootballAPIManager {
   }
 
   /**
+   * 3 derniers résultats d'une équipe (API-Football uniquement), affichés
+   * sous son nom dans Données Foot. Mis en cache côté ballDontLie.ts.
+   */
+  async getTeamLastMatches(teamId: string, count: number = 3): Promise<APIResponse<FootballMatch[]>> {
+    if (!this.config.ballDontLie?.apiKey) {
+      return {
+        success: false,
+        error: 'Derniers résultats indisponibles : configure une clé API-Football.',
+        source: 'multiAPI',
+        timestamp: new Date().toISOString()
+      };
+    }
+
+    await incrementRequestCount(REQUEST_COUNTER_SOURCE.ballDontLie);
+    return ballDontLie.getTeamLastMatches(this.config.ballDontLie, teamId, count);
+  }
+
+  /**
    * Récupère les infos d'un joueur
    */
   async getPlayerInfo(
