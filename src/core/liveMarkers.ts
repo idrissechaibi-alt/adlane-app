@@ -322,8 +322,11 @@ export async function runLiveMarkerTick(): Promise<{ observed: number; closed: n
       MAX_DETAILED_STATS_PER_TICK,
       MAX_DETAILED_STATS_PER_TICK + MAX_OMNIROUTE_STATS_PER_TICK
     );
+    // Pas de spendBudget ici : Omniroute est un serveur auto-hébergé par
+    // l'utilisateur, sans quota gratuit externe à protéger — seul le nombre
+    // de matchs par tour (MAX_OMNIROUTE_STATS_PER_TICK) le borne, pour ne
+    // pas allonger le tour indéfiniment.
     for (const l of beyondQuota) {
-      if (!(await spendBudget('omniroute'))) break;
       const meta = universeById.get(l.fixtureId)!;
       const markers = await fetchOmnirouteMarkers(omnirouteConfig, meta.homeTeam, meta.awayTeam, meta.league, l.minute);
       if (markers) omnirouteMarkersByFixture.set(l.fixtureId, markers);
@@ -339,7 +342,6 @@ export async function runLiveMarkerTick(): Promise<{ observed: number; closed: n
       .slice(0, MAX_CROSSCHECK_PER_TICK);
 
     for (const l of crossCheckCandidates) {
-      if (!(await spendBudget('omniroute'))) break;
       const meta = universeById.get(l.fixtureId)!;
       const omniMarkers = await fetchOmnirouteMarkers(omnirouteConfig, meta.homeTeam, meta.awayTeam, meta.league, l.minute);
       if (!omniMarkers) continue;

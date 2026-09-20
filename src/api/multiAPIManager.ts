@@ -144,10 +144,15 @@ export const DEFAULT_QUOTAS: Record<string, QuotaSetting> = {
   theOddsApi: { limit: 500, period: 'month' },
   sportmonks: { limit: 3000, period: 'day' },
   perplexity: { limit: 100, period: 'month' },
-  // Moteurs IA : plafonds volontairement prudents pour l'enrichissement
-  // automatique des matchs suivis (modifiables dans Gestion des API).
+  // Moteur IA Gemini : quota Google réel (modifiable dans Gestion des API).
   gemini: { limit: 200, period: 'day' },
-  omniroute: { limit: 100, period: 'day' },
+  // Omniroute n'a PAS de quota ici : c'est un serveur auto-hébergé par
+  // l'utilisateur (Termux/localhost), sans plafond de requêtes gratuit à
+  // protéger — contrairement aux autres sources de cette liste. Un plafond
+  // par défaut avait été ajouté par erreur, invisible et non modifiable
+  // (absent de l'écran Gestion des API), qui bridait silencieusement
+  // l'auto-apprentissage à 100 requêtes/jour sans que l'utilisateur puisse
+  // le voir ni le changer. Ses appels ne passent donc plus par spendBudget.
 };
 
 export async function getQuotaConfig(): Promise<Record<string, QuotaSetting>> {

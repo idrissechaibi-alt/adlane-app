@@ -110,8 +110,10 @@ export async function enrichFocusMatches(): Promise<number> {
       }
     }
 
-    // 2) Omniroute : lecture qualitative par les agents configurés.
-    if (omnirouteConfig && (await spendBudget('omniroute'))) {
+    // 2) Omniroute : lecture qualitative par les agents configurés. Pas de
+    // spendBudget ici : serveur auto-hébergé par l'utilisateur, sans quota
+    // gratuit externe à protéger (contrairement à Gemini/API-Football).
+    if (omnirouteConfig) {
       try {
         const result = await askOmnirouteLight(
           "Tu es un analyste football. Réponds en français, en 5 puces factuelles maximum. " +
