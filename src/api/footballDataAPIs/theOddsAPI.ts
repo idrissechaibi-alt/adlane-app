@@ -4,6 +4,7 @@
 
 import { APIResponse, MarketOdds, AllMatchOdds } from '../types';
 import { getFromCache, saveToCache, generateCacheKey } from '../cache';
+import { fetchWithTimeout } from '../../core/httpTimeout';
 
 const BASE_URL = 'https://api.the-odds-api.com/v4';
 
@@ -275,15 +276,31 @@ export interface SimpleMatchOdds {
  * propositions recevaient donc une cote à 0 (jamais assignée), ce qui les
  * affichait comme "non définies" plutôt que de bloquer proprement.
  */
+/**
+ * "btts" est un marché additionnel : certains plans TheOddsAPI ne l'incluent
+ * pas, et une demande combinée (h2h,totals,btts) qui contient UN marché non
+ * autorisé fait échouer TOUTE la requête (h2h et totals compris), pas
+ * seulement btts. C'est ce qui s'est produit en pratique : plus aucun match
+ * ne recevait de cote du tout dès que btts a été ajouté à la liste, alors
+ * que h2h+totals seuls fonctionnaient très bien. On retente donc sans btts
+ * si la requête combinée échoue, pour ne jamais perdre 1X2/Over-Under (dont
+ * dépend toute la génération de propositions) à cause d'un marché annexe.
+ */
 export async function fetchCompetitionOdds(
   apiKey: string,
   sportKey: string,
   region: 'us' | 'uk' | 'eu' | 'au' = 'eu'
 ): Promise<APIResponse<SimpleMatchOdds[]>> {
   try {
-    const response = await fetch(
+    let response = await fetchWithTimeout(
       `${BASE_URL}/sports/${sportKey}/odds?apiKey=${apiKey}&regions=${region}&markets=h2h,totals,btts&oddsFormat=decimal`
     );
+
+    if (!response.ok) {
+      response = await fetchWithTimeout(
+        `${BASE_URL}/sports/${sportKey}/odds?apiKey=${apiKey}&regions=${region}&markets=h2h,totals&oddsFormat=decimal`
+      );
+    }
 
     if (!response.ok) {
       return { success: false, error: `HTTP ${response.status}`, source: 'theOddsAPI', timestamp: new Date().toISOString() };
