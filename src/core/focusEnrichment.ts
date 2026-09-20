@@ -31,7 +31,7 @@ const ENRICH_UNTIL_MINUTES_AFTER = 60;
 /** Un match n'est ré-enrichi qu'au-delà de ce délai. */
 const REFRESH_AFTER_MINUTES = 120;
 
-async function loadOmnirouteConfig(): Promise<OmnirouteConfig | null> {
+export async function loadOmnirouteConfig(): Promise<OmnirouteConfig | null> {
   try {
     const raw = await AsyncStorage.getItem(OMNIROUTE_CONFIG_KEY);
     if (!raw) return null;

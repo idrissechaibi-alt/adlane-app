@@ -14,6 +14,7 @@
 import { getAllBets } from '../database/storage';
 import { HISTORICAL_BETS } from '../data/historical';
 import {
+  CrossCheckSample,
   EventDeltas,
   LEARNING_HORIZONS,
   LearnedModel,
@@ -23,6 +24,7 @@ import {
   TrackedMarket,
   TrainingRow,
   readAgentDigest,
+  readCrossCheckSamples,
   readLearnedModel,
   readPaperBets,
   readTrainingRows,
@@ -38,6 +40,14 @@ const MIN_SAMPLES_PER_RULE = 30;
 const MIN_LIFT = 1.15;
 /** Seuil de déclenchement d'un pari papier. */
 const PAPER_BET_PROB_THRESHOLD = 0.35;
+/**
+ * Seuils de promotion des marqueurs Omniroute (scrapés) au rang de source de
+ * calibrage à part entière : il faut assez de recoupements avec la vérité
+ * terrain API-Football, ET un taux d'accord suffisant, sinon Omniroute reste
+ * cantonné à de la couverture supplémentaire non calibrante.
+ */
+const CROSSCHECK_MIN_SAMPLES = 30;
+const CROSSCHECK_MIN_AGREE_RATE = 0.8;
 
 interface MarkerCandidate {
   name: string;
@@ -151,10 +161,32 @@ export async function getUserFocus(): Promise<{ leagues: string[]; markets: stri
   return { leagues: Array.from(leagues), markets: Array.from(markets) };
 }
 
-/** Lignes exploitables pour un horizon : fenêtre présente et non tronquée. */
-function rowsForHorizon(rows: TrainingRow[], horizon: number): Array<{ row: TrainingRow; deltas: EventDeltas }> {
+/**
+ * Fiabilité mesurée des marqueurs Omniroute par recoupement avec la vérité
+ * terrain API-Football (voir liveMarkers.ts). Tant que le seuil n'est pas
+ * atteint, les lignes 'omniroute' ne servent qu'à observer, jamais à bâtir
+ * une règle de calibrage.
+ */
+function computeOmnirouteTrust(samples: CrossCheckSample[]): NonNullable<LearnedModel['omnirouteTrust']> {
+  if (samples.length === 0) return { samples: 0, agreeRate: 0, trusted: false };
+  const agreeing = samples.filter((s) => s.agree).length;
+  const agreeRate = agreeing / samples.length;
+  return {
+    samples: samples.length,
+    agreeRate,
+    trusted: samples.length >= CROSSCHECK_MIN_SAMPLES && agreeRate >= CROSSCHECK_MIN_AGREE_RATE,
+  };
+}
+
+/** Lignes exploitables pour un horizon : fenêtre présente, non tronquée, et source assez fiable. */
+function rowsForHorizon(
+  rows: TrainingRow[],
+  horizon: number,
+  allowOmniroute: boolean
+): Array<{ row: TrainingRow; deltas: EventDeltas }> {
   const usable: Array<{ row: TrainingRow; deltas: EventDeltas }> = [];
   for (const row of rows) {
+    if (row.source === 'omniroute' && !allowOmniroute) continue;
     const deltas = row.horizons?.[String(horizon)];
     if (!deltas || deltas.truncated) continue;
     usable.push({ row, deltas });
@@ -162,12 +194,15 @@ function rowsForHorizon(rows: TrainingRow[], horizon: number): Array<{ row: Trai
   return usable;
 }
 
-function buildRules(rows: TrainingRow[]): { rules: MarkerRule[]; baselines: Record<string, number> } {
+function buildRules(
+  rows: TrainingRow[],
+  allowOmniroute: boolean
+): { rules: MarkerRule[]; baselines: Record<string, number> } {
   const rules: MarkerRule[] = [];
   const baselines: Record<string, number> = {};
 
   for (const horizon of LEARNING_HORIZONS) {
-    const usable = rowsForHorizon(rows, horizon);
+    const usable = rowsForHorizon(rows, horizon, allowOmniroute);
     if (usable.length < MIN_SAMPLES_PER_RULE) continue;
 
     for (const target of LEARNING_TARGETS) {
@@ -263,15 +298,24 @@ export function scoreAllTargets(
   return results.sort((a, b) => b.prob - a.prob);
 }
 
-/** Enregistre des paris papier si le modèle déclenche (aucune notification). */
+/**
+ * Enregistre des paris papier si le modèle déclenche (aucune notification).
+ * Tant qu'Omniroute n'est pas promu source fiable, ses instantanés sont
+ * exclus : sinon un bruit de lecture non prouvé fausserait le taux de
+ * réussite mesuré (paperBets.hitRate), qui recalibre TOUTES les probabilités
+ * — y compris celles issues d'API-Football.
+ */
 export function maybePlacePaperBets(snapshots: MarkerSnapshot[], model: LearnedModel | null): void {
   if (!model) return;
 
   const existing = readPaperBets();
   const known = new Set(existing.map((b) => `${b.fixtureId}-${b.minuteAtPlacement}-${b.target}-${b.horizon}`));
   const added: PaperBet[] = [];
+  const eligibleSnapshots = model.omnirouteTrust?.trusted
+    ? snapshots
+    : snapshots.filter((s) => s.source !== 'omniroute');
 
-  for (const snapshot of snapshots) {
+  for (const snapshot of eligibleSnapshots) {
     for (const horizon of LEARNING_HORIZONS) {
       for (const scored of scoreAllTargets(snapshot, model, horizon)) {
         if (scored.prob < PAPER_BET_PROB_THRESHOLD) continue;
@@ -335,7 +379,8 @@ export async function consolidateLearning(): Promise<LearnedModel | null> {
   const rows = readTrainingRows(14);
   if (rows.length < MIN_SAMPLES_PER_RULE) return readLearnedModel();
 
-  const { rules, baselines } = buildRules(rows);
+  const omnirouteTrust = computeOmnirouteTrust(readCrossCheckSamples(14));
+  const { rules, baselines } = buildRules(rows, omnirouteTrust.trusted);
 
   const bets = settlePaperBets(rows);
   const settled = bets.filter((b) => b.settled);
@@ -364,6 +409,7 @@ export async function consolidateLearning(): Promise<LearnedModel | null> {
       calibrationFactor,
     },
     focusLeagues: focus.leagues,
+    omnirouteTrust,
   };
 
   writeLearnedModel(model);
@@ -415,6 +461,18 @@ function renderDigest(model: LearnedModel, markets: string[], rows: TrainingRow[
     `- Facteur de recalibrage appliqué : ×${model.paperBets.calibrationFactor.toFixed(2)} ` +
       '(<1 = le modèle était trop optimiste, ses probabilités sont rabotées)',
   );
+
+  if (model.omnirouteTrust) {
+    const t = model.omnirouteTrust;
+    lines.push(
+      '',
+      '## Couverture élargie via Omniroute (matchs au-delà du quota API-Football)',
+      `- Recoupements avec la vérité terrain API-Football : ${t.samples} (accord : ${(t.agreeRate * 100).toFixed(1)}%)`,
+      t.trusted
+        ? '- Seuil de fiabilité atteint : les observations Omniroute participent désormais aussi aux règles de calibrage.'
+        : `- Pas encore assez fiable (seuil : ${CROSSCHECK_MIN_SAMPLES} recoupements, ${(CROSSCHECK_MIN_AGREE_RATE * 100).toFixed(0)}% d'accord) — Omniroute élargit la couverture observée mais n'influence pas encore les probabilités.`
+    );
+  }
 
   const scoutingAccuracy = computeScoutingAccuracy(30);
   lines.push('', '## Fiabilité passée de l\'analyse Scouting IA (par marché, 30 derniers jours)');

@@ -64,6 +64,14 @@ export interface MarkerSnapshot {
   markers: MarkerSet;
   /** true si le match appartient à une ligue sur laquelle l'utilisateur joue. */
   focus?: boolean;
+  /**
+   * Origine des marqueurs (corners/cartons/tirs) de cet instantané. Absent ou
+   * 'api_football' = source structurée vérifiée. 'omniroute' = scrapé par les
+   * agents Omniroute pour couvrir les matchs au-delà du quota API-Football —
+   * n'est utilisé pour bâtir des règles de calibrage qu'une fois sa fiabilité
+   * prouvée par recoupement (voir CrossCheckSample / consolidateLearning).
+   */
+  source?: 'api_football' | 'omniroute';
 }
 
 /** Ce qui s'est réellement produit pendant une fenêtre d'observation. */
@@ -149,6 +157,55 @@ export interface LearnedModel {
   };
   /** Ligues sur lesquelles l'utilisateur joue réellement (priorité d'apprentissage). */
   focusLeagues: string[];
+  /** Fiabilité mesurée des marqueurs Omniroute par recoupement avec API-Football. */
+  omnirouteTrust?: {
+    samples: number;
+    agreeRate: number;
+    /** true = les lignes 'omniroute' entrent aussi dans les règles de calibrage. */
+    trusted: boolean;
+  };
+}
+
+/**
+ * Un recoupement : le même match, au même instant, lu par API-Football (vérité
+ * terrain) ET par Omniroute (scraping) — sert à mesurer si Omniroute peut être
+ * promu de "couverture supplémentaire" à "source de calibrage à part entière".
+ */
+export interface CrossCheckSample {
+  ts: string;
+  fixtureId: number;
+  market: 'corners' | 'cards';
+  apiFootballValue: number;
+  omnirouteValue: number;
+  /** Écart jugé acceptable (voir MARKET_TOLERANCE dans liveMarkers.ts). */
+  agree: boolean;
+}
+
+export function appendCrossCheckSamples(samples: CrossCheckSample[]): void {
+  if (samples.length === 0) return;
+  const file = fileIn(`crosscheck-${dayKey()}.jsonl`);
+  const existing = readTextSafe(file) ?? '';
+  const added = samples.map((s) => JSON.stringify(s)).join('\n');
+  writeText(file, existing ? `${existing}\n${added}` : added);
+}
+
+/** Relit les recoupements des N derniers jours (corpus glissant). */
+export function readCrossCheckSamples(days: number = 14): CrossCheckSample[] {
+  const samples: CrossCheckSample[] = [];
+  for (let i = 0; i < days; i++) {
+    const date = new Date(Date.now() - i * 86_400_000);
+    const content = readTextSafe(fileIn(`crosscheck-${dayKey(date)}.jsonl`));
+    if (!content) continue;
+    for (const line of content.split('\n')) {
+      if (!line.trim()) continue;
+      try {
+        samples.push(JSON.parse(line));
+      } catch {
+        // ligne corrompue : ignorée sans casser la lecture
+      }
+    }
+  }
+  return samples;
 }
 
 function learningDirectory(): Directory {

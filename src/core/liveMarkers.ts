@@ -20,15 +20,30 @@ import {
   MarkerSet,
   PendingObservation,
   TrainingRow,
+  CrossCheckSample,
+  appendCrossCheckSamples,
   appendTrainingRows,
   readLearnedModel,
   readPendingSnapshots,
   writePendingSnapshots,
 } from './learnStore';
 import { maybePlacePaperBets } from './autoLearn';
+import { loadOmnirouteConfig } from './focusEnrichment';
+import { askOmnirouteLight } from './omniroute';
+import { OmnirouteConfig } from '../types';
 
-/** Nombre maximum de matchs enrichis en statistiques détaillées par tour. */
+/** Nombre maximum de matchs enrichis en statistiques détaillées par tour (API-Football, quota limité). */
 const MAX_DETAILED_STATS_PER_TICK = 10;
+/**
+ * Matchs supplémentaires couverts par Omniroute (scraping, pas soumis au
+ * même quota) au-delà de ce que API-Football peut fournir dans le tour —
+ * c'est ce qui permet de suivre bien plus que 10 matchs à la fois.
+ */
+const MAX_OMNIROUTE_STATS_PER_TICK = 10;
+/** Matchs déjà couverts par API-Football redemandés à Omniroute, pour mesurer son accord avec la vérité terrain. */
+const MAX_CROSSCHECK_PER_TICK = 3;
+/** Écart toléré entre la lecture Omniroute et la vérité terrain API-Football pour juger qu'elles "sont d'accord". */
+const MARKET_TOLERANCE: Record<'corners' | 'cards', number> = { corners: 1, cards: 1 };
 const LONGEST_HORIZON = Math.max(...LEARNING_HORIZONS);
 
 interface LiveSnapshotInput {
@@ -122,6 +137,63 @@ async function fetchMarkers(apiKey: string, fixtureId: number): Promise<MarkerSe
   } catch {
     return {};
   }
+}
+
+/**
+ * Demande à Omniroute (scraping) les marqueurs live d'un match, pour couvrir
+ * ce que le quota API-Football ne permet pas de suivre dans ce tour. Ne
+ * renvoie que des valeurs numériques trouvées sur une vraie source live —
+ * jamais une estimation : si l'agent ne trouve rien de fiable, il renvoie
+ * null pour ce champ, et null globalement si rien n'est exploitable.
+ */
+async function fetchOmnirouteMarkers(
+  config: OmnirouteConfig,
+  homeTeam: string,
+  awayTeam: string,
+  league: string,
+  minute: number
+): Promise<MarkerSet | null> {
+  let result: { text: string; model: string } | null;
+  try {
+    result = await askOmnirouteLight(
+      "Tu es un outil de lecture de statistiques de match de football EN DIRECT. " +
+        "Réponds UNIQUEMENT par un JSON strict, sans texte autour. N'invente RIEN : " +
+        "si une valeur n'est pas trouvée sur une source de score en direct fiable " +
+        "(Sofascore, Flashscore, l'API du diffuseur...), mets null pour ce champ " +
+        "plutôt qu'une estimation.",
+      `Match EN COURS, minute ${minute} : ${homeTeam} vs ${awayTeam} (${league}).\n` +
+        'Cherche les statistiques live (corners, cartons cumulés) sur une source fiable.\n' +
+        'Réponds avec ce JSON exact, sans rien autour :\n' +
+        '{"corners_home": number|null, "corners_away": number|null, "cards_home": number|null, "cards_away": number|null}\n' +
+        'cards_home/away = total cumulé cartons jaunes + rouges pour cette équipe à cet instant.',
+      config
+    );
+  } catch (error: any) {
+    console.warn('[Marqueurs live] Omniroute indisponible:', error.message);
+    return null;
+  }
+  if (!result) return null;
+
+  let parsed: any;
+  try {
+    const jsonMatch = result.text.match(/\{[\s\S]*\}/);
+    parsed = JSON.parse(jsonMatch ? jsonMatch[0] : result.text);
+  } catch {
+    return null;
+  }
+
+  const toNumber = (v: unknown): number | undefined =>
+    typeof v === 'number' && Number.isFinite(v) ? v : undefined;
+
+  const markers: MarkerSet = {
+    cornersHome: toNumber(parsed.corners_home),
+    cornersAway: toNumber(parsed.corners_away),
+    cardsHome: toNumber(parsed.cards_home),
+    cardsAway: toNumber(parsed.cards_away),
+  };
+
+  const hasAnyValue = Object.values(markers).some((v) => v != null);
+  return hasAnyValue ? markers : null;
 }
 
 function totalCorners(markers: MarkerSet): number | undefined {
@@ -228,12 +300,92 @@ export async function runLiveMarkerTick(): Promise<{ observed: number; closed: n
       return aFocus - bFocus;
     });
 
-  // Statistiques détaillées pour un nombre borné de matchs (budget API).
+  // Statistiques détaillées pour un nombre borné de matchs (budget API-Football).
+  const topApiFootball = firstHalf.slice(0, MAX_DETAILED_STATS_PER_TICK);
   const markersByFixture = new Map<number, MarkerSet>();
-  for (const l of firstHalf.slice(0, MAX_DETAILED_STATS_PER_TICK)) {
+  for (const l of topApiFootball) {
     if (!(await spendBudget('apiFootball'))) break;
     markersByFixture.set(l.fixtureId, await fetchMarkers(config.apiFootball, l.fixtureId));
   }
+
+  // Couverture supplémentaire au-delà du quota API-Football : Omniroute
+  // scrape les mêmes marqueurs pour d'autres matchs de l'univers, sans être
+  // soumis au même plafond. Ses lignes sont marquées 'omniroute' et ne
+  // rentrent dans les règles de calibrage qu'une fois leur fiabilité prouvée
+  // par recoupement (cf. consolidateLearning / omnirouteTrust).
+  const omnirouteMarkersByFixture = new Map<number, MarkerSet>();
+  const omnirouteConfig = await loadOmnirouteConfig();
+  const crossCheckSamples: CrossCheckSample[] = [];
+
+  if (omnirouteConfig) {
+    const beyondQuota = firstHalf.slice(
+      MAX_DETAILED_STATS_PER_TICK,
+      MAX_DETAILED_STATS_PER_TICK + MAX_OMNIROUTE_STATS_PER_TICK
+    );
+    for (const l of beyondQuota) {
+      if (!(await spendBudget('omniroute'))) break;
+      const meta = universeById.get(l.fixtureId)!;
+      const markers = await fetchOmnirouteMarkers(omnirouteConfig, meta.homeTeam, meta.awayTeam, meta.league, l.minute);
+      if (markers) omnirouteMarkersByFixture.set(l.fixtureId, markers);
+    }
+
+    // Recoupement : redemande à Omniroute quelques matchs déjà couverts par
+    // API-Football (vérité terrain), pour mesurer son taux d'accord réel.
+    const crossCheckCandidates = topApiFootball
+      .filter((l) => {
+        const m = markersByFixture.get(l.fixtureId);
+        return m && (totalCorners(m) != null || totalCards(m) != null);
+      })
+      .slice(0, MAX_CROSSCHECK_PER_TICK);
+
+    for (const l of crossCheckCandidates) {
+      if (!(await spendBudget('omniroute'))) break;
+      const meta = universeById.get(l.fixtureId)!;
+      const omniMarkers = await fetchOmnirouteMarkers(omnirouteConfig, meta.homeTeam, meta.awayTeam, meta.league, l.minute);
+      if (!omniMarkers) continue;
+
+      const trueMarkers = markersByFixture.get(l.fixtureId)!;
+      const ts = new Date().toISOString();
+
+      const trueCorners = totalCorners(trueMarkers);
+      const omniCorners = totalCorners(omniMarkers);
+      if (trueCorners != null && omniCorners != null) {
+        crossCheckSamples.push({
+          ts,
+          fixtureId: l.fixtureId,
+          market: 'corners',
+          apiFootballValue: trueCorners,
+          omnirouteValue: omniCorners,
+          agree: Math.abs(trueCorners - omniCorners) <= MARKET_TOLERANCE.corners,
+        });
+      }
+
+      const trueCards = totalCards(trueMarkers);
+      const omniCards = totalCards(omniMarkers);
+      if (trueCards != null && omniCards != null) {
+        crossCheckSamples.push({
+          ts,
+          fixtureId: l.fixtureId,
+          market: 'cards',
+          apiFootballValue: trueCards,
+          omnirouteValue: omniCards,
+          agree: Math.abs(trueCards - omniCards) <= MARKET_TOLERANCE.cards,
+        });
+      }
+    }
+  }
+
+  if (crossCheckSamples.length > 0) appendCrossCheckSamples(crossCheckSamples);
+
+  // Vue unifiée des marqueurs courants, quelle que soit leur source — une
+  // valeur API-Football, quand elle existe, prime toujours sur Omniroute.
+  const currentMarkersByFixture = new Map<number, MarkerSet>([
+    ...omnirouteMarkersByFixture,
+    ...markersByFixture,
+  ]);
+  const fixtureSource = new Map<number, 'api_football' | 'omniroute'>();
+  for (const fixtureId of omnirouteMarkersByFixture.keys()) fixtureSource.set(fixtureId, 'omniroute');
+  for (const fixtureId of markersByFixture.keys()) fixtureSource.set(fixtureId, 'api_football'); // priorité
 
   // 1) Avancer les fenêtres des instantanés déjà ouverts.
   const pending = readPendingSnapshots();
@@ -243,7 +395,7 @@ export async function runLiveMarkerTick(): Promise<{ observed: number; closed: n
   for (const obs of pending) {
     const liveNow = liveByFixture.get(obs.fixtureId);
     const halfEnded = !liveNow || liveNow.statusShort !== '1H';
-    const updated = updateHorizons(obs, liveNow, markersByFixture.get(obs.fixtureId), halfEnded);
+    const updated = updateHorizons(obs, liveNow, currentMarkersByFixture.get(obs.fixtureId), halfEnded);
 
     if (isClosed(updated)) closedRows.push(toTrainingRow(updated));
     else stillPending.push(updated);
@@ -260,7 +412,7 @@ export async function runLiveMarkerTick(): Promise<{ observed: number; closed: n
     const key = `${l.fixtureId}-${l.minute}`;
     if (openFixtures.has(key)) continue;
 
-    const markers = markersByFixture.get(l.fixtureId) ?? {};
+    const markers = currentMarkersByFixture.get(l.fixtureId) ?? {};
 
     newSnapshots.push({
       ts: new Date().toISOString(),
@@ -274,6 +426,7 @@ export async function runLiveMarkerTick(): Promise<{ observed: number; closed: n
       goalsAway: l.goalsAway,
       markers,
       focus: focusLeagues.has(meta.league.toLowerCase()),
+      source: fixtureSource.get(l.fixtureId) ?? 'api_football',
       baselineCorners: totalCorners(markers) ?? 0,
       baselineCards: totalCards(markers) ?? 0,
       baselineFouls: totalFouls(markers) ?? 0,
