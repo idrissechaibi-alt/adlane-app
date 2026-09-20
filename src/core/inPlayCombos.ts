@@ -25,15 +25,19 @@
 //   B) Paris FICTIFS — tout l'univers de matchs suivi (matchUniverse, ~28
 //      pays), UNIQUEMENT avec des ressources libres de droit (Football-
 //      Data.co.uk pour les buts attendus ET les corners/cartons, aucune
-//      cote, aucune API payante). Un combo par match (tous les marchés
-//      qualifiés de CE match) — ne sert qu'à nourrir la boucle d'auto-
-//      apprentissage, jamais notifié, jamais affiché comme un vrai pari. Ne
-//      retraite jamais un match déjà couvert par le pipeline réel.
+//      cote, aucune API payante). AUCUN combo : une batterie de paris
+//      SIMPLES indépendants, un par marché qualifié (le maximum possible),
+//      jamais enrichis par Omniroute — juste une mesure statistique brute
+//      pour comparer estimation vs réalité marché par marché et affûter le
+//      modèle utilisé ensuite sur les vrais matchs. Jamais notifié, jamais
+//      affiché comme un vrai pari. Ne retraite jamais un match déjà couvert
+//      par le pipeline réel.
 //
 // Dans les deux cas, les probabilités sont TOUJOURS calculées
 // statistiquement (poisson.ts), jamais devinées par une IA. Omniroute
-// n'intervient qu'ENSUITE, pour enrichir le raisonnement de chaque jambe
-// avec le contexte disponible — il ne touche jamais aux chiffres.
+// n'intervient QUE pour le pipeline réel, pour enrichir le raisonnement de
+// chaque jambe avec le contexte disponible — il ne touche jamais aux
+// chiffres.
 
 import { getDailyPlan } from './scheduler';
 import { buildScheduledMatches, ScheduledMatch } from './dailyWorkflow';
@@ -68,12 +72,8 @@ const CHECKPOINT20_MAX_MINUTE = 24;
 const CHECKPOINT60_MIN_MINUTE = 58;
 const CHECKPOINT60_MAX_MINUTE = 64;
 
-/** Probabilité minimale pour qu'une jambe soit retenue (solo ou combo). */
+/** Probabilité minimale pour qu'une jambe soit retenue (solo, combo, ou pari fictif). */
 const MIN_LEG_PROB = 0.55;
-/** Probabilité combinée minimale pour émettre un combo (paris fictifs). */
-const MIN_COMBINED_PROB = 0.25;
-const MAX_LEGS_20 = 5;
-const MAX_LEGS_60 = 3;
 /** Seuil interne utilisé pour choisir la ligne over/under la plus haute encore fiable (corners/cartons). */
 const LINE_PICK_THRESHOLD = 0.55;
 /** Au-delà de ce nombre de matchs dans le créneau : combos plutôt que paris simples (paris réels). */
@@ -475,7 +475,16 @@ export async function runInPlayComboTick(): Promise<number> {
   if (liveFixtures.length === 0) return 0;
 
   const existing = readInPlayProposals();
-  const alreadyProposed = new Set(existing.flatMap((p) => p.legs.map((l) => `${l.fixtureId}-${p.kind}`)));
+  // Réel : une jambe proposée bloque TOUT le match pour ce checkpoint (peu
+  // importe le marché). Fictif : chaque marché est une jambe indépendante
+  // (voir plus bas), donc seul CE marché précis est bloqué pour ce match.
+  const alreadyProposed = new Set(
+    existing.flatMap((p) =>
+      p.real === false
+        ? p.legs.map((l) => `${l.fixtureId}-${p.kind}-${l.market}`)
+        : p.legs.map((l) => `${l.fixtureId}-${p.kind}`)
+    )
+  );
   const fresh: InPlayProposal[] = [];
   const claimedFixtureIds = new Set<number>();
 
@@ -526,11 +535,14 @@ export async function runInPlayComboTick(): Promise<number> {
   }
 
   // B) Paris FICTIFS (boucle d'auto-apprentissage) — tout l'univers de
-  // matchs suivi, UNIQUEMENT des ressources libres de droit, un combo
-  // multi-marchés PAR MATCH (pas par créneau — sert seulement à mesurer la
-  // fiabilité du modèle, pas à imiter la présentation des vrais paris).
-  // Jamais notifié, jamais affiché comme un vrai pari. Ne retraite pas un
-  // match déjà couvert par le pipeline réel ci-dessus.
+  // matchs suivi, UNIQUEMENT des ressources libres de droit. AUCUN combo :
+  // une batterie de paris SIMPLES indépendants, un par marché qualifié
+  // (le maximum possible), pour comparer estimation vs réalité marché par
+  // marché et affûter le modèle utilisé ensuite sur les vrais matchs — pas
+  // pour imiter la présentation des vrais paris. Jamais notifié, jamais
+  // affiché comme un vrai pari, jamais enrichi par Omniroute (juste une
+  // mesure statistique). Ne retraite pas un match déjà couvert par le
+  // pipeline réel ci-dessus.
   const universe = await getStoredUniverse();
   if (universe) {
     const universeById = new Map<number, UniverseMatch>(universe.map((m) => [m.fixtureId, m]));
@@ -554,42 +566,32 @@ export async function runInPlayComboTick(): Promise<number> {
 
       if (
         live.statusShort === '1H' &&
-        live.minute >= CHECKPOINT20_MIN_MINUTE && live.minute <= CHECKPOINT20_MAX_MINUTE &&
-        !alreadyProposed.has(`${live.fixtureId}-minute20`)
+        live.minute >= CHECKPOINT20_MIN_MINUTE && live.minute <= CHECKPOINT20_MAX_MINUTE
       ) {
         const rawLegs = (await buildLegs20(match, live.fixtureId, live, preMatchExpectedGoals)).filter((l) => l.prob >= MIN_LEG_PROB);
-        const items: LegWithContext[] = rawLegs
-          .sort((a, b) => b.prob - a.prob)
-          .slice(0, MAX_LEGS_20)
-          .map((leg) => ({ leg, fixtureId: live.fixtureId, match, live }));
-
-        if (items.length >= 2) {
-          const enriched = await formulateWithOmniroute(items, '20e minute — 1ère mi-temps + BTTS/total du match');
-          const proposal = buildProposalFromItems('minute20', enriched, '20e → pause + match complet', false);
-          if (proposal && proposal.combinedProb >= MIN_COMBINED_PROB) {
+        for (const leg of rawLegs) {
+          const dedupKey = `${live.fixtureId}-minute20-${leg.market}`;
+          if (alreadyProposed.has(dedupKey)) continue;
+          const proposal = buildProposalFromItems('minute20', [{ leg, fixtureId: live.fixtureId, match, live }], '20e → pause + match complet', false);
+          if (proposal) {
             fresh.push(proposal);
-            alreadyProposed.add(`${live.fixtureId}-minute20`);
+            alreadyProposed.add(dedupKey);
           }
         }
       }
 
       if (
         live.statusShort === '2H' &&
-        live.minute >= CHECKPOINT60_MIN_MINUTE && live.minute <= CHECKPOINT60_MAX_MINUTE &&
-        !alreadyProposed.has(`${live.fixtureId}-minute60`)
+        live.minute >= CHECKPOINT60_MIN_MINUTE && live.minute <= CHECKPOINT60_MAX_MINUTE
       ) {
         const rawLegs = buildLegs60(live, preMatchExpectedGoals).filter((l) => l.prob >= MIN_LEG_PROB);
-        const items: LegWithContext[] = rawLegs
-          .sort((a, b) => b.prob - a.prob)
-          .slice(0, MAX_LEGS_60)
-          .map((leg) => ({ leg, fixtureId: live.fixtureId, match, live }));
-
-        if (items.length >= 2) {
-          const enriched = await formulateWithOmniroute(items, '60e minute — reste du match');
-          const proposal = buildProposalFromItems('minute60', enriched, '60e → fin de match', false);
-          if (proposal && proposal.combinedProb >= MIN_COMBINED_PROB) {
+        for (const leg of rawLegs) {
+          const dedupKey = `${live.fixtureId}-minute60-${leg.market}`;
+          if (alreadyProposed.has(dedupKey)) continue;
+          const proposal = buildProposalFromItems('minute60', [{ leg, fixtureId: live.fixtureId, match, live }], '60e → fin de match', false);
+          if (proposal) {
             fresh.push(proposal);
-            alreadyProposed.add(`${live.fixtureId}-minute60`);
+            alreadyProposed.add(dedupKey);
           }
         }
       }

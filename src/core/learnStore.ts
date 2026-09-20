@@ -419,11 +419,12 @@ export function writeInPlayProposals(proposals: InPlayProposal[]): void {
   const cutoff = Date.now() - 48 * 3_600_000;
   const fresh = proposals.filter((p) => new Date(p.createdAt).getTime() > cutoff);
 
-  // Plafonds séparés : les paris fictifs (tout l'univers européen) sont bien
-  // plus nombreux que les vrais paris (5 grands championnats) — sans ça, un
+  // Plafonds séparés : les paris fictifs (tout l'univers européen, une
+  // batterie de paris simples indépendants par marché) sont bien plus
+  // nombreux que les vrais paris (5 grands championnats) — sans ça, un
   // afflux de paris fictifs finirait par évincer les vrais du plafond commun.
   const real = fresh.filter((p) => p.real !== false);
-  const fictional = fresh.filter((p) => p.real === false).slice(-300);
+  const fictional = fresh.filter((p) => p.real === false).slice(-2000);
   writeText(fileIn('inplay-proposals.json'), JSON.stringify([...real, ...fictional]));
 }
 
