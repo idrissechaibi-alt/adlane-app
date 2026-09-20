@@ -22,6 +22,16 @@ import { reconcileScoutingAnalyses } from './scoutingReview';
 import { refreshDueLineups } from './lineupRefresh';
 import { readLearnedModel } from './learnStore';
 
+interface SharedLiveFixturesResult {
+  fixtures: LiveFixture[];
+  /** D'où viennent (ou pourquoi pas) les fixtures — sert au diagnostic du
+   * bouton "forcer le scan" (EvolutionScreen) : sans ça, un relevé vide est
+   * indiscernable d'un budget épuisé, d'un univers vide, ou d'Omniroute non
+   * configuré — trois causes très différentes du même symptôme "0 match". */
+  source: 'api_football' | 'omniroute' | 'aucune_api_football_epuisee' | 'aucune_omniroute_non_configure' | 'aucune_univers_vide';
+  universeSize: number;
+}
+
 /**
  * Un seul relevé live par tour, partagé entre runLiveMarkerTick et
  * runInPlayComboTick (avant ce partage, chacun refaisait sa propre requête,
@@ -35,13 +45,23 @@ import { readLearnedModel } from './learnStore';
  * connu (matchUniverse) — sans ce repli, un quota épuisé arrêtait TOUT le
  * scan en direct, y compris le pipeline fictif qui n'est pourtant censé
  * dépendre d'aucune ressource payante.
+ *
+ * ⚠️ Ce repli a lui-même une limite non résolue : il lit matchUniverse
+ * (getStoredUniverse), qui est construit par ensureDailyUniverse — LUI-MÊME
+ * entièrement gated derrière le budget API-Football (aucun repli Omniroute
+ * pour bâtir le programme du jour). Si le budget est déjà épuisé au tout
+ * premier appel du jour, l'univers reste vide et Omniroute n'a alors aucun
+ * match candidat à interroger — il ne fait littéralement aucun appel, pas
+ * un appel qui échoue. D'où le diagnostic détaillé ci-dessous plutôt qu'un
+ * simple booléen "ça a marché / pas marché".
  */
-async function fetchSharedLiveFixtures(): Promise<LiveFixture[]> {
+async function fetchSharedLiveFixtures(): Promise<SharedLiveFixturesResult> {
   const apiConfig = await getAPIConfig();
 
   if (apiConfig.apiFootball && (await spendBudget('apiFootball'))) {
     try {
-      return await fetchLiveFixtures(apiConfig.apiFootball);
+      const fixtures = await fetchLiveFixtures(apiConfig.apiFootball);
+      return { fixtures, source: 'api_football', universeSize: 0 };
     } catch (error: any) {
       console.warn('[Tâche de fond] Relevé live API-Football échoué, repli Omniroute:', error.message);
     }
@@ -49,25 +69,42 @@ async function fetchSharedLiveFixtures(): Promise<LiveFixture[]> {
 
   try {
     const omnirouteConfig = await loadOmnirouteConfig();
-    if (!omnirouteConfig) return [];
+    if (!omnirouteConfig) return { fixtures: [], source: 'aucune_omniroute_non_configure', universeSize: 0 };
     const universe = await getStoredUniverse();
-    if (!universe || universe.length === 0) return [];
-    return await fetchOmnirouteLiveFixtures(omnirouteConfig, universe);
+    if (!universe || universe.length === 0) {
+      return { fixtures: [], source: 'aucune_univers_vide', universeSize: 0 };
+    }
+    const fixtures = await fetchOmnirouteLiveFixtures(omnirouteConfig, universe);
+    return { fixtures, source: 'omniroute', universeSize: universe.length };
   } catch (error: any) {
     console.warn('[Tâche de fond] Repli Omniroute pour le relevé live échoué:', error.message);
-    return [];
+    return { fixtures: [], source: 'aucune_api_football_epuisee', universeSize: 0 };
   }
 }
 
 export const AUTOLEARN_TASK_NAME = 'adlane-autolearn-tick';
 const MINIMUM_INTERVAL_MINUTES = 15; // plancher Android, inutile de descendre
 
+export interface AutoLearnTickDiagnostics {
+  universeSize: number;
+  liveFixturesFound: number;
+  liveFixturesSource: SharedLiveFixturesResult['source'];
+  liveMarkerObserved: number;
+  liveMarkerClosed: number;
+  freshInPlayProposals: number;
+}
+
 /**
  * Un tour complet : univers du jour, relevé live + étiquetage, consolidation
  * du modèle, puis scan en direct 20e/60e minute. Chaque étape est isolée :
  * si l'une échoue (réseau coupé, quota atteint), les autres continuent.
+ * Renvoie un résumé chiffré de ce qui s'est vraiment passé (voir
+ * AutoLearnTickDiagnostics) — utilisé par le bouton "forcer le scan"
+ * (EvolutionScreen) pour distinguer "aucun match en direct en ce moment" de
+ * "quelque chose bloque en amont", plutôt que de laisser deviner face à un
+ * compteur qui reste silencieusement à 0.
  */
-export async function runAutoLearnTick(): Promise<void> {
+export async function runAutoLearnTick(): Promise<AutoLearnTickDiagnostics> {
   // Scan matinal automatique (7h locales) : voir runMorningScanIfDue pour le
   // principe de déclenchement (premier tour après l'heure cible, idempotent).
   try {
@@ -80,9 +117,11 @@ export async function runAutoLearnTick(): Promise<void> {
   // avant-match ne sont plus jugées rentables (demande explicite). L'univers
   // du jour ci-dessous reste construit — c'est la base des scans en direct
   // (20e/60e minute), pas seulement du Planning du Jour.
+  let universeSize = 0;
   try {
     const model = readLearnedModel();
-    await ensureDailyUniverse(model?.focusLeagues ?? []);
+    const universe = await ensureDailyUniverse(model?.focusLeagues ?? []);
+    universeSize = universe.length;
   } catch (error: any) {
     console.warn('[Tâche de fond] Univers du jour indisponible:', error.message);
   }
@@ -95,10 +134,19 @@ export async function runAutoLearnTick(): Promise<void> {
     console.warn('[Tâche de fond] Rafraîchissement compositions T-90 échoué:', error.message);
   }
 
-  const liveFixtures = await fetchSharedLiveFixtures();
+  const shared = await fetchSharedLiveFixtures();
+  const liveFixtures = shared.fixtures;
+  // fetchSharedLiveFixtures ne relit l'univers que sur le chemin Omniroute ;
+  // sur le chemin API-Football normal, l'univers ci-dessus reste la mesure
+  // à afficher (déjà lu dans les deux cas, jamais 0 par défaut par erreur).
+  if (shared.universeSize > 0) universeSize = shared.universeSize;
 
+  let liveMarkerObserved = 0;
+  let liveMarkerClosed = 0;
   try {
-    await runLiveMarkerTick(liveFixtures);
+    const result = await runLiveMarkerTick(liveFixtures);
+    liveMarkerObserved = result.observed;
+    liveMarkerClosed = result.closed;
   } catch (error: any) {
     console.warn('[Tâche de fond] Relevé live échoué:', error.message);
   }
@@ -127,8 +175,9 @@ export async function runAutoLearnTick(): Promise<void> {
   // Scan en direct 20e minute (buts/corners/cartons 1ère MT + BTTS/total du
   // match) et 60e minute (reste du match) — remplace l'ancien combo 20e
   // minute (règles apprises seules) et le moniteur mi-temps.
+  let freshInPlayProposals = 0;
   try {
-    await runInPlayComboTick(liveFixtures);
+    freshInPlayProposals = await runInPlayComboTick(liveFixtures);
   } catch (error: any) {
     console.warn('[Tâche de fond] Scan en direct échoué:', error.message);
   }
@@ -139,6 +188,15 @@ export async function runAutoLearnTick(): Promise<void> {
   } catch (error: any) {
     console.warn('[Tâche de fond] Bilan de minuit échoué:', error.message);
   }
+
+  return {
+    universeSize,
+    liveFixturesFound: liveFixtures.length,
+    liveFixturesSource: shared.source,
+    liveMarkerObserved,
+    liveMarkerClosed,
+    freshInPlayProposals,
+  };
 }
 
 // La définition doit se faire au chargement du module, hors de tout composant :

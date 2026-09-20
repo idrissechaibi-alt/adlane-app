@@ -74,6 +74,14 @@ export default function EvolutionScreen() {
     }
   }, [isFocused]);
 
+  const LIVE_FIXTURES_SOURCE_LABEL: Record<string, string> = {
+    api_football: 'API-Football',
+    omniroute: 'Omniroute (repli)',
+    aucune_api_football_epuisee: 'aucun — repli Omniroute en échec',
+    aucune_omniroute_non_configure: 'aucun — Omniroute non configuré (Paramètres)',
+    aucune_univers_vide: 'aucun — univers du jour vide',
+  };
+
   /**
    * Lance le tour complet (univers du jour, relevé live + étiquetage,
    * consolidation du modèle d'auto-apprentissage, scan 20e/60e minute) tout
@@ -83,14 +91,26 @@ export default function EvolutionScreen() {
    * ou la clé absente (voir backgroundTasks.ts/fetchSharedLiveFixtures) — et
    * alimente au passage la même boucle d'auto-apprentissage (consolidation
    * du modèle, paris papier) que le scan automatique, pas un chemin à part.
+   *
+   * L'alerte affiche le diagnostic chiffré renvoyé par runAutoLearnTick,
+   * plutôt qu'un simple "terminé" : un compteur resté à 0 peut venir d'au
+   * moins trois causes différentes (aucun match en direct en ce moment,
+   * univers du jour vide car jamais construit, Omniroute non configuré) —
+   * sans ce détail, impossible de savoir laquelle sans deviner.
    */
   const handleForceScan = async () => {
     if (forcingScan) return;
     setForcingScan(true);
     try {
-      await runAutoLearnTick();
+      const diag = await runAutoLearnTick();
       refreshLiveCounters();
-      Alert.alert('Scan terminé', 'Le relevé en direct et la consolidation de la boucle d\'apprentissage viennent de tourner.');
+      Alert.alert(
+        'Scan terminé',
+        `Univers du jour : ${diag.universeSize} match(s) suivis.\n` +
+          `Relevé live : ${diag.liveFixturesFound} match(s) en direct — source : ${LIVE_FIXTURES_SOURCE_LABEL[diag.liveFixturesSource] ?? diag.liveFixturesSource}.\n` +
+          `Marqueurs : ${diag.liveMarkerObserved} observé(s), ${diag.liveMarkerClosed} clôturé(s).\n` +
+          `Scan 20e/60e minute : ${diag.freshInPlayProposals} nouvelle(s) proposition(s).`
+      );
     } catch (error: any) {
       Alert.alert('Scan échoué', error?.message || 'Erreur inconnue.');
     } finally {
