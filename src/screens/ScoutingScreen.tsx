@@ -23,7 +23,7 @@ import { fetchMatchContext, PerplexitySearchResult } from '../core/perplexity';
 import { getAgentLearningDigest } from '../core/autoLearn';
 import { getHistoricalPriors } from '../core/footballDataCoUk';
 import { getSecondOpinion } from '../core/eloRatings';
-import { getAPIConfig } from '../api/multiAPIManager';
+import { getAPIConfig, getQuotaUsage, incrementRequestCount } from '../api/multiAPIManager';
 import { HISTORICAL_LESSONS } from '../data/historical';
 import { getDailyPlan } from '../core/scheduler';
 import { ScheduledMatchDetail } from '../types/database';
@@ -116,13 +116,18 @@ export default function ScoutingScreen() {
     const combinedSources: PerplexitySearchResult[] = [];
     try {
       const apiConfig = await getAPIConfig();
+      const perplexityQuota = apiConfig.perplexity ? await getQuotaUsage('perplexity', apiConfig) : null;
+      const perplexityAvailable = Boolean(apiConfig.perplexity) && (!perplexityQuota || perplexityQuota.used < perplexityQuota.limit);
 
       const [googleResult, perplexityResult] = await Promise.allSettled([
         geminiApiKey
           ? fetchGoogleSearchContext(match.homeTeam, match.awayTeam, geminiApiKey)
           : Promise.resolve(null),
-        apiConfig.perplexity
-          ? fetchMatchContext(match.homeTeam, match.awayTeam, apiConfig.perplexity)
+        perplexityAvailable
+          ? fetchMatchContext(match.homeTeam, match.awayTeam, apiConfig.perplexity).then((r) => {
+              void incrementRequestCount('perplexity');
+              return r;
+            })
           : Promise.resolve(null)
       ]);
 

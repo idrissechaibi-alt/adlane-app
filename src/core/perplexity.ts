@@ -3,6 +3,8 @@
 // (compositions probables, actualités/blessures) que les LLM seuls n'ont pas.
 // Documentation : https://docs.perplexity.ai/docs/search/quickstart
 
+import { fetchWithTimeout } from './httpTimeout';
+
 const SEARCH_ENDPOINT = 'https://api.perplexity.ai/search';
 
 export interface PerplexitySearchResult {
@@ -24,18 +26,22 @@ export async function searchWeb(
   apiKey: string,
   maxResults: number = 5
 ): Promise<PerplexitySearchResponse> {
-  const response = await fetch(SEARCH_ENDPOINT, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`
+  const response = await fetchWithTimeout(
+    SEARCH_ENDPOINT,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        query,
+        max_results: maxResults,
+        search_context_size: 'medium'
+      })
     },
-    body: JSON.stringify({
-      query,
-      max_results: maxResults,
-      search_context_size: 'medium'
-    })
-  });
+    15000
+  );
 
   if (!response.ok) {
     const bodyText = await response.text().catch(() => '');

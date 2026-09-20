@@ -6,12 +6,25 @@
 // Gemini (déjà utilisée pour l'enrichissement Scouting) en premier, puis
 // Omniroute si Gemini n'est pas configuré ou échoue. Jamais de cote/proba
 // inventée ici — uniquement du texte factuel pour lever le verrou T-90.
+//
+// Perplexity (déjà utilisé côté Scouting, cf. core/perplexity.ts) en tout
+// dernier recours seulement : son crédit est mensuel et limité (100 req/mois
+// par défaut, cf. multiAPIManager.DEFAULT_QUOTAS), contrairement à
+// Gemini/Omniroute. On vérifie le quota affiché dans Gestion des API avant
+// d'appeler, et on incrémente le compteur partagé pour que cet usage reste
+// visible là-bas. Le T-90 est l'endroit où sa recherche web a le plus de
+// valeur (elle conditionne le placement d'un vrai pari) et où le volume est
+// naturellement borné au nombre de matchs qui atteignent réellement T-90
+// avec une proposition active — jamais un appel par match dans le pipeline
+// général de scan/enrichissement.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { fetchGoogleSearchContext } from './gemini';
+import { fetchMatchContext } from './perplexity';
 import { askOmnirouteLight, DEFAULT_OMNIROUTE_CONFIG } from './omniroute';
 import { getDailyPlan } from './scheduler';
+import { getAPIConfig, getQuotaUsage, incrementRequestCount } from '../api/multiAPIManager';
 
 const GEMINI_KEY_STORAGE = 'app-adlane.gemini-api-key';
 const OMNIROUTE_CONFIG_KEY = '@omniroute_config';
@@ -26,7 +39,7 @@ export interface LineupRefresh {
   awayTeam: string;
   fetchedAt: string;
   contextText: string;
-  source: 'gemini' | 'omniroute';
+  source: 'gemini' | 'omniroute' | 'perplexity';
 }
 
 async function readRefreshes(): Promise<Record<string, LineupRefresh>> {
@@ -73,7 +86,7 @@ export async function ensureLineupRefresh(
   if (existing) return existing;
 
   let contextText = '';
-  let source: 'gemini' | 'omniroute' = 'gemini';
+  let source: 'gemini' | 'omniroute' | 'perplexity' = 'gemini';
 
   const geminiKey = await SecureStore.getItemAsync(GEMINI_KEY_STORAGE);
   if (geminiKey) {
@@ -107,6 +120,27 @@ export async function ensureLineupRefresh(
       }
     } catch (error: any) {
       console.warn('[T-90] Recherche Omniroute échouée:', error.message);
+    }
+  }
+
+  if (!contextText) {
+    try {
+      const apiConfig = await getAPIConfig();
+      if (apiConfig.perplexity) {
+        const quota = await getQuotaUsage('perplexity', apiConfig);
+        if (!quota || quota.used < quota.limit) {
+          const result = await fetchMatchContext(homeTeam, awayTeam, apiConfig.perplexity);
+          await incrementRequestCount('perplexity');
+          if (result.contextText) {
+            contextText = result.contextText;
+            source = 'perplexity';
+          }
+        } else {
+          console.warn('[T-90] Quota Perplexity mensuel atteint, recherche ignorée.');
+        }
+      }
+    } catch (error: any) {
+      console.warn('[T-90] Recherche Perplexity échouée:', error.message);
     }
   }
 
