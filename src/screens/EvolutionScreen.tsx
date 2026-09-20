@@ -96,6 +96,24 @@ export default function EvolutionScreen() {
         </Text>
       </View>
 
+      {/* Paris fictifs en arrière-plan (boucle live, distincte de la calibration
+          ci-dessous qui porte sur les VRAIS paris réglés) : affiché ici aussi,
+          c'est là que la plupart des gens le cherchent en premier. */}
+      <View style={styles.paperBetsBox}>
+        <Ionicons name="pulse" size={16} color="#a78bfa" />
+        <Text style={styles.paperBetsText}>
+          {paperBetsSummary && paperBetsSummary.total > 0 ? (
+            <>
+              <Text style={styles.paperBetsNumber}>{paperBetsSummary.total}</Text> paris fictifs traités en arrière-plan
+              {' '}(<Text style={styles.paperBetsNumber}>{paperBetsSummary.settled}</Text> réglés) sur{' '}
+              <Text style={styles.paperBetsNumber}>{paperBetsSummary.matches}</Text> match{paperBetsSummary.matches > 1 ? 's' : ''}.
+            </>
+          ) : (
+            "0 pari fictif pour l'instant. Cette boucle observe des matchs EN DIRECT (1ère mi-temps) et n'active une règle qu'après au moins 30 échantillons réels — jamais de valeur inventée pour combler l'attente. Ça demande du temps réel avec des matchs suivis en direct, pas juste une mise à jour de l'app."
+          )}
+        </Text>
+      </View>
+
       {calibrations.map((cal, idx) => {
         if (cal.total_predictions === 0) return null;
 

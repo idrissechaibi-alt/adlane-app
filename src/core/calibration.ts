@@ -12,7 +12,7 @@ export function computeMarketCalibrations(bets: Bet[]): MarketCalibration[] {
   const marketStats = new Map<Market, { total: number; won: number; probSum: number }>();
 
   // Initialiser les marchés
-  const allMarkets: Market[] = ['1X2', 'BTTS', 'OU_2_5', 'corners', 'shots_on_target', 'fouls', 'cards', 'saves'];
+  const allMarkets: Market[] = ['1X2', 'BTTS', 'OU_2_5', 'corners', 'shots_on_target', 'fouls', 'cards', 'saves', '1ere_mi_temps'];
   for (const m of allMarkets) {
     marketStats.set(m, { total: 0, won: 0, probSum: 0 });
   }
