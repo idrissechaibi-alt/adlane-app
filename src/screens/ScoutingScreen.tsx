@@ -23,7 +23,7 @@ import { getAgentLearningDigest } from '../core/autoLearn';
 import { getHistoricalPriors } from '../core/footballDataCoUk';
 import { getSecondOpinion } from '../core/eloRatings';
 import { fetchLiveFixtures } from '../core/halftimeMonitor';
-import { normalizeTeamName } from '../core/teamNameMatch';
+import { normalizeTeamName, namesLikelyMatch } from '../core/teamNameMatch';
 import { getAPIConfig, getQuotaUsage, incrementRequestCount } from '../api/multiAPIManager';
 import { HISTORICAL_LESSONS } from '../data/historical';
 import { getDailyPlan } from '../core/scheduler';
@@ -201,27 +201,48 @@ export default function ScoutingScreen() {
     // Match déjà en cours ? (règle explicite) Un seul appel qui couvre TOUS
     // les matchs en direct (fixtures?live=all), jamais un par match. En 1ère
     // mi-temps, les pronostics doivent porter sur la 1ère mi-temps
-    // uniquement ; à la mi-temps ou en 2ème période, sur le RESTE du match
-    // (pas le match complet depuis le coup d'envoi, déjà partiellement joué).
+    // uniquement ; à la mi-temps ou en 2ème période (ou prolongations), sur
+    // le RESTE du match (pas le match complet depuis le coup d'envoi, déjà
+    // partiellement joué).
+    //
+    // Correspondance par nom d'équipe en 2 passes comme ailleurs dans l'app
+    // (scheduler.ts) : l'égalité stricte échoue souvent hors Premier League
+    // (noms officiels longs de football-data.org vs noms d'API-Football, qui
+    // peuvent différer). Sans repli, la détection échouait silencieusement
+    // et l'analyse tournait comme si le match n'avait pas commencé.
     let liveDirective = '';
+    let liveStatusNote = 'match non détecté en direct (analyse standard)';
     try {
       const apiConfig = await getAPIConfig();
-      if (apiConfig.apiFootball) {
+      if (!apiConfig.apiFootball) {
+        liveStatusNote = 'vérification du direct impossible (clé API-Football manquante)';
+      } else {
         const liveFixtures = await fetchLiveFixtures(apiConfig.apiFootball);
-        const live = liveFixtures.find((f) =>
-          normalizeTeamName(f.homeTeam) === normalizeTeamName(match.homeTeam) &&
-          normalizeTeamName(f.awayTeam) === normalizeTeamName(match.awayTeam)
-        );
+        const homeNorm = normalizeTeamName(match.homeTeam);
+        const awayNorm = normalizeTeamName(match.awayTeam);
+        const live = liveFixtures.find((f) => {
+          const fHome = normalizeTeamName(f.homeTeam);
+          const fAway = normalizeTeamName(f.awayTeam);
+          return (fHome === homeNorm || namesLikelyMatch(fHome, homeNorm))
+            && (fAway === awayNorm || namesLikelyMatch(fAway, awayNorm));
+        });
+
         if (live) {
           const score = `${live.homeGoals}-${live.awayGoals}`;
           if (live.statusShort === '1H') {
             liveDirective = `⚠️ Ce match est ACTUELLEMENT EN DIRECT, en 1ère mi-temps (score actuel ${score}). Les 10 marchés demandés doivent porter UNIQUEMENT sur ce qui peut encore se passer avant la pause, pas sur le match complet depuis le coup d'envoi.`;
-          } else if (live.statusShort === 'HT' || live.statusShort === '2H') {
-            liveDirective = `⚠️ Ce match est ACTUELLEMENT EN DIRECT, ${live.statusShort === 'HT' ? 'à la mi-temps' : 'en 2ème mi-temps'} (score actuel ${score}). Les 10 marchés demandés doivent porter sur le RESTE DU MATCH à partir de maintenant, pas sur le match complet depuis le coup d'envoi (déjà partiellement joué).`;
+            liveStatusNote = `match en direct détecté — 1ère mi-temps (${score})`;
+          } else if (['HT', '2H', 'ET', 'BT', 'P', 'SUSP', 'INT'].includes(live.statusShort)) {
+            const periodLabel = live.statusShort === 'HT' ? 'à la mi-temps' : 'en 2ème période ou plus';
+            liveDirective = `⚠️ Ce match est ACTUELLEMENT EN DIRECT, ${periodLabel} (score actuel ${score}). Les 10 marchés demandés doivent porter sur le RESTE DU MATCH à partir de maintenant, pas sur le match complet depuis le coup d'envoi (déjà partiellement joué).`;
+            liveStatusNote = `match en direct détecté — ${periodLabel} (${score})`;
+          } else {
+            liveStatusNote = `match trouvé mais statut "${live.statusShort}" non géré (analyse standard)`;
           }
         }
       }
     } catch (error: any) {
+      liveStatusNote = `vérification du direct échouée (${error.message})`;
       console.warn('Statut live indisponible:', error.message);
     }
 
@@ -284,7 +305,7 @@ export default function ScoutingScreen() {
       const agentsNote = result.agentsUsed && result.agentsUsed.length > 0
         ? ` • ${result.agentsUsed.length} agent(s) : ${result.agentsUsed.join(', ')}${result.agentsFailed ? ` (${result.agentsFailed.length} échec(s))` : ''}`
         : '';
-      setDiagnostic({ engine: 'omniroute', status: 'success', message: `${result.markets.length} marché(s) reçu(s)${agentsNote}.`, timestamp: new Date().toISOString() });
+      setDiagnostic({ engine: 'omniroute', status: 'success', message: `${result.markets.length} marché(s) reçu(s)${agentsNote} • ${liveStatusNote}.`, timestamp: new Date().toISOString() });
     } catch (error: any) {
       const message = error?.message || 'Erreur inconnue';
       console.error('Omniroute a échoué:', message);
