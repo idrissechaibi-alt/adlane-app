@@ -23,19 +23,25 @@
 //      checkpoint. Seules ces propositions sont notifiées et affichées dans
 //      "Combos en direct du jour".
 //   B) Paris FICTIFS — tout l'univers de matchs suivi (matchUniverse, ~28
-//      pays), UNIQUEMENT avec des ressources libres de droit (Football-
-//      Data.co.uk pour les buts attendus ET les corners/cartons, aucune
-//      cote, aucune API payante). AUCUN combo : une batterie de paris
-//      SIMPLES indépendants, un par marché qualifié (le maximum possible),
-//      jamais enrichis par Omniroute — juste une mesure statistique brute
-//      pour comparer estimation vs réalité marché par marché et affûter le
-//      modèle utilisé ensuite sur les vrais matchs. Jamais notifié, jamais
-//      affiché comme un vrai pari. Ne retraite jamais un match déjà couvert
-//      par le pipeline réel.
+//      pays), UNIQUEMENT avec des ressources GRATUITES (aucune cote, aucune
+//      API payante) : Football-Data.co.uk pour les buts attendus ET les
+//      corners/cartons quand le championnat y est couvert (cinq grands
+//      championnats aujourd'hui), et Omniroute en repli pour les buts
+//      attendus partout ailleurs (auto-hébergé, sans quota — élargit la
+//      couverture gratuitement plutôt que de laisser tout le reste de
+//      l'univers sans aucune estimation). AUCUN combo : une batterie de
+//      paris SIMPLES indépendants, un par marché qualifié (le maximum
+//      possible), pour comparer estimation vs réalité marché par marché et
+//      affûter le modèle utilisé ensuite sur les vrais matchs. Jamais
+//      notifié, jamais affiché comme un vrai pari. Retraite aussi les
+//      matchs déjà couverts par le pipeline réel (dédoublonnage indépendant).
 //
 // Dans les deux cas, les probabilités sont TOUJOURS calculées
-// statistiquement (poisson.ts), jamais devinées par une IA. Omniroute
-// n'intervient QUE pour le pipeline réel, pour enrichir le raisonnement de
+// statistiquement (poisson.ts), jamais devinées par une IA — seule l'ENTRÉE
+// du modèle (les buts attendus avant-match) peut venir d'Omniroute quand
+// aucun historique gratuit n'existe pour ce championnat ; le calcul de
+// probabilité lui-même reste toujours le même Poisson recalibré en direct.
+// Pour le pipeline réel, Omniroute enrichit en plus le raisonnement de
 // chaque jambe avec le contexte disponible — il ne touche jamais aux
 // chiffres.
 
@@ -66,6 +72,7 @@ import {
 } from './learnStore';
 import { sendLocalNotification } from './notifications';
 import { normalizeTeamName, namesLikelyMatch } from './teamNameMatch';
+import { OmnirouteConfig } from '../types';
 
 const CHECKPOINT20_MIN_MINUTE = 18;
 const CHECKPOINT20_MAX_MINUTE = 24;
@@ -171,6 +178,69 @@ function blendWithLearnedMarkers(
     evidence: `${poissonEvidence} Recoupé avec un marqueur observé en direct : \`${scored.rule.marker}\` → ` +
       `${(scored.rule.hitRate * 100).toFixed(0)}% de but(s) sur les ${MARKER_RULE_HORIZON} min suivantes ` +
       `(×${scored.rule.lift.toFixed(2)} vs base, n=${scored.rule.samples}).`
+  };
+}
+
+/** Bornes de sécurité pour un but attendu renvoyé par Omniroute — une jambe
+ * l'utilise ensuite directement comme entrée du modèle de Poisson, contrairement
+ * aux marqueurs corners/cartons de liveMarkers.ts qui sont recoupés contre la
+ * vérité terrain avant d'être promus fiables ; ici on se contente d'écarter
+ * une réponse absurde plutôt que de la faire confirmer par recoupement. */
+const OMNIROUTE_EXPECTED_GOALS_MIN = 0.2;
+const OMNIROUTE_EXPECTED_GOALS_MAX = 4.0;
+
+/**
+ * Estimation des buts attendus (avant-match) via Omniroute, quand
+ * Football-Data.co.uk n'a pas d'historique pour ce championnat (couverture
+ * actuelle limitée aux cinq grands championnats) — Omniroute étant
+ * auto-hébergé et sans quota, il permet d'élargir gratuitement la couverture
+ * du pipeline fictif à tout l'univers suivi (~28 pays) sans consommer la
+ * moindre requête payante. N'invente rien : si l'agent ne trouve pas de
+ * forme/effectif fiable pour ces deux équipes, il renvoie null.
+ */
+async function estimateExpectedGoalsViaOmniroute(
+  config: OmnirouteConfig,
+  homeTeam: string,
+  awayTeam: string,
+  league: string
+): Promise<{ home: number; away: number } | null> {
+  let result: { text: string; model: string } | null;
+  try {
+    result = await askOmnirouteLight(
+      "Tu es un outil de PRONOSTIC STATISTIQUE avant-match. Réponds UNIQUEMENT par un JSON strict, " +
+        "sans texte autour. Base-toi sur la forme récente (5-10 derniers matchs), les buts marqués/encaissés " +
+        "et l'effectif connu de chaque équipe. N'INVENTE RIEN : si tu ne trouves pas d'information fiable sur " +
+        "ces deux équipes, réponds avec null pour les deux valeurs plutôt qu'une estimation approximative.",
+      `Match à venir ou en cours : ${homeTeam} (domicile) vs ${awayTeam} (extérieur), ${league}.\n` +
+        'Estime le nombre de buts attendus (expected goals) pour CE match précis, à partir de la forme ' +
+        "récente et de l'effectif de chaque équipe.\n" +
+        'Réponds avec ce JSON exact, sans rien autour :\n' +
+        '{"expected_goals_home": number|null, "expected_goals_away": number|null}',
+      config
+    );
+  } catch (error: any) {
+    console.warn('[Scan en direct] Estimation Omniroute des buts attendus échouée:', error.message);
+    return null;
+  }
+  if (!result) return null;
+
+  let parsed: any;
+  try {
+    const jsonMatch = result.text.match(/\{[\s\S]*\}/);
+    parsed = JSON.parse(jsonMatch ? jsonMatch[0] : result.text);
+  } catch {
+    return null;
+  }
+
+  const home = parsed.expected_goals_home;
+  const away = parsed.expected_goals_away;
+  if (typeof home !== 'number' || typeof away !== 'number' || !Number.isFinite(home) || !Number.isFinite(away)) {
+    return null;
+  }
+
+  return {
+    home: Math.min(OMNIROUTE_EXPECTED_GOALS_MAX, Math.max(OMNIROUTE_EXPECTED_GOALS_MIN, home)),
+    away: Math.min(OMNIROUTE_EXPECTED_GOALS_MAX, Math.max(OMNIROUTE_EXPECTED_GOALS_MIN, away)),
   };
 }
 
@@ -573,25 +643,32 @@ export async function runInPlayComboTick(liveFixtures: LiveFixture[]): Promise<n
   }
 
   // B) Paris FICTIFS (boucle d'auto-apprentissage) — tout l'univers de
-  // matchs suivi, UNIQUEMENT des ressources libres de droit. AUCUN combo :
-  // une batterie de paris SIMPLES indépendants, un par marché qualifié
-  // (le maximum possible), pour comparer estimation vs réalité marché par
-  // marché et affûter le modèle utilisé ensuite sur les vrais matchs — pas
-  // pour imiter la présentation des vrais paris. Jamais notifié, jamais
-  // affiché comme un vrai pari, jamais enrichi par Omniroute (juste une
-  // mesure statistique).
+  // matchs suivi, UNIQUEMENT des ressources gratuites (aucune cote, aucune
+  // API payante). AUCUN combo : une batterie de paris SIMPLES indépendants,
+  // un par marché qualifié (le maximum possible), pour comparer estimation vs
+  // réalité marché par marché et affûter le modèle utilisé ensuite sur les
+  // vrais matchs — pas pour imiter la présentation des vrais paris. Jamais
+  // notifié, jamais affiché comme un vrai pari.
+  //
+  // Source des buts attendus : Football-Data.co.uk (moyennes de saison
+  // réelles) en priorité — ne couvre aujourd'hui que les cinq grands
+  // championnats (LEAGUE_ID_TO_FD_CODE). Pour tout le reste de l'univers
+  // (~28 pays), repli sur une estimation Omniroute (forme récente + effectif) :
+  // auto-hébergé et sans quota, donc gratuit, ce qui permet d'élargir la
+  // couverture sans toucher au budget API-Football payant ("économiser des
+  // requêtes"). Sans ce repli, seuls les matchs des cinq grands championnats
+  // pouvaient produire une jambe — d'où le "0 match traité" observé quand la
+  // couverture Football-Data.co.uk ne suffisait pas.
   //
   // Retraite AUSSI les matchs déjà couverts par le pipeline réel ci-dessus
-  // (on ne les exclut plus) : Football-Data.co.uk ne couvre aujourd'hui que
-  // les cinq grands championnats (LEAGUE_ID_TO_FD_CODE), donc les exclure ici
-  // laissait uniquement des matchs hors couverture — priors/estimation
-  // toujours nulles, d'où "0 match traité" en permanence. Aucun conflit de
-  // clé avec le pipeline réel : dédoublonnage indépendant
-  // (`${fixtureId}-${kind}` côté réel vs `${fixtureId}-${kind}-${market}`
-  // côté fictif) et écriture dans des listes plafonnées séparément.
+  // (on ne les exclut plus) : aucun conflit de clé avec lui — dédoublonnage
+  // indépendant (`${fixtureId}-${kind}` côté réel vs
+  // `${fixtureId}-${kind}-${market}` côté fictif) et écriture dans des
+  // listes plafonnées séparément.
   const universe = await getStoredUniverse();
   if (universe) {
     const universeById = new Map<number, UniverseMatch>(universe.map((m) => [m.fixtureId, m]));
+    const omnirouteConfig = await loadOmnirouteConfig();
 
     for (const live of liveFixtures) {
       if (live.statusShort !== '1H' && live.statusShort !== '2H') continue;
@@ -605,9 +682,14 @@ export async function runInPlayComboTick(liveFixtures: LiveFixture[]): Promise<n
         league: universeMatch.league,
         leagueId: String(universeMatch.leagueId),
       };
-      const preMatchExpectedGoals = await estimateExpectedGoalsFromHistory(
+      let preMatchExpectedGoals = await estimateExpectedGoalsFromHistory(
         match.leagueId, match.homeTeam, match.awayTeam
       ).catch(() => null);
+      if (!preMatchExpectedGoals && omnirouteConfig) {
+        preMatchExpectedGoals = await estimateExpectedGoalsViaOmniroute(
+          omnirouteConfig, match.homeTeam, match.awayTeam, match.league
+        ).catch(() => null);
+      }
 
       if (
         live.statusShort === '1H' &&
