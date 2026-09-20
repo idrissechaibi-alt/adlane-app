@@ -64,7 +64,10 @@ export default function DailyPlanScreen() {
 
   const loadInPlayProposals = () => {
     const today = new Date().toISOString().split('T')[0];
-    setInPlayProposals(readInPlayProposals().filter((p) => p.createdAt.startsWith(today)));
+    // real !== false : les paris fictifs (boucle d'auto-apprentissage, tout
+    // l'univers européen) ne sont jamais affichés ici, seulement les vrais
+    // paris sur les 5 grands championnats.
+    setInPlayProposals(readInPlayProposals().filter((p) => p.createdAt.startsWith(today) && p.real !== false));
   };
 
   // Planning du Jour (solos/combinés pré-match) désactivé : les cotes

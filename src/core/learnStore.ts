@@ -359,6 +359,15 @@ export interface InPlayProposal {
   combinedProb: number;
   /** true une fois la journée close et les jambes réglées. */
   reviewed?: boolean;
+  /**
+   * true (ou absent, pour les enregistrements créés avant ce champ) = pari
+   * réel sur l'un des 5 grands championnats, construit avec toutes les
+   * ressources disponibles (cotes, APIs payantes). false = pari FICTIF, sur
+   * n'importe quel match européen suivi, construit uniquement avec des
+   * ressources libres de droit — sert seulement à nourrir la boucle
+   * d'auto-apprentissage, jamais notifié ni affiché comme un vrai pari.
+   */
+  real?: boolean;
 }
 
 // ==================== COURBE D'ÉVOLUTION PAR MARCHÉ ====================
@@ -401,7 +410,13 @@ export function readInPlayProposals(): InPlayProposal[] {
 export function writeInPlayProposals(proposals: InPlayProposal[]): void {
   const cutoff = Date.now() - 48 * 3_600_000;
   const fresh = proposals.filter((p) => new Date(p.createdAt).getTime() > cutoff);
-  writeText(fileIn('inplay-proposals.json'), JSON.stringify(fresh.slice(-100)));
+
+  // Plafonds séparés : les paris fictifs (tout l'univers européen) sont bien
+  // plus nombreux que les vrais paris (5 grands championnats) — sans ça, un
+  // afflux de paris fictifs finirait par évincer les vrais du plafond commun.
+  const real = fresh.filter((p) => p.real !== false);
+  const fictional = fresh.filter((p) => p.real === false).slice(-300);
+  writeText(fileIn('inplay-proposals.json'), JSON.stringify([...real, ...fictional]));
 }
 
 // ==================== MODÈLE APPRIS + DIGEST AGENTS ====================

@@ -23,9 +23,11 @@ import {
   PaperBet,
   TrackedMarket,
   TrainingRow,
+  marketLabel,
   readAgentDigest,
   readCrossCheckSamples,
   readLearnedModel,
+  readMarketSeries,
   readPaperBets,
   readTrainingRows,
   writeAgentDigest,
@@ -33,6 +35,30 @@ import {
   writePaperBets,
 } from './learnStore';
 import { computeScoutingAccuracy } from './scoutingReview';
+
+/** Fiabilité observée du scan en direct (20e/60e minute), par marché, sur les N derniers jours — réel ET fictif confondus (les deux réglés de la même façon, voir dailyReview.ts). */
+function computeCheckpointCalibration(days: number = 30) {
+  const cutoff = Date.now() - days * 24 * 3_600_000;
+  const points = readMarketSeries().filter((p) => new Date(p.date).getTime() > cutoff);
+
+  const byMarket = new Map<TrackedMarket, { correct: number; total: number; predictedSum: number }>();
+  for (const point of points) {
+    const entry = byMarket.get(point.market) ?? { correct: 0, total: 0, predictedSum: 0 };
+    entry.correct += point.correct;
+    entry.total += point.predictions;
+    entry.predictedSum += point.meanPredicted * point.predictions;
+    byMarket.set(point.market, entry);
+  }
+
+  return Array.from(byMarket.entries())
+    .map(([market, entry]) => ({
+      market,
+      samples: entry.total,
+      hitRate: entry.total > 0 ? entry.correct / entry.total : 0,
+      meanPredicted: entry.total > 0 ? entry.predictedSum / entry.total : 0,
+    }))
+    .sort((a, b) => b.samples - a.samples);
+}
 
 /** Échantillon minimum pour qu'une règle soit retenue (anti-bruit). */
 const MIN_SAMPLES_PER_RULE = 30;
@@ -472,6 +498,20 @@ function renderDigest(model: LearnedModel, markets: string[], rows: TrainingRow[
         ? '- Seuil de fiabilité atteint : les observations Omniroute participent désormais aussi aux règles de calibrage.'
         : `- Pas encore assez fiable (seuil : ${CROSSCHECK_MIN_SAMPLES} recoupements, ${(CROSSCHECK_MIN_AGREE_RATE * 100).toFixed(0)}% d'accord) — Omniroute élargit la couverture observée mais n'influence pas encore les probabilités.`
     );
+  }
+
+  const checkpointCalibration = computeCheckpointCalibration(30);
+  lines.push('', '## Fiabilité passée du scan en direct 20e/60e minute (par marché, 30 derniers jours, réel + fictif confondus)');
+  if (checkpointCalibration.length === 0) {
+    lines.push("Pas encore assez de scans réglés pour juger.");
+  } else {
+    for (const stat of checkpointCalibration) {
+      lines.push(
+        `- \`${marketLabel(stat.market)}\` : réalisé **${(stat.hitRate * 100).toFixed(1)}%** ` +
+          `vs annoncé ${(stat.meanPredicted * 100).toFixed(1)}% (n=${stat.samples})` +
+          (stat.hitRate < stat.meanPredicted - 0.1 ? ' — trop confiant sur ce marché, à corriger.' : '')
+      );
+    }
   }
 
   const scoutingAccuracy = computeScoutingAccuracy(30);

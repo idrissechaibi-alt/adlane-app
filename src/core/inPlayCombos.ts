@@ -8,22 +8,34 @@
 //   - 60e minute : reste du match (résultat, BTTS, total buts), recalibré
 //     avec tout ce qui s'est passé depuis le coup d'envoi.
 //
-// Aucune cote de marché n'est utilisée : les buts attendus pré-match sont
-// estimés statistiquement à partir des scores réels de la saison en cours
-// (Football-Data.co.uk, libre d'accès — modèle attaque/défense), pas des
-// cotes de bookmaker ni du Planning du Jour (désactivé). Ça permet de couvrir
-// tout l'univers de matchs suivi (matchUniverse), pas seulement les 5 grands
-// championnats. Omniroute n'intervient qu'ENSUITE, pour enrichir le
-// raisonnement de chaque jambe avec le contexte disponible (mémoire
-// d'auto-apprentissage, forme des équipes) — il ne touche jamais aux
-// chiffres. Remplace l'ancien combo de la 20e minute (règles apprises
-// seules) et le moniteur mi-temps (45e minute).
+// DEUX pipelines séparés, sur le même principe mais des ressources
+// différentes (demande explicite) :
+//
+//   A) Paris RÉELS — les 5 grands championnats seulement, ceux sur lesquels
+//      de l'argent réel est misé. Utilise TOUTES les ressources disponibles :
+//      cotes de marché (Planning du Jour, désormais utilisé uniquement comme
+//      source de buts attendus pré-match, plus pour générer de propositions
+//      pré-match), Football-Data.co.uk, mémoire d'auto-apprentissage,
+//      contexte déjà collecté. Ce sont ces propositions qui sont notifiées
+//      et affichées dans "Combos en direct du jour".
+//   B) Paris FICTIFS — tout l'univers de matchs suivi (matchUniverse, ~28
+//      pays), UNIQUEMENT avec des ressources libres de droit (Football-
+//      Data.co.uk pour les buts attendus ET les corners/cartons, aucune cote,
+//      aucune API payante). Ne sert qu'à nourrir la boucle d'auto-
+//      apprentissage (calibrage, digest) — jamais notifié, jamais affiché
+//      comme un vrai pari. Ne retraite jamais un match déjà couvert par le
+//      pipeline réel.
+//
+// Dans les deux cas, les probabilités sont TOUJOURS calculées
+// statistiquement (poisson.ts), jamais devinées par une IA. Omniroute
+// n'intervient qu'ENSUITE, pour enrichir le raisonnement de chaque jambe
+// avec le contexte disponible — il ne touche jamais aux chiffres.
 //
 // Aucune proposition n'est émise si moins de 2 jambes passent le seuil : un
-// combo, jamais un pari sec fondé sur une seule estimation incertaine. Un
-// championnat non couvert par Football-Data.co.uk ne bloque pas tout : les
-// jambes corners/cartons restent tentées indépendamment des jambes buts.
+// combo, jamais un pari sec fondé sur une seule estimation incertaine.
 
+import { getDailyPlan } from './scheduler';
+import { buildScheduledMatches } from './dailyWorkflow';
 import { fetchLiveFixtures, LiveFixture } from './halftimeMonitor';
 import { getAPIConfig } from '../api/multiAPIManager';
 import { getHistoricalPriors, estimateExpectedGoalsFromHistory } from './footballDataCoUk';
@@ -46,6 +58,7 @@ import {
   writeInPlayProposals,
 } from './learnStore';
 import { sendLocalNotification } from './notifications';
+import { normalizeTeamName, namesLikelyMatch } from './teamNameMatch';
 import { spendBudget } from './requestBudget';
 
 const CHECKPOINT20_MIN_MINUTE = 18;
@@ -61,6 +74,14 @@ const MAX_LEGS_20 = 5;
 const MAX_LEGS_60 = 3;
 /** Seuil interne utilisé pour choisir la ligne over/under la plus haute encore fiable (corners/cartons). */
 const LINE_PICK_THRESHOLD = 0.55;
+
+/** Identité minimale d'un match, commune aux deux pipelines (réel via le Planning du Jour, fictif via matchUniverse). */
+interface MatchRef {
+  homeTeam: string;
+  awayTeam: string;
+  league: string;
+  leagueId: string;
+}
 
 interface CandidateLeg {
   market: TrackedMarket;
@@ -107,11 +128,12 @@ function observedFirstHalfCounts(fixtureId: number): { corners?: number; cards?:
  * Jambes candidates du checkpoint 20e minute : but 1ère MT, corners/cartons
  * 1ère MT (si moyennes de saison disponibles), BTTS et total du match. Les
  * jambes buts/BTTS/total ne sont tentées que si preMatchExpectedGoals est
- * disponible (championnat couvert par Football-Data.co.uk) ; les jambes
- * corners/cartons sont indépendantes et toujours tentées.
+ * disponible ; les jambes corners/cartons sont indépendantes et toujours
+ * tentées (Football-Data.co.uk, libre d'accès dans les deux pipelines).
  */
 async function buildLegs20(
-  match: UniverseMatch,
+  match: MatchRef,
+  fixtureId: number,
   live: LiveFixture,
   preMatchExpectedGoals: { home: number; away: number } | null
 ): Promise<CandidateLeg[]> {
@@ -128,10 +150,10 @@ async function buildLegs20(
 
   // 2) Corners / 3) Cartons 1ère mi-temps — projection sur le reste de la 1ère
   // MT + ce qui est déjà compté en direct (best-effort, jamais bloquant).
-  const priors = await getHistoricalPriors(String(match.leagueId), match.homeTeam, match.awayTeam).catch(() => null);
+  const priors = await getHistoricalPriors(match.leagueId, match.homeTeam, match.awayTeam).catch(() => null);
   if (priors) {
     const fraction = remainingFirstHalfEventFraction(elapsedMinutes);
-    const observed = observedFirstHalfCounts(live.fixtureId);
+    const observed = observedFirstHalfCounts(fixtureId);
 
     const cornersLambda = (priors.home.cornersFor + priors.away.cornersFor) * fraction;
     const cornersLine = pickHighestConfidentOverLine(cornersLambda, LINE_PICK_THRESHOLD, observed.corners ?? 0);
@@ -177,10 +199,9 @@ async function buildLegs20(
 /**
  * Jambes candidates du checkpoint 60e minute : reste du match uniquement —
  * toutes basées sur les buts, donc rien à construire si preMatchExpectedGoals
- * est indisponible (championnat non couvert par Football-Data.co.uk).
+ * est indisponible.
  */
 function buildLegs60(
-  match: UniverseMatch,
   live: LiveFixture,
   preMatchExpectedGoals: { home: number; away: number } | null
 ): CandidateLeg[] {
@@ -217,7 +238,7 @@ function buildLegs60(
  * telles quelles, jamais bloquant.
  */
 async function formulateWithOmniroute(
-  match: UniverseMatch,
+  match: MatchRef,
   live: LiveFixture,
   legs: CandidateLeg[],
   checkpointLabel: string
@@ -273,10 +294,12 @@ async function formulateWithOmniroute(
 
 function buildProposal(
   kind: 'minute20' | 'minute60',
+  fixtureId: number,
   live: LiveFixture,
-  match: UniverseMatch,
+  match: MatchRef,
   legs: CandidateLeg[],
-  window: string
+  window: string,
+  real: boolean
 ): InPlayProposal | null {
   if (legs.length < 2) return null; // un combo, pas un pari sec — mieux vaut se taire
 
@@ -284,10 +307,10 @@ function buildProposal(
   if (combinedProb < MIN_COMBINED_PROB) return null;
 
   return {
-    id: `inplay-${kind}-${live.fixtureId}`,
+    id: `inplay-${kind}-${fixtureId}`,
     kind,
     createdAt: new Date().toISOString(),
-    fixtureId: live.fixtureId,
+    fixtureId,
     league: match.league,
     homeTeam: match.homeTeam,
     awayTeam: match.awayTeam,
@@ -296,6 +319,7 @@ function buildProposal(
     window,
     legs: legs.map((l) => ({ market: l.market, selection: l.selection, prob: l.prob, evidence: l.evidence })),
     combinedProb,
+    real,
   };
 }
 
@@ -309,21 +333,59 @@ async function notifyProposal(proposal: InPlayProposal): Promise<void> {
   );
 }
 
+/** Un match en direct passe-t-il par un checkpoint maintenant ? Construit et notifie (si réel) la proposition correspondante. */
+async function processMatch(
+  fixtureId: number,
+  live: LiveFixture,
+  match: MatchRef,
+  preMatchExpectedGoals: { home: number; away: number } | null,
+  real: boolean,
+  alreadyProposed: Set<string>,
+  fresh: InPlayProposal[]
+): Promise<void> {
+  if (
+    live.statusShort === '1H' &&
+    live.minute >= CHECKPOINT20_MIN_MINUTE && live.minute <= CHECKPOINT20_MAX_MINUTE &&
+    !alreadyProposed.has(`${fixtureId}-minute20`)
+  ) {
+    let legs = (await buildLegs20(match, fixtureId, live, preMatchExpectedGoals)).filter((l) => l.prob >= MIN_LEG_PROB);
+    legs = legs.sort((a, b) => b.prob - a.prob).slice(0, MAX_LEGS_20);
+    legs = await formulateWithOmniroute(match, live, legs, '20e minute — 1ère mi-temps + BTTS/total du match');
+
+    const proposal = buildProposal('minute20', fixtureId, live, match, legs, `${live.minute}e → pause + match complet`, real);
+    if (proposal) {
+      fresh.push(proposal);
+      alreadyProposed.add(`${fixtureId}-minute20`);
+      if (real) await notifyProposal(proposal);
+    }
+  }
+
+  if (
+    live.statusShort === '2H' &&
+    live.minute >= CHECKPOINT60_MIN_MINUTE && live.minute <= CHECKPOINT60_MAX_MINUTE &&
+    !alreadyProposed.has(`${fixtureId}-minute60`)
+  ) {
+    let legs = buildLegs60(live, preMatchExpectedGoals).filter((l) => l.prob >= MIN_LEG_PROB);
+    legs = legs.sort((a, b) => b.prob - a.prob).slice(0, MAX_LEGS_60);
+    legs = await formulateWithOmniroute(match, live, legs, '60e minute — reste du match');
+
+    const proposal = buildProposal('minute60', fixtureId, live, match, legs, `${live.minute}e → fin de match`, real);
+    if (proposal) {
+      fresh.push(proposal);
+      alreadyProposed.add(`${fixtureId}-minute60`);
+      if (real) await notifyProposal(proposal);
+    }
+  }
+}
+
 /**
  * Un tour de scan. Appelé par la tâche de fond (toutes les ~15 min) et par
  * la boucle de premier plan (3 min). Ne notifie jamais deux fois le même
- * match pour le même checkpoint. Couvre tout l'univers de matchs suivi
- * (matchUniverse — ~28 pays, toutes divisions), pas seulement les 5 grands
- * championnats : seule la disponibilité de Football-Data.co.uk pour le
- * championnat concerné détermine si les jambes buts/BTTS/total sont
- * tentées, indépendamment des jambes corners/cartons.
+ * match pour le même checkpoint.
  */
 export async function runInPlayComboTick(): Promise<number> {
   const apiConfig = await getAPIConfig();
   if (!apiConfig.apiFootball) return 0;
-
-  const universe = await getStoredUniverse();
-  if (!universe || universe.length === 0) return 0;
 
   if (!(await spendBudget('apiFootball'))) return 0;
 
@@ -334,58 +396,72 @@ export async function runInPlayComboTick(): Promise<number> {
     console.warn('[Scan en direct] Relevé live échoué:', error.message);
     return 0;
   }
+  if (liveFixtures.length === 0) return 0;
 
-  const universeById = new Map<number, UniverseMatch>(universe.map((m) => [m.fixtureId, m]));
   const existing = readInPlayProposals();
   const alreadyProposed = new Set(existing.map((p) => `${p.fixtureId}-${p.kind}`));
   const fresh: InPlayProposal[] = [];
+  const claimedFixtureIds = new Set<number>();
 
-  for (const live of liveFixtures) {
-    if (live.statusShort !== '1H' && live.statusShort !== '2H') continue;
+  // A) Paris RÉELS — 5 grands championnats, toutes les ressources
+  // disponibles (cotes de marché via le Planning du Jour, Football-
+  // Data.co.uk, mémoire d'apprentissage, contexte déjà collecté).
+  const plan = await getDailyPlan();
+  if (plan) {
+    const { matches: realMatches } = buildScheduledMatches(plan.slots);
 
-    const match = universeById.get(live.fixtureId);
-    if (!match) continue; // hors de l'univers suivi (pays non ciblés)
+    for (const live of liveFixtures) {
+      if (live.statusShort !== '1H' && live.statusShort !== '2H') continue;
 
-    if (
-      live.statusShort === '1H' &&
-      live.minute >= CHECKPOINT20_MIN_MINUTE && live.minute <= CHECKPOINT20_MAX_MINUTE &&
-      !alreadyProposed.has(`${live.fixtureId}-minute20`)
-    ) {
-      const preMatchExpectedGoals = await estimateExpectedGoalsFromHistory(
-        String(match.leagueId), match.homeTeam, match.awayTeam
-      ).catch(() => null);
+      const scheduled = realMatches.find((m) => {
+        const mHome = normalizeTeamName(m.homeTeam);
+        const mAway = normalizeTeamName(m.awayTeam);
+        const lHome = normalizeTeamName(live.homeTeam);
+        const lAway = normalizeTeamName(live.awayTeam);
+        return (mHome === lHome || namesLikelyMatch(mHome, lHome)) && (mAway === lAway || namesLikelyMatch(mAway, lAway));
+      });
+      if (!scheduled) continue;
 
-      let legs = (await buildLegs20(match, live, preMatchExpectedGoals)).filter((l) => l.prob >= MIN_LEG_PROB);
-      legs = legs.sort((a, b) => b.prob - a.prob).slice(0, MAX_LEGS_20);
-      legs = await formulateWithOmniroute(match, live, legs, '20e minute — 1ère mi-temps + BTTS/total du match');
+      claimedFixtureIds.add(live.fixtureId);
 
-      const proposal = buildProposal('minute20', live, match, legs, `${live.minute}e → pause + match complet`);
-      if (proposal) {
-        fresh.push(proposal);
-        alreadyProposed.add(`${live.fixtureId}-minute20`);
-        await notifyProposal(proposal);
-      }
+      const match: MatchRef = {
+        homeTeam: scheduled.homeTeam,
+        awayTeam: scheduled.awayTeam,
+        league: scheduled.leagueName,
+        leagueId: scheduled.leagueId,
+      };
+      const preMatchExpectedGoals = { home: scheduled.expectedHomeGoals, away: scheduled.expectedAwayGoals };
+
+      await processMatch(live.fixtureId, live, match, preMatchExpectedGoals, true, alreadyProposed, fresh);
     }
+  }
 
-    if (
-      live.statusShort === '2H' &&
-      live.minute >= CHECKPOINT60_MIN_MINUTE && live.minute <= CHECKPOINT60_MAX_MINUTE &&
-      !alreadyProposed.has(`${live.fixtureId}-minute60`)
-    ) {
+  // B) Paris FICTIFS (boucle d'auto-apprentissage) — tout l'univers de
+  // matchs suivi, UNIQUEMENT des ressources libres de droit. Jamais notifié,
+  // jamais affiché comme un vrai pari. Ne retraite pas un match déjà couvert
+  // par le pipeline réel ci-dessus.
+  const universe = await getStoredUniverse();
+  if (universe) {
+    const universeById = new Map<number, UniverseMatch>(universe.map((m) => [m.fixtureId, m]));
+
+    for (const live of liveFixtures) {
+      if (live.statusShort !== '1H' && live.statusShort !== '2H') continue;
+      if (claimedFixtureIds.has(live.fixtureId)) continue;
+
+      const universeMatch = universeById.get(live.fixtureId);
+      if (!universeMatch) continue; // hors de l'univers suivi (pays non ciblés)
+
+      const match: MatchRef = {
+        homeTeam: universeMatch.homeTeam,
+        awayTeam: universeMatch.awayTeam,
+        league: universeMatch.league,
+        leagueId: String(universeMatch.leagueId),
+      };
       const preMatchExpectedGoals = await estimateExpectedGoalsFromHistory(
-        String(match.leagueId), match.homeTeam, match.awayTeam
+        match.leagueId, match.homeTeam, match.awayTeam
       ).catch(() => null);
 
-      let legs = buildLegs60(match, live, preMatchExpectedGoals).filter((l) => l.prob >= MIN_LEG_PROB);
-      legs = legs.sort((a, b) => b.prob - a.prob).slice(0, MAX_LEGS_60);
-      legs = await formulateWithOmniroute(match, live, legs, '60e minute — reste du match');
-
-      const proposal = buildProposal('minute60', live, match, legs, `${live.minute}e → fin de match`);
-      if (proposal) {
-        fresh.push(proposal);
-        alreadyProposed.add(`${live.fixtureId}-minute60`);
-        await notifyProposal(proposal);
-      }
+      await processMatch(live.fixtureId, live, match, preMatchExpectedGoals, false, alreadyProposed, fresh);
     }
   }
 
