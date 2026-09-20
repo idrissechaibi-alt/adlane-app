@@ -23,6 +23,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const OMNIROUTE_CONFIG_KEY = '@omniroute_config';
 
+// Mots-clés courants pour repérer les agents de scraping/recherche web dans
+// un catalogue Omniroute qui peut exposer 1000+ agents — impossible de savoir
+// à l'avance comment ils sont nommés sur CE déploiement précis (self-hosted,
+// propre à l'utilisateur), donc large plutôt que restrictif.
+const SCRAPING_KEYWORDS = /scrap|crawl|spider|browser|playwright|puppeteer|selenium|extract|fetch|firecrawl|jina|reader|web[-_ ]?search|research|http|curl/i;
+
 interface OmnirouteConfig {
   endpoint: string;
   apiKey: string;
@@ -57,6 +63,7 @@ export default function SettingsScreen({ navigation }: any) {
   const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [modelSearch, setModelSearch] = useState('');
   const [pendingSelection, setPendingSelection] = useState<Set<string>>(new Set());
+  const [scrapingFilterActive, setScrapingFilterActive] = useState(false);
 
   useEffect(() => {
     loadConfigs();
@@ -201,9 +208,12 @@ export default function SettingsScreen({ navigation }: any) {
 
   const filteredModels = useMemo(() => {
     const q = modelSearch.trim().toLowerCase();
-    if (!q) return availableModels;
-    return availableModels.filter((m) => m.toLowerCase().includes(q));
-  }, [availableModels, modelSearch]);
+    return availableModels.filter((m) => {
+      if (scrapingFilterActive && !SCRAPING_KEYWORDS.test(m)) return false;
+      if (q && !m.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [availableModels, modelSearch, scrapingFilterActive]);
 
   const handleTestAPIFootball = async () => {
     if (!apiConfig?.apiFootball) {
@@ -565,6 +575,16 @@ export default function SettingsScreen({ navigation }: any) {
             autoCorrect={false}
           />
 
+          <TouchableOpacity
+            style={[styles.scrapingFilterChip, scrapingFilterActive && styles.scrapingFilterChipActive]}
+            onPress={() => setScrapingFilterActive((prev) => !prev)}
+          >
+            <Ionicons name="globe-outline" size={16} color={scrapingFilterActive ? '#ffffff' : '#94a3b8'} />
+            <Text style={[styles.scrapingFilterChipText, scrapingFilterActive && styles.scrapingFilterChipTextActive]}>
+              Agents de scraping / recherche web uniquement
+            </Text>
+          </TouchableOpacity>
+
           <FlatList
             data={filteredModels}
             keyExtractor={(item) => item}
@@ -831,6 +851,30 @@ const styles = StyleSheet.create({
   },
   modalSearchInput: {
     marginBottom: 12,
+  },
+  scrapingFilterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#334155',
+    marginBottom: 12,
+  },
+  scrapingFilterChipActive: {
+    backgroundColor: '#3b82f6',
+    borderColor: '#3b82f6',
+  },
+  scrapingFilterChipText: {
+    color: '#94a3b8',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  scrapingFilterChipTextActive: {
+    color: '#ffffff',
   },
   modalList: {
     flex: 1,
