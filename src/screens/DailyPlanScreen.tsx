@@ -16,38 +16,12 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { executeMorningScan, getDailyPlan, checkAndUpdateT90Status, DailyPlan } from '../core/scheduler';
-import { generateDailyProposals, ScheduledMatch } from '../core/dailyWorkflow';
-import { estimateExpectedGoalsFromMarket } from '../core/poisson';
+import { generateDailyProposals, buildScheduledMatches, ProposedSlip } from '../core/dailyWorkflow';
 import { InPlayProposal, readInPlayProposals } from '../core/learnStore';
 import { getLineupRefresh, isT90Reached, LineupRefresh } from '../core/lineupRefresh';
 import { getAllBets, saveBet } from '../database/storage';
-import { DailyScheduleSlot, ScheduledMatchDetail } from '../types/database';
-import { ProposedSlip } from '../core/dailyWorkflow';
+import { DailyScheduleSlot } from '../types/database';
 import { HISTORICAL_BETS } from '../data/historical';
-
-/**
- * Convertit les matchs planifiés en entrées exploitables par le moteur de
- * propositions. Les buts attendus sont dérivés des cotes du marché (jamais
- * inventés) ; un match sans cotes 1X2 + Over/Under exploitables est exclu
- * plutôt que de produire une "proposition" basée sur des données fictives.
- */
-function buildScheduledMatches(slots: DailyScheduleSlot[]): { matches: ScheduledMatch[]; skippedNoOdds: number } {
-  const matches: ScheduledMatch[] = [];
-  let skippedNoOdds = 0;
-
-  for (const slot of slots) {
-    for (const m of slot.matches as ScheduledMatchDetail[]) {
-      const estimated = estimateExpectedGoalsFromMarket(m.odds);
-      if (!estimated) {
-        skippedNoOdds++;
-        continue;
-      }
-      matches.push({ ...m, expectedHomeGoals: estimated.home, expectedAwayGoals: estimated.away });
-    }
-  }
-
-  return { matches, skippedNoOdds };
-}
 
 export default function DailyPlanScreen() {
   const [loading, setLoading] = useState(false);

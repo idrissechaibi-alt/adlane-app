@@ -16,7 +16,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getAPIConfig } from '../api/multiAPIManager';
 import { spendBudget } from './requestBudget';
 import { syncEloForAllCoveredLeagues } from './eloRatings';
-import { settlePlacedBets } from './betSettlement';
+import { settlePlacedBets, settleProposedBets } from './betSettlement';
 import { fetchWithTimeout } from './httpTimeout';
 import { generateDailyReport } from './reporter';
 import { getAllBets, saveDailyReport, getDailyReports } from '../database/storage';
@@ -218,26 +218,36 @@ export async function runNightlyReviewIfDue(): Promise<number> {
     console.warn('[Bilan] Règlement des paris placés échoué:', error.message);
   }
 
-  // Bilan quotidien texte (X paris proposés/gagnants, grandes lignes) :
-  // rattrape TOUT jour passé avec des paris joués mais sans rapport encore
-  // sauvegardé, indépendamment de la fenêtre de rattrapage ci-dessous (bornée
-  // à MAX_CATCHUP_DAYS à partir d'un point de départ qui n'avance que vers
-  // l'avant). Sans ça, des paris plus anciens que cette fenêtre (historique
-  // importé, ou l'app restée fermée plus de 7 jours) ne recevaient jamais de
-  // bilan — la section Rapport restait vide pour toujours, pas juste en
-  // retard. generateDailyReport est un calcul pur sur des données déjà
-  // connues (aucun appel réseau) : le relancer sur un jour déjà couvert ne
-  // coûte rien, donc on ne complique pas avec un curseur séparé.
+  // Bilan quotidien texte (X propositions émises, Y auraient gagné, grandes
+  // lignes) : rattrape TOUT jour passé avec des paris (placés OU simples
+  // propositions jamais jouées — demande explicite : le rapport porte sur
+  // TOUT ce que l'app a proposé, pas seulement les vrais paris placés) mais
+  // sans rapport encore sauvegardé, indépendamment de la fenêtre de
+  // rattrapage ci-dessous (bornée à MAX_CATCHUP_DAYS à partir d'un point de
+  // départ qui n'avance que vers l'avant). Sans ça, des paris plus anciens
+  // que cette fenêtre (historique importé, ou l'app restée fermée plus de 7
+  // jours) ne recevaient jamais de bilan — la section Rapport restait vide
+  // pour toujours, pas juste en retard. generateDailyReport est un calcul
+  // pur sur des données déjà connues (aucun appel réseau) : le relancer sur
+  // un jour déjà couvert ne coûte rien, donc on ne complique pas avec un
+  // curseur séparé.
   try {
-    const allBets = await getAllBets();
-    const playedDates = Array.from(new Set(
-      allBets.filter((b) => b.played && b.date < today).map((b) => b.date)
+    const activeDates = Array.from(new Set(
+      (await getAllBets()).filter((b) => b.date < today).map((b) => b.date)
     ));
     const existingReports = await getDailyReports(365);
     const reportedDates = new Set(existingReports.map((r) => r.date));
-    for (const day of playedDates) {
+    for (const day of activeDates) {
       if (reportedDates.has(day)) continue;
-      const report = generateDailyReport(day, allBets);
+
+      try {
+        await settleProposedBets(day);
+      } catch (error: any) {
+        console.warn(`[Bilan] Règlement des propositions du ${day} échoué:`, error.message);
+      }
+
+      const freshBets = await getAllBets(); // relire après règlement des propositions du jour
+      const report = generateDailyReport(day, freshBets);
       await saveDailyReport(report);
     }
   } catch (error: any) {

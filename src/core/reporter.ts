@@ -4,6 +4,46 @@ import { Bet, Lesson, MarketCalibration, DailyReport } from '../types';
 import { calculateDailySummary, calculateLedgerSummary } from './ledger';
 
 /**
+ * Bilan de TOUTES les propositions émises un jour donné (solos + combinés),
+ * qu'elles aient été jouées ou non — demande explicite : le rapport ne doit
+ * pas se limiter aux vrais paris placés (déjà couverts par la bannière et le
+ * cumul ci-dessus), mais dire "X propositions émises, Y auraient gagné".
+ * Séparé du calcul P&L (calculateDailySummary/calculateLedgerSummary, qui
+ * filtrent volontairement excluded_from_pnl) : ceci ne touche jamais l'argent
+ * réel, seulement la qualité des propositions.
+ */
+export function generateProposalsAuditSection(date: string, allBets: Bet[]): string {
+  const dayProposals = allBets.filter((b) => b.date === date);
+  if (dayProposals.length === 0) return '';
+
+  const resolved = dayProposals.filter((b) => ['won', 'lost'].includes(b.status));
+  const won = resolved.filter((b) => b.status === 'won').length;
+  const lost = resolved.filter((b) => b.status === 'lost').length;
+  const pending = dayProposals.length - resolved.length;
+
+  let text = `\n\n---\n**Toutes les propositions du ${date}** (jouées ou non) : ${dayProposals.length} émise${dayProposals.length > 1 ? 's' : ''}`;
+  if (resolved.length > 0) {
+    const rate = ((won / resolved.length) * 100).toFixed(1);
+    text += `, ${won} auraient gagné / ${lost} auraient perdu (${rate}% de réussite sur ${resolved.length} réglable${resolved.length > 1 ? 's' : ''})`;
+  }
+  if (pending > 0) {
+    text += `, ${pending} non réglable${pending > 1 ? 's' : ''} (marché sans source gratuite structurée, ou match pas encore terminé)`;
+  }
+  text += '.\n';
+
+  if (resolved.length > 0) {
+    text += '\n**Détail des propositions réglables :**\n';
+    for (const bet of resolved) {
+      const emoji = bet.status === 'won' ? '✅' : '❌';
+      const legsSummary = bet.legs.map((l) => `${l.match} — ${l.selection}`).join(' + ');
+      text += `${emoji} ${legsSummary}\n`;
+    }
+  }
+
+  return text;
+}
+
+/**
  * Génère le rapport quotidien conforme au format §5.5
  * Structure imposée :
  * 1. Bannière : résultat du jour
@@ -72,6 +112,8 @@ export function generateDailyReport(
 
   // 5. Aucune recommandation
   reportText += '\n---\n_Le système constate, mesure et analyse. Il ne recommande pas de jouer._';
+
+  reportText += generateProposalsAuditSection(date, allBets);
 
   return {
     date,

@@ -2,9 +2,12 @@
 // Browse les 5 championnats, découpe en créneaux, génère et valide les propositions
 
 import { Bet, BetLeg, Market } from '../types';
-import { computeDixonColesModel, computePoissonModel, poissonProb, devigOdds1X2Shin, devigOddsTwoWayShin, computeEdge } from './poisson';
+import { computeDixonColesModel, computePoissonModel, poissonProb, devigOdds1X2Shin, devigOddsTwoWayShin, computeEdge, estimateExpectedGoalsFromMarket } from './poisson';
 import { getHistoricalPriors } from './footballDataCoUk';
 import { validateBet } from './validator';
+import { DailyScheduleSlot, ScheduledMatchDetail } from '../types/database';
+import { getDailyPlan } from './scheduler';
+import { getAllBets, saveBet } from '../database/storage';
 
 export interface LeagueInfo {
   id: string;
@@ -49,6 +52,35 @@ export interface DaySlot {
   time_utc: string;
   display_time: string;       // UTC+1
   matches: ScheduledMatch[];
+}
+
+/**
+ * Convertit les matchs planifiés (scan matinal) en entrées exploitables par
+ * le moteur de propositions. Les buts attendus sont dérivés des cotes du
+ * marché (jamais inventés) ; un match sans cotes 1X2 + Over/Under
+ * exploitables est exclu plutôt que de produire une "proposition" basée sur
+ * des données fictives.
+ *
+ * Partagé entre l'écran Planning (affichage) et la tâche de fond (qui doit
+ * générer et persister les mêmes propositions sans dépendre de l'écran) —
+ * une seule implémentation, jamais deux qui pourraient diverger.
+ */
+export function buildScheduledMatches(slots: DailyScheduleSlot[]): { matches: ScheduledMatch[]; skippedNoOdds: number } {
+  const matches: ScheduledMatch[] = [];
+  let skippedNoOdds = 0;
+
+  for (const slot of slots) {
+    for (const m of slot.matches as ScheduledMatchDetail[]) {
+      const estimated = estimateExpectedGoalsFromMarket(m.odds);
+      if (!estimated) {
+        skippedNoOdds++;
+        continue;
+      }
+      matches.push({ ...m, expectedHomeGoals: estimated.home, expectedAwayGoals: estimated.away });
+    }
+  }
+
+  return { matches, skippedNoOdds };
 }
 
 export interface ProposedSlip {
@@ -775,4 +807,42 @@ export async function generateDailyProposals(
   }
 
   return proposals;
+}
+
+/**
+ * Génère et persiste toutes les propositions du jour (solos + combinés),
+ * qu'elles soient placées ou non — sans ça, une proposition disparaît dès
+ * que l'écran Planning n'est plus ouvert, et le bilan du soir ne peut
+ * jamais dire "X propositions émises, Y auraient gagné" (demande
+ * explicite : le rapport porte sur TOUT ce qui a été proposé, pas
+ * seulement les vrais paris placés). Appelé depuis la tâche de fond, pas
+ * seulement quand l'utilisateur ouvre l'écran.
+ *
+ * saveBet fait un upsert par id (déterministe : solo-<matchId>,
+ * combo-<créneau>-<rang>-<date>) — rappeler ceci plusieurs fois par jour ne
+ * duplique rien, juste rafraîchit la dernière version avant règlement.
+ */
+export async function persistTodaysProposals(): Promise<number> {
+  const plan = await getDailyPlan();
+  if (!plan) return 0;
+
+  const { matches } = buildScheduledMatches(plan.slots);
+  if (matches.length === 0) return 0;
+
+  const existingBets = await getAllBets();
+  const proposals = await generateDailyProposals(matches, existingBets);
+
+  // Ne jamais écraser un pari qui a avancé au-delà du simple stade de
+  // proposition (placé réellement, réglé, void...) : la régénération du
+  // jour ne fait que rafraîchir les propositions encore à l'état "proposed".
+  const advancedIds = new Set(
+    existingBets.filter((b) => b.status !== 'proposed').map((b) => b.id)
+  );
+
+  for (const proposal of proposals) {
+    if (advancedIds.has(proposal.sourceBet.id)) continue;
+    await saveBet(proposal.sourceBet);
+  }
+
+  return proposals.length;
 }

@@ -68,6 +68,60 @@ function extractTeams(matchLabel: string): { homeTeam: string; awayTeam: string 
   return { homeTeam: parts[0].trim(), awayTeam: parts[1].trim() };
 }
 
+interface BetOutcome {
+  anyLost: boolean;
+  allWon: boolean;
+  anyUnresolved: boolean;
+}
+
+/**
+ * Détermine l'issue d'un pari (placé ou non) à partir du score final réel de
+ * chacune de ses jambes. Partagé entre le règlement des vrais paris placés
+ * (settlePlacedBets, avec payout/P&L) et celui des simples propositions
+ * (settleProposedBets, sans aucun payout — juste le statut won/lost pour le
+ * bilan) : la logique de détermination de l'issue est strictement la même
+ * dans les deux cas, seul ce qu'on en fait diffère.
+ */
+async function computeBetOutcome(
+  bet: Bet,
+  apiKey: string,
+  resultCache: Map<string, FinalResult | null>,
+  statsCache: Map<string, MatchStatsCache | null>
+): Promise<BetOutcome> {
+  let anyLost = false;
+  let allWon = true;
+  let anyUnresolved = false;
+
+  for (const leg of bet.legs) {
+    const teams = extractTeams(leg.match);
+    if (!teams || !leg.matchId) { anyUnresolved = true; allWon = false; continue; }
+
+    const numericId = leg.matchId.replace(/^m-/, '');
+    if (!resultCache.has(numericId)) {
+      resultCache.set(numericId, await fetchFinalResult(apiKey, numericId));
+    }
+    const result = resultCache.get(numericId) ?? null;
+    if (!result) { anyUnresolved = true; allWon = false; continue; }
+
+    let matchStats: MatchStatsCache | null = null;
+    if (['corners', 'cards', 'fouls'].includes(leg.market) && leg.leagueId) {
+      if (!statsCache.has(leg.matchId)) {
+        statsCache.set(
+          leg.matchId,
+          await getMatchStats(leg.leagueId, teams.homeTeam, teams.awayTeam).catch(() => null)
+        );
+      }
+      matchStats = statsCache.get(leg.matchId) ?? null;
+    }
+
+    const outcome = settleBetLeg(leg, teams.homeTeam, teams.awayTeam, result, matchStats);
+    if (outcome === false) { anyLost = true; allWon = false; }
+    else if (outcome === null) { anyUnresolved = true; allWon = false; }
+  }
+
+  return { anyLost, allWon, anyUnresolved };
+}
+
 /**
  * Règle les vrais paris placés (played:true, status:pending) dont le match
  * est terminé depuis assez longtemps. Idempotent (status devient won/lost,
@@ -100,36 +154,7 @@ export async function settlePlacedBets(): Promise<number> {
     );
     if (!allMatchesOld) continue;
 
-    let anyLost = false;
-    let allWon = true;
-    let anyUnresolved = false;
-
-    for (const leg of bet.legs) {
-      const teams = extractTeams(leg.match);
-      if (!teams || !leg.matchId) { anyUnresolved = true; allWon = false; continue; }
-
-      const numericId = leg.matchId.replace(/^m-/, '');
-      if (!resultCache.has(numericId)) {
-        resultCache.set(numericId, await fetchFinalResult(apiKey, numericId));
-      }
-      const result = resultCache.get(numericId) ?? null;
-      if (!result) { anyUnresolved = true; allWon = false; continue; }
-
-      let matchStats: MatchStatsCache | null = null;
-      if (['corners', 'cards', 'fouls'].includes(leg.market) && leg.leagueId) {
-        if (!statsCache.has(leg.matchId)) {
-          statsCache.set(
-            leg.matchId,
-            await getMatchStats(leg.leagueId, teams.homeTeam, teams.awayTeam).catch(() => null)
-          );
-        }
-        matchStats = statsCache.get(leg.matchId) ?? null;
-      }
-
-      const outcome = settleBetLeg(leg, teams.homeTeam, teams.awayTeam, result, matchStats);
-      if (outcome === false) { anyLost = true; allWon = false; }
-      else if (outcome === null) { anyUnresolved = true; allWon = false; }
-    }
+    const { anyLost, allWon, anyUnresolved } = await computeBetOutcome(bet, apiKey, resultCache, statsCache);
 
     if (anyLost) {
       const updated: Bet = { ...bet, status: 'lost', payout: 0, net_pnl: -(bet.stake ?? 0), updatedAt: new Date().toISOString() };
@@ -143,6 +168,48 @@ export async function settlePlacedBets(): Promise<number> {
     }
     // sinon : au moins une jambe indéterminée et aucune perdue -> on laisse
     // "pending", retenté au prochain tour (jamais un statut deviné).
+  }
+
+  return settledCount;
+}
+
+/**
+ * Règle TOUTES les propositions émises un jour donné (status:'proposed'),
+ * placées ou non — pour le bilan "X propositions émises, Y auraient
+ * gagné" (demande explicite : le rapport quotidien porte sur tout ce qui a
+ * été proposé, pas seulement les vrais paris placés). Ne touche jamais
+ * payout/net_pnl (ces propositions restent excluded_from_pnl) : seul le
+ * statut change, pour compter won/lost dans le bilan.
+ */
+export async function settleProposedBets(day: string): Promise<number> {
+  const allBets = await getAllBets();
+  const dayProposals = allBets.filter(
+    (b) => b.date === day && b.status === 'proposed' && b.legs.every((l) => l.matchId)
+  );
+  if (dayProposals.length === 0) return 0;
+
+  const apiKey = await SecureStore.getItemAsync(FOOTBALL_DATA_KEY);
+  if (!apiKey) return 0;
+
+  const resultCache = new Map<string, FinalResult | null>();
+  const statsCache = new Map<string, MatchStatsCache | null>();
+  let settledCount = 0;
+
+  for (const bet of dayProposals) {
+    const allMatchesOld = bet.legs.every(
+      (leg) => Date.now() - new Date(leg.kickoff_utc).getTime() > MATCH_DURATION_BUFFER_MS
+    );
+    if (!allMatchesOld) continue;
+
+    const { anyLost, allWon, anyUnresolved } = await computeBetOutcome(bet, apiKey, resultCache, statsCache);
+
+    if (anyLost) {
+      await saveBet({ ...bet, status: 'lost', updatedAt: new Date().toISOString() });
+      settledCount += 1;
+    } else if (allWon && !anyUnresolved) {
+      await saveBet({ ...bet, status: 'won', updatedAt: new Date().toISOString() });
+      settledCount += 1;
+    }
   }
 
   return settledCount;

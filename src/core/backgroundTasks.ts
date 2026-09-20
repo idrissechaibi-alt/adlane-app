@@ -16,6 +16,7 @@ import { enrichFocusMatches } from './focusEnrichment';
 import { runInPlayComboTick } from './inPlayCombos';
 import { runNightlyReviewIfDue } from './dailyReview';
 import { runMorningScanIfDue } from './scheduler';
+import { persistTodaysProposals } from './dailyWorkflow';
 import { reconcileScoutingAnalyses } from './scoutingReview';
 import { refreshDueLineups } from './lineupRefresh';
 import { readLearnedModel } from './learnStore';
@@ -35,6 +36,16 @@ export async function runAutoLearnTick(): Promise<void> {
     await runMorningScanIfDue();
   } catch (error: any) {
     console.warn('[Tâche de fond] Scan matinal automatique échoué:', error.message);
+  }
+
+  // Persiste toutes les propositions du jour (solos + combinés), placées ou
+  // non : sans ça le bilan du soir ne peut jamais auditer que les vrais
+  // paris placés, alors que le rapport doit porter sur TOUT ce qui a été
+  // proposé (demande explicite).
+  try {
+    await persistTodaysProposals();
+  } catch (error: any) {
+    console.warn('[Tâche de fond] Sauvegarde des propositions du jour échouée:', error.message);
   }
 
   try {
