@@ -8,8 +8,11 @@
 
 import * as BackgroundTask from 'expo-background-task';
 import * as TaskManager from 'expo-task-manager';
+import { getAPIConfig } from '../api/multiAPIManager';
+import { spendBudget } from './requestBudget';
 import { ensureDailyUniverse } from './matchUniverse';
 import { runLiveMarkerTick } from './liveMarkers';
+import { fetchLiveFixtures, LiveFixture } from './halftimeMonitor';
 import { consolidateLearning } from './autoLearn';
 import { enrichFocusMatches } from './focusEnrichment';
 import { runInPlayComboTick } from './inPlayCombos';
@@ -18,6 +21,28 @@ import { runMorningScanIfDue } from './scheduler';
 import { reconcileScoutingAnalyses } from './scoutingReview';
 import { refreshDueLineups } from './lineupRefresh';
 import { readLearnedModel } from './learnStore';
+
+/**
+ * Un seul relevé /fixtures?live=all par tour, partagé entre runLiveMarkerTick
+ * et runInPlayComboTick (avant ce partage, chacun refaisait sa propre
+ * requête, doublant la consommation du quota API-Football à chaque tour —
+ * de quoi l'épuiser en cours d'après-midi et rater silencieusement les
+ * scans du soir). Renvoie un tableau vide si la clé manque, le quota est
+ * épuisé, ou la requête échoue — chaque appelant gère déjà ce cas comme une
+ * absence de match en direct.
+ */
+async function fetchSharedLiveFixtures(): Promise<LiveFixture[]> {
+  const apiConfig = await getAPIConfig();
+  if (!apiConfig.apiFootball) return [];
+  if (!(await spendBudget('apiFootball'))) return [];
+
+  try {
+    return await fetchLiveFixtures(apiConfig.apiFootball);
+  } catch (error: any) {
+    console.warn('[Tâche de fond] Relevé live partagé échoué:', error.message);
+    return [];
+  }
+}
 
 export const AUTOLEARN_TASK_NAME = 'adlane-autolearn-tick';
 const MINIMUM_INTERVAL_MINUTES = 15; // plancher Android, inutile de descendre
@@ -55,8 +80,10 @@ export async function runAutoLearnTick(): Promise<void> {
     console.warn('[Tâche de fond] Rafraîchissement compositions T-90 échoué:', error.message);
   }
 
+  const liveFixtures = await fetchSharedLiveFixtures();
+
   try {
-    await runLiveMarkerTick();
+    await runLiveMarkerTick(liveFixtures);
   } catch (error: any) {
     console.warn('[Tâche de fond] Relevé live échoué:', error.message);
   }
@@ -86,7 +113,7 @@ export async function runAutoLearnTick(): Promise<void> {
   // match) et 60e minute (reste du match) — remplace l'ancien combo 20e
   // minute (règles apprises seules) et le moniteur mi-temps.
   try {
-    await runInPlayComboTick();
+    await runInPlayComboTick(liveFixtures);
   } catch (error: any) {
     console.warn('[Tâche de fond] Scan en direct échoué:', error.message);
   }

@@ -41,8 +41,7 @@
 
 import { getDailyPlan } from './scheduler';
 import { buildScheduledMatches, ScheduledMatch } from './dailyWorkflow';
-import { fetchLiveFixtures, LiveFixture } from './halftimeMonitor';
-import { getAPIConfig } from '../api/multiAPIManager';
+import { LiveFixture } from './halftimeMonitor';
 import { getHistoricalPriors, estimateExpectedGoalsFromHistory } from './footballDataCoUk';
 import { getStoredUniverse, UniverseMatch } from './matchUniverse';
 import {
@@ -67,7 +66,6 @@ import {
 } from './learnStore';
 import { sendLocalNotification } from './notifications';
 import { normalizeTeamName, namesLikelyMatch } from './teamNameMatch';
-import { spendBudget } from './requestBudget';
 
 const CHECKPOINT20_MIN_MINUTE = 18;
 const CHECKPOINT20_MAX_MINUTE = 24;
@@ -508,21 +506,12 @@ async function processRealSlotCheckpoint(
 /**
  * Un tour de scan. Appelé par la tâche de fond (toutes les ~15 min) et par
  * la boucle de premier plan (3 min). Ne notifie jamais deux fois le même
- * match pour le même checkpoint.
+ * match pour le même checkpoint. `liveFixtures` est déjà récupéré par
+ * backgroundTasks.ts (un seul relevé /fixtures?live=all par tour, partagé
+ * avec liveMarkers.ts) — avant ce partage, chaque module refaisait sa propre
+ * requête, doublant la consommation du quota API-Football à chaque tour.
  */
-export async function runInPlayComboTick(): Promise<number> {
-  const apiConfig = await getAPIConfig();
-  if (!apiConfig.apiFootball) return 0;
-
-  if (!(await spendBudget('apiFootball'))) return 0;
-
-  let liveFixtures: LiveFixture[];
-  try {
-    liveFixtures = await fetchLiveFixtures(apiConfig.apiFootball);
-  } catch (error: any) {
-    console.warn('[Scan en direct] Relevé live échoué:', error.message);
-    return 0;
-  }
+export async function runInPlayComboTick(liveFixtures: LiveFixture[]): Promise<number> {
   if (liveFixtures.length === 0) return 0;
 
   const existing = readInPlayProposals();

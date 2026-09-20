@@ -5,15 +5,20 @@
 //   - 10 minutes : signal court.
 //   - 25 minutes : la fenêtre de pari visée (décision à la 20e, jusqu'à la pause).
 //
-// Économie de requêtes : UN SEUL appel /fixtures?live=all ramène tous les
-// matchs en direct de la planète. Les statistiques détaillées (tirs, corners,
-// cartons) coûtent un appel par match : elles sont donc réservées en priorité
-// aux matchs des ligues sur lesquelles l'utilisateur joue vraiment.
+// Économie de requêtes : le relevé /fixtures?live=all est fait UNE SEULE FOIS
+// par tour, par backgroundTasks.ts, et partagé avec inPlayCombos.ts (même
+// donnée, même requête) — avant ce partage, les deux modules la refaisaient
+// chacun de leur côté, doublant la consommation du quota API-Football à
+// chaque tour (jusqu'à épuiser le quota du jour avant la fin d'un match).
+// Les statistiques détaillées (tirs, corners, cartons) restent un appel par
+// match : elles sont réservées en priorité aux matchs des ligues sur
+// lesquelles l'utilisateur joue vraiment.
 
 import { getAPIConfig } from '../api/multiAPIManager';
 import { spendBudget } from './requestBudget';
 import { getStoredUniverse, UniverseMatch } from './matchUniverse';
 import { fetchWithTimeout } from './httpTimeout';
+import { LiveFixture } from './halftimeMonitor';
 import {
   EventDeltas,
   LEARNING_HORIZONS,
@@ -46,52 +51,12 @@ const MAX_CROSSCHECK_PER_TICK = 3;
 const MARKET_TOLERANCE: Record<'corners' | 'cards', number> = { corners: 1, cards: 1 };
 const LONGEST_HORIZON = Math.max(...LEARNING_HORIZONS);
 
-interface LiveSnapshotInput {
-  fixtureId: number;
-  minute: number;
-  goalsHome: number;
-  goalsAway: number;
-  statusShort: string;
-}
-
 function buildHeaders(apiKey: string): Record<string, string> {
   return {
     'x-rapidapi-key': apiKey,
     'x-rapidapi-host': 'v3.football.api-sports.io',
     'x-apisports-key': apiKey,
   };
-}
-
-async function fetchAllLive(apiKey: string): Promise<LiveSnapshotInput[]> {
-  const response = await fetchWithTimeout('https://v3.football.api-sports.io/fixtures?live=all', {
-    headers: buildHeaders(apiKey),
-  });
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-  const data = await response.json();
-
-  // API-Football répond souvent HTTP 200 même en cas de problème de clé/plan
-  // (ex: "Missing application key", déjà rencontré sur /standings avec ce
-  // compte) — l'erreur réelle est dans data.errors, jamais dans le statut
-  // HTTP. Sans cette vérification, cette fonction renvoyait silencieusement
-  // un tableau vide dans ce cas précis : runLiveMarkerTick voyait "aucun
-  // match en direct" à chaque tour, pour toujours, quel que soit le nombre
-  // réel de matchs en cours — c'était indiscernable d'une vraie absence de
-  // match en direct.
-  const errors = data.errors;
-  const hasErrors = errors && (Array.isArray(errors) ? errors.length > 0 : Object.keys(errors).length > 0);
-  if (hasErrors) {
-    const message = Array.isArray(errors) ? errors.join(', ') : Object.values(errors).join(', ');
-    throw new Error(message || 'Erreur API-Football inconnue (data.errors non vide)');
-  }
-
-  return (data.response || []).map((item: any) => ({
-    fixtureId: item.fixture?.id,
-    minute: item.fixture?.status?.elapsed ?? 0,
-    goalsHome: item.goals?.home ?? 0,
-    goalsAway: item.goals?.away ?? 0,
-    statusShort: item.fixture?.status?.short || '',
-  }));
 }
 
 function parseStatValue(raw: unknown): number | undefined {
@@ -218,11 +183,11 @@ function totalFouls(markers: MarkerSet): number | undefined {
  */
 function updateHorizons(
   pending: PendingObservation,
-  live: LiveSnapshotInput | undefined,
+  live: LiveFixture | undefined,
   currentMarkers: MarkerSet | undefined,
   halfEnded: boolean
 ): PendingObservation {
-  const goalsNow = live ? live.goalsHome + live.goalsAway : pending.goalsHome + pending.goalsAway;
+  const goalsNow = live ? live.homeGoals + live.awayGoals : pending.goalsHome + pending.goalsAway;
   const cornersNow = currentMarkers ? totalCorners(currentMarkers) : undefined;
   const cardsNow = currentMarkers ? totalCards(currentMarkers) : undefined;
   const foulsNow = currentMarkers ? totalFouls(currentMarkers) : undefined;
@@ -266,29 +231,24 @@ function toTrainingRow(pending: PendingObservation): TrainingRow {
 /**
  * Un tour d'observation. Appelé par la tâche de fond (toutes les ~15 min,
  * plancher imposé par Android) et par la boucle de premier plan (3 min).
+ * `liveFixtures` est déjà récupéré par backgroundTasks.ts (un seul relevé
+ * /fixtures?live=all par tour, partagé avec inPlayCombos.ts) — cette
+ * fonction ne fait plus sa propre requête ni son propre spendBudget pour ça.
  */
-export async function runLiveMarkerTick(): Promise<{ observed: number; closed: number }> {
+export async function runLiveMarkerTick(liveFixtures: LiveFixture[]): Promise<{ observed: number; closed: number }> {
   const config = await getAPIConfig();
   if (!config.apiFootball) return { observed: 0, closed: 0 };
 
   const universe = await getStoredUniverse();
   if (!universe || universe.length === 0) return { observed: 0, closed: 0 };
 
-  if (!(await spendBudget('apiFootball'))) return { observed: 0, closed: 0 };
-
-  let live: LiveSnapshotInput[];
-  try {
-    live = await fetchAllLive(config.apiFootball);
-  } catch (error: any) {
-    console.warn('[Marqueurs live] Échec du relevé:', error.message);
-    return { observed: 0, closed: 0 };
-  }
+  const live = liveFixtures;
 
   const model = readLearnedModel();
   const focusLeagues = new Set((model?.focusLeagues ?? []).map((l) => l.toLowerCase()));
 
   const universeById = new Map<number, UniverseMatch>(universe.map((m) => [m.fixtureId, m]));
-  const liveByFixture = new Map<number, LiveSnapshotInput>(live.map((l) => [l.fixtureId, l]));
+  const liveByFixture = new Map<number, LiveFixture>(live.map((l) => [l.fixtureId, l]));
 
   // Matchs de l'univers actuellement en 1ère mi-temps, ligues jouées d'abord :
   // ce sont eux qui méritent les requêtes de statistiques détaillées.
@@ -424,8 +384,8 @@ export async function runLiveMarkerTick(): Promise<{ observed: number; closed: n
       homeTeam: meta.homeTeam,
       awayTeam: meta.awayTeam,
       minute: l.minute,
-      goalsHome: l.goalsHome,
-      goalsAway: l.goalsAway,
+      goalsHome: l.homeGoals,
+      goalsAway: l.awayGoals,
       markers,
       focus: focusLeagues.has(meta.league.toLowerCase()),
       source: fixtureSource.get(l.fixtureId) ?? 'api_football',
