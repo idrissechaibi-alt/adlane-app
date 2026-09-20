@@ -141,6 +141,23 @@ export interface MarkerRule {
   lift: number;
 }
 
+/**
+ * Ce que l'app a appris d'un marché à force de le voir gagner ou perdre :
+ * l'écart entre la probabilité qu'elle annonçait et le taux de réussite
+ * réellement constaté. Alimenté par les DEUX pipelines (les paris fictifs
+ * fournissent l'essentiel du volume), appliqué aux DEUX.
+ */
+export interface MarketExpertise {
+  market: TrackedMarket;
+  samples: number;
+  /** Probabilité moyenne annoncée sur ces échantillons. */
+  meanPredicted: number;
+  /** Taux de réussite réellement observé. */
+  hitRate: number;
+  /** hitRate / meanPredicted, borné : <1 = le modèle est trop optimiste sur ce marché. */
+  calibrationFactor: number;
+}
+
 export interface LearnedModel {
   updatedAt: string;
   totalRows: number;
@@ -157,6 +174,9 @@ export interface LearnedModel {
   };
   /** Ligues sur lesquelles l'utilisateur joue réellement (priorité d'apprentissage). */
   focusLeagues: string[];
+  /** Expertise empirique par marché, mesurée sur les résultats réellement
+   * constatés (PredictionOutcome) — consultée à CHAQUE prédiction. */
+  marketExpertise?: MarketExpertise[];
   /** Fiabilité mesurée des marqueurs Omniroute par recoupement avec API-Football. */
   omnirouteTrust?: {
     samples: number;
@@ -263,6 +283,55 @@ export function readTrainingRows(days: number = 14): TrainingRow[] {
     }
   }
   return rows;
+}
+
+// ==================== RÉSULTATS DE PRÉDICTIONS (expertise empirique) ====================
+
+/**
+ * Une prédiction confrontée à la réalité : ce que le modèle annonçait, ce qui
+ * s'est réellement passé. Écrit au règlement de chaque match (dailyReview.ts),
+ * relu par autoLearn pour mesurer marché par marché l'écart entre annonce et
+ * réalité — c'est cette mesure qui corrige ensuite les prédictions suivantes.
+ */
+export interface PredictionOutcome {
+  ts: string;
+  fixtureId: number;
+  league: string;
+  market: TrackedMarket;
+  selection: string;
+  predictedProb: number;
+  won: boolean;
+  kind: 'minute20' | 'minute60' | 'halftime';
+  minute: number;
+  /** false = pari fictif de la boucle d'apprentissage. */
+  real: boolean;
+}
+
+export function appendPredictionOutcomes(outcomes: PredictionOutcome[]): void {
+  if (outcomes.length === 0) return;
+  const file = fileIn(`outcomes-${dayKey()}.jsonl`);
+  const existing = readTextSafe(file) ?? '';
+  const added = outcomes.map((o) => JSON.stringify(o)).join('\n');
+  writeText(file, existing ? `${existing}\n${added}` : added);
+}
+
+/** Corpus glissant des résultats mesurés (les deux pipelines confondus). */
+export function readPredictionOutcomes(days: number = 30): PredictionOutcome[] {
+  const outcomes: PredictionOutcome[] = [];
+  for (let i = 0; i < days; i++) {
+    const date = new Date(Date.now() - i * 86_400_000);
+    const content = readTextSafe(fileIn(`outcomes-${dayKey(date)}.jsonl`));
+    if (!content) continue;
+    for (const line of content.split('\n')) {
+      if (!line.trim()) continue;
+      try {
+        outcomes.push(JSON.parse(line));
+      } catch {
+        // ligne corrompue : ignorée sans casser la lecture
+      }
+    }
+  }
+  return outcomes;
 }
 
 // ==================== INSTANTANÉS EN ATTENTE ====================

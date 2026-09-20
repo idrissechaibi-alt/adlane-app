@@ -11,6 +11,7 @@ import * as TaskManager from 'expo-task-manager';
 import { getAPIConfig } from '../api/multiAPIManager';
 import { spendBudget } from './requestBudget';
 import { ensureDailyUniverse } from './matchUniverse';
+import { ensureFictionalDailyProgram } from './fictionalProgram';
 import { runLiveMarkerTick } from './liveMarkers';
 import { fetchLiveFixtures, fetchOmnirouteAllLiveFixtures, LiveFixture } from './halftimeMonitor';
 import { consolidateLearning } from './autoLearn';
@@ -78,6 +79,8 @@ const MINIMUM_INTERVAL_MINUTES = 15; // plancher Android, inutile de descendre
 
 export interface AutoLearnTickDiagnostics {
   universeSize: number;
+  /** Matchs du programme fictif du jour (Omniroute seul). */
+  fictionalProgramSize: number;
   liveFixturesFound: number;
   liveFixturesSource: SharedLiveFixturesResult['source'];
   liveMarkerObserved: number;
@@ -115,6 +118,23 @@ export async function runAutoLearnTick(): Promise<AutoLearnTickDiagnostics> {
     universeSize = universe.length;
   } catch (error: any) {
     console.warn('[Tâche de fond] Univers du jour indisponible:', error.message);
+  }
+
+  // Programme du jour de la boucle FICTIVE : Omniroute balaie une fois par
+  // jour le calendrier de 20 pays européens (toutes divisions, catégories
+  // jeunes comprises) et en retient 250 matchs avec leurs horaires. Idempotent
+  // — construit au premier tour après minuit, relu tel quel ensuite. C'est ce
+  // programme, et lui seul, qui dit au pipeline fictif quels matchs suivre et
+  // quand : aucune API n'intervient.
+  let fictionalProgramSize = 0;
+  try {
+    const omnirouteConfig = await loadOmnirouteConfig();
+    if (omnirouteConfig) {
+      const program = await ensureFictionalDailyProgram(omnirouteConfig);
+      fictionalProgramSize = program.length;
+    }
+  } catch (error: any) {
+    console.warn('[Tâche de fond] Programme fictif du jour indisponible:', error.message);
   }
 
   // Compositions confirmées à T-90 (recherche Google/Omniroute, gratuit) :
@@ -178,6 +198,7 @@ export async function runAutoLearnTick(): Promise<AutoLearnTickDiagnostics> {
 
   return {
     universeSize,
+    fictionalProgramSize,
     liveFixturesFound: liveFixtures.length,
     liveFixturesSource: shared.source,
     liveMarkerObserved,

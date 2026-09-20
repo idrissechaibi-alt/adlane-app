@@ -96,7 +96,7 @@ function fnv1aHash(input: string): number {
   return hash >>> 0;
 }
 
-function syntheticFixtureId(homeTeam: string, awayTeam: string, dateKey: string): number {
+export function syntheticFixtureId(homeTeam: string, awayTeam: string, dateKey: string): number {
   const key = `${homeTeam.trim().toLowerCase()}|${awayTeam.trim().toLowerCase()}|${dateKey}`;
   return SYNTHETIC_FIXTURE_ID_BASE + (fnv1aHash(key) % SYNTHETIC_FIXTURE_ID_RANGE);
 }
@@ -182,34 +182,57 @@ export async function fetchOmnirouteAllLiveFixtures(config: OmnirouteConfig): Pr
 
 const OMNIROUTE_MATCH_STATUS_MAP: Record<string, string> = { '1H': '1H', HT: 'HT', '2H': '2H' };
 
+/** Relevé complet d'un match : son état ET ses statistiques de déroulement,
+ * ramenés par UNE seule requête Omniroute (les tirs cadrés servent ensuite à
+ * recalibrer les buts attendus sur l'évolution réelle du match — cf.
+ * poisson.ts/recalibrateGoalsForWindow). Les demander dans la même requête
+ * que le score évite de payer deux allers-retours par match et par
+ * checkpoint. */
+export interface LiveFixtureDetail extends LiveFixture {
+  shotsOnTargetHome?: number;
+  shotsOnTargetAway?: number;
+  /** Corners/cartons cumulés depuis le coup d'envoi : suffisent à projeter
+   * le reste de la mi-temps au rythme observé, sans aucune moyenne de saison
+   * externe (le pipeline fictif n'a que Omniroute). */
+  cornersTotal?: number;
+  cardsTotal?: number;
+}
+
 /**
  * Statut EN CE MOMENT d'UN match précis, via Omniroute — contrairement à
- * fetchOmnirouteAllLiveFixtures (une liste large, best-effort, adaptée au
- * pipeline fictif qui explore tout l'univers), cette requête cible un seul
- * match connu par avance et est donc bien plus fiable : demander "liste-moi
- * tout ce qui est en cours" peut en oublier un ; demander "CE match précis
- * est-il en cours" ne peut que confirmer ou infirmer. Utilisée en secours
- * pour le pipeline RÉEL (argent misé, 5 grands championnats) quand un match
- * pourtant programmé n'apparaît pas dans le relevé live partagé — pour ne
- * jamais rater une notification de pari réel faute d'un repli assez
- * précis.
+ * fetchOmnirouteAllLiveFixtures (une liste large, best-effort), cette requête
+ * cible un seul match connu par avance et est donc bien plus fiable :
+ * demander "liste-moi tout ce qui est en cours" peut en oublier un ;
+ * demander "CE match précis est-il en cours" ne peut que confirmer ou
+ * infirmer.
+ *
+ * C'est le relevé de base des DEUX pipelines quand Omniroute travaille seul :
+ * le pipeline fictif interroge ainsi chacun des matchs de son programme du
+ * jour à l'approche de ses checkpoints, et le pipeline réel s'en sert en
+ * secours quand un match programmé n'apparaît pas dans le relevé live
+ * partagé — pour ne jamais rater une notification de pari réel.
  */
 export async function fetchOmnirouteMatchStatus(
   config: OmnirouteConfig,
   homeTeam: string,
   awayTeam: string,
   league: string
-): Promise<LiveFixture | null> {
+): Promise<LiveFixtureDetail | null> {
   let result: { text: string; model: string } | null;
   try {
     result = await askOmnirouteLight(
       'Tu es un outil de lecture de score de football EN DIRECT. Réponds UNIQUEMENT par un JSON strict, ' +
         "sans texte autour. N'invente RIEN : si tu ne trouves pas ce match sur une source de score en direct " +
-        'fiable (Sofascore, Flashscore, l\'API du diffuseur...), réponds avec status "not_found".',
+        'fiable (Sofascore, Flashscore, l\'API du diffuseur...), réponds avec status "not_found" ; si seul le ' +
+        'détail des tirs manque, mets null pour ces champs-là.',
       `Match : ${homeTeam} vs ${awayTeam} (${league}).\n` +
-        'Cherche son statut EN CE MOMENT sur une source de score en direct fiable.\n' +
+        'Cherche son statut EN CE MOMENT sur une source de score en direct fiable, avec les statistiques ' +
+        'cumulées depuis le coup d\'envoi.\n' +
         'Réponds avec ce JSON exact, sans rien autour :\n' +
-        '{"status": "not_started"|"1H"|"HT"|"2H"|"finished"|"not_found", "minute": number|null, "home_goals": number|null, "away_goals": number|null}',
+        '{"status": "not_started"|"1H"|"HT"|"2H"|"finished"|"not_found", "minute": number|null, ' +
+        '"home_goals": number|null, "away_goals": number|null, ' +
+        '"shots_on_target_home": number|null, "shots_on_target_away": number|null, ' +
+        '"corners_total": number|null, "cards_total": number|null}',
       config
     );
   } catch (error: any) {
@@ -229,18 +252,21 @@ export async function fetchOmnirouteMatchStatus(
   const statusShort = OMNIROUTE_MATCH_STATUS_MAP[parsed.status];
   if (!statusShort) return null; // not_started / finished / not_found : rien à observer maintenant
 
-  const minute = typeof parsed.minute === 'number' && Number.isFinite(parsed.minute) ? parsed.minute : 0;
-  const homeGoals = typeof parsed.home_goals === 'number' && Number.isFinite(parsed.home_goals) ? parsed.home_goals : 0;
-  const awayGoals = typeof parsed.away_goals === 'number' && Number.isFinite(parsed.away_goals) ? parsed.away_goals : 0;
+  const numberOrUndefined = (v: unknown): number | undefined =>
+    typeof v === 'number' && Number.isFinite(v) ? v : undefined;
 
   return {
     statusShort,
     homeTeam,
     awayTeam,
-    homeGoals,
-    awayGoals,
+    homeGoals: numberOrUndefined(parsed.home_goals) ?? 0,
+    awayGoals: numberOrUndefined(parsed.away_goals) ?? 0,
     fixtureId: syntheticFixtureId(homeTeam, awayTeam, new Date().toISOString().split('T')[0]),
-    minute,
+    minute: numberOrUndefined(parsed.minute) ?? 0,
     league,
+    shotsOnTargetHome: numberOrUndefined(parsed.shots_on_target_home),
+    shotsOnTargetAway: numberOrUndefined(parsed.shots_on_target_away),
+    cornersTotal: numberOrUndefined(parsed.corners_total),
+    cardsTotal: numberOrUndefined(parsed.cards_total),
   };
 }

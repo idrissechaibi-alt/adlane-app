@@ -20,7 +20,9 @@ import {
   LearnedModel,
   MarkerRule,
   MarkerSnapshot,
+  MarketExpertise,
   PaperBet,
+  PredictionOutcome,
   TrackedMarket,
   TrainingRow,
   marketLabel,
@@ -29,6 +31,7 @@ import {
   readLearnedModel,
   readMarketSeries,
   readPaperBets,
+  readPredictionOutcomes,
   readTrainingRows,
   writeAgentDigest,
   writeLearnedModel,
@@ -397,13 +400,92 @@ function settlePaperBets(rows: TrainingRow[]): PaperBet[] {
   return bets;
 }
 
+/** Échantillons nécessaires avant qu'un marché ne corrige quoi que ce soit :
+ * en dessous, l'écart mesuré est du bruit, pas une expertise. */
+const MIN_OUTCOMES_PER_MARKET = 25;
+
 /**
- * Consolidation complète : règles, paris papier, recalibrage, digest.
- * Appelée à la fin de chaque tour de fond.
+ * Synthèse de ce que valent réellement nos annonces, marché par marché :
+ * probabilité moyenne annoncée vs taux de réussite constaté. C'est le cœur de
+ * l'expertise empirique que l'app s'auto-fabrique — alimentée surtout par les
+ * paris fictifs (gros volume, aucun enjeu) et appliquée ensuite aux deux
+ * pipelines, y compris aux paris réels.
+ */
+function computeMarketExpertise(outcomes: PredictionOutcome[]): MarketExpertise[] {
+  const byMarket = new Map<TrackedMarket, PredictionOutcome[]>();
+  for (const outcome of outcomes) {
+    const list = byMarket.get(outcome.market) ?? [];
+    list.push(outcome);
+    byMarket.set(outcome.market, list);
+  }
+
+  const expertise: MarketExpertise[] = [];
+  for (const [market, list] of byMarket) {
+    const samples = list.length;
+    const hitRate = list.filter((o) => o.won).length / samples;
+    const meanPredicted = list.reduce((sum, o) => sum + o.predictedProb, 0) / samples;
+    // Borné comme le recalibrage global : une série de malchance ne doit pas
+    // effondrer un marché, ni une bonne série le rendre euphorique.
+    const rawFactor = meanPredicted > 0 && samples >= MIN_OUTCOMES_PER_MARKET ? hitRate / meanPredicted : 1;
+    expertise.push({
+      market,
+      samples,
+      meanPredicted,
+      hitRate,
+      calibrationFactor: Math.min(1.5, Math.max(0.5, rawFactor)),
+    });
+  }
+
+  return expertise.sort((a, b) => b.samples - a.samples);
+}
+
+/**
+ * Corrige une probabilité annoncée par l'expertise empirique accumulée sur ce
+ * marché précis, et dit dans l'évidence ce qui a été appliqué. Appelée pour
+ * CHAQUE jambe des deux pipelines : c'est le point par lequel tout ce que
+ * l'app a mesuré revient nourrir la prédiction suivante. Sans assez
+ * d'échantillons, renvoie la probabilité telle quelle — jamais de correction
+ * bâtie sur du bruit.
+ */
+export function applyMarketExpertise(
+  market: TrackedMarket,
+  prob: number,
+  evidence: string
+): { prob: number; evidence: string } {
+  const model = readLearnedModel();
+  const expertise = model?.marketExpertise?.find((e) => e.market === market);
+  if (!expertise || expertise.samples < MIN_OUTCOMES_PER_MARKET || expertise.calibrationFactor === 1) {
+    return { prob, evidence };
+  }
+
+  const corrected = Math.min(0.99, Math.max(0.01, prob * expertise.calibrationFactor));
+  return {
+    prob: corrected,
+    evidence:
+      `${evidence} Corrigé ×${expertise.calibrationFactor.toFixed(2)} par l'expérience de l'app sur ce marché : ` +
+      `${(expertise.meanPredicted * 100).toFixed(0)}% annoncés en moyenne pour ${(expertise.hitRate * 100).toFixed(0)}% réalisés ` +
+      `sur ${expertise.samples} prédictions déjà vérifiées.`,
+  };
+}
+
+/**
+ * Consolidation complète : règles, paris papier, recalibrage, expertise par
+ * marché, digest. Appelée à la fin de chaque tour de fond.
  */
 export async function consolidateLearning(): Promise<LearnedModel | null> {
   const rows = readTrainingRows(14);
-  if (rows.length < MIN_SAMPLES_PER_RULE) return readLearnedModel();
+  const marketExpertise = computeMarketExpertise(readPredictionOutcomes(30));
+
+  // L'expertise par marché vient d'un corpus distinct (résultats mesurés) et
+  // ne dépend pas du volume d'instantanés de marqueurs : on la met à jour même
+  // quand celui-ci est encore trop maigre pour bâtir des règles.
+  if (rows.length < MIN_SAMPLES_PER_RULE) {
+    const existing = readLearnedModel();
+    if (!existing) return null;
+    const updated = { ...existing, marketExpertise };
+    writeLearnedModel(updated);
+    return updated;
+  }
 
   const omnirouteTrust = computeOmnirouteTrust(readCrossCheckSamples(14));
   const { rules, baselines } = buildRules(rows, omnirouteTrust.trusted);
@@ -436,6 +518,7 @@ export async function consolidateLearning(): Promise<LearnedModel | null> {
     },
     focusLeagues: focus.leagues,
     omnirouteTrust,
+    marketExpertise,
   };
 
   writeLearnedModel(model);

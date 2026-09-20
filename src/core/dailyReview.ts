@@ -25,7 +25,9 @@ import { getAllBets, saveDailyReport, getDailyReports } from '../database/storag
 import {
   InPlayProposal,
   MarketDayPoint,
+  PredictionOutcome,
   TrackedMarket,
+  appendPredictionOutcomes,
   readInPlayProposals,
   readMarketSeries,
   writeInPlayProposals,
@@ -360,6 +362,12 @@ export async function runNightlyReviewIfDue(): Promise<number> {
       }
     }
 
+    // Chaque jambe réglée part aussi dans le corpus d'expertise empirique :
+    // c'est lui qu'autoLearn synthétise marché par marché, et que chaque
+    // prédiction suivante consulte (applyMarketExpertise). Sans cette
+    // écriture, un match qui se termine n'apprend rien à l'app.
+    const settledOutcomes: PredictionOutcome[] = [];
+
     for (const proposal of dayProposals) {
       const allResolved = proposal.legs.every((leg) => finals.has(leg.fixtureId));
       if (!allResolved) continue; // au moins un match du combo n'a pas encore de score final
@@ -370,9 +378,23 @@ export async function runNightlyReviewIfDue(): Promise<number> {
         if (won == null) continue;
         leg.settled = true;
         leg.won = won;
+        settledOutcomes.push({
+          ts: new Date().toISOString(),
+          fixtureId: leg.fixtureId,
+          league: leg.league,
+          market: leg.market,
+          selection: leg.selection,
+          predictedProb: leg.prob,
+          won,
+          kind: proposal.kind,
+          minute: proposal.minute,
+          real: proposal.real !== false,
+        });
       }
       proposal.reviewed = true;
     }
+
+    if (settledOutcomes.length > 0) appendPredictionOutcomes(settledOutcomes);
 
     const points = buildDayPoints(day, dayProposals);
     // Une journée déjà présente dans la série est remplacée, jamais dupliquée.

@@ -105,7 +105,8 @@ export default function EvolutionScreen() {
       refreshLiveCounters();
       Alert.alert(
         'Scan terminé',
-        `Univers du jour : ${diag.universeSize} match(s) suivis.\n` +
+        `Programme fictif du jour (Omniroute) : ${diag.fictionalProgramSize} match(s).\n` +
+          `Univers du jour (API) : ${diag.universeSize} match(s) suivis.\n` +
           `Relevé live : ${diag.liveFixturesFound} match(s) en direct — source : ${LIVE_FIXTURES_SOURCE_LABEL[diag.liveFixturesSource] ?? diag.liveFixturesSource}.\n` +
           `Marqueurs : ${diag.liveMarkerObserved} observé(s), ${diag.liveMarkerClosed} clôturé(s).\n` +
           `Scan 20e/60e minute : ${diag.freshInPlayProposals} nouvelle(s) proposition(s).`
