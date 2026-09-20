@@ -3,6 +3,7 @@
 
 import { APIResponse, FootballMatch, MatchStatistics, Team, Player, MarketOdds, AllMatchOdds } from './types';
 import * as ballDontLie from './footballDataAPIs/ballDontLie';
+import { StandingEntry } from './footballDataAPIs/ballDontLie';
 import * as sofaScore from './footballDataAPIs/sofaScore';
 import * as footballData from './footballDataAPIs/footballData';
 import * as theOddsAPI from './footballDataAPIs/theOddsAPI';
@@ -280,6 +281,24 @@ export class FootballAPIManager {
       source: 'multiAPI',
       timestamp: new Date().toISOString()
     };
+  }
+
+  /**
+   * Classement réel d'une ligue (API-Football uniquement — ni football-data.org
+   * ni SofaScore n'exposent un classement propre dans cette app).
+   */
+  async getStandings(leagueId: string): Promise<APIResponse<StandingEntry[]>> {
+    if (!this.config.ballDontLie?.apiKey) {
+      return {
+        success: false,
+        error: 'Classement indisponible : configure une clé API-Football dans Paramètres → Gestion des API.',
+        source: 'multiAPI',
+        timestamp: new Date().toISOString()
+      };
+    }
+
+    await incrementRequestCount(REQUEST_COUNTER_SOURCE.ballDontLie);
+    return ballDontLie.getStandings(this.config.ballDontLie, leagueId);
   }
 
   /**

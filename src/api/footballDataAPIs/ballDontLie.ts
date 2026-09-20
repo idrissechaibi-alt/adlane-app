@@ -254,6 +254,82 @@ export async function getTeamLastMatches(
   }
 }
 
+export interface StandingEntry {
+  rank: number;
+  teamName: string;
+  teamLogo?: string;
+  played: number;
+  win: number;
+  draw: number;
+  lose: number;
+  goalsFor: number;
+  goalsAgainst: number;
+  goalsDiff: number;
+  points: number;
+  form?: string;
+}
+
+/**
+ * Classement réel de la ligue (utilisé par l'écran Données Foot quand on
+ * clique sur une compétition). Mis en cache comme le reste : le classement
+ * ne change qu'après chaque journée jouée.
+ */
+export async function getStandings(
+  config: BallDontLieConfig,
+  leagueId: string,
+  season?: number
+): Promise<APIResponse<StandingEntry[]>> {
+  const year = season ?? seasonForDate(new Date().toISOString());
+  const cacheKey = generateCacheKey('standings', { leagueId, year });
+  const cached = await getFromCache<StandingEntry[]>(cacheKey);
+
+  if (cached) {
+    return { success: true, data: cached, cacheHit: true, source: 'ballDontLie', timestamp: new Date().toISOString() };
+  }
+
+  try {
+    const response = await fetch(`${BASE_URL}/standings?league=${leagueId}&season=${year}`, {
+      headers: buildHeaders(config)
+    });
+
+    if (!response.ok) {
+      return { success: false, error: `HTTP ${response.status}`, source: 'ballDontLie', timestamp: new Date().toISOString() };
+    }
+
+    const data = await response.json();
+    const apiError = data.errors && Object.keys(data.errors).length > 0
+      ? Object.values(data.errors).join('; ')
+      : null;
+    if (apiError) {
+      return { success: false, error: `API-Football: ${apiError}`, source: 'ballDontLie', timestamp: new Date().toISOString() };
+    }
+
+    // API-Football renvoie un tableau de groupes (poules) ; les 5 grands
+    // championnats n'en ont qu'un seul, on prend le premier.
+    const table = data.response?.[0]?.league?.standings?.[0] || [];
+    const standings: StandingEntry[] = table.map((row: any) => ({
+      rank: row.rank,
+      teamName: row.team?.name || '',
+      teamLogo: row.team?.logo,
+      played: row.all?.played ?? 0,
+      win: row.all?.win ?? 0,
+      draw: row.all?.draw ?? 0,
+      lose: row.all?.lose ?? 0,
+      goalsFor: row.all?.goals?.for ?? 0,
+      goalsAgainst: row.all?.goals?.against ?? 0,
+      goalsDiff: row.goalsDiff ?? 0,
+      points: row.points ?? 0,
+      form: row.form,
+    }));
+
+    await saveToCache(cacheKey, standings);
+
+    return { success: true, data: standings, source: 'ballDontLie', timestamp: new Date().toISOString() };
+  } catch (error: any) {
+    return { success: false, error: error.message, source: 'ballDontLie', timestamp: new Date().toISOString() };
+  }
+}
+
 // ==================== TRANSFORMERS ====================
 
 /**

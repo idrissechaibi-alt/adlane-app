@@ -366,12 +366,37 @@ export function generateDailyProposals(
     });
   }
 
-  // 3. Création d'un COMBINÉ de volume si au moins 2 jambes solides (sans 1X2 < 50%)
+  // 3. Combinés PAR CRÉNEAU (pas un seul combiné "de volume" mélangeant des
+  // heures de coup d'envoi différentes) : quand plusieurs matchs démarrent au
+  // même moment, c'est justement l'occasion naturelle de les combiner —
+  // l'ancien comportement ne produisait qu'UN combiné pour toute la journée,
+  // qui pouvait ignorer un créneau avec 6 matchs simultanés si les 3
+  // premières jambes fortes venaient d'un autre créneau.
   const strongLegs = evaluatedSelections.filter(s => s.modelProb >= 0.55 && s.market !== 'BTTS');
+  const MAX_LEGS_PER_COMBO = 4;
 
-  if (strongLegs.length >= 2) {
-    const comboLegs: BetLeg[] = strongLegs.slice(0, 3).map((s, idx) => ({
-      id: `combo-leg-${idx}`,
+  const strongLegsBySlot = new Map<string, typeof strongLegs>();
+  for (const leg of strongLegs) {
+    const key = leg.match.creneau_display;
+    const group = strongLegsBySlot.get(key) ?? [];
+    group.push(leg);
+    strongLegsBySlot.set(key, group);
+  }
+
+  for (const [slotDisplay, slotLegs] of strongLegsBySlot.entries()) {
+    // Jamais deux sélections du même match dans un combiné : on garde la
+    // jambe la plus probable quand un match en propose plusieurs (ex: à la
+    // fois "Victoire domicile" et "Plus de 2,5 buts" au-dessus du seuil).
+    const bestPerMatch = new Map<string, (typeof slotLegs)[number]>();
+    for (const leg of slotLegs) {
+      const existing = bestPerMatch.get(leg.match.id);
+      if (!existing || leg.modelProb > existing.modelProb) bestPerMatch.set(leg.match.id, leg);
+    }
+    const candidates = Array.from(bestPerMatch.values());
+    if (candidates.length < 2) continue;
+
+    const comboLegs: BetLeg[] = candidates.slice(0, MAX_LEGS_PER_COMBO).map((s, idx) => ({
+      id: `combo-leg-${slotDisplay}-${idx}`,
       match: `${s.match.homeTeam} - ${s.match.awayTeam}`,
       kickoff_utc: s.match.kickoff_utc,
       league: s.match.leagueName,
@@ -386,11 +411,11 @@ export function generateDailyProposals(
     const comboOdds = comboLegs.reduce((acc, l) => acc * (l.odds || 1), 1);
 
     const comboCandidate: Bet = {
-      id: `combo-daily-${new Date().toISOString().split('T')[0]}`,
+      id: `combo-${slotDisplay.replace(/[^0-9a-z]/gi, '')}-${new Date().toISOString().split('T')[0]}`,
       version: 1,
-      date: strongLegs[0].match.kickoff_utc.split('T')[0],
-      creneau_utc: strongLegs[0].match.kickoff_utc,
-      creneau_display: strongLegs[0].match.creneau_display,
+      date: candidates[0].match.kickoff_utc.split('T')[0],
+      creneau_utc: candidates[0].match.kickoff_utc,
+      creneau_display: slotDisplay,
       league: 'Multi-championnats',
       legs: comboLegs,
       odds: comboOdds,
@@ -400,7 +425,7 @@ export function generateDailyProposals(
       played: false,
       confiance: 65,
       confidence_level: 'Moyen',
-      analysis: 'Combiné de volume construit sur des jambes à probabilité >= 55%.',
+      analysis: `Combiné ${comboLegs.length} jambes du créneau ${slotDisplay}, construit sur des probabilités >= 55%.`,
       validation_flags: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -411,7 +436,7 @@ export function generateDailyProposals(
     proposals.push({
       id: comboCandidate.id,
       type: 'combo',
-      title: `Combiné ${comboLegs.length} jambes`,
+      title: `Combiné ${slotDisplay} (${comboLegs.length} jambes)`,
       legs: comboLegs,
       totalOdds: comboOdds,
       confiance: comboCandidate.confiance || 50,

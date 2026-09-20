@@ -24,8 +24,8 @@ const LEAGUE_NAME_MATCH: Record<string, string[]> = {
   '140': ['la liga', 'laliga'],
   '135': ['serie a'],
   '78': ['bundesliga'],
-  '101': ['ligue 1'],
-  '1': ['champions league'],
+  '61': ['ligue 1'],
+  '2': ['champions league'],
 };
 
 function sofaScoreHeaders(): HeadersInit {

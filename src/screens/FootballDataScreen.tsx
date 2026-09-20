@@ -9,13 +9,15 @@ import {
   ActivityIndicator,
   ScrollView,
   StyleSheet,
-  RefreshControl
+  RefreshControl,
+  Image
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 import { FootballAPIManager, createFootballAPIManager } from '../api';
 import { FootballMatch, MarketOdds } from '../api/types';
+import { StandingEntry } from '../api/footballDataAPIs/ballDontLie';
 import { getAPIConfig, incrementRequestCount } from '../api/multiAPIManager';
 import { fetchCompetitionOdds, LEAGUE_ID_TO_ODDS_SPORT_KEY } from '../api/footballDataAPIs/theOddsAPI';
 import { normalizeTeamName } from '../core/teamNameMatch';
@@ -41,15 +43,23 @@ export default function FootballDataScreen({ navigation }: any) {
   const [selectedLeague, setSelectedLeague] = useState('39'); // Premier League par défaut
   const [error, setError] = useState<string | null>(null);
   const [hasConfiguredKeys, setHasConfiguredKeys] = useState(true);
+  const [standings, setStandings] = useState<StandingEntry[]>([]);
+  const [standingsError, setStandingsError] = useState<string | null>(null);
+  const [standingsLoading, setStandingsLoading] = useState(false);
 
-  // Ligue disponibles
+  // Ligues disponibles — IDs API-Football réels (v3.football.api-sports.io).
+  // "101" et "1" étaient utilisés ici pour Ligue 1 / Champions League : ce
+  // sont en réalité d'AUTRES compétitions dans la numérotation API-Football
+  // (61 et 2 sont les bons IDs, confirmés par footballDataCoUk.ts/eloRatings.ts
+  // qui utilisent déjà "61" pour Ligue 1 ailleurs dans l'app) — ce qui faisait
+  // remonter 0 ou les mauvais matchs pour ces deux boutons.
   const leagues = [
-    { id: '39', name: 'Premier League', country: 'Angleterre' },
-    { id: '140', name: 'La Liga', country: 'Espagne' },
-    { id: '135', name: 'Serie A', country: 'Italie' },
-    { id: '78', name: 'Bundesliga', country: 'Allemagne' },
-    { id: '101', name: 'Ligue 1', country: 'France' },
-    { id: '1', name: 'Champions League', country: 'Europe' },
+    { id: '39', name: 'Premier League', country: 'Angleterre', logo: 'https://media.api-sports.io/football/leagues/39.png' },
+    { id: '140', name: 'La Liga', country: 'Espagne', logo: 'https://media.api-sports.io/football/leagues/140.png' },
+    { id: '135', name: 'Serie A', country: 'Italie', logo: 'https://media.api-sports.io/football/leagues/135.png' },
+    { id: '78', name: 'Bundesliga', country: 'Allemagne', logo: 'https://media.api-sports.io/football/leagues/78.png' },
+    { id: '61', name: 'Ligue 1', country: 'France', logo: 'https://media.api-sports.io/football/leagues/61.png' },
+    { id: '2', name: 'Champions League', country: 'Europe', logo: 'https://media.api-sports.io/football/leagues/2.png' },
   ];
 
   useEffect(() => {
@@ -64,6 +74,7 @@ export default function FootballDataScreen({ navigation }: any) {
       });
       setManager(manager);
       fetchFixtures(manager);
+      loadStandings(manager);
     };
 
     initManager();
@@ -78,6 +89,26 @@ export default function FootballDataScreen({ navigation }: any) {
     });
     return unsubscribe;
   }, [navigation]);
+
+  /** Classement réel de la ligue sélectionnée (API-Football), affiché sous "Matchs du jour". */
+  const loadStandings = async (mgr: FootballAPIManager) => {
+    setStandingsLoading(true);
+    setStandingsError(null);
+    try {
+      const result = await mgr.getStandings(selectedLeague);
+      if (result.success && result.data) {
+        setStandings(result.data);
+      } else {
+        setStandings([]);
+        setStandingsError(result.error || 'Classement indisponible.');
+      }
+    } catch (err: any) {
+      setStandings([]);
+      setStandingsError(err.message || 'Classement indisponible.');
+    } finally {
+      setStandingsLoading(false);
+    }
+  };
 
   /**
    * Cotes de TOUS les matchs de la ligue en UNE requête.
@@ -294,21 +325,22 @@ export default function FootballDataScreen({ navigation }: any) {
         </TouchableOpacity>
       )}
 
-      {/* League Selector */}
+      {/* League Selector — icônes des compétitions plutôt que des rectangles de texte */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.leagueSelector}>
         {leagues.map(league => (
           <TouchableOpacity
             key={league.id}
             style={[
-              styles.leagueButton,
-              selectedLeague === league.id && styles.leagueButtonActive
+              styles.leagueIconButton,
+              selectedLeague === league.id && styles.leagueIconButtonActive
             ]}
             onPress={() => setSelectedLeague(league.id)}
           >
+            <Image source={{ uri: league.logo }} style={styles.leagueIcon} resizeMode="contain" />
             <Text style={[
-              styles.leagueButtonText,
-              selectedLeague === league.id && styles.leagueButtonTextActive
-            ]}>
+              styles.leagueIconLabel,
+              selectedLeague === league.id && styles.leagueIconLabelActive
+            ]} numberOfLines={1}>
               {league.name}
             </Text>
           </TouchableOpacity>
@@ -346,6 +378,40 @@ export default function FootballDataScreen({ navigation }: any) {
           {fixtures.map((item) => (
             <View key={item.id}>{renderMatch({ item })}</View>
           ))}
+
+          {/* Classement réel de la ligue sélectionnée (API-Football) */}
+          <View style={styles.standingsBox}>
+            <Text style={styles.standingsTitle}>
+              Classement — {leagues.find((l) => l.id === selectedLeague)?.name}
+            </Text>
+
+            {standingsLoading ? (
+              <ActivityIndicator size="small" color="#3b82f6" style={{ marginVertical: 12 }} />
+            ) : standingsError ? (
+              <Text style={styles.standingsError}>{standingsError}</Text>
+            ) : standings.length === 0 ? (
+              <Text style={styles.standingsError}>Classement indisponible pour cette compétition.</Text>
+            ) : (
+              <View>
+                <View style={styles.standingsHeaderRow}>
+                  <Text style={[styles.standingsCell, styles.standingsRankCell, styles.standingsHeaderText]}>#</Text>
+                  <Text style={[styles.standingsCell, styles.standingsTeamCell, styles.standingsHeaderText]}>Équipe</Text>
+                  <Text style={[styles.standingsCell, styles.standingsHeaderText]}>J</Text>
+                  <Text style={[styles.standingsCell, styles.standingsHeaderText]}>Diff</Text>
+                  <Text style={[styles.standingsCell, styles.standingsHeaderText]}>Pts</Text>
+                </View>
+                {standings.map((row) => (
+                  <View key={row.rank} style={styles.standingsRow}>
+                    <Text style={[styles.standingsCell, styles.standingsRankCell]}>{row.rank}</Text>
+                    <Text style={[styles.standingsCell, styles.standingsTeamCell]} numberOfLines={1}>{row.teamName}</Text>
+                    <Text style={styles.standingsCell}>{row.played}</Text>
+                    <Text style={styles.standingsCell}>{row.goalsDiff > 0 ? `+${row.goalsDiff}` : row.goalsDiff}</Text>
+                    <Text style={[styles.standingsCell, styles.standingsPointsCell]}>{row.points}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
         </View>
 
         {/* Value Bets Section */}
@@ -450,6 +516,90 @@ const styles = StyleSheet.create({
   },
   leagueButtonTextActive: {
     color: 'white'
+  },
+  leagueIconButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 72,
+    paddingVertical: 8,
+    marginRight: 10,
+    borderRadius: 12,
+    backgroundColor: '#1e293b',
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  leagueIconButtonActive: {
+    backgroundColor: '#1d3a63',
+    borderColor: '#3b82f6',
+  },
+  leagueIcon: {
+    width: 32,
+    height: 32,
+    marginBottom: 4,
+  },
+  leagueIconLabel: {
+    color: '#94a3b8',
+    fontSize: 10,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  leagueIconLabelActive: {
+    color: '#f8fafc',
+  },
+  standingsBox: {
+    marginTop: 16,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: '#334155',
+  },
+  standingsTitle: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#f1f5f9',
+    marginBottom: 10,
+  },
+  standingsError: {
+    color: '#64748b',
+    fontSize: 12,
+    fontStyle: 'italic',
+  },
+  standingsHeaderRow: {
+    flexDirection: 'row',
+    paddingBottom: 8,
+    marginBottom: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: '#334155',
+  },
+  standingsRow: {
+    flexDirection: 'row',
+    paddingVertical: 6,
+  },
+  standingsCell: {
+    flex: 1,
+    color: '#cbd5e1',
+    fontSize: 12,
+    textAlign: 'center',
+  },
+  standingsHeaderText: {
+    color: '#64748b',
+    fontWeight: '700',
+    fontSize: 10,
+    textTransform: 'uppercase',
+  },
+  standingsRankCell: {
+    flex: 0.5,
+    fontWeight: '700',
+    color: '#f8fafc',
+  },
+  standingsTeamCell: {
+    flex: 3,
+    textAlign: 'left',
+    color: '#f8fafc',
+    fontWeight: '600',
+  },
+  standingsPointsCell: {
+    fontWeight: '700',
+    color: '#10b981',
   },
   errorContainer: {
     flexDirection: 'row',
