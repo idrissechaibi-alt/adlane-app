@@ -82,6 +82,8 @@ const LINE_PICK_THRESHOLD = 0.55;
 const SLOT_COMBO_THRESHOLD = 3;
 /** Nombre maximum de combos émis par créneau et par checkpoint (paris réels). */
 const MAX_COMBOS_PER_SLOT = 2;
+/** Probabilité combinée minimale pour émettre un combo réel (3 jambes à ≥55% chacune peut descendre très bas, ex. 0.55³ ≈ 17%). */
+const MIN_COMBO_PROB = 0.25;
 
 /** Identité minimale d'un match, commune aux deux pipelines. */
 interface MatchRef {
@@ -382,7 +384,10 @@ function buildProposalFromItems(
   const combinedProb = items.reduce((product, item) => product * item.leg.prob, 1);
 
   return {
-    id: `inplay-${kind}-${items.map((i) => i.fixtureId).join('-')}`,
+    // Inclut le marché (pas seulement le fixtureId) : le pipeline fictif crée
+    // plusieurs propositions indépendantes pour le MÊME match+checkpoint (une
+    // par marché qualifié) — sans ça, leurs ids entreraient en collision.
+    id: `inplay-${kind}-${items.map((i) => `${i.fixtureId}-${i.leg.market}`).join('-')}`,
     kind,
     createdAt: new Date().toISOString(),
     minute: items[0].live.minute,
@@ -492,7 +497,7 @@ async function processRealSlotCheckpoint(
     const group = sorted.slice(i, i + 3);
     const enriched = await formulateWithOmniroute(group, checkpointLabel);
     const proposal = buildProposalFromItems(kind, enriched, window, true);
-    if (proposal) {
+    if (proposal && proposal.combinedProb >= MIN_COMBO_PROB) {
       fresh.push(proposal);
       for (const item of group) alreadyProposed.add(`${item.fixtureId}-${kind}`);
       await notifyProposal(proposal);
