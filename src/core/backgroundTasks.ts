@@ -15,6 +15,8 @@ import { checkHalftimeOpportunities } from './halftimeMonitor';
 import { enrichFocusMatches } from './focusEnrichment';
 import { runInPlayComboTick } from './inPlayCombos';
 import { runNightlyReviewIfDue } from './dailyReview';
+import { runMorningScanIfDue } from './scheduler';
+import { reconcileScoutingAnalyses } from './scoutingReview';
 import { readLearnedModel } from './learnStore';
 
 export const AUTOLEARN_TASK_NAME = 'adlane-autolearn-tick';
@@ -26,6 +28,14 @@ const MINIMUM_INTERVAL_MINUTES = 15; // plancher Android, inutile de descendre
  * (réseau coupé, quota atteint), les autres continuent.
  */
 export async function runAutoLearnTick(): Promise<void> {
+  // Scan matinal automatique (7h locales) : voir runMorningScanIfDue pour le
+  // principe de déclenchement (premier tour après l'heure cible, idempotent).
+  try {
+    await runMorningScanIfDue();
+  } catch (error: any) {
+    console.warn('[Tâche de fond] Scan matinal automatique échoué:', error.message);
+  }
+
   try {
     const model = readLearnedModel();
     await ensureDailyUniverse(model?.focusLeagues ?? []);
@@ -37,6 +47,15 @@ export async function runAutoLearnTick(): Promise<void> {
     await runLiveMarkerTick();
   } catch (error: any) {
     console.warn('[Tâche de fond] Relevé live échoué:', error.message);
+  }
+
+  // Confronte les analyses Scouting IA de la veille (et plus anciennes) au
+  // score final réel, AVANT de consolider le digest : la fiabilité mesurée
+  // doit être à jour pour la prochaine analyse.
+  try {
+    await reconcileScoutingAnalyses();
+  } catch (error: any) {
+    console.warn('[Tâche de fond] Bilan Scouting vs réalité échoué:', error.message);
   }
 
   try {

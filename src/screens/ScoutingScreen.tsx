@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { analyzeMatchWithOmniroute, DEFAULT_OMNIROUTE_CONFIG, AIAnalysisOutput } from '../core/omniroute';
 import { analyzeMatchWithGemini, fetchGoogleSearchContext } from '../core/gemini';
 import { analyzeMatchWithFreeLLMPool, getConfiguredFreeLLMProviders } from '../core/freeLLMProviders';
+import { recordScoutingAnalysis } from '../core/scoutingReview';
 import { fetchMatchContext, PerplexitySearchResult } from '../core/perplexity';
 import { getAgentLearningDigest } from '../core/autoLearn';
 import { getHistoricalPriors } from '../core/footballDataCoUk';
@@ -258,6 +259,7 @@ export default function ScoutingScreen() {
         console.log('Utilisation de Gemini Direct...');
         const result = await analyzeMatchWithGemini(matchInput, HISTORICAL_LESSONS, geminiApiKey);
         setAnalysisResult(result);
+        recordScoutingAnalysis(match, result, 'gemini');
         setDiagnostic({ engine: 'gemini', status: 'success', message: `${result.markets.length} marché(s) reçu(s).`, timestamp: new Date().toISOString() });
         setLoading(false);
         return;
@@ -274,6 +276,7 @@ export default function ScoutingScreen() {
         const outcome = await analyzeMatchWithFreeLLMPool(matchInput, HISTORICAL_LESSONS);
         if (outcome) {
           setAnalysisResult(outcome.result);
+          recordScoutingAnalysis(match, outcome.result, `freeLLM:${outcome.providerLabel}`);
           setDiagnostic({
             engine: 'freeLLM',
             status: 'success',
@@ -301,6 +304,7 @@ export default function ScoutingScreen() {
           selectedModel: omnirouteConfig!.selectedModel || DEFAULT_OMNIROUTE_CONFIG.selectedModel,
         });
         setAnalysisResult(result);
+        recordScoutingAnalysis(match, result, `omniroute:${result.agentsUsed?.[0] || 'inconnu'}`);
         const agentsNote = result.agentsUsed && result.agentsUsed.length > 0
           ? ` • ${result.agentsUsed.length} agent(s) : ${result.agentsUsed.join(', ')}${result.agentsFailed ? ` (${result.agentsFailed.length} échec(s))` : ''}`
           : '';

@@ -5,6 +5,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
+import * as Updates from 'expo-updates';
 import { initDatabase, seedDatabaseIfEmpty } from './src/database/storage';
 import { startAutoSync } from './src/core/gitAutoSync';
 import { ensureNotificationPermissions } from './src/core/notifications';
@@ -36,10 +37,33 @@ function SettingsStack() {
 // au plancher imposé par Android (~15 min).
 const FOREGROUND_TICK_INTERVAL_MS = 3 * 60 * 1000;
 
+/**
+ * `checkAutomatically: "ON_LOAD"` (app.json) télécharge une mise à jour OTA
+ * en arrière-plan au démarrage, mais ne l'applique QUE au prochain
+ * redémarrage froid — sans ce bloc, un correctif publié n'apparaît jamais
+ * tant que l'utilisateur ne ferme/rouvre pas l'app une seconde fois après le
+ * téléchargement, ce qui donne l'impression qu'un correctif "ne marche pas".
+ * On force ici la vérification + le rechargement immédiat si une mise à jour
+ * est disponible.
+ */
+async function applyPendingUpdate(): Promise<void> {
+  if (!Updates.isEnabled) return; // build de développement : pas d'OTA
+  try {
+    const check = await Updates.checkForUpdateAsync();
+    if (check.isAvailable) {
+      await Updates.fetchUpdateAsync();
+      await Updates.reloadAsync(); // relance l'app sur le nouveau bundle
+    }
+  } catch (error: any) {
+    console.warn('[OTA] Vérification/application de mise à jour échouée:', error.message);
+  }
+}
+
 export default function App() {
   useEffect(() => {
     const setupApp = async () => {
       try {
+        await applyPendingUpdate();
         await initDatabase();
         await seedDatabaseIfEmpty();
         await startAutoSync();

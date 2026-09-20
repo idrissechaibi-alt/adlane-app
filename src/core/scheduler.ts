@@ -10,6 +10,22 @@ import { normalizeTeamName } from './teamNameMatch';
 
 const DAILY_SCHEDULE_KEY = '@daily_schedule_json';
 const FOOTBALL_DATA_KEY = 'app-adlane.football-data-api-key';
+const LAST_SCAN_DATE_KEY = '@last_morning_scan_date';
+
+/**
+ * Date du jour au format YYYY-MM-DD en heure LOCALE de l'appareil (pas UTC) :
+ * c'est la journée que l'utilisateur voit sur son écran, avec ses horaires de
+ * coup d'envoi déjà affichés en local. football-data.org compare ses filtres
+ * dateFrom/dateTo à la date UTC du match, donc un match très tôt/tard peut en
+ * théorie tomber du mauvais côté de minuit — un compromis très mineur face au
+ * bug réel (aucune date envoyée, fenêtre par défaut pouvant inclure hier).
+ */
+function todayLocalDateString(date: Date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
 // Codes officiels Football-Data pour les Big 5 + Cups majeures
 const COMPETITIONS = 'PL,PD,BL1,SA,FL1,CL,FAC,CDR,DFB,CIT,CDF';
@@ -81,11 +97,17 @@ export async function executeMorningScan(): Promise<DailyPlan> {
   }
 
   try {
-    // Appel filtré uniquement sur les compétitions demandées
+    // Appel filtré sur les compétitions demandées ET sur la date du jour
+    // (heure locale de l'appareil). Sans dateFrom/dateTo explicites,
+    // football-data.org applique une fenêtre par défaut non documentée qui
+    // peut inclure des matchs d'hier ou de demain selon l'heure d'appel —
+    // c'est ce qui faisait apparaître le planning d'une autre journée.
+    const localToday = todayLocalDateString();
     await incrementRequestCount('footballData');
-    const response = await fetch(`https://api.football-data.org/v4/matches?competitions=${COMPETITIONS}`, {
-      headers: { 'X-Auth-Token': apiKey }
-    });
+    const response = await fetch(
+      `https://api.football-data.org/v4/matches?competitions=${COMPETITIONS}&dateFrom=${localToday}&dateTo=${localToday}`,
+      { headers: { 'X-Auth-Token': apiKey } }
+    );
 
     if (!response.ok) {
       if (response.status === 403) throw new Error('API Football-Data : Votre plan ne permet pas d\'accéder à certaines coupes. Vérifiez votre clé.');
@@ -123,13 +145,14 @@ export async function executeMorningScan(): Promise<DailyPlan> {
 
     const slots = groupMatchesIntoSlots(mappedMatches);
     const plan: DailyPlan = {
-      date: new Date().toISOString().split('T')[0],
+      date: localToday,
       generatedAt: new Date().toISOString(),
       totalMatches: mappedMatches.length,
       slots
     };
 
     await AsyncStorage.setItem(DAILY_SCHEDULE_KEY, JSON.stringify(plan));
+    await AsyncStorage.setItem(LAST_SCAN_DATE_KEY, localToday);
     return plan;
   } catch (error: any) {
     console.error('Erreur Scan Matinal:', error.message);
@@ -148,6 +171,29 @@ function getLeagueFlag(code: string): string {
 export async function getDailyPlan(): Promise<DailyPlan | null> {
   const raw = await AsyncStorage.getItem(DAILY_SCHEDULE_KEY);
   return raw ? JSON.parse(raw) : null;
+}
+
+/** Heure locale (0-23) à partir de laquelle le scan matinal se déclenche tout seul. */
+const AUTO_SCAN_HOUR = 7;
+
+/**
+ * Déclenche le scan matinal automatiquement, sans action de l'utilisateur.
+ * Android ne garantit pas une exécution pile à 7h00 (le système décide du
+ * moment exact de la tâche de fond, au mieux toutes les ~15 min) : on se
+ * contente donc du PREMIER tour, après 7h locales, où la journée n'a pas
+ * encore été scannée — même principe que le bilan de minuit. Idempotent :
+ * un tour de plus le même jour après 7h ne relance rien.
+ */
+export async function runMorningScanIfDue(): Promise<boolean> {
+  const now = new Date();
+  if (now.getHours() < AUTO_SCAN_HOUR) return false;
+
+  const today = todayLocalDateString(now);
+  const lastScanDate = await AsyncStorage.getItem(LAST_SCAN_DATE_KEY);
+  if (lastScanDate === today) return false;
+
+  await executeMorningScan();
+  return true;
 }
 
 function groupMatchesIntoSlots(matches: ScheduledMatchDetail[]): DailyScheduleSlot[] {

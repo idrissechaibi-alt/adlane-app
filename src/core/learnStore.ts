@@ -374,3 +374,49 @@ export function readAgentDigest(): string | null {
 export function learningDirectoryUri(): string {
   return learningDirectory().uri;
 }
+
+// ==================== ANALYSES SCOUTING IA (bilan vs réalité) ====================
+
+export interface ScoutingRecordLeg {
+  market: string;
+  selection: string;
+  estimated_prob: number;
+}
+
+/** Une analyse Scouting IA (Gemini/pool gratuit/Omniroute), en attente de confrontation au résultat réel. */
+export interface ScoutingRecord {
+  id: string; // même id que ScheduledMatchDetail ("m-<id football-data.org>")
+  homeTeam: string;
+  awayTeam: string;
+  league: string;
+  kickoff_utc: string;
+  analyzedAt: string;
+  engine: string;
+  legs: ScoutingRecordLeg[];
+  reviewed: boolean;
+  outcome?: {
+    goalsHome: number;
+    goalsAway: number;
+    htHome: number;
+    htAway: number;
+    /** Uniquement les jambes qu'un score final permet de trancher avec confiance (voir scoutingReview.ts). */
+    settledLegs: Array<ScoutingRecordLeg & { correct: boolean }>;
+  };
+}
+
+export function readScoutingRecords(): ScoutingRecord[] {
+  const content = readTextSafe(fileIn('scouting-records.json'));
+  if (!content) return [];
+  try {
+    return JSON.parse(content);
+  } catch {
+    return [];
+  }
+}
+
+export function writeScoutingRecords(records: ScoutingRecord[]): void {
+  // Corpus glissant : 60 jours suffisent largement pour juger la fiabilité récente.
+  const cutoff = Date.now() - 60 * 24 * 3_600_000;
+  const fresh = records.filter((r) => new Date(r.analyzedAt).getTime() > cutoff);
+  writeText(fileIn('scouting-records.json'), JSON.stringify(fresh.slice(-1000)));
+}

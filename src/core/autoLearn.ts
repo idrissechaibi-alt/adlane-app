@@ -30,6 +30,7 @@ import {
   writeLearnedModel,
   writePaperBets,
 } from './learnStore';
+import { computeScoutingAccuracy } from './scoutingReview';
 
 /** Échantillon minimum pour qu'une règle soit retenue (anti-bruit). */
 const MIN_SAMPLES_PER_RULE = 30;
@@ -413,7 +414,23 @@ function renderDigest(model: LearnedModel, markets: string[], rows: TrainingRow[
     `- Taux de réussite réel : ${(model.paperBets.hitRate * 100).toFixed(1)}%`,
     `- Facteur de recalibrage appliqué : ×${model.paperBets.calibrationFactor.toFixed(2)} ` +
       '(<1 = le modèle était trop optimiste, ses probabilités sont rabotées)',
-    '',
+  );
+
+  const scoutingAccuracy = computeScoutingAccuracy(30);
+  lines.push('', '## Fiabilité passée de l\'analyse Scouting IA (par marché, 30 derniers jours)');
+  if (scoutingAccuracy.length === 0) {
+    lines.push("Pas encore assez d'analyses réglées (le match doit être terminé) pour juger.");
+  } else {
+    for (const stat of scoutingAccuracy) {
+      lines.push(
+        `- \`${stat.market}\` : réalisé **${(stat.hitRate * 100).toFixed(1)}%** ` +
+          `vs annoncé ${(stat.meanPredicted * 100).toFixed(1)}% (n=${stat.samples})` +
+          (stat.hitRate < stat.meanPredicted - 0.1 ? ' — l\'IA est trop confiante sur ce marché, à corriger.' : '')
+      );
+    }
+  }
+
+  lines.push('',
     "## Périmètre de jeu de l'utilisateur",
     `- Ligues jouées : ${model.focusLeagues.join(', ') || 'non renseigné'}`,
     `- Marchés joués : ${markets.join(', ') || 'non renseigné'}`,
