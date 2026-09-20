@@ -16,13 +16,14 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { analyzeMatchWithOmniroute, DEFAULT_OMNIROUTE_CONFIG, AIAnalysisOutput } from '../core/omniroute';
-import { analyzeMatchWithGemini, fetchGoogleSearchContext } from '../core/gemini';
-import { analyzeMatchWithFreeLLMPool, getConfiguredFreeLLMProviders } from '../core/freeLLMProviders';
+import { fetchGoogleSearchContext } from '../core/gemini';
 import { recordScoutingAnalysis } from '../core/scoutingReview';
 import { fetchMatchContext, PerplexitySearchResult } from '../core/perplexity';
 import { getAgentLearningDigest } from '../core/autoLearn';
 import { getHistoricalPriors } from '../core/footballDataCoUk';
 import { getSecondOpinion } from '../core/eloRatings';
+import { fetchLiveFixtures } from '../core/halftimeMonitor';
+import { normalizeTeamName } from '../core/teamNameMatch';
 import { getAPIConfig, getQuotaUsage, incrementRequestCount } from '../api/multiAPIManager';
 import { HISTORICAL_LESSONS } from '../data/historical';
 import { getDailyPlan } from '../core/scheduler';
@@ -197,6 +198,33 @@ export default function ScoutingScreen() {
       console.warn('Priors historiques/Elo indisponibles:', error.message);
     }
 
+    // Match déjà en cours ? (règle explicite) Un seul appel qui couvre TOUS
+    // les matchs en direct (fixtures?live=all), jamais un par match. En 1ère
+    // mi-temps, les pronostics doivent porter sur la 1ère mi-temps
+    // uniquement ; à la mi-temps ou en 2ème période, sur le RESTE du match
+    // (pas le match complet depuis le coup d'envoi, déjà partiellement joué).
+    let liveDirective = '';
+    try {
+      const apiConfig = await getAPIConfig();
+      if (apiConfig.apiFootball) {
+        const liveFixtures = await fetchLiveFixtures(apiConfig.apiFootball);
+        const live = liveFixtures.find((f) =>
+          normalizeTeamName(f.homeTeam) === normalizeTeamName(match.homeTeam) &&
+          normalizeTeamName(f.awayTeam) === normalizeTeamName(match.awayTeam)
+        );
+        if (live) {
+          const score = `${live.homeGoals}-${live.awayGoals}`;
+          if (live.statusShort === '1H') {
+            liveDirective = `⚠️ Ce match est ACTUELLEMENT EN DIRECT, en 1ère mi-temps (score actuel ${score}). Les 10 marchés demandés doivent porter UNIQUEMENT sur ce qui peut encore se passer avant la pause, pas sur le match complet depuis le coup d'envoi.`;
+          } else if (live.statusShort === 'HT' || live.statusShort === '2H') {
+            liveDirective = `⚠️ Ce match est ACTUELLEMENT EN DIRECT, ${live.statusShort === 'HT' ? 'à la mi-temps' : 'en 2ème mi-temps'} (score actuel ${score}). Les 10 marchés demandés doivent porter sur le RESTE DU MATCH à partir de maintenant, pas sur le match complet depuis le coup d'envoi (déjà partiellement joué).`;
+          }
+        }
+      }
+    } catch (error: any) {
+      console.warn('Statut live indisponible:', error.message);
+    }
+
     const matchInput = {
       homeTeam: match.homeTeam,
       awayTeam: match.awayTeam,
@@ -209,6 +237,7 @@ export default function ScoutingScreen() {
         btts_yes: match.odds.btts_yes || undefined,
       },
       contextInfo: [
+        liveDirective,
         match.context,
         webContext ? `Recherche web en direct :\n${webContext}` : '',
         priorsText ? `Données historiques & second avis (gratuites, indépendantes du marché) :\n${priorsText}` : '',
@@ -218,8 +247,10 @@ export default function ScoutingScreen() {
         .join('\n\n') || undefined
     };
 
-    // Détermine le moteur IA à utiliser : Gemini (clé directe) en priorité,
-    // sinon Omniroute si configuré ET activé dans Paramètres, sinon aucun.
+    // Moteur d'analyse : Omniroute UNIQUEMENT (demande explicite) — Gemini
+    // reste utilisé juste au-dessus pour la recherche web factuelle (gratuite,
+    // sans lien avec ce choix), mais ne sert plus jamais à produire les 10
+    // marchés eux-mêmes, ni le pool IA gratuit (Groq/OpenRouter/Cerebras).
     let omnirouteConfig: PersistedOmnirouteConfig | null = null;
     try {
       const raw = await AsyncStorage.getItem(OMNIROUTE_CONFIG_KEY);
@@ -228,112 +259,40 @@ export default function ScoutingScreen() {
       omnirouteConfig = null;
     }
 
-    // Omniroute sert UNIQUEMENT de secours (jamais de moteur principal) : dès
-    // qu'un endpoint et au moins un agent sont renseignés, il est utilisable
-    // comme filet de sécurité. Le bouton "Activer Omniroute" dans Paramètres
-    // ne conditionne donc plus ce secours — sinon, l'oublier (ou une
-    // réinstallation qui remet la config à zéro) désactive silencieusement le
-    // repli exactement quand on en a besoin, comme constaté avec l'erreur de
-    // facturation Gemini.
     const omnirouteAvailable = Boolean(
       omnirouteConfig?.endpoint && omnirouteConfig.selectedModel?.trim()
     );
-    const freeLLMConfigured = (await getConfiguredFreeLLMProviders()).length > 0;
 
-    if (!geminiApiKey && !freeLLMConfigured && !omnirouteAvailable) {
+    if (!omnirouteAvailable) {
       setLoading(false);
-      const message = "Aucun moteur IA configuré. Renseignez une clé Google Gemini, Groq, OpenRouter ou Cerebras (Paramètres → Sauvegarde & IA), ou configurez Omniroute (Paramètres → Configuration Omniroute → endpoint + agents).";
+      const message = "Omniroute non configuré. Renseigne un endpoint et au moins un agent dans Paramètres → Configuration Omniroute.";
       setAnalysisError(message);
       setDiagnostic({ engine: 'aucun', status: 'error', message, timestamp: new Date().toISOString() });
       return;
     }
 
-    // Cascade : Gemini d'abord si une clé est configurée, puis le pool de
-    // moteurs gratuits (Groq/OpenRouter/Cerebras, item G — toujours gratuits,
-    // ne dépendent pas d'un quota qui peut s'épuiser comme Gemini), et enfin
-    // Omniroute (config personnelle de l'utilisateur, potentiellement payante)
-    // en dernier recours. Jamais l'inverse : on ne remplace jamais une donnée
-    // factuelle par une invention de l'IA, ceci reste une analyse probabiliste
-    // de scouting.
-    let lastEngine: Engine = 'aucun';
-    let lastMessage = '';
-
-    if (geminiApiKey) {
-      lastEngine = 'gemini';
-      try {
-        console.log('Utilisation de Gemini Direct...');
-        const result = await analyzeMatchWithGemini(matchInput, HISTORICAL_LESSONS, geminiApiKey);
-        setAnalysisResult(result);
-        recordScoutingAnalysis(match, result, 'gemini');
-        setDiagnostic({ engine: 'gemini', status: 'success', message: `${result.markets.length} marché(s) reçu(s).`, timestamp: new Date().toISOString() });
-        setLoading(false);
-        return;
-      } catch (error: any) {
-        lastMessage = error?.message || 'Erreur inconnue';
-        console.warn('Gemini a échoué, tentative du pool IA gratuit / Omniroute si disponible:', lastMessage);
-      }
+    try {
+      console.log('Utilisation de Omniroute...');
+      const result = await analyzeMatchWithOmniroute(matchInput, HISTORICAL_LESSONS, {
+        ...DEFAULT_OMNIROUTE_CONFIG,
+        endpoint: omnirouteConfig!.endpoint,
+        apiKey: omnirouteConfig!.apiKey,
+        selectedModel: omnirouteConfig!.selectedModel || DEFAULT_OMNIROUTE_CONFIG.selectedModel,
+      });
+      setAnalysisResult(result);
+      recordScoutingAnalysis(match, result, `omniroute:${result.agentsUsed?.[0] || 'inconnu'}`);
+      const agentsNote = result.agentsUsed && result.agentsUsed.length > 0
+        ? ` • ${result.agentsUsed.length} agent(s) : ${result.agentsUsed.join(', ')}${result.agentsFailed ? ` (${result.agentsFailed.length} échec(s))` : ''}`
+        : '';
+      setDiagnostic({ engine: 'omniroute', status: 'success', message: `${result.markets.length} marché(s) reçu(s)${agentsNote}.`, timestamp: new Date().toISOString() });
+    } catch (error: any) {
+      const message = error?.message || 'Erreur inconnue';
+      console.error('Omniroute a échoué:', message);
+      setAnalysisError(message);
+      setDiagnostic({ engine: 'omniroute', status: 'error', message, timestamp: new Date().toISOString() });
+    } finally {
+      setLoading(false);
     }
-
-    if (freeLLMConfigured) {
-      lastEngine = 'freeLLM';
-      try {
-        console.log('Utilisation du pool IA gratuit (Groq/OpenRouter/Cerebras)...');
-        const outcome = await analyzeMatchWithFreeLLMPool(matchInput, HISTORICAL_LESSONS);
-        if (outcome) {
-          setAnalysisResult(outcome.result);
-          recordScoutingAnalysis(match, outcome.result, `freeLLM:${outcome.providerLabel}`);
-          setDiagnostic({
-            engine: 'freeLLM',
-            status: 'success',
-            message: `${outcome.result.markets.length} marché(s) reçu(s) via ${outcome.providerLabel}${geminiApiKey ? ' (secours gratuit)' : ''}.`,
-            timestamp: new Date().toISOString(),
-          });
-          setLoading(false);
-          return;
-        }
-        lastMessage = 'Tous les providers gratuits configurés ont échoué.';
-      } catch (error: any) {
-        lastMessage = error?.message || 'Erreur inconnue';
-        console.warn('Pool IA gratuit a échoué, tentative Omniroute si disponible:', lastMessage);
-      }
-    }
-
-    if (omnirouteAvailable) {
-      lastEngine = 'omniroute';
-      try {
-        console.log('Utilisation de Omniroute...');
-        const result = await analyzeMatchWithOmniroute(matchInput, HISTORICAL_LESSONS, {
-          ...DEFAULT_OMNIROUTE_CONFIG,
-          endpoint: omnirouteConfig!.endpoint,
-          apiKey: omnirouteConfig!.apiKey,
-          selectedModel: omnirouteConfig!.selectedModel || DEFAULT_OMNIROUTE_CONFIG.selectedModel,
-        });
-        setAnalysisResult(result);
-        recordScoutingAnalysis(match, result, `omniroute:${result.agentsUsed?.[0] || 'inconnu'}`);
-        const agentsNote = result.agentsUsed && result.agentsUsed.length > 0
-          ? ` • ${result.agentsUsed.length} agent(s) : ${result.agentsUsed.join(', ')}${result.agentsFailed ? ` (${result.agentsFailed.length} échec(s))` : ''}`
-          : '';
-        setDiagnostic({ engine: 'omniroute', status: 'success', message: `${result.markets.length} marché(s) reçu(s)${geminiApiKey ? ' (via secours Omniroute)' : ''}${agentsNote}.`, timestamp: new Date().toISOString() });
-        setLoading(false);
-        return;
-      } catch (error: any) {
-        lastMessage = error?.message || 'Erreur inconnue';
-        console.error('Omniroute a également échoué:', lastMessage);
-      }
-    }
-
-    // Aucun secours n'a pu être essayé (rien de configuré) : le dire
-    // explicitement plutôt que de laisser croire qu'il n'y a aucune solution,
-    // puisque la config Omniroute d'une précédente installation peut avoir
-    // été perdue sans que l'utilisateur s'en rende compte.
-    const finalMessage = (lastEngine === 'gemini' || lastEngine === 'freeLLM') && !omnirouteAvailable
-      ? `${lastMessage}\n\nSecours Omniroute non disponible : configure un endpoint et au moins un agent dans Paramètres → Configuration Omniroute.${!freeLLMConfigured ? ' Tu peux aussi ajouter une clé Groq/OpenRouter/Cerebras gratuite dans Paramètres → Sauvegarde & IA.' : ''}`
-      : lastMessage;
-
-    console.error(`Erreur analyse IA (${lastEngine}):`, lastMessage);
-    setAnalysisError(finalMessage);
-    setDiagnostic({ engine: lastEngine, status: 'error', message: finalMessage, timestamp: new Date().toISOString() });
-    setLoading(false);
   };
 
   const renderMatchList = () => (

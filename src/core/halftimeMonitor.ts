@@ -41,7 +41,7 @@ const HT_WINDOW_MAX_MINUTES = 75;
 // le spam sur des probabilités proches du 50/50 sans signal réel).
 const NOTIFY_PROB_THRESHOLD = 0.60;
 
-interface LiveFixture {
+export interface LiveFixture {
   statusShort: string; // '1H', 'HT', '2H', 'FT', ...
   homeTeam: string;
   awayTeam: string;
@@ -89,7 +89,7 @@ function buildApiFootballHeaders(apiKey: string): Record<string, string> {
  * requête, filtrée ensuite côté client par nom d'équipe) — API-Football
  * n'offre pas de recherche live par équipe.
  */
-async function fetchLiveFixtures(apiKey: string): Promise<LiveFixture[]> {
+export async function fetchLiveFixtures(apiKey: string): Promise<LiveFixture[]> {
   const response = await fetchWithTimeout('https://v3.football.api-sports.io/fixtures?live=all', {
     headers: buildApiFootballHeaders(apiKey)
   });
