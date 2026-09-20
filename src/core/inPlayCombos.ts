@@ -47,7 +47,7 @@
 
 import { getDailyPlan } from './scheduler';
 import { buildScheduledMatches, ScheduledMatch } from './dailyWorkflow';
-import { LiveFixture } from './halftimeMonitor';
+import { LiveFixture, fetchOmnirouteMatchStatus } from './halftimeMonitor';
 import { getHistoricalPriors, estimateExpectedGoalsFromHistory } from './footballDataCoUk';
 import { getStoredUniverse, UniverseMatch } from './matchUniverse';
 import {
@@ -667,8 +667,6 @@ async function processRealSlotCheckpoint(
  * requête, doublant la consommation du quota API-Football à chaque tour.
  */
 export async function runInPlayComboTick(liveFixtures: LiveFixture[]): Promise<number> {
-  if (liveFixtures.length === 0) return 0;
-
   const existing = readInPlayProposals();
   // Réel : une jambe proposée bloque TOUT le match pour ce checkpoint (peu
   // importe le marché). Fictif : chaque marché est une jambe indépendante
@@ -681,6 +679,7 @@ export async function runInPlayComboTick(liveFixtures: LiveFixture[]): Promise<n
     )
   );
   const fresh: InPlayProposal[] = [];
+  const omnirouteConfig = await loadOmnirouteConfig();
 
   // A) Paris RÉELS — 5 grands championnats, par créneau horaire, toutes les
   // ressources disponibles.
@@ -694,7 +693,23 @@ export async function runInPlayComboTick(liveFixtures: LiveFixture[]): Promise<n
       const candidates60: Array<{ scheduled: ScheduledMatch; live: LiveFixture }> = [];
 
       for (const scheduled of slotMatches) {
-        const live = findLiveFixture(scheduled, liveFixtures);
+        let live = findLiveFixture(scheduled, liveFixtures);
+        // Repli Omniroute CIBLÉ sur ce match précis (pas la découverte large
+        // du pipeline fictif) : un match d'argent réel absent du relevé live
+        // partagé — API-Football en panne, ou simplement pas mentionné par la
+        // découverte Omniroute générale — ne doit jamais rester sans
+        // vérification, sous peine de rater une notification de pari réel.
+        // Bornage au coup d'envoi théorique (± 130 min) pour ne pas
+        // interroger Omniroute sur des matchs qui n'ont clairement pas encore
+        // commencé ou sont clairement terminés.
+        if (!live && omnirouteConfig) {
+          const elapsedMs = Date.now() - Date.parse(scheduled.kickoff_utc);
+          if (Number.isFinite(elapsedMs) && elapsedMs >= 0 && elapsedMs <= 130 * 60 * 1000) {
+            live = (await fetchOmnirouteMatchStatus(
+              omnirouteConfig, scheduled.homeTeam, scheduled.awayTeam, scheduled.leagueName
+            ).catch(() => null)) ?? undefined;
+          }
+        }
         if (!live) continue;
 
         if (
@@ -762,7 +777,6 @@ export async function runInPlayComboTick(liveFixtures: LiveFixture[]): Promise<n
   // Omniroute ci-dessous, qui ne demande que les noms d'équipe.
   const universe = await getStoredUniverse();
   const universeById = new Map<number, UniverseMatch>((universe ?? []).map((m) => [m.fixtureId, m]));
-  const omnirouteConfig = await loadOmnirouteConfig();
 
   for (const live of liveFixtures) {
     if (live.statusShort !== '1H' && live.statusShort !== '2H') continue;

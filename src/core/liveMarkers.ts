@@ -18,7 +18,7 @@ import { getAPIConfig } from '../api/multiAPIManager';
 import { spendBudget } from './requestBudget';
 import { getStoredUniverse, UniverseMatch } from './matchUniverse';
 import { fetchWithTimeout } from './httpTimeout';
-import { LiveFixture } from './halftimeMonitor';
+import { LiveFixture, isSyntheticFixtureId } from './halftimeMonitor';
 import {
   EventDeltas,
   LEARNING_HORIZONS,
@@ -243,58 +243,80 @@ function toTrainingRow(pending: PendingObservation): TrainingRow {
  * fonction ne fait plus sa propre requête ni son propre spendBudget pour ça.
  */
 export async function runLiveMarkerTick(liveFixtures: LiveFixture[]): Promise<{ observed: number; closed: number }> {
-  const config = await getAPIConfig();
-  if (!config.apiFootball) return { observed: 0, closed: 0 };
+  if (liveFixtures.length === 0) return { observed: 0, closed: 0 };
 
+  const config = await getAPIConfig();
   const universe = await getStoredUniverse();
-  if (!universe || universe.length === 0) return { observed: 0, closed: 0 };
 
   const live = liveFixtures;
 
   const model = readLearnedModel();
   const focusLeagues = new Set((model?.focusLeagues ?? []).map((l) => l.toLowerCase()));
 
-  const universeById = new Map<number, UniverseMatch>(universe.map((m) => [m.fixtureId, m]));
+  const universeById = new Map<number, UniverseMatch>((universe ?? []).map((m) => [m.fixtureId, m]));
   const liveByFixture = new Map<number, LiveFixture>(live.map((l) => [l.fixtureId, l]));
 
-  // Matchs de l'univers actuellement en 1ère mi-temps, ligues jouées d'abord :
-  // ce sont eux qui méritent les requêtes de statistiques détaillées.
+  // league/pays connus via matchUniverse quand ce fixtureId y figure, sinon
+  // directement depuis la fixture (LiveFixture.league, déjà renseigné côté
+  // découverte Omniroute) — jamais un filtre bloquant : un match découvert
+  // par Omniroute (fixtureId synthétique, cf. halftimeMonitor.ts) n'a par
+  // construction aucune entrée dans matchUniverse.
+  const metaFor = (l: LiveFixture): { league: string; country: string; homeTeam: string; awayTeam: string } => {
+    const known = universeById.get(l.fixtureId);
+    if (known) return known;
+    return { league: l.league || 'Inconnu', country: '', homeTeam: l.homeTeam, awayTeam: l.awayTeam };
+  };
+
+  // Matchs actuellement en 1ère mi-temps, ligues jouées d'abord : ce sont eux
+  // qui méritent les requêtes de statistiques détaillées.
   const firstHalf = live
-    .filter((l) => l.statusShort === '1H' && universeById.has(l.fixtureId))
+    .filter((l) => l.statusShort === '1H')
     .sort((a, b) => {
-      const aFocus = focusLeagues.has(universeById.get(a.fixtureId)!.league.toLowerCase()) ? 0 : 1;
-      const bFocus = focusLeagues.has(universeById.get(b.fixtureId)!.league.toLowerCase()) ? 0 : 1;
+      const aFocus = focusLeagues.has(metaFor(a).league.toLowerCase()) ? 0 : 1;
+      const bFocus = focusLeagues.has(metaFor(b).league.toLowerCase()) ? 0 : 1;
       return aFocus - bFocus;
     });
 
-  // Statistiques détaillées pour un nombre borné de matchs (budget API-Football).
-  const topApiFootball = firstHalf.slice(0, MAX_DETAILED_STATS_PER_TICK);
+  // Statistiques détaillées API-Football : jamais pour un fixtureId
+  // synthétique (repli Omniroute) — API-Football ne le connaît sous aucun
+  // identifiant, l'appel échouerait pour rien.
+  const eligibleForApiFootball = config.apiFootball ? firstHalf.filter((l) => !isSyntheticFixtureId(l.fixtureId)) : [];
+  const topApiFootball = eligibleForApiFootball.slice(0, MAX_DETAILED_STATS_PER_TICK);
   const markersByFixture = new Map<number, MarkerSet>();
   for (const l of topApiFootball) {
     if (!(await spendBudget('apiFootball'))) break;
-    markersByFixture.set(l.fixtureId, await fetchMarkers(config.apiFootball, l.fixtureId));
+    markersByFixture.set(l.fixtureId, await fetchMarkers(config.apiFootball!, l.fixtureId));
   }
 
-  // Couverture supplémentaire au-delà du quota API-Football : Omniroute
-  // scrape les mêmes marqueurs pour d'autres matchs de l'univers, sans être
-  // soumis au même plafond. Ses lignes sont marquées 'omniroute' et ne
-  // rentrent dans les règles de calibrage qu'une fois leur fiabilité prouvée
-  // par recoupement (cf. consolidateLearning / omnirouteTrust).
+  // Couverture supplémentaire au-delà du quota API-Football, ET tous les
+  // matchs découverts directement par Omniroute (fixtureId synthétique — ces
+  // derniers ne PEUVENT être couverts que par Omniroute, jamais par
+  // API-Football, quel que soit le budget restant). Sans ce deuxième cas, un
+  // match du pipeline fictif découvert par Omniroute ne recevait jamais
+  // d'instantané ici, donc n'alimentait jamais la boucle de règles apprises
+  // malgré son règlement dans dailyReview.ts — seule la calibration
+  // (Taux Réel affiché) progressait, jamais le modèle lui-même. Ses lignes
+  // sont marquées 'omniroute' et ne rentrent dans les règles de calibrage
+  // qu'une fois leur fiabilité prouvée par recoupement (cf. consolidateLearning
+  // / omnirouteTrust).
   const omnirouteMarkersByFixture = new Map<number, MarkerSet>();
   const omnirouteConfig = await loadOmnirouteConfig();
   const crossCheckSamples: CrossCheckSample[] = [];
 
   if (omnirouteConfig) {
-    const beyondQuota = firstHalf.slice(
-      MAX_DETAILED_STATS_PER_TICK,
-      MAX_DETAILED_STATS_PER_TICK + MAX_OMNIROUTE_STATS_PER_TICK
-    );
+    const alreadyCovered = new Set(topApiFootball.map((l) => l.fixtureId));
+    const beyondQuota = [
+      ...eligibleForApiFootball.slice(MAX_DETAILED_STATS_PER_TICK),
+      ...firstHalf.filter((l) => isSyntheticFixtureId(l.fixtureId)),
+    ]
+      .filter((l) => !alreadyCovered.has(l.fixtureId))
+      .slice(0, MAX_OMNIROUTE_STATS_PER_TICK);
     // Pas de spendBudget ici : Omniroute est un serveur auto-hébergé par
     // l'utilisateur, sans quota gratuit externe à protéger — seul le nombre
     // de matchs par tour (MAX_OMNIROUTE_STATS_PER_TICK) le borne, pour ne
     // pas allonger le tour indéfiniment.
     for (const l of beyondQuota) {
-      const meta = universeById.get(l.fixtureId)!;
+      const meta = metaFor(l);
       const markers = await fetchOmnirouteMarkers(omnirouteConfig, meta.homeTeam, meta.awayTeam, meta.league, l.minute);
       if (markers) omnirouteMarkersByFixture.set(l.fixtureId, markers);
     }
@@ -309,7 +331,7 @@ export async function runLiveMarkerTick(liveFixtures: LiveFixture[]): Promise<{ 
       .slice(0, MAX_CROSSCHECK_PER_TICK);
 
     for (const l of crossCheckCandidates) {
-      const meta = universeById.get(l.fixtureId)!;
+      const meta = metaFor(l);
       const omniMarkers = await fetchOmnirouteMarkers(omnirouteConfig, meta.homeTeam, meta.awayTeam, meta.league, l.minute);
       if (!omniMarkers) continue;
 
@@ -377,7 +399,7 @@ export async function runLiveMarkerTick(liveFixtures: LiveFixture[]): Promise<{ 
   const newSnapshots: PendingObservation[] = [];
 
   for (const l of firstHalf) {
-    const meta = universeById.get(l.fixtureId)!;
+    const meta = metaFor(l);
     const key = `${l.fixtureId}-${l.minute}`;
     if (openFixtures.has(key)) continue;
 
@@ -395,7 +417,7 @@ export async function runLiveMarkerTick(liveFixtures: LiveFixture[]): Promise<{ 
       goalsAway: l.awayGoals,
       markers,
       focus: focusLeagues.has(meta.league.toLowerCase()),
-      source: fixtureSource.get(l.fixtureId) ?? 'api_football',
+      source: fixtureSource.get(l.fixtureId) ?? (isSyntheticFixtureId(l.fixtureId) ? 'omniroute' : 'api_football'),
       baselineCorners: totalCorners(markers) ?? 0,
       baselineCards: totalCards(markers) ?? 0,
       baselineFouls: totalFouls(markers) ?? 0,
