@@ -8,15 +8,19 @@ import {
   View,
   ScrollView,
   TouchableOpacity,
+  TextInput,
   RefreshControl,
   SafeAreaView,
-  ActivityIndicator
+  ActivityIndicator,
+  Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { executeMorningScan, getDailyPlan, checkAndUpdateT90Status, DailyPlan } from '../core/scheduler';
 import { generateDailyProposals, ScheduledMatch } from '../core/dailyWorkflow';
 import { estimateExpectedGoalsFromMarket } from '../core/poisson';
 import { InPlayProposal, readInPlayProposals } from '../core/learnStore';
+import { getLineupRefresh, isT90Reached, LineupRefresh } from '../core/lineupRefresh';
+import { getAllBets, saveBet } from '../database/storage';
 import { DailyScheduleSlot, ScheduledMatchDetail } from '../types/database';
 import { ProposedSlip } from '../core/dailyWorkflow';
 import { HISTORICAL_BETS } from '../data/historical';
@@ -53,10 +57,16 @@ export default function DailyPlanScreen() {
   const [matchesMissingOdds, setMatchesMissingOdds] = useState(0);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [inPlayProposals, setInPlayProposals] = useState<InPlayProposal[]>([]);
+  const [lineupRefreshes, setLineupRefreshes] = useState<Record<string, LineupRefresh | null>>({});
+  const [placedBetIds, setPlacedBetIds] = useState<Set<string>>(new Set());
+  const [placingId, setPlacingId] = useState<string | null>(null);
+  const [stakeInput, setStakeInput] = useState('');
+  const [placing, setPlacing] = useState(false);
 
   useEffect(() => {
     loadDailyPlan();
     loadInPlayProposals();
+    loadPlacedBets();
 
     // Vérifier T-90 toutes les 30 secondes, et relire les alertes mi-temps
     // au même rythme (le moniteur tourne en tâche de fond dans App.tsx).
@@ -68,6 +78,29 @@ export default function DailyPlanScreen() {
 
     return () => clearInterval(interval);
   }, []);
+
+  const loadPlacedBets = async () => {
+    try {
+      const bets = await getAllBets();
+      setPlacedBetIds(new Set(bets.filter((b) => b.played).map((b) => b.id)));
+    } catch (error) {
+      console.warn('Paris placés indisponibles:', error);
+    }
+  };
+
+  /** Recharge l'état "compo confirmée à T-90" pour tous les matchs référencés par les propositions courantes. */
+  const loadLineupRefreshesFor = async (props: ProposedSlip[]) => {
+    const matchIds = new Set<string>();
+    for (const p of props) {
+      for (const leg of p.legs) {
+        if (leg.matchId) matchIds.add(leg.matchId);
+      }
+    }
+    const entries = await Promise.all(
+      Array.from(matchIds).map(async (id) => [id, await getLineupRefresh(id)] as const)
+    );
+    setLineupRefreshes(Object.fromEntries(entries));
+  };
 
   const loadInPlayProposals = () => {
     const today = new Date().toISOString().split('T')[0];
@@ -82,7 +115,9 @@ export default function DailyPlanScreen() {
       // le compte à rebours T-90 reste affiché à titre indicatif par créneau.
       const { matches, skippedNoOdds } = buildScheduledMatches(existing.slots);
       setMatchesMissingOdds(skippedNoOdds);
-      setProposals(matches.length > 0 ? await generateDailyProposals(matches, HISTORICAL_BETS) : []);
+      const generated = matches.length > 0 ? await generateDailyProposals(matches, HISTORICAL_BETS) : [];
+      setProposals(generated);
+      void loadLineupRefreshesFor(generated);
     }
   };
 
@@ -93,7 +128,9 @@ export default function DailyPlanScreen() {
       setPlan(newPlan);
       const { matches, skippedNoOdds } = buildScheduledMatches(newPlan.slots);
       setMatchesMissingOdds(skippedNoOdds);
-      setProposals(matches.length > 0 ? await generateDailyProposals(matches, HISTORICAL_BETS) : []);
+      const generated = matches.length > 0 ? await generateDailyProposals(matches, HISTORICAL_BETS) : [];
+      setProposals(generated);
+      void loadLineupRefreshesFor(generated);
     } catch (error) {
       console.error('Erreur refresh:', error);
     } finally {
@@ -110,6 +147,7 @@ export default function DailyPlanScreen() {
       setMatchesMissingOdds(skippedNoOdds);
       const generated = matches.length > 0 ? await generateDailyProposals(matches, HISTORICAL_BETS) : [];
       setProposals(generated);
+      void loadLineupRefreshesFor(generated);
     } catch (error) {
       console.error('Erreur scan matinal:', error);
     } finally {
@@ -130,6 +168,49 @@ export default function DailyPlanScreen() {
 
     if (hours > 0) return `T-90 dans ${hours}h${minutes}`;
     return `T-90 dans ${minutes} min`;
+  };
+
+  /**
+   * Un pari n'est plaçable qu'une fois le T-90 atteint POUR TOUS ses matchs
+   * (un combiné ne porte que sur un seul créneau donc c'est simultané) ET
+   * qu'une compo/actu fraîche a été trouvée pour chacun d'eux — jamais avec
+   * les seules données du matin.
+   */
+  const isProposalReadyToPlace = (proposal: ProposedSlip): boolean => {
+    return proposal.legs.every((leg) => {
+      if (!leg.matchId) return false;
+      if (!isT90Reached(leg.kickoff_utc)) return false;
+      return Boolean(lineupRefreshes[leg.matchId]);
+    });
+  };
+
+  const handleConfirmPlaceBet = async (proposal: ProposedSlip) => {
+    const stake = Number(stakeInput.replace(',', '.'));
+    if (!Number.isFinite(stake) || stake <= 0) {
+      Alert.alert('Mise invalide', 'Entre un montant de mise valide avant de confirmer.');
+      return;
+    }
+
+    setPlacing(true);
+    try {
+      const bet = {
+        ...proposal.sourceBet,
+        stake,
+        played: true,
+        status: 'pending' as const,
+        excluded_from_pnl: false,
+        updatedAt: new Date().toISOString(),
+      };
+      await saveBet(bet);
+      setPlacedBetIds((prev) => new Set(prev).add(bet.id));
+      setPlacingId(null);
+      setStakeInput('');
+      Alert.alert('Pari placé', `Enregistré dans le Bilan P&L avec une mise de ${stake}.`);
+    } catch (error: any) {
+      Alert.alert('Erreur', `Impossible d'enregistrer le pari : ${error.message}`);
+    } finally {
+      setPlacing(false);
+    }
   };
 
   const renderSlot = (slot: DailyScheduleSlot) => {
@@ -254,6 +335,61 @@ export default function DailyPlanScreen() {
                         ))}
                       </View>
                     )}
+
+                    {prop.validation.valid && (() => {
+                      const alreadyPlaced = placedBetIds.has(prop.sourceBet.id);
+                      const ready = isProposalReadyToPlace(prop);
+
+                      if (alreadyPlaced) {
+                        return (
+                          <View style={styles.placedBadge}>
+                            <Ionicons name="checkmark-done-circle" size={14} color="#10b981" />
+                            <Text style={styles.placedBadgeText}>Pari placé — dans le Bilan P&L</Text>
+                          </View>
+                        );
+                      }
+
+                      if (!ready) {
+                        return (
+                          <Text style={styles.placeLockedText}>
+                            🔒 Placement disponible à T-90, une fois les dernières compos/actus vérifiées.
+                          </Text>
+                        );
+                      }
+
+                      if (placingId === prop.id) {
+                        return (
+                          <View style={styles.placeStakeRow}>
+                            <TextInput
+                              style={styles.stakeInput}
+                              value={stakeInput}
+                              onChangeText={setStakeInput}
+                              placeholder="Mise (ex: 10)"
+                              placeholderTextColor="#64748b"
+                              keyboardType="decimal-pad"
+                              autoFocus
+                            />
+                            <TouchableOpacity
+                              style={styles.confirmStakeButton}
+                              disabled={placing}
+                              onPress={() => handleConfirmPlaceBet(prop)}
+                            >
+                              {placing ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.confirmStakeText}>OK</Text>}
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.cancelStakeButton} onPress={() => { setPlacingId(null); setStakeInput(''); }}>
+                              <Ionicons name="close" size={16} color="#94a3b8" />
+                            </TouchableOpacity>
+                          </View>
+                        );
+                      }
+
+                      return (
+                        <TouchableOpacity style={styles.placeBetButton} onPress={() => setPlacingId(prop.id)}>
+                          <Ionicons name="checkmark-circle-outline" size={16} color="#ffffff" />
+                          <Text style={styles.placeBetButtonText}>Placer ce pari</Text>
+                        </TouchableOpacity>
+                      );
+                    })()}
                   </View>
                 ))}
               </View>
@@ -582,6 +718,70 @@ const styles = StyleSheet.create({
     color: '#f59e0b',
     fontWeight: '600',
     flex: 1,
+  },
+  placeLockedText: {
+    marginTop: 10,
+    fontSize: 11,
+    color: '#64748b',
+    fontStyle: 'italic',
+  },
+  placeBetButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 10,
+    backgroundColor: '#10b981',
+    borderRadius: 8,
+    paddingVertical: 10,
+  },
+  placeBetButtonText: {
+    color: '#ffffff',
+    fontWeight: 'bold',
+    fontSize: 13,
+  },
+  placedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 10,
+    paddingVertical: 8,
+  },
+  placedBadgeText: {
+    color: '#10b981',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  placeStakeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 10,
+  },
+  stakeInput: {
+    flex: 1,
+    backgroundColor: '#0f172a',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#334155',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    color: '#f8fafc',
+    fontSize: 13,
+  },
+  confirmStakeButton: {
+    backgroundColor: '#10b981',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+  },
+  confirmStakeText: {
+    color: '#ffffff',
+    fontWeight: 'bold',
+    fontSize: 13,
+  },
+  cancelStakeButton: {
+    padding: 8,
   },
   emptyState: {
     alignItems: 'center',

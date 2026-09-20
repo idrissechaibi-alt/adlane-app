@@ -27,6 +27,7 @@ export type ValidationFlag =
 export interface BetLeg {
   id: string;
   match: string;                  // ex: "Real Sociedad - Atlético Madrid"
+  matchId?: string;                // id stable du match (ScheduledMatchDetail.id), pour retrouver le rafraîchissement T-90
   kickoff_utc: string;            // ISO 8601 (ex: "2026-09-13T19:00:00Z")
   league: string;                 // ex: "La Liga"
   market: Market;

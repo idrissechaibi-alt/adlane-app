@@ -60,6 +60,8 @@ export interface ProposedSlip {
   confiance: number;
   confidenceLevel: 'Faible' | 'Moyen' | 'Élevé';
   analysis: string;
+  /** Le pari sous-jacent complet, prêt à être persisté (stake à renseigner) si l'utilisateur choisit de le placer réellement. */
+  sourceBet: Bet;
   validation: {
     valid: boolean;
     blockers: string[];
@@ -428,6 +430,7 @@ export async function generateDailyProposals(
     const leg: BetLeg = {
       id: `leg-solo-${sel.match.id}`,
       match: `${sel.match.homeTeam} - ${sel.match.awayTeam}`,
+      matchId: sel.match.id,
       kickoff_utc: sel.match.kickoff_utc,
       league: sel.match.leagueName,
       market: sel.market,
@@ -472,6 +475,7 @@ export async function generateDailyProposals(
       confiance: candidateBet.confiance || 50,
       confidenceLevel: sel.confidence,
       analysis: candidateBet.analysis,
+      sourceBet: candidateBet,
       validation: {
         valid: validation.valid,
         blockers: validation.blockers,
@@ -536,6 +540,7 @@ export async function generateDailyProposals(
       const comboLegs: BetLeg[] = picked.map((s, idx) => ({
         id: `combo-leg-${slotDisplay}-${label}-${idx}`,
         match: `${s.match.homeTeam} - ${s.match.awayTeam}`,
+        matchId: s.match.id,
         kickoff_utc: s.match.kickoff_utc,
         league: s.match.leagueName,
         market: s.market,
@@ -581,6 +586,7 @@ export async function generateDailyProposals(
         confiance: comboCandidate.confiance || 50,
         confidenceLevel,
         analysis: comboCandidate.analysis,
+        sourceBet: comboCandidate,
         validation: {
           valid: validation.valid,
           blockers: validation.blockers,

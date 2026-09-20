@@ -17,6 +17,7 @@ import { runInPlayComboTick } from './inPlayCombos';
 import { runNightlyReviewIfDue } from './dailyReview';
 import { runMorningScanIfDue } from './scheduler';
 import { reconcileScoutingAnalyses } from './scoutingReview';
+import { refreshDueLineups } from './lineupRefresh';
 import { readLearnedModel } from './learnStore';
 
 export const AUTOLEARN_TASK_NAME = 'adlane-autolearn-tick';
@@ -41,6 +42,14 @@ export async function runAutoLearnTick(): Promise<void> {
     await ensureDailyUniverse(model?.focusLeagues ?? []);
   } catch (error: any) {
     console.warn('[Tâche de fond] Univers du jour indisponible:', error.message);
+  }
+
+  // Compositions confirmées à T-90 (recherche Google/Omniroute, gratuit) :
+  // débloque le placement direct des paris du Planning dès que l'info est là.
+  try {
+    await refreshDueLineups();
+  } catch (error: any) {
+    console.warn('[Tâche de fond] Rafraîchissement compositions T-90 échoué:', error.message);
   }
 
   try {
