@@ -241,12 +241,17 @@ const NEVER_USE_PATTERN = /claude|anthropic/i;
 // l'utilisateur) et on leur donne un score plus élevé. Les noms non reconnus
 // (agents custom type "Clodiko") gardent un score neutre et restent dans
 // l'ordre où l'utilisateur les a sélectionnés.
+// Séparateur toléré entre le nom du provider et son numéro de version : les
+// noms affichés par certains déploiements Omniroute utilisent un espace
+// ("Gemini 3.7 Flash Tiered") plutôt qu'un tiret ("gemini-3.7-flash") — sans
+// ça, ces modèles retombaient à tort au score neutre (50), au même rang
+// qu'un agent custom non identifié.
 const QUALITY_PATTERNS: Array<{ pattern: RegExp; score: number }> = [
-  { pattern: /gpt-?5|o3|gpt-4\.5/i, score: 100 },
-  { pattern: /gemini-?3|gemini-2\.5-pro/i, score: 95 },
-  { pattern: /gpt-4o|gemini-2\.5-flash|mercury-2\.5|deepseek-r1/i, score: 85 },
-  { pattern: /llama-3\.1-405b|mixtral-8x22b|qwen-?2\.5-72b/i, score: 80 },
-  { pattern: /mercury-2|gemini-flash|gpt-4-turbo/i, score: 70 },
+  { pattern: /gpt[ -]?5|o3|gpt[ -]?4\.5/i, score: 100 },
+  { pattern: /gemini[ -]?3|gemini[ -]?2\.5[ -]?pro/i, score: 95 },
+  { pattern: /gpt[ -]?4o|gemini[ -]?2\.5[ -]?flash|mercury[ -]?2\.5|deepseek[ -]?r1/i, score: 85 },
+  { pattern: /llama[ -]?3\.1[ -]?405b|mixtral[ -]?8x22b|qwen[ -]?2\.5[ -]?72b/i, score: 80 },
+  { pattern: /mercury[ -]?2|gemini[ -]?flash|gpt[ -]?4[ -]?turbo/i, score: 70 },
 ];
 
 function scoreModel(model: string): number {
