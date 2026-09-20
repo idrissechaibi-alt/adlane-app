@@ -470,8 +470,17 @@ export async function generateDailyProposals(
     }
   }
 
-  // 2. Création des propositions SOLO
+  // 2. Création des propositions SOLO — jamais dans un créneau de 3 matchs ou
+  // plus (demande explicite) : ces créneaux ont assez de matière pour ne
+  // proposer QUE des combinés, plus intéressants que des solos isolés.
+  const matchCountBySlot = new Map<string, number>();
+  for (const m of matches) {
+    matchCountBySlot.set(m.creneau_display, (matchCountBySlot.get(m.creneau_display) ?? 0) + 1);
+  }
+
   for (const sel of evaluatedSelections) {
+    if ((matchCountBySlot.get(sel.match.creneau_display) ?? 0) >= 3) continue;
+
     const leg: BetLeg = {
       id: `leg-solo-${sel.match.id}`,
       match: `${sel.match.homeTeam} - ${sel.match.awayTeam}`,
@@ -692,7 +701,55 @@ export async function generateDailyProposals(
       );
     };
 
+    /**
+     * Combiné "gain maximisé" ciblant une PROBABILITÉ COMBINÉE (pas une cote)
+     * comprise entre minProb et maxProb (demande explicite : ni trop sûr —
+     * peu de gain — ni trop risqué). Les jambes les plus probables sont
+     * ajoutées en premier (pour ne pas gaspiller la marge de probabilité
+     * disponible), jusqu'à ce que la probabilité cumulée entre dans la
+     * fourchette visée ; on s'arrête dès qu'on y entre pour ne pas sacrifier
+     * plus de gain que nécessaire, et on ne descend jamais sous le plancher
+     * une fois qu'un combiné valide (>= 2 jambes) existe déjà.
+     */
+    const buildProbabilityBandCombo = (
+      label: string,
+      candidates: EvaluatedSelection[],
+      minProb: number,
+      maxProb: number,
+      maxLegs: number
+    ): void => {
+      const sorted = pickBestPerMatch(candidates, 'modelProb');
+      const picked: EvaluatedSelection[] = [];
+      let cumulativeProb = 1;
+
+      for (const sel of sorted) {
+        if (picked.length >= maxLegs) break;
+        const nextProb = cumulativeProb * sel.modelProb;
+        if (nextProb < minProb && picked.length >= 2) break; // déjà valide : ne pas descendre sous le plancher
+        picked.push(sel);
+        cumulativeProb = nextProb;
+        if (picked.length >= 2 && cumulativeProb <= maxProb) break; // entré dans la fourchette : gain déjà maximisé
+      }
+
+      if (picked.length < 2) return;
+
+      const inBand = cumulativeProb >= minProb && cumulativeProb <= maxProb;
+      emitCombo(
+        label,
+        picked,
+        'Moyen',
+        inBand
+          ? `Probabilité combinée ${(cumulativeProb * 100).toFixed(1)}% (visée ${(minProb * 100).toFixed(0)}-${(maxProb * 100).toFixed(0)}%) : jambes les plus probables ajoutées une à une jusqu'à entrer dans cette fourchette, pour maximiser le gain sans sortir de la zone de confiance voulue.`
+          : `Probabilité combinée ${(cumulativeProb * 100).toFixed(1)}% : ce créneau n'a pas assez de jambes qualifiées pour rester dans la fourchette ${(minProb * 100).toFixed(0)}-${(maxProb * 100).toFixed(0)}% visée — combiné le plus proche possible.`
+      );
+    };
+
     if (matchesInSlot >= 3) {
+      // Les profils à marchés mélangés grandissent avec la taille du créneau
+      // (plus de matchs qualifiés = plus de jambes possibles = combinés plus
+      // différenciés d'un créneau à l'autre), plafonné à 6 jambes.
+      const scaledMaxLegs = Math.min(matchesInSlot, 6);
+
       buildCombo(
         '🛡️ Sécurisé',
         slotSelections.filter((s) => s.modelProb >= 0.65),
@@ -704,7 +761,7 @@ export async function generateDailyProposals(
       buildCombo(
         '⚖️ Équilibré',
         slotSelections.filter((s) => s.modelProb >= 0.55),
-        4,
+        scaledMaxLegs,
         'Moyen',
         `Combiné standard : sélections >= 55% de probabilité modèle, marchés mélangés.`
       );
@@ -712,7 +769,7 @@ export async function generateDailyProposals(
       buildCombo(
         '⚽ Buts',
         slotSelections.filter((s) => s.modelProb >= 0.55 && ['BTTS', 'OU_2_5', '1ere_mi_temps'].includes(s.market)),
-        4,
+        scaledMaxLegs,
         'Moyen',
         `Combiné thématique buts (BTTS, Over/Under, 1ère mi-temps) : diversifie volontairement hors des résultats 1X2.`
       );
@@ -720,7 +777,7 @@ export async function generateDailyProposals(
       buildCombo(
         '🚩 Discipline',
         slotSelections.filter((s) => s.modelProb >= 0.55 && ['corners', 'cards', 'fouls'].includes(s.market)),
-        4,
+        scaledMaxLegs,
         'Moyen',
         `Combiné thématique discipline/rythme (corners, cartons, fautes) : estimé depuis les moyennes de saison réelles, pas de cote de marché pour ces marchés.`
       );
@@ -730,6 +787,14 @@ export async function generateDailyProposals(
         slotSelections.filter((s) => s.modelProb >= 0.45),
         6,
         8
+      );
+
+      buildProbabilityBandCombo(
+        '🎯 Gain maximisé (60-68%)',
+        slotSelections,
+        0.60,
+        0.68,
+        scaledMaxLegs
       );
     } else {
       // 2 matchs seulement : pas assez de matière pour différencier plusieurs profils.
