@@ -108,6 +108,19 @@ export async function ensureDailyUniverse(focusLeagues: string[] = []): Promise<
       );
       if (!response.ok) break;
       payload = await response.json();
+
+      // API-Football répond souvent HTTP 200 même en cas de problème de clé/plan
+      // (ex: "Missing application key") — l'erreur réelle est dans data.errors,
+      // jamais dans le statut HTTP. Sans cette vérification, "aucun match ce
+      // jour-là" et "l'appel a échoué" sont indiscernables, et l'univers du jour
+      // (dont dépend tout l'auto-apprentissage) se construit silencieusement vide.
+      const errors = payload.errors;
+      const hasErrors = errors && (Array.isArray(errors) ? errors.length > 0 : Object.keys(errors).length > 0);
+      if (hasErrors) {
+        const message = Array.isArray(errors) ? errors.join(', ') : Object.values(errors).join(', ');
+        console.warn('[Univers] Échec récupération des matchs du jour:', message || 'data.errors non vide');
+        break;
+      }
     } catch (error: any) {
       console.warn('[Univers] Échec récupération des matchs du jour:', error.message);
       break;

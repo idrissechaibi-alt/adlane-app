@@ -51,9 +51,25 @@ async function fetchAllLive(apiKey: string): Promise<LiveSnapshotInput[]> {
   const response = await fetchWithTimeout('https://v3.football.api-sports.io/fixtures?live=all', {
     headers: buildHeaders(apiKey),
   });
-  if (!response.ok) return [];
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
   const data = await response.json();
+
+  // API-Football répond souvent HTTP 200 même en cas de problème de clé/plan
+  // (ex: "Missing application key", déjà rencontré sur /standings avec ce
+  // compte) — l'erreur réelle est dans data.errors, jamais dans le statut
+  // HTTP. Sans cette vérification, cette fonction renvoyait silencieusement
+  // un tableau vide dans ce cas précis : runLiveMarkerTick voyait "aucun
+  // match en direct" à chaque tour, pour toujours, quel que soit le nombre
+  // réel de matchs en cours — c'était indiscernable d'une vraie absence de
+  // match en direct.
+  const errors = data.errors;
+  const hasErrors = errors && (Array.isArray(errors) ? errors.length > 0 : Object.keys(errors).length > 0);
+  if (hasErrors) {
+    const message = Array.isArray(errors) ? errors.join(', ') : Object.values(errors).join(', ');
+    throw new Error(message || 'Erreur API-Football inconnue (data.errors non vide)');
+  }
+
   return (data.response || []).map((item: any) => ({
     fixtureId: item.fixture?.id,
     minute: item.fixture?.status?.elapsed ?? 0,

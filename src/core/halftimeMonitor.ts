@@ -93,9 +93,23 @@ export async function fetchLiveFixtures(apiKey: string): Promise<LiveFixture[]> 
   const response = await fetchWithTimeout('https://v3.football.api-sports.io/fixtures?live=all', {
     headers: buildApiFootballHeaders(apiKey)
   });
-  if (!response.ok) return [];
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
   const data = await response.json();
+
+  // API-Football répond souvent HTTP 200 même en cas de problème de clé/plan
+  // (ex: "Missing application key", déjà rencontré sur /standings avec ce
+  // compte) — l'erreur réelle est dans data.errors, jamais dans le statut
+  // HTTP. Sans cette vérification, "aucun match en direct trouvé" et "l'appel
+  // a échoué" sont indiscernables : impossible de savoir si un match
+  // réellement en cours a juste été raté, ou si l'API a refusé la requête.
+  const errors = data.errors;
+  const hasErrors = errors && (Array.isArray(errors) ? errors.length > 0 : Object.keys(errors).length > 0);
+  if (hasErrors) {
+    const message = Array.isArray(errors) ? errors.join(', ') : Object.values(errors).join(', ');
+    throw new Error(message || 'Erreur API-Football inconnue (data.errors non vide)');
+  }
+
   return (data.response || []).map((item: any) => ({
     statusShort: item.fixture?.status?.short || '',
     homeTeam: item.teams?.home?.name || '',

@@ -90,6 +90,19 @@ async function fetchFinalResults(
       if (!response.ok) continue;
 
       const data = await response.json();
+
+      // API-Football répond souvent HTTP 200 même en cas de problème de clé/plan
+      // (ex: "Missing application key") — l'erreur réelle est dans data.errors,
+      // jamais dans le statut HTTP. Sans cette vérification, un lot en échec est
+      // indiscernable d'un lot de matchs simplement pas encore terminés.
+      const errors = data.errors;
+      const hasErrors = errors && (Array.isArray(errors) ? errors.length > 0 : Object.keys(errors).length > 0);
+      if (hasErrors) {
+        const message = Array.isArray(errors) ? errors.join(', ') : Object.values(errors).join(', ');
+        console.warn('[Bilan] Résultats finaux indisponibles:', message || 'data.errors non vide');
+        continue;
+      }
+
       for (const item of data.response || []) {
         if (item.fixture?.status?.short !== 'FT') continue; // match non terminé : on ne règle pas
         results.set(item.fixture.id, {
