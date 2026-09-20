@@ -301,6 +301,18 @@ export async function getStandings(
       ? Object.values(data.errors).join('; ')
       : null;
     if (apiError) {
+      // "Missing application key" à ce stade veut dire qu'API-Football a bien
+      // reçu la requête (HTTP 200) mais a rejeté la clé elle-même — jamais un
+      // bug de code puisque les mêmes en-têtes servent aux fixtures. Message
+      // clair plutôt que de renvoyer le texte brut de l'API.
+      if (/application key/i.test(apiError)) {
+        return {
+          success: false,
+          error: "Clé API-Football invalide ou absente pour ce compte. Vérifie la clé dans Paramètres → Gestion des API (elle doit venir du dashboard direct api-football.com, pas seulement de RapidAPI).",
+          source: 'ballDontLie',
+          timestamp: new Date().toISOString()
+        };
+      }
       return { success: false, error: `API-Football: ${apiError}`, source: 'ballDontLie', timestamp: new Date().toISOString() };
     }
 

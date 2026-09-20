@@ -259,15 +259,21 @@ export interface SimpleMatchOdds {
   away?: number;
   over_2_5?: number;
   under_2_5?: number;
+  btts_yes?: number;
+  btts_no?: number;
 }
 
 /**
- * Récupère les cotes 1X2 + Over/Under 2.5 pour TOUS les matchs à venir d'une
- * compétition (une seule requête par compétition, pas par match — TheOddsAPI
- * n'expose pas de recherche par équipe). Le marché h2h pour le foot est à 3
- * issues (home/draw/away, "Draw" n'étant ni l'équipe domicile ni l'équipe
- * extérieure) — contrairement au sport US par défaut de ce fichier, d'où un
- * traitement dédié de l'issue "Draw".
+ * Récupère les cotes 1X2 + Over/Under 2.5 + BTTS pour TOUS les matchs à venir
+ * d'une compétition (une seule requête par compétition, pas par match —
+ * TheOddsAPI n'expose pas de recherche par équipe). Le marché h2h pour le
+ * foot est à 3 issues (home/draw/away, "Draw" n'étant ni l'équipe domicile
+ * ni l'équipe extérieure) — contrairement au sport US par défaut de ce
+ * fichier, d'où un traitement dédié de l'issue "Draw".
+ *
+ * Le marché BTTS a longtemps manqué ici : les jambes BTTS du moteur de
+ * propositions recevaient donc une cote à 0 (jamais assignée), ce qui les
+ * affichait comme "non définies" plutôt que de bloquer proprement.
  */
 export async function fetchCompetitionOdds(
   apiKey: string,
@@ -276,7 +282,7 @@ export async function fetchCompetitionOdds(
 ): Promise<APIResponse<SimpleMatchOdds[]>> {
   try {
     const response = await fetch(
-      `${BASE_URL}/sports/${sportKey}/odds?apiKey=${apiKey}&regions=${region}&markets=h2h,totals&oddsFormat=decimal`
+      `${BASE_URL}/sports/${sportKey}/odds?apiKey=${apiKey}&regions=${region}&markets=h2h,totals,btts&oddsFormat=decimal`
     );
 
     if (!response.ok) {
@@ -316,7 +322,15 @@ export async function fetchCompetitionOdds(
           }
         }
 
-        if (entry.home != null && entry.over_2_5 != null) break;
+        const btts = bookmaker.markets?.find((m: any) => m.key === 'btts');
+        if (btts && entry.btts_yes == null) {
+          for (const o of btts.outcomes || []) {
+            if (o.name === 'Yes') entry.btts_yes = o.price;
+            else if (o.name === 'No') entry.btts_no = o.price;
+          }
+        }
+
+        if (entry.home != null && entry.over_2_5 != null && entry.btts_yes != null) break;
       }
 
       return entry;

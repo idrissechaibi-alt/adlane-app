@@ -77,6 +77,10 @@ async function enrichWithRealOdds(
       if (found.away != null) match.odds.away = found.away;
       if (found.over_2_5 != null) match.odds.over_2_5 = found.over_2_5;
       if (found.under_2_5 != null) match.odds.under_2_5 = found.under_2_5;
+      // BTTS restait toujours à 0 (jamais assignée) : les jambes BTTS du
+      // moteur de propositions avaient donc une cote factice de 0.
+      if (found.btts_yes != null) match.odds.btts_yes = found.btts_yes;
+      if (found.btts_no != null) match.odds.btts_no = found.btts_no;
     }
   }
 }

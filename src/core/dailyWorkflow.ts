@@ -293,8 +293,16 @@ export async function generateDailyProposals(
     // la marge au prorata, donc une estimation "juste" plus fidèle.
     const poisson = computeDixonColesModel(match.expectedHomeGoals, match.expectedAwayGoals);
     const devig1X2 = devigOdds1X2Shin(match.odds.home, match.odds.draw, match.odds.away);
-    const devigBTTS = devigOddsTwoWayShin(match.odds.btts_yes, match.odds.btts_no);
     const devigOU = devigOddsTwoWayShin(match.odds.over_2_5, match.odds.under_2_5);
+
+    // TheOddsAPI ne publie pas toujours un marché BTTS pour chaque match
+    // (contrairement à h2h/totals) : sans cote réelle, une jambe BTTS
+    // recevait avant une cote factice à 0, affichée comme "non définie".
+    // On ne dévige/propose BTTS que si les deux cotes sont réellement là.
+    const bttsOddsAvailable = match.odds.btts_yes > 1 && match.odds.btts_no > 1;
+    const devigBTTS = bttsOddsAvailable
+      ? devigOddsTwoWayShin(match.odds.btts_yes, match.odds.btts_no)
+      : { yes: 0, no: 0, z: 0, margin: 0 };
 
     // Évaluation 1X2 Domicile
     // Note : sans source de xG indépendante du marché, computeEdge() ne peut pas
@@ -347,7 +355,7 @@ export async function generateDailyProposals(
 
     // Évaluation BTTS (avec malus de calibration §4.1)
     const edgeBTTS = computeEdge(poisson.probBTTS.yes, devigBTTS.yes);
-    if (poisson.probBTTS.yes >= 0.58) {
+    if (bttsOddsAvailable && poisson.probBTTS.yes >= 0.58) {
       evaluatedSelections.push({
         match,
         market: 'BTTS',
@@ -373,7 +381,7 @@ export async function generateDailyProposals(
     }
 
     const edgeBTTSNon = computeEdge(poisson.probBTTS.no, devigBTTS.no);
-    if (poisson.probBTTS.no >= 0.58) {
+    if (bttsOddsAvailable && poisson.probBTTS.no >= 0.58) {
       evaluatedSelections.push({
         match, market: 'BTTS', selection: 'Les deux équipes marquent (Non)',
         modelProb: poisson.probBTTS.no, fairProb: devigBTTS.no, odds: match.odds.btts_no,
@@ -496,26 +504,29 @@ export async function generateDailyProposals(
 
     const seenSignatures = new Set<string>();
 
-    const buildCombo = (
-      label: string,
+    /** Une seule jambe par match (la meilleure au sens du critère donné), triée. */
+    const pickBestPerMatch = (
       candidates: EvaluatedSelection[],
-      maxLegs: number,
-      confidenceLevel: 'Faible' | 'Moyen' | 'Élevé',
-      description: string,
-      pickBy: 'modelProb' | 'edgeRatio' = 'modelProb'
-    ): void => {
-      // Jamais deux jambes du même match : on garde la meilleure au sens du
-      // critère du profil (probabilité pour les profils prudents, edge
-      // estimé pour le profil "value").
+      sortBy: 'modelProb' | 'edgeRatio'
+    ): EvaluatedSelection[] => {
       const bestPerMatch = new Map<string, EvaluatedSelection>();
       for (const sel of candidates) {
         const existing = bestPerMatch.get(sel.match.id);
-        const better = !existing || (pickBy === 'edgeRatio' ? sel.edgeRatio > existing.edgeRatio : sel.modelProb > existing.modelProb);
+        const better = !existing || (sortBy === 'edgeRatio' ? sel.edgeRatio > existing.edgeRatio : sel.modelProb > existing.modelProb);
         if (better) bestPerMatch.set(sel.match.id, sel);
       }
-      let picked = Array.from(bestPerMatch.values());
-      if (pickBy === 'edgeRatio') picked = picked.sort((a, b) => b.edgeRatio - a.edgeRatio);
-      picked = picked.slice(0, maxLegs);
+      return Array.from(bestPerMatch.values()).sort((a, b) =>
+        sortBy === 'edgeRatio' ? b.edgeRatio - a.edgeRatio : b.modelProb - a.modelProb
+      );
+    };
+
+    /** Construit et enregistre un combiné à partir de jambes déjà choisies. Ignore les doublons (même jeu de jambes qu'un autre profil). */
+    const emitCombo = (
+      label: string,
+      picked: EvaluatedSelection[],
+      confidenceLevel: 'Faible' | 'Moyen' | 'Élevé',
+      description: string
+    ): void => {
       if (picked.length < 2) return;
 
       const signature = picked.map((s) => `${s.match.id}:${s.market}:${s.selection}`).sort().join('|');
@@ -564,7 +575,7 @@ export async function generateDailyProposals(
       proposals.push({
         id: comboCandidate.id,
         type: 'combo',
-        title: `${label} — ${slotDisplay} (${comboLegs.length} jambes)`,
+        title: `${label} — ${slotDisplay} (${comboLegs.length} jambes, cote ${comboOdds.toFixed(2)})`,
         legs: comboLegs,
         totalOdds: comboOdds,
         confiance: comboCandidate.confiance || 50,
@@ -576,6 +587,54 @@ export async function generateDailyProposals(
           warnings: validation.warnings
         }
       });
+    };
+
+    const buildCombo = (
+      label: string,
+      candidates: EvaluatedSelection[],
+      maxLegs: number,
+      confidenceLevel: 'Faible' | 'Moyen' | 'Élevé',
+      description: string,
+      pickBy: 'modelProb' | 'edgeRatio' = 'modelProb'
+    ): void => {
+      emitCombo(label, pickBestPerMatch(candidates, pickBy).slice(0, maxLegs), confidenceLevel, description);
+    };
+
+    /**
+     * Combiné "value" ciblant une cote cumulée minimale (demande explicite :
+     * "high risk high reward" doit vraiment l'être — au moins 6). Les jambes
+     * sont ajoutées de la plus probable à la moins probable jusqu'à
+     * atteindre la cible, pour maximiser les chances de réalisation à cote
+     * donnée plutôt que d'empiler des jambes au hasard. Si le créneau n'a
+     * pas assez de matchs/marchés qualifiés pour atteindre la cible, le
+     * combiné est soit annoté honnêtement, soit pas proposé du tout s'il
+     * reste trop loin du compte.
+     */
+    const buildValueCombo = (
+      label: string,
+      candidates: EvaluatedSelection[],
+      minOdds: number,
+      maxLegs: number
+    ): void => {
+      const sorted = pickBestPerMatch(candidates, 'modelProb');
+      const picked: EvaluatedSelection[] = [];
+      let cumulativeOdds = 1;
+      for (const sel of sorted) {
+        if (picked.length >= maxLegs || cumulativeOdds >= minOdds) break;
+        picked.push(sel);
+        cumulativeOdds *= sel.odds || 1;
+      }
+      if (picked.length < 2 || cumulativeOdds < 4) return; // trop loin de "value" pour être honnêtement présenté comme tel
+
+      const reached = cumulativeOdds >= minOdds;
+      emitCombo(
+        label,
+        picked,
+        'Faible',
+        reached
+          ? `Cote cumulée ${cumulativeOdds.toFixed(2)} (cible >= ${minOdds} atteinte) : jambes ajoutées de la plus probable à la moins probable pour maximiser les chances de réalisation à cette cote.`
+          : `Cote cumulée ${cumulativeOdds.toFixed(2)} : la cible >= ${minOdds} n'a pas pu être atteinte, ce créneau n'a pas assez de matchs/marchés qualifiés — reste le combiné le plus proche possible en gardant les jambes les plus probables.`
+      );
     };
 
     if (matchesInSlot >= 3) {
@@ -596,23 +655,29 @@ export async function generateDailyProposals(
       );
 
       buildCombo(
-        '🎯 Buts & Stats',
-        slotSelections.filter((s) => s.modelProb >= 0.55 && s.market !== '1X2'),
+        '⚽ Buts',
+        slotSelections.filter((s) => s.modelProb >= 0.55 && ['BTTS', 'OU_2_5', '1ere_mi_temps'].includes(s.market)),
         4,
         'Moyen',
-        `Combiné thématique (BTTS, Over/Under, corners, cartons, fautes, 1ère mi-temps) : diversifie volontairement les marchés plutôt que de miser uniquement sur des résultats 1X2.`
+        `Combiné thématique buts (BTTS, Over/Under, 1ère mi-temps) : diversifie volontairement hors des résultats 1X2.`
       );
 
       buildCombo(
+        '🚩 Discipline',
+        slotSelections.filter((s) => s.modelProb >= 0.55 && ['corners', 'cards', 'fouls'].includes(s.market)),
+        4,
+        'Moyen',
+        `Combiné thématique discipline/rythme (corners, cartons, fautes) : estimé depuis les moyennes de saison réelles, pas de cote de marché pour ces marchés.`
+      );
+
+      buildValueCombo(
         '🔥 Value / Risqué',
         slotSelections.filter((s) => s.modelProb >= 0.45),
-        5,
-        'Faible',
-        `Combiné plus risqué : seuil de probabilité abaissé à 45% mais jambes choisies par edge estimé (écart modèle/marché) plutôt que par probabilité brute, et plus de jambes pour un gain potentiel plus élevé — reste construit pour maximiser ses chances, pas au hasard.`,
-        'edgeRatio'
+        6,
+        8
       );
     } else {
-      // 2 matchs seulement : pas assez de matière pour différencier 4 profils.
+      // 2 matchs seulement : pas assez de matière pour différencier plusieurs profils.
       buildCombo(
         'Combiné',
         slotSelections.filter((s) => s.modelProb >= 0.55),

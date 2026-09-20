@@ -14,7 +14,7 @@ import {
 import { Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import MarketTrendChart from '../components/MarketTrendChart';
-import { MarketDayPoint, TRACKED_MARKETS, readMarketSeries } from '../core/learnStore';
+import { MarketDayPoint, TRACKED_MARKETS, readMarketSeries, readPaperBets } from '../core/learnStore';
 import { getAllBets, getAllLessons, getAllCalibrations } from '../database/storage';
 import { computeMarketCalibrations } from '../core/calibration';
 import { generateDailyReport, generateImprovementReport } from '../core/reporter';
@@ -29,6 +29,7 @@ export default function EvolutionScreen() {
   const [loading, setLoading] = useState(true);
   const [selectedTab, setSelectedTab] = useState<'courbes' | 'calibration' | 'lessons' | 'report'>('courbes');
   const [marketSeries, setMarketSeries] = useState<MarketDayPoint[]>([]);
+  const [paperBetsSummary, setPaperBetsSummary] = useState<{ total: number; settled: number; matches: number } | null>(null);
 
   useEffect(() => {
     if (isFocused) {
@@ -37,6 +38,16 @@ export default function EvolutionScreen() {
         setMarketSeries(readMarketSeries());
       } catch (error) {
         console.warn('Série des marchés indisponible:', error);
+      }
+      try {
+        const bets = readPaperBets();
+        setPaperBetsSummary({
+          total: bets.length,
+          settled: bets.filter((b) => b.settled).length,
+          matches: new Set(bets.map((b) => b.fixtureId)).size,
+        });
+      } catch (error) {
+        console.warn('Paris fictifs indisponibles:', error);
       }
     }
   }, [isFocused]);
@@ -200,6 +211,18 @@ export default function EvolutionScreen() {
 
     return (
       <View>
+        {paperBetsSummary && paperBetsSummary.total > 0 && (
+          <View style={styles.paperBetsBox}>
+            <Ionicons name="pulse" size={16} color="#a78bfa" />
+            <Text style={styles.paperBetsText}>
+              <Text style={styles.paperBetsNumber}>{paperBetsSummary.total}</Text> paris fictifs traités en arrière-plan
+              {' '}(<Text style={styles.paperBetsNumber}>{paperBetsSummary.settled}</Text> réglés) sur{' '}
+              <Text style={styles.paperBetsNumber}>{paperBetsSummary.matches}</Text> match{paperBetsSummary.matches > 1 ? 's' : ''} —
+              les courbes ci-dessous n'affichent que ce qui est déjà réglé, ce chiffre monte plus vite.
+            </Text>
+          </View>
+        )}
+
         <View style={styles.curvesIntro}>
           <Text style={styles.curvesIntroTitle}>Évolution de l'IA, marché par marché</Text>
           <Text style={styles.curvesIntroText}>
@@ -317,6 +340,27 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     fontSize: 11,
     lineHeight: 16,
+  },
+  paperBetsBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: 'rgba(167, 139, 250, 0.08)',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(167, 139, 250, 0.3)',
+    padding: 12,
+    marginBottom: 12,
+  },
+  paperBetsText: {
+    flex: 1,
+    color: '#ddd6fe',
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  paperBetsNumber: {
+    fontWeight: 'bold',
+    color: '#f8fafc',
   },
   container: {
     flex: 1,
