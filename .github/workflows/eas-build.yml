@@ -3,6 +3,13 @@ on:
   push:
     branches:
       - main
+    # La synchronisation automatique (gitAutoSync.ts) pousse un instantané de
+    # data/app-adlane-data.json toutes les ~15-20 min, sans aucun changement
+    # de code. Sans ce filtre, CHAQUE snapshot publiait une nouvelle mise à
+    # jour OTA (même bundle, juste un ID différent) — l'app affichait alors
+    # en permanence "nouvelle mise à jour disponible" pour rien.
+    paths-ignore:
+      - 'data/app-adlane-data.json'
 jobs:
   update:
     name: Publish Update
