@@ -513,8 +513,16 @@ export async function generateDailyProposals(
   for (const sel of evaluatedSelections) {
     if ((matchCountBySlot.get(sel.match.creneau_display) ?? 0) >= 3) continue;
 
+    // Un même match peut faire émerger PLUSIEURS solos (ex: victoire domicile
+    // + BTTS + plus de 2,5 buts passent tous le seuil en même temps) : l'id
+    // doit distinguer le marché/sélection, pas seulement le match. Sans ça,
+    // deux solos différents partageaient le même id -> saveBet() (INSERT OR
+    // REPLACE, clé = id) écrasait l'un par l'autre en base, et placer l'un
+    // faisait apparaître l'autre comme "déjà placé" sans jamais l'avoir été.
+    const legSuffix = `${sel.market}-${sel.selection}`.replace(/[^0-9a-zA-Z]+/g, '-').toLowerCase();
+
     const leg: BetLeg = {
-      id: `leg-solo-${sel.match.id}`,
+      id: `leg-solo-${sel.match.id}-${legSuffix}`,
       match: `${sel.match.homeTeam} - ${sel.match.awayTeam}`,
       matchId: sel.match.id,
       leagueId: sel.match.leagueId,
@@ -530,7 +538,7 @@ export async function generateDailyProposals(
     };
 
     const candidateBet: Bet = {
-      id: `solo-${sel.match.id}`,
+      id: `solo-${sel.match.id}-${legSuffix}`,
       version: 1,
       date: sel.match.kickoff_utc.split('T')[0],
       creneau_utc: sel.match.kickoff_utc,
