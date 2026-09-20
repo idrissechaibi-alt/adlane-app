@@ -19,7 +19,7 @@ import { syncEloForAllCoveredLeagues } from './eloRatings';
 import { settlePlacedBets } from './betSettlement';
 import { fetchWithTimeout } from './httpTimeout';
 import { generateDailyReport } from './reporter';
-import { getAllBets, saveDailyReport } from '../database/storage';
+import { getAllBets, saveDailyReport, getDailyReports } from '../database/storage';
 import {
   InPlayProposal,
   MarketDayPoint,
@@ -209,6 +209,41 @@ export async function runNightlyReviewIfDue(): Promise<number> {
     await AsyncStorage.setItem(LAST_ELO_SYNC_KEY, today);
   }
 
+  // Règle les vrais paris placés (bouton "Placer ce pari") avant de générer
+  // le moindre bilan : le rapport doit refléter des paris déjà réglés, pas
+  // des paris encore "pending".
+  try {
+    await settlePlacedBets();
+  } catch (error: any) {
+    console.warn('[Bilan] Règlement des paris placés échoué:', error.message);
+  }
+
+  // Bilan quotidien texte (X paris proposés/gagnants, grandes lignes) :
+  // rattrape TOUT jour passé avec des paris joués mais sans rapport encore
+  // sauvegardé, indépendamment de la fenêtre de rattrapage ci-dessous (bornée
+  // à MAX_CATCHUP_DAYS à partir d'un point de départ qui n'avance que vers
+  // l'avant). Sans ça, des paris plus anciens que cette fenêtre (historique
+  // importé, ou l'app restée fermée plus de 7 jours) ne recevaient jamais de
+  // bilan — la section Rapport restait vide pour toujours, pas juste en
+  // retard. generateDailyReport est un calcul pur sur des données déjà
+  // connues (aucun appel réseau) : le relancer sur un jour déjà couvert ne
+  // coûte rien, donc on ne complique pas avec un curseur séparé.
+  try {
+    const allBets = await getAllBets();
+    const playedDates = Array.from(new Set(
+      allBets.filter((b) => b.played && b.date < today).map((b) => b.date)
+    ));
+    const existingReports = await getDailyReports(365);
+    const reportedDates = new Set(existingReports.map((r) => r.date));
+    for (const day of playedDates) {
+      if (reportedDates.has(day)) continue;
+      const report = generateDailyReport(day, allBets);
+      await saveDailyReport(report);
+    }
+  } catch (error: any) {
+    console.warn('[Bilan] Rattrapage des rapports quotidiens échoué:', error.message);
+  }
+
   // Au tout premier bilan, on part de l'avant-veille pour que la journée
   // d'hier soit bien traitée (partir d'hier la ferait sauter définitivement).
   const storedLastReviewed = await AsyncStorage.getItem(LAST_REVIEW_KEY);
@@ -222,33 +257,10 @@ export async function runNightlyReviewIfDue(): Promise<number> {
   const rows = readTrainingRows(MAX_CATCHUP_DAYS + 2);
   const apiConfig = await getAPIConfig();
 
-  // Règle les vrais paris placés (bouton "Placer ce pari") avant de générer
-  // le bilan du jour : le rapport doit refléter des paris déjà réglés, pas
-  // des paris encore "pending". Indépendant des InPlayProposals ci-dessous.
-  try {
-    await settlePlacedBets();
-  } catch (error: any) {
-    console.warn('[Bilan] Règlement des paris placés échoué:', error.message);
-  }
-
   const series = readMarketSeries();
   let created = 0;
 
   for (const day of pendingDays) {
-    // Bilan quotidien texte (X paris proposés/gagnants, grandes lignes) sur
-    // les VRAIS paris placés ce jour-là — indépendant des InPlayProposals
-    // (qui alimentent uniquement la courbe par marché ci-dessous).
-    try {
-      const allBets = await getAllBets();
-      const betsThisDay = allBets.filter((b) => b.date === day && b.played);
-      if (betsThisDay.length > 0) {
-        const report = generateDailyReport(day, allBets);
-        await saveDailyReport(report);
-      }
-    } catch (error: any) {
-      console.warn(`[Bilan] Rapport quotidien du ${day} échoué:`, error.message);
-    }
-
     const dayProposals = allProposals.filter(
       (p) => p.createdAt.startsWith(day) && !p.reviewed
     );
