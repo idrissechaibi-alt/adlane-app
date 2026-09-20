@@ -4,6 +4,8 @@
 // retiré (remplacé par le scan unifié 20e/60e minute).
 
 import { fetchWithTimeout } from './httpTimeout';
+import { askOmnirouteLight } from './omniroute';
+import { OmnirouteConfig } from '../types';
 
 export interface LiveFixture {
   statusShort: string; // '1H', 'HT', '2H', 'FT', ...
@@ -59,4 +61,95 @@ export async function fetchLiveFixtures(apiKey: string): Promise<LiveFixture[]> 
     fixtureId: item.fixture?.id,
     minute: item.fixture?.status?.elapsed ?? 0
   }));
+}
+
+/** Nombre de matchs interrogés par tour en repli Omniroute — chaque appel est
+ * une requête IA (quelques secondes), pas une simple lecture JSON. */
+const MAX_OMNIROUTE_LIVE_FIXTURES_PER_TICK = 12;
+/** Durée après laquelle un match dont le coup d'envoi théorique est passé
+ * n'est plus considéré comme potentiellement en direct (90 min + pause +
+ * marge pour prolongations/retard d'envoi). */
+const ASSUMED_MATCH_DURATION_MS = 130 * 60 * 1000;
+
+const OMNIROUTE_STATUS_MAP: Record<string, string> = { '1H': '1H', HT: 'HT', '2H': '2H' };
+
+interface UniverseMatchLike {
+  fixtureId: number;
+  homeTeam: string;
+  awayTeam: string;
+  league: string;
+  kickoff_utc: string;
+}
+
+async function fetchOneOmnirouteLiveFixture(
+  config: OmnirouteConfig,
+  m: UniverseMatchLike
+): Promise<LiveFixture | null> {
+  let result: { text: string; model: string } | null;
+  try {
+    result = await askOmnirouteLight(
+      'Tu es un outil de lecture de score de football EN DIRECT. Réponds UNIQUEMENT par un JSON strict, ' +
+        "sans texte autour. N'invente RIEN : si tu ne trouves pas ce match sur une source de score en direct " +
+        'fiable (Sofascore, Flashscore, l\'API du diffuseur...), réponds avec status "not_found".',
+      `Match : ${m.homeTeam} vs ${m.awayTeam} (${m.league}).\n` +
+        'Cherche son statut EN CE MOMENT sur une source de score en direct fiable.\n' +
+        'Réponds avec ce JSON exact, sans rien autour :\n' +
+        '{"status": "not_started"|"1H"|"HT"|"2H"|"finished"|"not_found", "minute": number|null, "home_goals": number|null, "away_goals": number|null}',
+      config
+    );
+  } catch {
+    return null;
+  }
+  if (!result) return null;
+
+  let parsed: any;
+  try {
+    const jsonMatch = result.text.match(/\{[\s\S]*\}/);
+    parsed = JSON.parse(jsonMatch ? jsonMatch[0] : result.text);
+  } catch {
+    return null;
+  }
+
+  const statusShort = OMNIROUTE_STATUS_MAP[parsed.status];
+  if (!statusShort) return null; // not_started / finished / not_found : rien à observer maintenant
+
+  const minute = typeof parsed.minute === 'number' && Number.isFinite(parsed.minute) ? parsed.minute : 0;
+  const homeGoals = typeof parsed.home_goals === 'number' && Number.isFinite(parsed.home_goals) ? parsed.home_goals : 0;
+  const awayGoals = typeof parsed.away_goals === 'number' && Number.isFinite(parsed.away_goals) ? parsed.away_goals : 0;
+
+  return { statusShort, homeTeam: m.homeTeam, awayTeam: m.awayTeam, homeGoals, awayGoals, fixtureId: m.fixtureId, minute };
+}
+
+/**
+ * Reconstruit la liste des matchs actuellement en direct SANS passer par
+ * API-Football, en repli quand sa clé est absente ou son quota du jour est
+ * épuisé — Omniroute (auto-hébergé, scraping, sans quota) "prend le relais"
+ * à partir du programme du jour déjà connu (matchUniverse) : on ne retient
+ * que les matchs dont le coup d'envoi théorique est passé depuis moins de
+ * ASSUMED_MATCH_DURATION_MS, puis on demande à Omniroute la minute et le
+ * score actuels de chacun (bornage à MAX_OMNIROUTE_LIVE_FIXTURES_PER_TICK par
+ * tour). Sans ce repli, un quota API-Football épuisé arrêtait TOUT le scan en
+ * direct — y compris le pipeline fictif, qui n'est pourtant censé dépendre
+ * d'aucune ressource payante.
+ */
+export async function fetchOmnirouteLiveFixtures(
+  config: OmnirouteConfig,
+  universe: UniverseMatchLike[]
+): Promise<LiveFixture[]> {
+  const now = Date.now();
+  const candidates = universe
+    .filter((m) => {
+      const kickoff = Date.parse(m.kickoff_utc);
+      if (!Number.isFinite(kickoff)) return false;
+      const elapsedMs = now - kickoff;
+      return elapsedMs >= 0 && elapsedMs <= ASSUMED_MATCH_DURATION_MS;
+    })
+    .slice(0, MAX_OMNIROUTE_LIVE_FIXTURES_PER_TICK);
+
+  const results: LiveFixture[] = [];
+  for (const m of candidates) {
+    const live = await fetchOneOmnirouteLiveFixture(config, m);
+    if (live) results.push(live);
+  }
+  return results;
 }

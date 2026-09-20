@@ -10,11 +10,11 @@ import * as BackgroundTask from 'expo-background-task';
 import * as TaskManager from 'expo-task-manager';
 import { getAPIConfig } from '../api/multiAPIManager';
 import { spendBudget } from './requestBudget';
-import { ensureDailyUniverse } from './matchUniverse';
+import { ensureDailyUniverse, getStoredUniverse } from './matchUniverse';
 import { runLiveMarkerTick } from './liveMarkers';
-import { fetchLiveFixtures, LiveFixture } from './halftimeMonitor';
+import { fetchLiveFixtures, fetchOmnirouteLiveFixtures, LiveFixture } from './halftimeMonitor';
 import { consolidateLearning } from './autoLearn';
-import { enrichFocusMatches } from './focusEnrichment';
+import { enrichFocusMatches, loadOmnirouteConfig } from './focusEnrichment';
 import { runInPlayComboTick } from './inPlayCombos';
 import { runNightlyReviewIfDue } from './dailyReview';
 import { runMorningScanIfDue } from './scheduler';
@@ -23,23 +23,38 @@ import { refreshDueLineups } from './lineupRefresh';
 import { readLearnedModel } from './learnStore';
 
 /**
- * Un seul relevé /fixtures?live=all par tour, partagé entre runLiveMarkerTick
- * et runInPlayComboTick (avant ce partage, chacun refaisait sa propre
- * requête, doublant la consommation du quota API-Football à chaque tour —
- * de quoi l'épuiser en cours d'après-midi et rater silencieusement les
- * scans du soir). Renvoie un tableau vide si la clé manque, le quota est
- * épuisé, ou la requête échoue — chaque appelant gère déjà ce cas comme une
- * absence de match en direct.
+ * Un seul relevé live par tour, partagé entre runLiveMarkerTick et
+ * runInPlayComboTick (avant ce partage, chacun refaisait sa propre requête,
+ * doublant la consommation du quota API-Football à chaque tour — de quoi
+ * l'épuiser en cours d'après-midi et rater silencieusement les scans du
+ * soir).
+ *
+ * Repli Omniroute FORCÉ : dès que la clé API-Football manque, que son quota
+ * du jour est épuisé, ou que l'appel échoue, Omniroute (auto-hébergé,
+ * scraping, sans quota) prend le relais à partir du programme du jour déjà
+ * connu (matchUniverse) — sans ce repli, un quota épuisé arrêtait TOUT le
+ * scan en direct, y compris le pipeline fictif qui n'est pourtant censé
+ * dépendre d'aucune ressource payante.
  */
 async function fetchSharedLiveFixtures(): Promise<LiveFixture[]> {
   const apiConfig = await getAPIConfig();
-  if (!apiConfig.apiFootball) return [];
-  if (!(await spendBudget('apiFootball'))) return [];
+
+  if (apiConfig.apiFootball && (await spendBudget('apiFootball'))) {
+    try {
+      return await fetchLiveFixtures(apiConfig.apiFootball);
+    } catch (error: any) {
+      console.warn('[Tâche de fond] Relevé live API-Football échoué, repli Omniroute:', error.message);
+    }
+  }
 
   try {
-    return await fetchLiveFixtures(apiConfig.apiFootball);
+    const omnirouteConfig = await loadOmnirouteConfig();
+    if (!omnirouteConfig) return [];
+    const universe = await getStoredUniverse();
+    if (!universe || universe.length === 0) return [];
+    return await fetchOmnirouteLiveFixtures(omnirouteConfig, universe);
   } catch (error: any) {
-    console.warn('[Tâche de fond] Relevé live partagé échoué:', error.message);
+    console.warn('[Tâche de fond] Repli Omniroute pour le relevé live échoué:', error.message);
     return [];
   }
 }
