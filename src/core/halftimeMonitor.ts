@@ -13,9 +13,15 @@ export interface LiveFixture {
   awayTeam: string;
   homeGoals: number;
   awayGoals: number;
+  /** Identifiant API-Football réel côté source API-Football ; côté repli
+   * Omniroute (aucun identifiant officiel à disposition), un identifiant
+   * synthétique stable dérivé des noms d'équipe — voir syntheticFixtureId. */
   fixtureId: number;
   /** Minute de jeu actuelle (temps additionnel compris dans le décompte API-Football). */
   minute: number;
+  /** Nom de la compétition, quand connu — absent historiquement côté
+   * API-Football (jamais lu avant), toujours renseigné côté repli Omniroute. */
+  league?: string;
 }
 
 export function buildApiFootballHeaders(apiKey: string): Record<string, string> {
@@ -59,97 +65,111 @@ export async function fetchLiveFixtures(apiKey: string): Promise<LiveFixture[]> 
     homeGoals: item.goals?.home ?? 0,
     awayGoals: item.goals?.away ?? 0,
     fixtureId: item.fixture?.id,
-    minute: item.fixture?.status?.elapsed ?? 0
+    minute: item.fixture?.status?.elapsed ?? 0,
+    league: item.league?.name || undefined
   }));
 }
 
-/** Nombre de matchs interrogés par tour en repli Omniroute — chaque appel est
- * une requête IA (quelques secondes), pas une simple lecture JSON. */
-const MAX_OMNIROUTE_LIVE_FIXTURES_PER_TICK = 12;
-/** Durée après laquelle un match dont le coup d'envoi théorique est passé
- * n'est plus considéré comme potentiellement en direct (90 min + pause +
- * marge pour prolongations/retard d'envoi). */
-const ASSUMED_MATCH_DURATION_MS = 130 * 60 * 1000;
+/** Espace d'identifiants réservé aux matchs découverts par Omniroute (pas
+ * d'identifiant officiel API-Football à disposition) : assez haut pour ne
+ * jamais chevaucher un vrai fixtureId API-Football (actuellement de l'ordre
+ * du million), assez de marge (jusqu'à 999 999 999) pour un hash sans souci
+ * de collision pratique sur le volume de matchs traité par jour. */
+const SYNTHETIC_FIXTURE_ID_BASE = 900_000_000;
+const SYNTHETIC_FIXTURE_ID_RANGE = 90_000_000;
 
-const OMNIROUTE_STATUS_MAP: Record<string, string> = { '1H': '1H', HT: 'HT', '2H': '2H' };
-
-interface UniverseMatchLike {
-  fixtureId: number;
-  homeTeam: string;
-  awayTeam: string;
-  league: string;
-  kickoff_utc: string;
+/** Hash FNV-1a 32 bits — déterministe, donc la même paire d'équipes le même
+ * jour retombe toujours sur le même identifiant synthétique (indispensable
+ * pour le dédoublonnage entre tours et le règlement en fin de match). */
+function fnv1aHash(input: string): number {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < input.length; i++) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return hash >>> 0;
 }
 
-async function fetchOneOmnirouteLiveFixture(
-  config: OmnirouteConfig,
-  m: UniverseMatchLike
-): Promise<LiveFixture | null> {
+function syntheticFixtureId(homeTeam: string, awayTeam: string, dateKey: string): number {
+  const key = `${homeTeam.trim().toLowerCase()}|${awayTeam.trim().toLowerCase()}|${dateKey}`;
+  return SYNTHETIC_FIXTURE_ID_BASE + (fnv1aHash(key) % SYNTHETIC_FIXTURE_ID_RANGE);
+}
+
+/** Un match halluciné de plus dans une liste déjà longue coûte peu ; une
+ * liste sans borne coûterait un temps de tour imprévisible. */
+const MAX_OMNIROUTE_DISCOVERED_LIVE_FIXTURES = 40;
+const OMNIROUTE_LIVE_STATUS_SET = new Set(['1H', 'HT', '2H']);
+
+/**
+ * Reconstruit la liste des matchs actuellement en direct SANS passer par
+ * API-Football ET sans dépendre d'un programme du jour pré-construit
+ * (matchUniverse) — contrairement à une première version de ce repli qui
+ * ne faisait que RE-VÉRIFIER des matchs déjà connus, et se retrouvait donc
+ * sans aucun candidat à interroger si matchUniverse n'avait jamais pu se
+ * construire (lui-même entièrement gated derrière le budget API-Football).
+ * Omniroute (auto-hébergé, scraping, sans quota) découvre ICI lui-même,
+ * en une seule requête, tous les matchs actuellement en cours dans les
+ * grands championnats — exactement ce qu'un site de scores en direct
+ * affiche sur sa page d'accueil. N'invente rien : tableau vide si rien
+ * n'est confirmé.
+ *
+ * Sans fixtureId API-Football officiel pour ces matchs découverts, un
+ * identifiant synthétique stable (syntheticFixtureId) est dérivé des noms
+ * d'équipe — assez pour dédoublonner et régler ces paris fictifs entre eux
+ * d'un tour à l'autre, dans un espace d'identifiants qui ne chevauche
+ * jamais les vrais fixtureId API-Football.
+ */
+export async function fetchOmnirouteAllLiveFixtures(config: OmnirouteConfig): Promise<LiveFixture[]> {
   let result: { text: string; model: string } | null;
   try {
     result = await askOmnirouteLight(
-      'Tu es un outil de lecture de score de football EN DIRECT. Réponds UNIQUEMENT par un JSON strict, ' +
-        "sans texte autour. N'invente RIEN : si tu ne trouves pas ce match sur une source de score en direct " +
-        'fiable (Sofascore, Flashscore, l\'API du diffuseur...), réponds avec status "not_found".',
-      `Match : ${m.homeTeam} vs ${m.awayTeam} (${m.league}).\n` +
-        'Cherche son statut EN CE MOMENT sur une source de score en direct fiable.\n' +
+      'Tu es un outil de lecture de scores de football EN DIRECT, comme la page d\'accueil de Flashscore ou ' +
+        "Sofascore. Réponds UNIQUEMENT par un JSON strict, sans texte autour. N'INVENTE RIEN : ne liste QUE des " +
+        'matchs que tu peux confirmer être actuellement en cours sur une source de score en direct fiable. Si tu ' +
+        "n'es pas sûr d'un match, ne l'inclus pas plutôt que de deviner.",
+      'Liste TOUS les matchs de football actuellement EN COURS (1ère mi-temps, mi-temps, ou 2ème mi-temps — ' +
+        'ni terminés, ni pas encore commencés) dans les grands championnats nationaux européens et sud-' +
+        "américains (Angleterre, Espagne, Italie, Allemagne, France, et les autres grandes ligues).\n" +
         'Réponds avec ce JSON exact, sans rien autour :\n' +
-        '{"status": "not_started"|"1H"|"HT"|"2H"|"finished"|"not_found", "minute": number|null, "home_goals": number|null, "away_goals": number|null}',
+        '{"matches": [{"home_team": string, "away_team": string, "competition": string, ' +
+        '"status": "1H"|"HT"|"2H", "minute": number, "home_goals": number, "away_goals": number}]}\n' +
+        'Tableau vide si tu ne trouves aucun match en cours confirmé.',
       config
     );
-  } catch {
-    return null;
+  } catch (error: any) {
+    console.warn('[Découverte live Omniroute] Échec:', error.message);
+    return [];
   }
-  if (!result) return null;
+  if (!result) return [];
 
   let parsed: any;
   try {
     const jsonMatch = result.text.match(/\{[\s\S]*\}/);
     parsed = JSON.parse(jsonMatch ? jsonMatch[0] : result.text);
   } catch {
-    return null;
+    return [];
   }
 
-  const statusShort = OMNIROUTE_STATUS_MAP[parsed.status];
-  if (!statusShort) return null; // not_started / finished / not_found : rien à observer maintenant
+  const rawMatches: any[] = Array.isArray(parsed.matches) ? parsed.matches : [];
+  const dateKey = new Date().toISOString().split('T')[0];
 
-  const minute = typeof parsed.minute === 'number' && Number.isFinite(parsed.minute) ? parsed.minute : 0;
-  const homeGoals = typeof parsed.home_goals === 'number' && Number.isFinite(parsed.home_goals) ? parsed.home_goals : 0;
-  const awayGoals = typeof parsed.away_goals === 'number' && Number.isFinite(parsed.away_goals) ? parsed.away_goals : 0;
+  const fixtures: LiveFixture[] = [];
+  for (const m of rawMatches.slice(0, MAX_OMNIROUTE_DISCOVERED_LIVE_FIXTURES)) {
+    const homeTeam = typeof m.home_team === 'string' ? m.home_team.trim() : '';
+    const awayTeam = typeof m.away_team === 'string' ? m.away_team.trim() : '';
+    if (!homeTeam || !awayTeam) continue;
+    if (!OMNIROUTE_LIVE_STATUS_SET.has(m.status)) continue;
 
-  return { statusShort, homeTeam: m.homeTeam, awayTeam: m.awayTeam, homeGoals, awayGoals, fixtureId: m.fixtureId, minute };
-}
-
-/**
- * Reconstruit la liste des matchs actuellement en direct SANS passer par
- * API-Football, en repli quand sa clé est absente ou son quota du jour est
- * épuisé — Omniroute (auto-hébergé, scraping, sans quota) "prend le relais"
- * à partir du programme du jour déjà connu (matchUniverse) : on ne retient
- * que les matchs dont le coup d'envoi théorique est passé depuis moins de
- * ASSUMED_MATCH_DURATION_MS, puis on demande à Omniroute la minute et le
- * score actuels de chacun (bornage à MAX_OMNIROUTE_LIVE_FIXTURES_PER_TICK par
- * tour). Sans ce repli, un quota API-Football épuisé arrêtait TOUT le scan en
- * direct — y compris le pipeline fictif, qui n'est pourtant censé dépendre
- * d'aucune ressource payante.
- */
-export async function fetchOmnirouteLiveFixtures(
-  config: OmnirouteConfig,
-  universe: UniverseMatchLike[]
-): Promise<LiveFixture[]> {
-  const now = Date.now();
-  const candidates = universe
-    .filter((m) => {
-      const kickoff = Date.parse(m.kickoff_utc);
-      if (!Number.isFinite(kickoff)) return false;
-      const elapsedMs = now - kickoff;
-      return elapsedMs >= 0 && elapsedMs <= ASSUMED_MATCH_DURATION_MS;
-    })
-    .slice(0, MAX_OMNIROUTE_LIVE_FIXTURES_PER_TICK);
-
-  const results: LiveFixture[] = [];
-  for (const m of candidates) {
-    const live = await fetchOneOmnirouteLiveFixture(config, m);
-    if (live) results.push(live);
+    fixtures.push({
+      statusShort: m.status,
+      homeTeam,
+      awayTeam,
+      homeGoals: typeof m.home_goals === 'number' && Number.isFinite(m.home_goals) ? m.home_goals : 0,
+      awayGoals: typeof m.away_goals === 'number' && Number.isFinite(m.away_goals) ? m.away_goals : 0,
+      fixtureId: syntheticFixtureId(homeTeam, awayTeam, dateKey),
+      minute: typeof m.minute === 'number' && Number.isFinite(m.minute) ? m.minute : 0,
+      league: typeof m.competition === 'string' && m.competition.trim() ? m.competition.trim() : undefined,
+    });
   }
-  return results;
+  return fixtures;
 }

@@ -10,9 +10,9 @@ import * as BackgroundTask from 'expo-background-task';
 import * as TaskManager from 'expo-task-manager';
 import { getAPIConfig } from '../api/multiAPIManager';
 import { spendBudget } from './requestBudget';
-import { ensureDailyUniverse, getStoredUniverse } from './matchUniverse';
+import { ensureDailyUniverse } from './matchUniverse';
 import { runLiveMarkerTick } from './liveMarkers';
-import { fetchLiveFixtures, fetchOmnirouteLiveFixtures, LiveFixture } from './halftimeMonitor';
+import { fetchLiveFixtures, fetchOmnirouteAllLiveFixtures, LiveFixture } from './halftimeMonitor';
 import { consolidateLearning } from './autoLearn';
 import { enrichFocusMatches, loadOmnirouteConfig } from './focusEnrichment';
 import { runInPlayComboTick } from './inPlayCombos';
@@ -26,10 +26,9 @@ interface SharedLiveFixturesResult {
   fixtures: LiveFixture[];
   /** D'où viennent (ou pourquoi pas) les fixtures — sert au diagnostic du
    * bouton "forcer le scan" (EvolutionScreen) : sans ça, un relevé vide est
-   * indiscernable d'un budget épuisé, d'un univers vide, ou d'Omniroute non
-   * configuré — trois causes très différentes du même symptôme "0 match". */
-  source: 'api_football' | 'omniroute' | 'aucune_api_football_epuisee' | 'aucune_omniroute_non_configure' | 'aucune_univers_vide';
-  universeSize: number;
+   * indiscernable d'un vrai calme (aucun match en ce moment) ou d'Omniroute
+   * non configuré. */
+  source: 'api_football' | 'omniroute' | 'aucune_omniroute_non_configure' | 'aucune_echec_omniroute';
 }
 
 /**
@@ -41,19 +40,14 @@ interface SharedLiveFixturesResult {
  *
  * Repli Omniroute FORCÉ : dès que la clé API-Football manque, que son quota
  * du jour est épuisé, ou que l'appel échoue, Omniroute (auto-hébergé,
- * scraping, sans quota) prend le relais à partir du programme du jour déjà
- * connu (matchUniverse) — sans ce repli, un quota épuisé arrêtait TOUT le
- * scan en direct, y compris le pipeline fictif qui n'est pourtant censé
- * dépendre d'aucune ressource payante.
- *
- * ⚠️ Ce repli a lui-même une limite non résolue : il lit matchUniverse
- * (getStoredUniverse), qui est construit par ensureDailyUniverse — LUI-MÊME
- * entièrement gated derrière le budget API-Football (aucun repli Omniroute
- * pour bâtir le programme du jour). Si le budget est déjà épuisé au tout
- * premier appel du jour, l'univers reste vide et Omniroute n'a alors aucun
- * match candidat à interroger — il ne fait littéralement aucun appel, pas
- * un appel qui échoue. D'où le diagnostic détaillé ci-dessous plutôt qu'un
- * simple booléen "ça a marché / pas marché".
+ * scraping, sans quota) prend le relais et découvre LUI-MÊME tous les
+ * matchs actuellement en cours (fetchOmnirouteAllLiveFixtures) — sans
+ * dépendre du programme du jour construit par API-Football (matchUniverse) :
+ * une première version de ce repli ne faisait que RE-VÉRIFIER des matchs
+ * déjà connus de matchUniverse, et se retrouvait donc sans aucun candidat à
+ * interroger (0 appel, pas un appel qui échoue) si matchUniverse n'avait
+ * jamais pu se construire faute de budget — exactement le blocage que ce
+ * repli est censé lever.
  */
 async function fetchSharedLiveFixtures(): Promise<SharedLiveFixturesResult> {
   const apiConfig = await getAPIConfig();
@@ -61,24 +55,21 @@ async function fetchSharedLiveFixtures(): Promise<SharedLiveFixturesResult> {
   if (apiConfig.apiFootball && (await spendBudget('apiFootball'))) {
     try {
       const fixtures = await fetchLiveFixtures(apiConfig.apiFootball);
-      return { fixtures, source: 'api_football', universeSize: 0 };
+      return { fixtures, source: 'api_football' };
     } catch (error: any) {
       console.warn('[Tâche de fond] Relevé live API-Football échoué, repli Omniroute:', error.message);
     }
   }
 
+  const omnirouteConfig = await loadOmnirouteConfig();
+  if (!omnirouteConfig) return { fixtures: [], source: 'aucune_omniroute_non_configure' };
+
   try {
-    const omnirouteConfig = await loadOmnirouteConfig();
-    if (!omnirouteConfig) return { fixtures: [], source: 'aucune_omniroute_non_configure', universeSize: 0 };
-    const universe = await getStoredUniverse();
-    if (!universe || universe.length === 0) {
-      return { fixtures: [], source: 'aucune_univers_vide', universeSize: 0 };
-    }
-    const fixtures = await fetchOmnirouteLiveFixtures(omnirouteConfig, universe);
-    return { fixtures, source: 'omniroute', universeSize: universe.length };
+    const fixtures = await fetchOmnirouteAllLiveFixtures(omnirouteConfig);
+    return { fixtures, source: 'omniroute' };
   } catch (error: any) {
     console.warn('[Tâche de fond] Repli Omniroute pour le relevé live échoué:', error.message);
-    return { fixtures: [], source: 'aucune_api_football_epuisee', universeSize: 0 };
+    return { fixtures: [], source: 'aucune_echec_omniroute' };
   }
 }
 
@@ -136,10 +127,6 @@ export async function runAutoLearnTick(): Promise<AutoLearnTickDiagnostics> {
 
   const shared = await fetchSharedLiveFixtures();
   const liveFixtures = shared.fixtures;
-  // fetchSharedLiveFixtures ne relit l'univers que sur le chemin Omniroute ;
-  // sur le chemin API-Football normal, l'univers ci-dessus reste la mesure
-  // à afficher (déjà lu dans les deux cas, jamais 0 par défaut par erreur).
-  if (shared.universeSize > 0) universeSize = shared.universeSize;
 
   let liveMarkerObserved = 0;
   let liveMarkerClosed = 0;

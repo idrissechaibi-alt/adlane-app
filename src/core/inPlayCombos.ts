@@ -750,67 +750,80 @@ export async function runInPlayComboTick(liveFixtures: LiveFixture[]): Promise<n
   // indépendant (`${fixtureId}-${kind}` côté réel vs
   // `${fixtureId}-${kind}-${market}` côté fictif) et écriture dans des
   // listes plafonnées séparément.
+  //
+  // matchUniverse (getStoredUniverse) n'est utilisé qu'en ENRICHISSEMENT
+  // optionnel (league/leagueId connus, pour tenter Football-Data.co.uk) —
+  // jamais comme filtre bloquant : `liveFixtures` peut désormais contenir des
+  // matchs découverts directement par Omniroute (fetchOmnirouteAllLiveFixtures,
+  // aucun besoin d'un programme du jour pré-construit), donc absents de
+  // matchUniverse par construction. Un match sans entrée dans matchUniverse
+  // est simplement traité avec league inconnue : Football-Data.co.uk ne
+  // trouvera rien (leagueId vide), et l'estimation retombe sur le repli
+  // Omniroute ci-dessous, qui ne demande que les noms d'équipe.
   const universe = await getStoredUniverse();
-  if (universe) {
-    const universeById = new Map<number, UniverseMatch>(universe.map((m) => [m.fixtureId, m]));
-    const omnirouteConfig = await loadOmnirouteConfig();
+  const universeById = new Map<number, UniverseMatch>((universe ?? []).map((m) => [m.fixtureId, m]));
+  const omnirouteConfig = await loadOmnirouteConfig();
 
-    for (const live of liveFixtures) {
-      if (live.statusShort !== '1H' && live.statusShort !== '2H') continue;
+  for (const live of liveFixtures) {
+    if (live.statusShort !== '1H' && live.statusShort !== '2H') continue;
 
-      const universeMatch = universeById.get(live.fixtureId);
-      if (!universeMatch) continue; // hors de l'univers suivi (pays non ciblés)
-
-      const match: MatchRef = {
-        homeTeam: universeMatch.homeTeam,
-        awayTeam: universeMatch.awayTeam,
-        league: universeMatch.league,
-        leagueId: String(universeMatch.leagueId),
-      };
-      let preMatchExpectedGoals = await estimateExpectedGoalsFromHistory(
-        match.leagueId, match.homeTeam, match.awayTeam
+    const universeMatch = universeById.get(live.fixtureId);
+    const match: MatchRef = universeMatch
+      ? {
+          homeTeam: universeMatch.homeTeam,
+          awayTeam: universeMatch.awayTeam,
+          league: universeMatch.league,
+          leagueId: String(universeMatch.leagueId),
+        }
+      : {
+          homeTeam: live.homeTeam,
+          awayTeam: live.awayTeam,
+          league: live.league || 'Inconnu',
+          leagueId: '',
+        };
+    let preMatchExpectedGoals = match.leagueId
+      ? await estimateExpectedGoalsFromHistory(match.leagueId, match.homeTeam, match.awayTeam).catch(() => null)
+      : null;
+    if (!preMatchExpectedGoals && omnirouteConfig) {
+      preMatchExpectedGoals = await estimateExpectedGoalsViaOmniroute(
+        omnirouteConfig, match.homeTeam, match.awayTeam, match.league
       ).catch(() => null);
-      if (!preMatchExpectedGoals && omnirouteConfig) {
-        preMatchExpectedGoals = await estimateExpectedGoalsViaOmniroute(
-          omnirouteConfig, match.homeTeam, match.awayTeam, match.league
-        ).catch(() => null);
-      }
-      // Tirs cadrés en direct (Omniroute, gratuit) : fait suivre la projection
-      // l'évolution réelle du match plutôt qu'une moyenne pré-match figée —
-      // voir buildLegs20/buildLegs60.
-      const currentStats = omnirouteConfig
-        ? (await fetchOmnirouteLiveStats(omnirouteConfig, match.homeTeam, match.awayTeam, match.league, live.minute).catch(() => null)) ?? undefined
-        : undefined;
+    }
+    // Tirs cadrés en direct (Omniroute, gratuit) : fait suivre la projection
+    // l'évolution réelle du match plutôt qu'une moyenne pré-match figée —
+    // voir buildLegs20/buildLegs60.
+    const currentStats = omnirouteConfig
+      ? (await fetchOmnirouteLiveStats(omnirouteConfig, match.homeTeam, match.awayTeam, match.league, live.minute).catch(() => null)) ?? undefined
+      : undefined;
 
-      if (
-        live.statusShort === '1H' &&
-        live.minute >= CHECKPOINT20_MIN_MINUTE && live.minute <= CHECKPOINT20_MAX_MINUTE
-      ) {
-        const rawLegs = (await buildLegs20(match, live.fixtureId, live, preMatchExpectedGoals, currentStats)).filter((l) => l.prob >= MIN_LEG_PROB);
-        for (const leg of rawLegs) {
-          const dedupKey = `${live.fixtureId}-minute20-${leg.market}`;
-          if (alreadyProposed.has(dedupKey)) continue;
-          const proposal = buildProposalFromItems('minute20', [{ leg, fixtureId: live.fixtureId, match, live }], '20e → pause + match complet', false);
-          if (proposal) {
-            fresh.push(proposal);
-            alreadyProposed.add(dedupKey);
-          }
+    if (
+      live.statusShort === '1H' &&
+      live.minute >= CHECKPOINT20_MIN_MINUTE && live.minute <= CHECKPOINT20_MAX_MINUTE
+    ) {
+      const rawLegs = (await buildLegs20(match, live.fixtureId, live, preMatchExpectedGoals, currentStats)).filter((l) => l.prob >= MIN_LEG_PROB);
+      for (const leg of rawLegs) {
+        const dedupKey = `${live.fixtureId}-minute20-${leg.market}`;
+        if (alreadyProposed.has(dedupKey)) continue;
+        const proposal = buildProposalFromItems('minute20', [{ leg, fixtureId: live.fixtureId, match, live }], '20e → pause + match complet', false);
+        if (proposal) {
+          fresh.push(proposal);
+          alreadyProposed.add(dedupKey);
         }
       }
+    }
 
-      if (
-        live.statusShort === '2H' &&
-        live.minute >= CHECKPOINT60_MIN_MINUTE && live.minute <= CHECKPOINT60_MAX_MINUTE
-      ) {
-        const rawLegs = buildLegs60(live, preMatchExpectedGoals, currentStats).filter((l) => l.prob >= MIN_LEG_PROB);
-        for (const leg of rawLegs) {
-          const dedupKey = `${live.fixtureId}-minute60-${leg.market}`;
-          if (alreadyProposed.has(dedupKey)) continue;
-          const proposal = buildProposalFromItems('minute60', [{ leg, fixtureId: live.fixtureId, match, live }], '60e → fin de match', false);
-          if (proposal) {
-            fresh.push(proposal);
-            alreadyProposed.add(dedupKey);
-          }
+    if (
+      live.statusShort === '2H' &&
+      live.minute >= CHECKPOINT60_MIN_MINUTE && live.minute <= CHECKPOINT60_MAX_MINUTE
+    ) {
+      const rawLegs = buildLegs60(live, preMatchExpectedGoals, currentStats).filter((l) => l.prob >= MIN_LEG_PROB);
+      for (const leg of rawLegs) {
+        const dedupKey = `${live.fixtureId}-minute60-${leg.market}`;
+        if (alreadyProposed.has(dedupKey)) continue;
+        const proposal = buildProposalFromItems('minute60', [{ leg, fixtureId: live.fixtureId, match, live }], '60e → fin de match', false);
+        if (proposal) {
+          fresh.push(proposal);
+          alreadyProposed.add(dedupKey);
         }
       }
     }

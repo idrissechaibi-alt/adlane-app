@@ -76,10 +76,9 @@ export default function EvolutionScreen() {
 
   const LIVE_FIXTURES_SOURCE_LABEL: Record<string, string> = {
     api_football: 'API-Football',
-    omniroute: 'Omniroute (repli)',
-    aucune_api_football_epuisee: 'aucun — repli Omniroute en échec',
+    omniroute: 'Omniroute (découverte autonome)',
     aucune_omniroute_non_configure: 'aucun — Omniroute non configuré (Paramètres)',
-    aucune_univers_vide: 'aucun — univers du jour vide',
+    aucune_echec_omniroute: 'aucun — repli Omniroute en échec',
   };
 
   /**

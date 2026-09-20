@@ -31,6 +31,9 @@ import {
   writeInPlayProposals,
   writeMarketSeries,
 } from './learnStore';
+import { loadOmnirouteConfig } from './focusEnrichment';
+import { askOmnirouteLight } from './omniroute';
+import { OmnirouteConfig } from '../types';
 
 const LAST_REVIEW_KEY = '@last_daily_review';
 const LAST_ELO_SYNC_KEY = '@last_elo_sync';
@@ -114,6 +117,67 @@ async function fetchFinalResults(
     } catch (error: any) {
       console.warn('[Bilan] Résultats finaux indisponibles:', error.message);
     }
+  }
+
+  return results;
+}
+
+/**
+ * Équivalent Omniroute de fetchFinalResults, pour les matchs découverts
+ * directement par Omniroute (fixtureId synthétique, cf. halftimeMonitor.ts/
+ * fetchOmnirouteAllLiveFixtures) — API-Football ne les connaît sous aucun
+ * identifiant, donc `fetchFinalResults` ne peut littéralement jamais les
+ * régler : sans ce repli, ces propositions restaient non réglées pour
+ * toujours, et n'alimentaient donc jamais la boucle d'auto-apprentissage
+ * malgré le "réussi" affiché en calibrage. Un appel par match (pas de
+ * requête groupée possible sans identifiant commun), mais gratuit et sans
+ * quota — un par jour et par match suffit largement.
+ */
+async function fetchFinalResultsViaOmniroute(
+  omnirouteConfig: OmnirouteConfig,
+  matches: Array<{ fixtureId: number; homeTeam: string; awayTeam: string }>
+): Promise<Map<number, FinalResult>> {
+  const results = new Map<number, FinalResult>();
+
+  for (const { fixtureId, homeTeam, awayTeam } of matches) {
+    let result: { text: string; model: string } | null;
+    try {
+      result = await askOmnirouteLight(
+        'Tu es un outil de lecture de résultats de football TERMINÉS. Réponds UNIQUEMENT par un JSON strict, ' +
+          "sans texte autour. N'invente RIEN : si ce match n'est pas terminé, ou que tu ne trouves pas son score " +
+          'sur une source fiable, réponds avec finished: false.',
+        `Match : ${homeTeam} vs ${awayTeam}.\n` +
+          'Ce match est-il terminé ? Si oui, quels sont le score final ET le score à la mi-temps ?\n' +
+          'Réponds avec ce JSON exact, sans rien autour :\n' +
+          '{"finished": boolean, "home_goals": number|null, "away_goals": number|null, ' +
+          '"ht_home_goals": number|null, "ht_away_goals": number|null}',
+        omnirouteConfig
+      );
+    } catch (error: any) {
+      console.warn('[Bilan] Résultat final Omniroute échoué:', error.message);
+      continue;
+    }
+    if (!result) continue;
+
+    let parsed: any;
+    try {
+      const jsonMatch = result.text.match(/\{[\s\S]*\}/);
+      parsed = JSON.parse(jsonMatch ? jsonMatch[0] : result.text);
+    } catch {
+      continue;
+    }
+    if (!parsed.finished) continue;
+
+    const goalsHome = parsed.home_goals;
+    const goalsAway = parsed.away_goals;
+    if (typeof goalsHome !== 'number' || typeof goalsAway !== 'number') continue;
+
+    results.set(fixtureId, {
+      goalsHome,
+      goalsAway,
+      htHome: typeof parsed.ht_home_goals === 'number' ? parsed.ht_home_goals : 0,
+      htAway: typeof parsed.ht_away_goals === 'number' ? parsed.ht_away_goals : 0,
+    });
   }
 
   return results;
@@ -273,23 +337,41 @@ export async function runNightlyReviewIfDue(): Promise<number> {
     // créneau) — récupérés en une seule requête groupée pour toute la
     // journée. Un combo n'est réglé QUE quand TOUS ses matchs ont un score
     // final disponible ; sinon on retente au prochain bilan.
-    if (apiConfig.apiFootball) {
-      const allFixtureIds = Array.from(new Set(dayProposals.flatMap((p) => p.legs.map((l) => l.fixtureId))));
-      const finals = await fetchFinalResults(apiConfig.apiFootball, allFixtureIds);
+    const allLegs = Array.from(
+      new Map(
+        dayProposals.flatMap((p) => p.legs.map((l) => [l.fixtureId, l] as const))
+      ).values()
+    );
+    const finals = apiConfig.apiFootball
+      ? await fetchFinalResults(apiConfig.apiFootball, allLegs.map((l) => l.fixtureId))
+      : new Map<number, FinalResult>();
 
-      for (const proposal of dayProposals) {
-        const allResolved = proposal.legs.every((leg) => finals.has(leg.fixtureId));
-        if (!allResolved) continue; // au moins un match du combo n'a pas encore de score final
-
-        for (const leg of proposal.legs) {
-          const result = finals.get(leg.fixtureId)!;
-          const won = settleReprojectedLeg(leg.market, leg.selection, result);
-          if (won == null) continue;
-          leg.settled = true;
-          leg.won = won;
-        }
-        proposal.reviewed = true;
+    // Repli Omniroute : matchs découverts par Omniroute (fixtureId
+    // synthétique, jamais connu d'API-Football) — sans ce repli, ils
+    // restaient non réglés pour toujours, quelle que soit l'ancienneté de la
+    // proposition. Uniquement pour ce qu'API-Football n'a pas su régler,
+    // jamais un doublon d'appel pour un match déjà résolu.
+    const unresolvedLegs = allLegs.filter((l) => !finals.has(l.fixtureId));
+    if (unresolvedLegs.length > 0) {
+      const omnirouteConfig = await loadOmnirouteConfig();
+      if (omnirouteConfig) {
+        const omnirouteFinals = await fetchFinalResultsViaOmniroute(omnirouteConfig, unresolvedLegs);
+        for (const [fixtureId, result] of omnirouteFinals) finals.set(fixtureId, result);
       }
+    }
+
+    for (const proposal of dayProposals) {
+      const allResolved = proposal.legs.every((leg) => finals.has(leg.fixtureId));
+      if (!allResolved) continue; // au moins un match du combo n'a pas encore de score final
+
+      for (const leg of proposal.legs) {
+        const result = finals.get(leg.fixtureId)!;
+        const won = settleReprojectedLeg(leg.market, leg.selection, result);
+        if (won == null) continue;
+        leg.settled = true;
+        leg.won = won;
+      }
+      proposal.reviewed = true;
     }
 
     const points = buildDayPoints(day, dayProposals);
