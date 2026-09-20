@@ -21,6 +21,7 @@ import { recordScoutingAnalysis, reconcileScoutingAnalysisNow } from '../core/sc
 import { ScoutingRecord } from '../core/learnStore';
 import { fetchMatchContext, PerplexitySearchResult } from '../core/perplexity';
 import { getAgentLearningDigest } from '../core/autoLearn';
+import { getFocusNoteByTeams, renderFocusNote } from '../core/focusEnrichment';
 import { getHistoricalPriors } from '../core/footballDataCoUk';
 import { getSecondOpinion } from '../core/eloRatings';
 import { fetchLiveFixtures } from '../core/halftimeMonitor';
@@ -168,6 +169,16 @@ export default function ScoutingScreen() {
       console.warn('Digest auto-apprentissage indisponible:', error.message);
     }
 
+    // Contexte qualitatif déjà collecté en fond (Gemini + Omniroute) sur ce
+    // match, si c'est une ligue jouée (focusEnrichment.ts) — auparavant
+    // récolté mais jamais réellement lu par aucun agent : gaspillé.
+    let focusContext: string | null = null;
+    try {
+      focusContext = renderFocusNote(getFocusNoteByTeams(match.homeTeam, match.awayTeam));
+    } catch (error: any) {
+      console.warn('Contexte de fond (focusEnrichment) indisponible:', error.message);
+    }
+
     // Priors pré-match (Football-Data.co.uk, item A) et second avis Elo
     // (item E) : deux sources gratuites, indépendantes du marché et de
     // Gemini/Omniroute. Étiquetées explicitement dans le prompt plutôt que
@@ -290,7 +301,8 @@ export default function ScoutingScreen() {
         match.context,
         webContext ? `Recherche web en direct :\n${webContext}` : '',
         priorsText ? `Données historiques & second avis (gratuites, indépendantes du marché) :\n${priorsText}` : '',
-        learningDigest ? `Mémoire d'auto-apprentissage (marqueurs observés en direct) :\n${learningDigest}` : ''
+        learningDigest ? `Mémoire d'auto-apprentissage (marqueurs observés en direct) :\n${learningDigest}` : '',
+        focusContext ? `Contexte déjà collecté en fond sur ce match (ligue jouée) :\n${focusContext}` : ''
       ]
         .filter(Boolean)
         .join('\n\n') || undefined

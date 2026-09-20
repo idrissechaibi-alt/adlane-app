@@ -19,6 +19,7 @@ import { DEFAULT_OMNIROUTE_CONFIG } from './omniroute';
 import { spendBudget } from './requestBudget';
 import { getStoredUniverse } from './matchUniverse';
 import { FocusNote, readFocusNotes, readLearnedModel, writeFocusNotes } from './learnStore';
+import { normalizeTeamName, namesLikelyMatch } from './teamNameMatch';
 
 const GEMINI_KEY_STORAGE = 'app-adlane.gemini-api-key';
 const OMNIROUTE_CONFIG_KEY = '@omniroute_config';
@@ -143,6 +144,29 @@ export async function enrichFocusMatches(): Promise<number> {
 /** Note d'enrichissement la plus récente pour un match donné. */
 export function getFocusNote(fixtureId: number): FocusNote | null {
   const notes = readFocusNotes().filter((n) => n.fixtureId === fixtureId);
+  if (notes.length === 0) return null;
+  return notes.sort((a, b) => b.collectedAt.localeCompare(a.collectedAt))[0];
+}
+
+/**
+ * Même chose, mais par noms d'équipe plutôt que par fixtureId — nécessaire
+ * pour Scouting, qui identifie ses matchs par l'id football-data.org
+ * (incompatible avec le fixtureId API-Football utilisé ici). Même repli en
+ * deux passes (égalité stricte puis namesLikelyMatch) que scheduler.ts /
+ * ScoutingScreen.tsx pour la détection live, contre les noms qui diffèrent
+ * d'une source à l'autre.
+ */
+export function getFocusNoteByTeams(homeTeam: string, awayTeam: string): FocusNote | null {
+  const homeNorm = normalizeTeamName(homeTeam);
+  const awayNorm = normalizeTeamName(awayTeam);
+
+  const notes = readFocusNotes().filter((n) => {
+    const nHome = normalizeTeamName(n.homeTeam);
+    const nAway = normalizeTeamName(n.awayTeam);
+    return (nHome === homeNorm || namesLikelyMatch(nHome, homeNorm))
+      && (nAway === awayNorm || namesLikelyMatch(nAway, awayNorm));
+  });
+
   if (notes.length === 0) return null;
   return notes.sort((a, b) => b.collectedAt.localeCompare(a.collectedAt))[0];
 }
