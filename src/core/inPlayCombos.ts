@@ -52,14 +52,16 @@ import {
   pickHighestConfidentOverLine,
   SecondHalfMarket,
 } from './poisson';
-import { getAgentLearningDigest } from './autoLearn';
+import { getAgentLearningDigest, scoreAllTargets } from './autoLearn';
 import { getFocusNoteByTeams, renderFocusNote, loadOmnirouteConfig } from './focusEnrichment';
 import { askOmnirouteLight } from './omniroute';
 import {
   InPlayProposal,
   InPlayProposalLeg,
+  PendingObservation,
   TrackedMarket,
   readInPlayProposals,
+  readLearnedModel,
   readPendingSnapshots,
   writeInPlayProposals,
 } from './learnStore';
@@ -113,11 +115,15 @@ function pickBinarySide(market: TrackedMarket, projected: SecondHalfMarket, inve
   };
 }
 
-/** Corners/cartons déjà comptés en 1ère mi-temps, si un instantané liveMarkers récent existe pour ce match (best-effort, jamais bloquant). */
-function observedFirstHalfCounts(fixtureId: number): { corners?: number; cards?: number } {
-  const snapshot = readPendingSnapshots()
+/** Instantané liveMarkers le plus récent pour ce match, si un existe (best-effort, jamais bloquant). */
+function mostRecentSnapshot(fixtureId: number): PendingObservation | undefined {
+  return readPendingSnapshots()
     .filter((o) => o.fixtureId === fixtureId)
     .sort((a, b) => b.ts.localeCompare(a.ts))[0];
+}
+
+/** Corners/cartons déjà comptés en 1ère mi-temps, d'après ce même instantané. */
+function observedFirstHalfCounts(snapshot: PendingObservation | undefined): { corners?: number; cards?: number } {
   if (!snapshot) return {};
 
   const corners = snapshot.markers.cornersHome != null || snapshot.markers.cornersAway != null
@@ -128,6 +134,44 @@ function observedFirstHalfCounts(fixtureId: number): { corners?: number; cards?:
     : undefined;
 
   return { corners, cards };
+}
+
+/**
+ * Fenêtre d'apprentissage la plus proche de "20e minute → pause" dans
+ * autoLearn.ts (LEARNING_HORIZONS = [10, 25]) : 25 minutes couvre bien le
+ * même intervalle.
+ */
+const MARKER_RULE_HORIZON = 25;
+
+/**
+ * Recoupe l'estimation Poisson d'un but avant la pause avec les marqueurs
+ * empiriquement validés par la boucle d'auto-apprentissage (autoLearn.ts —
+ * "quand X marqueurs sont réunis, un but survient dans Y% des cas, sur un
+ * échantillon assez grand pour être significatif"), si une règle s'applique
+ * à CET instantané précis. Simple moyenne des deux estimations quand une
+ * règle se déclenche — les deux sont des probabilités réelles (jamais
+ * inventées), aucune raison de préférer l'une à l'autre sans plus
+ * d'information. Renvoie l'estimation Poisson seule si aucune règle ne
+ * s'applique (corpus trop jeune, ou aucun marqueur atteint le seuil).
+ */
+function blendWithLearnedMarkers(
+  poissonProb: number,
+  poissonEvidence: string,
+  snapshot: PendingObservation | undefined
+): { prob: number; evidence: string } {
+  if (!snapshot) return { prob: poissonProb, evidence: poissonEvidence };
+
+  const model = readLearnedModel();
+  const scored = scoreAllTargets(snapshot, model, MARKER_RULE_HORIZON).find((s) => s.target === 'goals>=1');
+  if (!scored) return { prob: poissonProb, evidence: poissonEvidence };
+
+  const blended = (poissonProb + scored.prob) / 2;
+  return {
+    prob: blended,
+    evidence: `${poissonEvidence} Recoupé avec un marqueur observé en direct : \`${scored.rule.marker}\` → ` +
+      `${(scored.rule.hitRate * 100).toFixed(0)}% de but(s) sur les ${MARKER_RULE_HORIZON} min suivantes ` +
+      `(×${scored.rule.lift.toFixed(2)} vs base, n=${scored.rule.samples}).`
+  };
 }
 
 /**
@@ -146,12 +190,14 @@ async function buildLegs20(
   const legs: CandidateLeg[] = [];
   const currentScore = { home: live.homeGoals, away: live.awayGoals };
   const elapsedMinutes = live.minute;
+  const snapshot = mostRecentSnapshot(fixtureId);
 
   // 1) But 1ère mi-temps ou pas — rien à prédire si déjà marqué (certain).
   if (preMatchExpectedGoals && currentScore.home + currentScore.away === 0) {
     const est = estimateRemainingFirstHalfMarket({ preMatchExpectedGoals, elapsedMinutes, currentScore });
     const m = est.markets[0];
-    legs.push({ market: 'buts_1ere_mt', selection: 'Oui, un but avant la pause', prob: m.estimated_prob, evidence: m.reasoning });
+    const blended = blendWithLearnedMarkers(m.estimated_prob, m.reasoning, snapshot);
+    legs.push({ market: 'buts_1ere_mt', selection: 'Oui, un but avant la pause', prob: blended.prob, evidence: blended.evidence });
   }
 
   // 2) Corners / 3) Cartons 1ère mi-temps — projection sur le reste de la 1ère
@@ -159,7 +205,7 @@ async function buildLegs20(
   const priors = await getHistoricalPriors(match.leagueId, match.homeTeam, match.awayTeam).catch(() => null);
   if (priors) {
     const fraction = remainingFirstHalfEventFraction(elapsedMinutes);
-    const observed = observedFirstHalfCounts(fixtureId);
+    const observed = observedFirstHalfCounts(snapshot);
 
     const cornersLambda = (priors.home.cornersFor + priors.away.cornersFor) * fraction;
     const cornersLine = pickHighestConfidentOverLine(cornersLambda, LINE_PICK_THRESHOLD, observed.corners ?? 0);
