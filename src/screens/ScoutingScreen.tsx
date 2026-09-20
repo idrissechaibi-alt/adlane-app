@@ -236,13 +236,21 @@ export default function ScoutingScreen() {
         });
 
         if (live) {
+          // Score/statut = seule donnée injectée telle quelle (source
+          // structurée API-Football, jamais contredite). Pour le RESTE —
+          // cartons déjà donnés, blessures en cours de match, occasions
+          // notables, changements tactiques, tournant du match — la
+          // consigne demande explicitement à Omniroute d'aller les
+          // chercher en direct avec ses outils de recherche/scraping
+          // désormais configurés (Firecrawl/Jina/Tavily/TinyFish), plutôt
+          // que de pronostiquer seulement à partir du score brut.
           const score = `${live.homeGoals}-${live.awayGoals}`;
           if (live.statusShort === '1H') {
-            liveDirective = `⚠️ Ce match est ACTUELLEMENT EN DIRECT, en 1ère mi-temps (score actuel ${score}). Les 10 marchés demandés doivent porter UNIQUEMENT sur ce qui peut encore se passer avant la pause, pas sur le match complet depuis le coup d'envoi.`;
+            liveDirective = `⚠️ Ce match est ACTUELLEMENT EN DIRECT, en 1ère mi-temps (score actuel ${score} — donnée fiable, ne la remets pas en question). Utilise MAINTENANT tes outils de recherche/scraping pour trouver ce qui s'est passé depuis le coup d'envoi (cartons donnés, occasions notables, blessures, tournant du match, actualité en direct de ce match précis), puis donne les 10 marchés demandés en te basant sur cet état réel — ils doivent porter UNIQUEMENT sur ce qui peut encore se passer avant la pause, jamais sur le match complet depuis le coup d'envoi.`;
             liveStatusNote = `match en direct détecté — 1ère mi-temps (${score})`;
           } else if (['HT', '2H', 'ET', 'BT', 'P', 'SUSP', 'INT'].includes(live.statusShort)) {
             const periodLabel = live.statusShort === 'HT' ? 'à la mi-temps' : 'en 2ème période ou plus';
-            liveDirective = `⚠️ Ce match est ACTUELLEMENT EN DIRECT, ${periodLabel} (score actuel ${score}). Les 10 marchés demandés doivent porter sur le RESTE DU MATCH à partir de maintenant, pas sur le match complet depuis le coup d'envoi (déjà partiellement joué).`;
+            liveDirective = `⚠️ Ce match est ACTUELLEMENT EN DIRECT, ${periodLabel} (score actuel ${score} — donnée fiable, ne la remets pas en question). Utilise MAINTENANT tes outils de recherche/scraping pour trouver l'état réel du match à cet instant (cartons donnés, occasions notables, blessures, changements, tournant du match, actualité en direct de ce match précis), puis donne les 10 marchés demandés en te basant sur cet état réel — ils doivent porter sur le RESTE DU MATCH à partir de maintenant, jamais sur le match complet depuis le coup d'envoi (déjà partiellement joué).`;
             liveStatusNote = `match en direct détecté — ${periodLabel} (${score})`;
           } else {
             liveStatusNote = `match trouvé mais statut "${live.statusShort}" non géré (analyse standard)`;
