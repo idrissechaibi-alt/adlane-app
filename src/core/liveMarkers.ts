@@ -68,7 +68,14 @@ function parseStatValue(raw: unknown): number | undefined {
   return undefined;
 }
 
-async function fetchMarkers(apiKey: string, fixtureId: number): Promise<MarkerSet> {
+/**
+ * Statistiques détaillées d'un match (tirs cadrés, corners, cartons, fautes,
+ * possession) via API-Football. Exportée pour être réutilisée par
+ * inPlayCombos.ts : les tirs cadrés y servent à recalibrer les buts attendus
+ * sur l'évolution RÉELLE du match (poisson.ts/recalibrateGoalsForWindow),
+ * plutôt que de rester figés sur la moyenne pré-match.
+ */
+export async function fetchMarkers(apiKey: string, fixtureId: number): Promise<MarkerSet> {
   try {
     const response = await fetchWithTimeout(
       `https://v3.football.api-sports.io/fixtures/statistics?fixture=${fixtureId}`,

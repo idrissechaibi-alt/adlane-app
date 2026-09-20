@@ -56,10 +56,14 @@ import {
   remainingFirstHalfEventFraction,
   pickHighestConfidentOverLine,
   SecondHalfMarket,
+  LiveMatchStats,
 } from './poisson';
 import { getAgentLearningDigest, scoreAllTargets } from './autoLearn';
 import { getFocusNoteByTeams, renderFocusNote, loadOmnirouteConfig } from './focusEnrichment';
 import { askOmnirouteLight } from './omniroute';
+import { fetchMarkers } from './liveMarkers';
+import { spendBudget } from './requestBudget';
+import { getAPIConfig } from '../api/multiAPIManager';
 import {
   InPlayProposal,
   InPlayProposalLeg,
@@ -245,17 +249,96 @@ async function estimateExpectedGoalsViaOmniroute(
 }
 
 /**
+ * Tirs cadrés en direct pour ce match, via API-Football (statistiques
+ * détaillées) — permet à poisson.ts/recalibrateGoalsForWindow de suivre
+ * l'ÉVOLUTION réelle du match (qui domine, qui se procure les occasions),
+ * pas seulement la moyenne pré-match étalée sur le temps écoulé. Réservé au
+ * pipeline réel (5 grands championnats, peu de matchs simultanés) : coûte
+ * une requête budgétée par match et par checkpoint, acceptable vu le faible
+ * volume et le fait que toutes les ressources sont permises pour l'argent
+ * réel.
+ */
+async function fetchRealLiveStats(fixtureId: number): Promise<LiveMatchStats | undefined> {
+  const apiConfig = await getAPIConfig();
+  if (!apiConfig.apiFootball) return undefined;
+  if (!(await spendBudget('apiFootball'))) return undefined;
+
+  try {
+    const markers = await fetchMarkers(apiConfig.apiFootball, fixtureId);
+    if (markers.shotsOnTargetHome == null && markers.shotsOnTargetAway == null) return undefined;
+    return markers;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Équivalent Omniroute (scraping, gratuit) des tirs cadrés en direct, pour le
+ * pipeline fictif — même rôle que fetchRealLiveStats côté réel : suivre
+ * l'évolution du match plutôt que de rester sur une moyenne pré-match figée.
+ * N'invente rien : si l'agent ne trouve pas de source live fiable, il
+ * renvoie null.
+ */
+async function fetchOmnirouteLiveStats(
+  config: OmnirouteConfig,
+  homeTeam: string,
+  awayTeam: string,
+  league: string,
+  minute: number
+): Promise<LiveMatchStats | null> {
+  let result: { text: string; model: string } | null;
+  try {
+    result = await askOmnirouteLight(
+      'Tu es un outil de lecture de statistiques de match de football EN DIRECT. Réponds UNIQUEMENT par un JSON ' +
+        "strict, sans texte autour. N'invente RIEN : si une valeur n'est pas trouvée sur une source de score en " +
+        "direct fiable (Sofascore, Flashscore, l'API du diffuseur...), mets null pour ce champ.",
+      `Match EN COURS, minute ${minute} : ${homeTeam} vs ${awayTeam} (${league}).\n` +
+        'Cherche le nombre de tirs cadrés cumulés de chaque équipe sur une source fiable.\n' +
+        'Réponds avec ce JSON exact, sans rien autour :\n' +
+        '{"shots_on_target_home": number|null, "shots_on_target_away": number|null}',
+      config
+    );
+  } catch (error: any) {
+    console.warn('[Scan en direct] Tirs cadrés Omniroute échoués:', error.message);
+    return null;
+  }
+  if (!result) return null;
+
+  let parsed: any;
+  try {
+    const jsonMatch = result.text.match(/\{[\s\S]*\}/);
+    parsed = JSON.parse(jsonMatch ? jsonMatch[0] : result.text);
+  } catch {
+    return null;
+  }
+
+  const shotsOnTargetHome = parsed.shots_on_target_home;
+  const shotsOnTargetAway = parsed.shots_on_target_away;
+  if (typeof shotsOnTargetHome !== 'number' && typeof shotsOnTargetAway !== 'number') return null;
+
+  return {
+    shotsOnTargetHome: typeof shotsOnTargetHome === 'number' && Number.isFinite(shotsOnTargetHome) ? shotsOnTargetHome : undefined,
+    shotsOnTargetAway: typeof shotsOnTargetAway === 'number' && Number.isFinite(shotsOnTargetAway) ? shotsOnTargetAway : undefined,
+  };
+}
+
+/**
  * Jambes candidates du checkpoint 20e minute : but 1ère MT, corners/cartons
  * 1ère MT (si moyennes de saison disponibles), BTTS et total du match. Les
  * jambes buts/BTTS/total ne sont tentées que si preMatchExpectedGoals est
  * disponible ; les jambes corners/cartons sont indépendantes et toujours
  * tentées (Football-Data.co.uk, libre d'accès dans les deux pipelines).
+ * `currentStats` (tirs cadrés en direct) fait suivre la projection des buts
+ * l'ÉVOLUTION réelle du match plutôt qu'une simple moyenne pré-match étalée
+ * dans le temps (cf. poisson.ts/recalibrateGoalsForWindow) — omis, la
+ * projection reste sur la moyenne pré-match telle quelle.
  */
 async function buildLegs20(
   match: MatchRef,
   fixtureId: number,
   live: LiveFixture,
-  preMatchExpectedGoals: { home: number; away: number } | null
+  preMatchExpectedGoals: { home: number; away: number } | null,
+  currentStats?: LiveMatchStats
 ): Promise<CandidateLeg[]> {
   const legs: CandidateLeg[] = [];
   const currentScore = { home: live.homeGoals, away: live.awayGoals };
@@ -264,7 +347,7 @@ async function buildLegs20(
 
   // 1) But 1ère mi-temps ou pas — rien à prédire si déjà marqué (certain).
   if (preMatchExpectedGoals && currentScore.home + currentScore.away === 0) {
-    const est = estimateRemainingFirstHalfMarket({ preMatchExpectedGoals, elapsedMinutes, currentScore });
+    const est = estimateRemainingFirstHalfMarket({ preMatchExpectedGoals, elapsedMinutes, currentScore, currentStats });
     const m = est.markets[0];
     const blended = blendWithLearnedMarkers(m.estimated_prob, m.reasoning, snapshot);
     legs.push({ market: 'buts_1ere_mt', selection: 'Oui, un but avant la pause', prob: blended.prob, evidence: blended.evidence });
@@ -304,7 +387,7 @@ async function buildLegs20(
   // seulement la 1ère MT (déjà acquis si les deux ont déjà marqué / si le
   // total dépasse déjà la ligne : rien à prédire, on ne propose pas).
   if (preMatchExpectedGoals) {
-    const fullEst = estimateRemainingMatchMarket({ preMatchExpectedGoals, elapsedMinutes, currentScore });
+    const fullEst = estimateRemainingMatchMarket({ preMatchExpectedGoals, elapsedMinutes, currentScore, currentStats });
     const bttsMarket = fullEst.markets.find((m) => m.market === 'FT_btts_reprojete');
     if (bttsMarket && !(currentScore.home > 0 && currentScore.away > 0)) {
       legs.push(pickBinarySide('btts', bttsMarket, 'Les deux équipes ne marquent pas toutes les deux (Non)'));
@@ -321,11 +404,12 @@ async function buildLegs20(
 /**
  * Jambes candidates du checkpoint 60e minute : reste du match uniquement —
  * toutes basées sur les buts, donc rien à construire si preMatchExpectedGoals
- * est indisponible.
+ * est indisponible. `currentStats` : voir buildLegs20.
  */
 function buildLegs60(
   live: LiveFixture,
-  preMatchExpectedGoals: { home: number; away: number } | null
+  preMatchExpectedGoals: { home: number; away: number } | null,
+  currentStats?: LiveMatchStats
 ): CandidateLeg[] {
   if (!preMatchExpectedGoals) return [];
 
@@ -333,7 +417,7 @@ function buildLegs60(
   const currentScore = { home: live.homeGoals, away: live.awayGoals };
   const elapsedMinutes = live.minute;
 
-  const est = estimateRemainingMatchMarket({ preMatchExpectedGoals, elapsedMinutes, currentScore });
+  const est = estimateRemainingMatchMarket({ preMatchExpectedGoals, elapsedMinutes, currentScore, currentStats });
 
   const resultMarket = est.markets.find((m) => m.market === 'FT_1X2_reprojete');
   if (resultMarket) {
@@ -506,10 +590,11 @@ async function bestLegFor(
 ): Promise<LegWithContext | null> {
   const match = matchRefOfScheduled(scheduled);
   const preMatchExpectedGoals = { home: scheduled.expectedHomeGoals, away: scheduled.expectedAwayGoals };
+  const currentStats = await fetchRealLiveStats(live.fixtureId);
 
   const rawLegs = kind === 'minute20'
-    ? await buildLegs20(match, live.fixtureId, live, preMatchExpectedGoals)
-    : buildLegs60(live, preMatchExpectedGoals);
+    ? await buildLegs20(match, live.fixtureId, live, preMatchExpectedGoals, currentStats)
+    : buildLegs60(live, preMatchExpectedGoals, currentStats);
 
   const eligible = rawLegs.filter((l) => l.prob >= MIN_LEG_PROB).sort((a, b) => b.prob - a.prob);
   if (eligible.length === 0) return null;
@@ -690,12 +775,18 @@ export async function runInPlayComboTick(liveFixtures: LiveFixture[]): Promise<n
           omnirouteConfig, match.homeTeam, match.awayTeam, match.league
         ).catch(() => null);
       }
+      // Tirs cadrés en direct (Omniroute, gratuit) : fait suivre la projection
+      // l'évolution réelle du match plutôt qu'une moyenne pré-match figée —
+      // voir buildLegs20/buildLegs60.
+      const currentStats = omnirouteConfig
+        ? (await fetchOmnirouteLiveStats(omnirouteConfig, match.homeTeam, match.awayTeam, match.league, live.minute).catch(() => null)) ?? undefined
+        : undefined;
 
       if (
         live.statusShort === '1H' &&
         live.minute >= CHECKPOINT20_MIN_MINUTE && live.minute <= CHECKPOINT20_MAX_MINUTE
       ) {
-        const rawLegs = (await buildLegs20(match, live.fixtureId, live, preMatchExpectedGoals)).filter((l) => l.prob >= MIN_LEG_PROB);
+        const rawLegs = (await buildLegs20(match, live.fixtureId, live, preMatchExpectedGoals, currentStats)).filter((l) => l.prob >= MIN_LEG_PROB);
         for (const leg of rawLegs) {
           const dedupKey = `${live.fixtureId}-minute20-${leg.market}`;
           if (alreadyProposed.has(dedupKey)) continue;
@@ -711,7 +802,7 @@ export async function runInPlayComboTick(liveFixtures: LiveFixture[]): Promise<n
         live.statusShort === '2H' &&
         live.minute >= CHECKPOINT60_MIN_MINUTE && live.minute <= CHECKPOINT60_MAX_MINUTE
       ) {
-        const rawLegs = buildLegs60(live, preMatchExpectedGoals).filter((l) => l.prob >= MIN_LEG_PROB);
+        const rawLegs = buildLegs60(live, preMatchExpectedGoals, currentStats).filter((l) => l.prob >= MIN_LEG_PROB);
         for (const leg of rawLegs) {
           const dedupKey = `${live.fixtureId}-minute60-${leg.market}`;
           if (alreadyProposed.has(dedupKey)) continue;
