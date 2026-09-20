@@ -2,6 +2,7 @@
 
 import { Lesson } from '../types';
 import { buildSystemPrompt, AIAnalysisOutput, MatchScoutInput } from './omniroute';
+import { fetchWithTimeout } from './httpTimeout';
 
 // Google retire régulièrement les anciennes versions de Gemini. On pointe sur un
 // modèle stable précis (recommandé par Google pour la prod), avec des secours
@@ -45,7 +46,7 @@ Réponds en français, sous forme de liste factuelle concise (pas de conseil de 
 
   for (const model of GEMINI_MODEL_CANDIDATES) {
     try {
-      const response = await fetch(
+      const response = await fetchWithTimeout(
         `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
         {
           method: 'POST',
@@ -55,7 +56,8 @@ Réponds en français, sous forme de liste factuelle concise (pas de conseil de 
             tools: [{ google_search: {} }],
             generationConfig: { temperature: 0.1 }
           })
-        }
+        },
+        20000 // recherche Google + synthèse : plus long qu'un appel LLM simple
       );
 
       if (!response.ok) {
@@ -128,7 +130,7 @@ FORMAT DE RÉPONSE : JSON Strict uniquement.`;
 
   for (const model of GEMINI_MODEL_CANDIDATES) {
     try {
-      const response = await fetch(
+      const response = await fetchWithTimeout(
         `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
         {
           method: 'POST',
@@ -142,7 +144,8 @@ FORMAT DE RÉPONSE : JSON Strict uniquement.`;
               responseMimeType: "application/json",
             }
           })
-        }
+        },
+        20000
       );
 
       if (!response.ok) {

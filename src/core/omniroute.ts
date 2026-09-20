@@ -3,6 +3,7 @@
 
 import { Lesson, OmnirouteConfig } from '../types';
 import { lintContent } from './validator';
+import { fetchWithTimeout } from './httpTimeout';
 
 // Aucun nom de modèle deviné par défaut : le préfixe "in-ai/" testé
 // précédemment s'est révélé faux sur le serveur réel de l'utilisateur (HTTP
@@ -133,21 +134,25 @@ async function callSingleAgent(
   userPrompt: string,
   config: OmnirouteConfig
 ): Promise<RawAgentResult> {
-  const response = await fetch(`${config.endpoint}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(config.apiKey ? { 'Authorization': `Bearer ${config.apiKey}` } : {})
+  const response = await fetchWithTimeout(
+    `${config.endpoint}/chat/completions`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(config.apiKey ? { 'Authorization': `Bearer ${config.apiKey}` } : {})
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        temperature: 0.2
+      })
     },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt }
-      ],
-      temperature: 0.2
-    })
-  });
+    20000 // endpoint tiers (auto-hébergé ou self-service) : peut être plus lent qu'une API majeure
+  );
 
   if (!response.ok) {
     const bodyText = await response.text().catch(() => '');

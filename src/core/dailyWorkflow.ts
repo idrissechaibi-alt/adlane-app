@@ -417,11 +417,18 @@ export async function generateDailyProposals(
     // (Football-Data.co.uk, item A) plutôt que de les ignorer complètement.
     // Silencieux si le championnat n'est pas couvert (coupes nationales) ou
     // si une équipe n'est pas reconnue — jamais une valeur inventée.
-    const priors = await getHistoricalPriors(match.leagueId, match.homeTeam, match.awayTeam);
-    if (priors) {
-      pushEstimatedOverUnder(evaluatedSelections, match, 'corners', priors.home.cornersFor + priors.away.cornersFor, 'corners', 0.55);
-      pushEstimatedOverUnder(evaluatedSelections, match, 'cards', priors.home.cardsFor + priors.away.cardsFor, 'cartons', 0.55);
-      pushEstimatedOverUnder(evaluatedSelections, match, 'fouls', priors.home.foulsFor + priors.away.foulsFor, 'fautes', 0.55);
+    // Un échec ici (réseau, timeout) ne doit jamais faire échouer la
+    // génération de TOUTES les propositions du jour — juste priver ce match
+    // des marchés corners/cartons/fautes.
+    try {
+      const priors = await getHistoricalPriors(match.leagueId, match.homeTeam, match.awayTeam);
+      if (priors) {
+        pushEstimatedOverUnder(evaluatedSelections, match, 'corners', priors.home.cornersFor + priors.away.cornersFor, 'corners', 0.55);
+        pushEstimatedOverUnder(evaluatedSelections, match, 'cards', priors.home.cardsFor + priors.away.cardsFor, 'cartons', 0.55);
+        pushEstimatedOverUnder(evaluatedSelections, match, 'fouls', priors.home.foulsFor + priors.away.foulsFor, 'fautes', 0.55);
+      }
+    } catch (error: any) {
+      console.warn(`[Planning] Priors historiques indisponibles pour ${match.homeTeam} - ${match.awayTeam}:`, error.message);
     }
   }
 

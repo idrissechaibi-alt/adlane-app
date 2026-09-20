@@ -7,6 +7,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getAPIConfig } from '../api/multiAPIManager';
 import { spendBudget } from './requestBudget';
+import { fetchWithTimeout } from './httpTimeout';
 
 const UNIVERSE_KEY_PREFIX = '@match_universe_';
 const MAX_UNIVERSE_SIZE = 500;
@@ -101,7 +102,7 @@ export async function ensureDailyUniverse(focusLeagues: string[] = []): Promise<
 
     let payload: any;
     try {
-      const response = await fetch(
+      const response = await fetchWithTimeout(
         `https://v3.football.api-sports.io/fixtures?date=${date}&page=${page}`,
         { headers: buildHeaders(config.apiFootball) }
       );

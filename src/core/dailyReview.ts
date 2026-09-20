@@ -17,6 +17,7 @@ import { getAPIConfig } from '../api/multiAPIManager';
 import { spendBudget } from './requestBudget';
 import { syncEloForAllCoveredLeagues } from './eloRatings';
 import { settlePlacedBets } from './betSettlement';
+import { fetchWithTimeout } from './httpTimeout';
 import { generateDailyReport } from './reporter';
 import { getAllBets, saveDailyReport } from '../database/storage';
 import {
@@ -82,7 +83,7 @@ async function fetchFinalResults(
     if (!(await spendBudget('apiFootball'))) break;
 
     try {
-      const response = await fetch(
+      const response = await fetchWithTimeout(
         `https://v3.football.api-sports.io/fixtures?ids=${batch.join('-')}`,
         { headers: buildHeaders(apiKey) }
       );

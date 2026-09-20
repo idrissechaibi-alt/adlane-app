@@ -6,6 +6,8 @@
 // règlement des vrais paris placés (betSettlement.ts) : même logique
 // d'interprétation, deux consommateurs différents.
 
+import { fetchWithTimeout } from './httpTimeout';
+
 export interface FinalResult {
   goalsHome: number;
   goalsAway: number;
@@ -16,7 +18,7 @@ export interface FinalResult {
 /** Score final + mi-temps d'un match terminé, via football-data.org (gratuit, même clé que le planning). */
 export async function fetchFinalResult(apiKey: string, numericId: string): Promise<FinalResult | null> {
   try {
-    const response = await fetch(`https://api.football-data.org/v4/matches/${numericId}`, {
+    const response = await fetchWithTimeout(`https://api.football-data.org/v4/matches/${numericId}`, {
       headers: { 'X-Auth-Token': apiKey },
     });
     if (!response.ok) return null;

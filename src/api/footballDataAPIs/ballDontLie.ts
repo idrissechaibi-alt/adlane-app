@@ -4,6 +4,7 @@
 
 import { APIResponse, FootballMatch, MatchStatistics, Team } from '../types';
 import { getFromCache, saveToCache, generateCacheKey, getCacheConfig } from '../cache';
+import { fetchWithTimeout } from '../../core/httpTimeout';
 
 const BASE_URL = 'https://v3.football.api-sports.io';
 
@@ -52,7 +53,7 @@ function seasonForDate(date: string): number {
  */
 export async function testConnection(config: BallDontLieConfig): Promise<boolean> {
   try {
-    const response = await fetch(`${BASE_URL}/status`, {
+    const response = await fetchWithTimeout(`${BASE_URL}/status`, {
       headers: buildHeaders(config)
     });
     return response.ok;
@@ -78,7 +79,7 @@ export async function getFixturesByDate(
 
   try {
     const season = seasonForDate(date);
-    const response = await fetch(`${BASE_URL}/fixtures?league=${leagueId}&date=${date}&season=${season}`, {
+    const response = await fetchWithTimeout(`${BASE_URL}/fixtures?league=${leagueId}&date=${date}&season=${season}`, {
       headers: buildHeaders(config)
     });
 
@@ -119,7 +120,7 @@ export async function getFixturesBySeason(
   season: number
 ): Promise<APIResponse<FootballMatch[]>> {
   try {
-    const response = await fetch(`${BASE_URL}/fixtures?league=${leagueId}&season=${season}`, {
+    const response = await fetchWithTimeout(`${BASE_URL}/fixtures?league=${leagueId}&season=${season}`, {
       headers: buildHeaders(config)
     });
 
@@ -157,7 +158,7 @@ export async function getMatchStatistics(
   }
 
   try {
-    const response = await fetch(`${BASE_URL}/fixtures/statistics?fixture=${matchId}`, {
+    const response = await fetchWithTimeout(`${BASE_URL}/fixtures/statistics?fixture=${matchId}`, {
       headers: buildHeaders(config)
     });
 
@@ -197,7 +198,7 @@ export async function getTeamInfo(
   }
 
   try {
-    const response = await fetch(`${BASE_URL}/teams?id=${teamId}`, {
+    const response = await fetchWithTimeout(`${BASE_URL}/teams?id=${teamId}`, {
       headers: buildHeaders(config)
     });
 
@@ -230,8 +231,14 @@ export async function getTeamLastMatches(
   teamId: string,
   count: number = 5
 ): Promise<APIResponse<FootballMatch[]>> {
+  const cacheKey = generateCacheKey('team-last', { teamId, count });
+  const cached = await getFromCache<FootballMatch[]>(cacheKey);
+  if (cached) {
+    return { success: true, data: cached, cacheHit: true, source: 'ballDontLie', timestamp: new Date().toISOString() };
+  }
+
   try {
-    const response = await fetch(`${BASE_URL}/fixtures?team=${teamId}&last=${count}`, {
+    const response = await fetchWithTimeout(`${BASE_URL}/fixtures?team=${teamId}&last=${count}`, {
       headers: buildHeaders(config)
     });
 
@@ -241,6 +248,9 @@ export async function getTeamLastMatches(
 
     const data = await response.json();
     const matches = data.response?.map((item: any) => transformMatch(item)) || [];
+
+    const cacheConfig = await getCacheConfig();
+    await saveToCache(cacheKey, matches, cacheConfig.teamTTL);
 
     return {
       success: true,
@@ -288,7 +298,7 @@ export async function getStandings(
   }
 
   try {
-    const response = await fetch(`${BASE_URL}/standings?league=${leagueId}&season=${year}`, {
+    const response = await fetchWithTimeout(`${BASE_URL}/standings?league=${leagueId}&season=${year}`, {
       headers: buildHeaders(config)
     });
 

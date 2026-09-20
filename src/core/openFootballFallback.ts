@@ -8,6 +8,7 @@
 // ne remplace jamais une source qui répond.
 
 import { APIResponse, FootballMatch } from '../api/types';
+import { fetchWithTimeout } from './httpTimeout';
 
 const BASE_URL = 'https://raw.githubusercontent.com/openfootball/football.json/master';
 
@@ -66,7 +67,7 @@ export async function getFixturesByDate(leagueId: string, date: string): Promise
   }
 
   try {
-    const response = await fetch(`${BASE_URL}/${seasonFolder()}/${code}.json`);
+    const response = await fetchWithTimeout(`${BASE_URL}/${seasonFolder()}/${code}.json`);
     if (!response.ok) {
       return { success: false, error: `HTTP ${response.status}`, source: 'openFootball', timestamp: new Date().toISOString() };
     }

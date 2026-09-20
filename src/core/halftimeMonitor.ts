@@ -13,6 +13,7 @@ import { estimateExpectedGoalsFromMarket, estimateSecondHalfMarket, SecondHalfMa
 import { normalizeTeamName } from './teamNameMatch';
 import { sendLocalNotification } from './notifications';
 import { InPlayProposal, TrackedMarket, readInPlayProposals, writeInPlayProposals } from './learnStore';
+import { fetchWithTimeout } from './httpTimeout';
 import { ScheduledMatchDetail } from '../types/database';
 
 /**
@@ -89,7 +90,7 @@ function buildApiFootballHeaders(apiKey: string): Record<string, string> {
  * n'offre pas de recherche live par équipe.
  */
 async function fetchLiveFixtures(apiKey: string): Promise<LiveFixture[]> {
-  const response = await fetch('https://v3.football.api-sports.io/fixtures?live=all', {
+  const response = await fetchWithTimeout('https://v3.football.api-sports.io/fixtures?live=all', {
     headers: buildApiFootballHeaders(apiKey)
   });
   if (!response.ok) return [];
@@ -107,7 +108,7 @@ async function fetchLiveFixtures(apiKey: string): Promise<LiveFixture[]> {
 
 async function fetchLiveStats(apiKey: string, fixtureId: number, homeTeam: string): Promise<LiveStats> {
   try {
-    const response = await fetch(`https://v3.football.api-sports.io/fixtures/statistics?fixture=${fixtureId}`, {
+    const response = await fetchWithTimeout(`https://v3.football.api-sports.io/fixtures/statistics?fixture=${fixtureId}`, {
       headers: buildApiFootballHeaders(apiKey)
     });
     if (!response.ok) return {};

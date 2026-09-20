@@ -12,6 +12,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { normalizeTeamName } from './teamNameMatch';
+import { fetchWithTimeout } from './httpTimeout';
 
 const BASE_URL = 'https://www.football-data.co.uk/mmz4281';
 const CACHE_KEY_PREFIX = '@fd_couk_csv_';
@@ -185,7 +186,7 @@ async function fetchLeagueCsv(leagueId: string): Promise<CsvRow[] | null> {
   }
 
   try {
-    const response = await fetch(`${BASE_URL}/${seasonCode()}/${fdCode}.csv`);
+    const response = await fetchWithTimeout(`${BASE_URL}/${seasonCode()}/${fdCode}.csv`);
     if (!response.ok) return null;
 
     const text = await response.text();

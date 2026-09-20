@@ -7,6 +7,7 @@ import * as SecureStore from 'expo-secure-store';
 import { getAPIConfig, incrementRequestCount } from '../api/multiAPIManager';
 import { fetchCompetitionOdds, FOOTBALL_DATA_TO_ODDS_SPORT_KEY, SimpleMatchOdds } from '../api/footballDataAPIs/theOddsAPI';
 import { normalizeTeamName } from './teamNameMatch';
+import { fetchWithTimeout } from './httpTimeout';
 
 const DAILY_SCHEDULE_KEY = '@daily_schedule_json';
 const FOOTBALL_DATA_KEY = 'app-adlane.football-data-api-key';
@@ -116,7 +117,7 @@ export async function executeMorningScan(): Promise<DailyPlan> {
     const localToday = todayLocalDateString();
     const localTomorrow = todayLocalDateString(new Date(Date.now() + 24 * 3_600_000));
     await incrementRequestCount('footballData');
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       `https://api.football-data.org/v4/matches?competitions=${COMPETITIONS}&dateFrom=${localToday}&dateTo=${localTomorrow}`,
       { headers: { 'X-Auth-Token': apiKey } }
     );

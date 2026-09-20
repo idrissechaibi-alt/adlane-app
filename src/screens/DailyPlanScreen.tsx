@@ -108,16 +108,20 @@ export default function DailyPlanScreen() {
   };
 
   const loadDailyPlan = async () => {
-    const existing = await getDailyPlan();
-    if (existing) {
-      setPlan(existing);
-      // Propositions générées dès que des matchs sont disponibles (pas besoin d'attendre T-90) :
-      // le compte à rebours T-90 reste affiché à titre indicatif par créneau.
-      const { matches, skippedNoOdds } = buildScheduledMatches(existing.slots);
-      setMatchesMissingOdds(skippedNoOdds);
-      const generated = matches.length > 0 ? await generateDailyProposals(matches, HISTORICAL_BETS) : [];
-      setProposals(generated);
-      void loadLineupRefreshesFor(generated);
+    try {
+      const existing = await getDailyPlan();
+      if (existing) {
+        setPlan(existing);
+        // Propositions générées dès que des matchs sont disponibles (pas besoin d'attendre T-90) :
+        // le compte à rebours T-90 reste affiché à titre indicatif par créneau.
+        const { matches, skippedNoOdds } = buildScheduledMatches(existing.slots);
+        setMatchesMissingOdds(skippedNoOdds);
+        const generated = matches.length > 0 ? await generateDailyProposals(matches, HISTORICAL_BETS) : [];
+        setProposals(generated);
+        void loadLineupRefreshesFor(generated);
+      }
+    } catch (error: any) {
+      console.error('Erreur chargement planning:', error.message);
     }
   };
 

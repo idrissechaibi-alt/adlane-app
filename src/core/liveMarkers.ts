@@ -13,6 +13,7 @@
 import { getAPIConfig } from '../api/multiAPIManager';
 import { spendBudget } from './requestBudget';
 import { getStoredUniverse, UniverseMatch } from './matchUniverse';
+import { fetchWithTimeout } from './httpTimeout';
 import {
   EventDeltas,
   LEARNING_HORIZONS,
@@ -47,7 +48,7 @@ function buildHeaders(apiKey: string): Record<string, string> {
 }
 
 async function fetchAllLive(apiKey: string): Promise<LiveSnapshotInput[]> {
-  const response = await fetch('https://v3.football.api-sports.io/fixtures?live=all', {
+  const response = await fetchWithTimeout('https://v3.football.api-sports.io/fixtures?live=all', {
     headers: buildHeaders(apiKey),
   });
   if (!response.ok) return [];
@@ -73,7 +74,7 @@ function parseStatValue(raw: unknown): number | undefined {
 
 async function fetchMarkers(apiKey: string, fixtureId: number): Promise<MarkerSet> {
   try {
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       `https://v3.football.api-sports.io/fixtures/statistics?fixture=${fixtureId}`,
       { headers: buildHeaders(apiKey) }
     );

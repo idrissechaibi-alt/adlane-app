@@ -21,6 +21,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { normalizeTeamName } from './teamNameMatch';
+import { fetchWithTimeout } from './httpTimeout';
 
 const RATINGS_KEY = '@elo_ratings_v1';
 const SYNC_COUNT_KEY_PREFIX = '@elo_synced_count_';
@@ -134,7 +135,7 @@ export async function syncEloForLeague(leagueId: string): Promise<number> {
 
   let payload: { matches?: RawMatch[] };
   try {
-    const response = await fetch(`${OPENFOOTBALL_BASE}/${seasonFolder()}/${code}.json`);
+    const response = await fetchWithTimeout(`${OPENFOOTBALL_BASE}/${seasonFolder()}/${code}.json`);
     if (!response.ok) return 0;
     payload = await response.json();
   } catch (error: any) {
