@@ -389,6 +389,8 @@ export interface ScoutingRecord {
   homeTeam: string;
   awayTeam: string;
   league: string;
+  /** Code football-data.org (ex: "PL"), pour retrouver les stats corners/cartons dans Football-Data.co.uk. */
+  leagueId: string;
   kickoff_utc: string;
   analyzedAt: string;
   engine: string;

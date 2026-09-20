@@ -281,3 +281,36 @@ export async function getHistoricalPriors(
 
   return { home: average(homeAcc), away: average(awayAcc), refereeCardAvg };
 }
+
+export interface SingleMatchStats {
+  corners: number; // total du match (domicile + extérieur)
+  cards: number;
+  fouls: number;
+}
+
+/**
+ * Stats RÉELLES d'UN match déjà joué (pas une moyenne de saison) — sert à
+ * régler objectivement les marchés corners/cartons du bilan Scouting IA
+ * (scoutingReview.ts) avec une vraie source structurée plutôt qu'en devinant.
+ * Une confrontation domicile/extérieur donnée n'a lieu qu'une fois par
+ * saison (aller simple), donc les deux noms d'équipe suffisent à identifier
+ * la ligne sans ambiguïté. Renvoie null si la ligue n'est pas couverte
+ * (coupes nationales notamment) ou si le match n'est pas trouvé dans le CSV.
+ */
+export async function getMatchStats(
+  leagueId: string,
+  homeTeam: string,
+  awayTeam: string
+): Promise<SingleMatchStats | null> {
+  const rows = await fetchLeagueCsv(resolveLeagueId(leagueId));
+  if (!rows || rows.length === 0) return null;
+
+  const row = rows.find((r) => namesMatch(r.homeTeam, homeTeam) && namesMatch(r.awayTeam, awayTeam));
+  if (!row) return null;
+
+  return {
+    corners: row.homeCorners + row.awayCorners,
+    cards: row.homeCards + row.awayCards,
+    fouls: row.homeFouls + row.awayFouls,
+  };
+}
