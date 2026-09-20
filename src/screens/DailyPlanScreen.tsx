@@ -61,6 +61,7 @@ export default function DailyPlanScreen() {
   const [placedBetIds, setPlacedBetIds] = useState<Set<string>>(new Set());
   const [placingId, setPlacingId] = useState<string | null>(null);
   const [stakeInput, setStakeInput] = useState('');
+  const [oddsInput, setOddsInput] = useState('');
   const [placing, setPlacing] = useState(false);
 
   useEffect(() => {
@@ -195,10 +196,17 @@ export default function DailyPlanScreen() {
       return;
     }
 
+    const odds = Number(oddsInput.replace(',', '.'));
+    if (!Number.isFinite(odds) || odds <= 1) {
+      Alert.alert('Cote invalide', 'Entre la cote réelle donnée par ton bookmaker avant de confirmer.');
+      return;
+    }
+
     setPlacing(true);
     try {
       const bet = {
         ...proposal.sourceBet,
+        odds,
         stake,
         played: true,
         status: 'pending' as const,
@@ -209,7 +217,8 @@ export default function DailyPlanScreen() {
       setPlacedBetIds((prev) => new Set(prev).add(bet.id));
       setPlacingId(null);
       setStakeInput('');
-      Alert.alert('Pari placé', `Enregistré dans le Bilan P&L avec une mise de ${stake}.`);
+      setOddsInput('');
+      Alert.alert('Pari placé', `Enregistré dans le Bilan P&L avec une cote de ${odds} et une mise de ${stake}.`);
     } catch (error: any) {
       Alert.alert('Erreur', `Impossible d'enregistrer le pari : ${error.message}`);
     } finally {
@@ -306,16 +315,32 @@ export default function DailyPlanScreen() {
                       </View>
                     </View>
 
-                    <Text style={styles.proposalTitle}>{prop.title}</Text>
-                    <Text style={styles.proposalOdds}>Cote : {prop.totalOdds.toFixed(2)}</Text>
-                    <Text style={styles.proposalAnalysis}>{prop.analysis}</Text>
+                    {(() => {
+                      const hasEstimatedOdds = prop.legs.some((leg) => leg.oddsSource === 'estimated');
+                      const legLines = prop.legs.map((leg) => {
+                        const oddsPart = leg.oddsSource === 'market' && leg.odds
+                          ? `cote ${leg.odds.toFixed(2)}`
+                          : 'cote à compléter (pas de marché publié)';
+                        return `• ${leg.match} — ${leg.selection} (${(leg.estimated_prob! * 100).toFixed(1)}% — ${oddsPart})`;
+                      });
 
-                    {/* Affichage des jambes */}
-                    {prop.legs.map((leg, lIdx) => (
-                      <Text key={lIdx} style={styles.legText}>
-                        • {leg.selection} ({(leg.estimated_prob! * 100).toFixed(1)}%)
-                      </Text>
-                    ))}
+                      return (
+                        <>
+                          <Text style={styles.proposalTitle}>{prop.title}</Text>
+                          <Text style={styles.proposalOdds}>
+                            {hasEstimatedOdds
+                              ? `Cote estimée : ${prop.totalOdds.toFixed(2)} (au moins une jambe sans cote de marché — ajuste avec la cote réelle de ton bookmaker)`
+                              : `Cote : ${prop.totalOdds.toFixed(2)}`}
+                          </Text>
+                          <Text style={styles.proposalAnalysis}>{prop.analysis}</Text>
+
+                          {/* Bloc sélectionnable en un seul Text : copiable directement (appui long) */}
+                          <Text style={styles.legText} selectable>
+                            {legLines.join('\n')}
+                          </Text>
+                        </>
+                      );
+                    })()}
 
                     {/* Alertes et blocages */}
                     {prop.validation.blockers.length > 0 && (
@@ -366,12 +391,20 @@ export default function DailyPlanScreen() {
                           <View style={styles.placeStakeRow}>
                             <TextInput
                               style={styles.stakeInput}
+                              value={oddsInput}
+                              onChangeText={setOddsInput}
+                              placeholder="Cote réelle"
+                              placeholderTextColor="#64748b"
+                              keyboardType="decimal-pad"
+                              autoFocus
+                            />
+                            <TextInput
+                              style={styles.stakeInput}
                               value={stakeInput}
                               onChangeText={setStakeInput}
                               placeholder="Mise (ex: 10)"
                               placeholderTextColor="#64748b"
                               keyboardType="decimal-pad"
-                              autoFocus
                             />
                             <TouchableOpacity
                               style={styles.confirmStakeButton}
@@ -380,7 +413,7 @@ export default function DailyPlanScreen() {
                             >
                               {placing ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.confirmStakeText}>OK</Text>}
                             </TouchableOpacity>
-                            <TouchableOpacity style={styles.cancelStakeButton} onPress={() => { setPlacingId(null); setStakeInput(''); }}>
+                            <TouchableOpacity style={styles.cancelStakeButton} onPress={() => { setPlacingId(null); setStakeInput(''); setOddsInput(''); }}>
                               <Ionicons name="close" size={16} color="#94a3b8" />
                             </TouchableOpacity>
                           </View>
@@ -388,7 +421,14 @@ export default function DailyPlanScreen() {
                       }
 
                       return (
-                        <TouchableOpacity style={styles.placeBetButton} onPress={() => setPlacingId(prop.id)}>
+                        <TouchableOpacity
+                          style={styles.placeBetButton}
+                          onPress={() => {
+                            const hasEstimatedOdds = prop.legs.some((leg) => leg.oddsSource === 'estimated');
+                            setOddsInput(hasEstimatedOdds ? '' : prop.totalOdds.toFixed(2));
+                            setPlacingId(prop.id);
+                          }}
+                        >
                           <Ionicons name="checkmark-circle-outline" size={16} color="#ffffff" />
                           <Text style={styles.placeBetButtonText}>Placer ce pari</Text>
                         </TouchableOpacity>

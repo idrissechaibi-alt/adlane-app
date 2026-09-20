@@ -223,6 +223,8 @@ interface EvaluatedSelection {
   odds: number;
   edgeRatio: number;
   confidence: 'Faible' | 'Moyen' | 'Élevé';
+  /** 'market' = cote réelle (TheOddsAPI) ; 'estimated' = cote juste théorique (1/proba), aucun marché publié pour ce type de sélection. */
+  oddsSource: 'market' | 'estimated';
 }
 
 /** P(X > line) pour une variable de Poisson de paramètre lambda (line est toujours un X.5, jamais d'ambiguïté de push). */
@@ -238,12 +240,39 @@ function lineNearMean(lambda: number): number {
 }
 
 /**
+ * Parmi toutes les lignes X.5 au-dessus de la moyenne, la PLUS HAUTE dont la
+ * probabilité de dépassement reste >= threshold (demande explicite : viser
+ * le meilleur rapport gain/risque plutôt qu'une ligne "évidente" proche de la
+ * moyenne — ex. 9 corners attendus, proposer "plus de 7" ou "plus de 8.5"
+ * plutôt que "plus de 4" qui n'a aucune valeur). La probabilité décroît
+ * strictement quand la ligne monte, donc un simple parcours croissant qui
+ * s'arrête au premier échec suffit à trouver le maximum.
+ */
+function pickHighestConfidentOverLine(lambda: number, threshold: number): { line: number; prob: number } | null {
+  // La ligne proche de la moyenne est déjà souvent SOUS le seuil (une
+  // médiane de Poisson tourne autour de 50%, parfois moins) : partir de là
+  // et ne monter ferait rater la plupart des cas. On part donc plus bas
+  // (où la probabilité est confortablement au-dessus du seuil) et on monte
+  // tant que ça tient, en gardant la dernière ligne qui passe encore.
+  let best: { line: number; prob: number } | null = null;
+  const startLine = Math.max(0.5, lineNearMean(lambda) - 5);
+  for (let i = 0; i < 15; i++) {
+    const line = startLine + i;
+    const prob = poissonOverProb(lambda, line);
+    if (prob < threshold) break;
+    best = { line, prob };
+  }
+  return best;
+}
+
+/**
  * Ajoute une sélection Over ET Under pour un marché sans cote de marché
  * disponible (corners/cartons/fautes — estimés depuis les moyennes de saison
  * Football-Data.co.uk, item A). Sans cote publiée, une jambe serait bloquée
  * par BLOCK_COTE_MANQUANTE : on utilise donc la cote "juste" théorique
- * (1/probabilité), explicitement signalée comme telle dans l'analyse plutôt
- * que présentée comme une cote de bookmaker.
+ * (1/probabilité) en interne pour la validation, mais marquée
+ * oddsSource:'estimated' pour ne jamais être affichée comme une cote de
+ * bookmaker côté écran (l'utilisateur la complète lui-même au placement).
  */
 function pushEstimatedOverUnder(
   target: EvaluatedSelection[],
@@ -254,22 +283,25 @@ function pushEstimatedOverUnder(
   threshold: number
 ): void {
   if (!(lambda > 0)) return;
-  const line = lineNearMean(lambda);
-  const overProb = poissonOverProb(lambda, line);
-  const underProb = 1 - overProb;
 
-  if (overProb >= threshold) {
+  const bestOver = pickHighestConfidentOverLine(lambda, threshold);
+  if (bestOver) {
     target.push({
-      match, market, selection: `Plus de ${line} ${unitLabel}`,
-      modelProb: overProb, fairProb: overProb, odds: Number((1 / overProb).toFixed(2)),
-      edgeRatio: 1, confidence: 'Faible',
+      match, market, selection: `Plus de ${bestOver.line} ${unitLabel}`,
+      modelProb: bestOver.prob, fairProb: bestOver.prob, odds: Number((1 / bestOver.prob).toFixed(2)),
+      edgeRatio: 1, confidence: 'Faible', oddsSource: 'estimated',
     });
   }
+
+  // Under : ligne proche de la moyenne (l'inverse d'une ligne haute serait
+  // trivialement sûr et sans intérêt côté under).
+  const line = lineNearMean(lambda);
+  const underProb = 1 - poissonOverProb(lambda, line);
   if (underProb >= threshold) {
     target.push({
       match, market, selection: `Moins de ${line} ${unitLabel}`,
       modelProb: underProb, fairProb: underProb, odds: Number((1 / underProb).toFixed(2)),
-      edgeRatio: 1, confidence: 'Faible',
+      edgeRatio: 1, confidence: 'Faible', oddsSource: 'estimated',
     });
   }
 }
@@ -321,7 +353,8 @@ export async function generateDailyProposals(
         fairProb: devig1X2.home,
         odds: match.odds.home,
         edgeRatio: edgeHome.edgeRatio,
-        confidence: poisson.prob1X2.home > 0.60 ? 'Élevé' : 'Moyen'
+        confidence: poisson.prob1X2.home > 0.60 ? 'Élevé' : 'Moyen',
+        oddsSource: 'market'
       });
     }
 
@@ -336,7 +369,8 @@ export async function generateDailyProposals(
         fairProb: devig1X2.away,
         odds: match.odds.away,
         edgeRatio: edgeAway.edgeRatio,
-        confidence: poisson.prob1X2.away > 0.60 ? 'Élevé' : 'Moyen'
+        confidence: poisson.prob1X2.away > 0.60 ? 'Élevé' : 'Moyen',
+        oddsSource: 'market'
       });
     }
 
@@ -351,7 +385,8 @@ export async function generateDailyProposals(
         fairProb: devigOU.yes,
         odds: match.odds.over_2_5,
         edgeRatio: edgeOver.edgeRatio,
-        confidence: poisson.probOU25.over > 0.65 ? 'Élevé' : 'Moyen'
+        confidence: poisson.probOU25.over > 0.65 ? 'Élevé' : 'Moyen',
+        oddsSource: 'market'
       });
     }
 
@@ -366,7 +401,8 @@ export async function generateDailyProposals(
         fairProb: devigBTTS.yes,
         odds: match.odds.btts_yes,
         edgeRatio: edgeBTTS.edgeRatio,
-        confidence: 'Faible' // Règle §4.1 : BTTS toujours dégradé en faible
+        confidence: 'Faible', // Règle §4.1 : BTTS toujours dégradé en faible
+        oddsSource: 'market'
       });
     }
 
@@ -378,7 +414,8 @@ export async function generateDailyProposals(
       evaluatedSelections.push({
         match, market: 'OU_2_5', selection: 'Moins de 2,5 buts',
         modelProb: poisson.probOU25.under, fairProb: devigOU.no, odds: match.odds.under_2_5,
-        edgeRatio: edgeUnder.edgeRatio, confidence: poisson.probOU25.under > 0.65 ? 'Élevé' : 'Moyen'
+        edgeRatio: edgeUnder.edgeRatio, confidence: poisson.probOU25.under > 0.65 ? 'Élevé' : 'Moyen',
+        oddsSource: 'market'
       });
     }
 
@@ -387,7 +424,8 @@ export async function generateDailyProposals(
       evaluatedSelections.push({
         match, market: 'BTTS', selection: 'Les deux équipes marquent (Non)',
         modelProb: poisson.probBTTS.no, fairProb: devigBTTS.no, odds: match.odds.btts_no,
-        edgeRatio: edgeBTTSNon.edgeRatio, confidence: 'Faible'
+        edgeRatio: edgeBTTSNon.edgeRatio, confidence: 'Faible',
+        oddsSource: 'market'
       });
     }
 
@@ -401,14 +439,14 @@ export async function generateDailyProposals(
       evaluatedSelections.push({
         match, market: '1ere_mi_temps', selection: 'Plus de 0,5 but avant la pause',
         modelProb: probOverHT05, fairProb: probOverHT05, odds: Number((1 / probOverHT05).toFixed(2)),
-        edgeRatio: 1, confidence: 'Faible'
+        edgeRatio: 1, confidence: 'Faible', oddsSource: 'estimated'
       });
     }
     if (probUnderHT05 >= 0.55) {
       evaluatedSelections.push({
         match, market: '1ere_mi_temps', selection: '0-0 à la pause (moins de 0,5 but)',
         modelProb: probUnderHT05, fairProb: probUnderHT05, odds: Number((1 / probUnderHT05).toFixed(2)),
-        edgeRatio: 1, confidence: 'Faible'
+        edgeRatio: 1, confidence: 'Faible', oddsSource: 'estimated'
       });
     }
 
@@ -444,6 +482,7 @@ export async function generateDailyProposals(
       market: sel.market,
       selection: sel.selection,
       odds: sel.odds,
+      oddsSource: sel.oddsSource,
       estimated_prob: sel.modelProb,
       is_void: false,
       result: 'pending'
@@ -477,7 +516,7 @@ export async function generateDailyProposals(
     proposals.push({
       id: candidateBet.id,
       type: 'solo',
-      title: `Solo : ${sel.selection}`,
+      title: `Solo : ${sel.match.homeTeam} - ${sel.match.awayTeam} — ${sel.selection}`,
       legs: [leg],
       totalOdds: sel.odds,
       confiance: candidateBet.confiance || 50,
@@ -555,6 +594,7 @@ export async function generateDailyProposals(
         market: s.market,
         selection: s.selection,
         odds: s.odds,
+        oddsSource: s.oddsSource,
         estimated_prob: s.modelProb,
         is_void: false,
         result: 'pending'

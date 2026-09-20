@@ -34,6 +34,8 @@ export interface BetLeg {
   market: Market;
   selection: string;              // ex: "Plus de 2,5 buts", "Victoire Arsenal"
   odds: number | null;            // null si non publiée -> BLOCK_COTE_MANQUANTE
+  /** 'market' = cote réelle (bookmaker) ; 'estimated' = cote juste théorique (1/proba modèle), sans marché publié pour ce type de sélection (corners/cartons/fautes/1ère mi-temps). Jamais affichée comme une cote ferme : l'utilisateur la complète lui-même au placement. */
+  oddsSource?: 'market' | 'estimated';
   estimated_prob?: number | null; // Probabilité estimée par le modèle (0 à 1)
   is_void: boolean;               // true si joueur/match annulé
   result: LegResult;
