@@ -7,14 +7,33 @@ import { getRequestCount, getQuotaConfig, incrementRequestCount } from '../api/m
 
 /**
  * Part du quota journalier réservée à l'auto-apprentissage. Le reste est
- * laissé à l'usage direct de l'utilisateur (scan matinal, scouting, etc.) :
- * la boucle de fond ne doit pas consommer la clé au point de bloquer une
- * analyse demandée explicitement.
+ * laissé à l'usage direct de l'utilisateur (scan matinal, scouting, Données
+ * Foot, etc.).
+ *
+ * Décomptée sur un compteur DÉDIÉ (`${source}-autolearn`), jamais partagé
+ * avec l'usage direct : avant ce correctif, les deux tiraient sur le MÊME
+ * compteur global, donc une simple navigation dans Données Foot (classement,
+ * 3 derniers résultats par équipe) pouvait épuiser à elle seule la part
+ * réservée à l'auto-learning pour le reste de la journée, alors que "70%
+ * réservés" ne protégeait en réalité personne — l'usage direct n'avait lui-
+ * même aucun plafond. Le compteur global (`source`, affiché dans Gestion des
+ * API) continue d'être incrémenté à chaque appel réel, direct ou non, pour
+ * que le quota affiché reste exact ; il sert aussi de garde-fou final pour
+ * ne jamais dépasser le vrai quota du fournisseur même si l'usage direct est
+ * déjà très élevé.
  */
 const AUTOLEARN_BUDGET_SHARE = 0.7;
 
+function autolearnCounterKey(source: string): string {
+  return `${source}-autolearn`;
+}
+
 export async function remainingBudget(source: string): Promise<number> {
-  const [used, quotas] = await Promise.all([getRequestCount(source), getQuotaConfig()]);
+  const [totalUsed, autolearnUsed, quotas] = await Promise.all([
+    getRequestCount(source),
+    getRequestCount(autolearnCounterKey(source)),
+    getQuotaConfig(),
+  ]);
   const setting = quotas[source];
   if (!setting || setting.limit <= 0) return 0;
 
@@ -24,7 +43,12 @@ export async function remainingBudget(source: string): Promise<number> {
       ? setting.limit * 24
       : Math.floor(setting.limit / 30); // mensuel ramené au jour
 
-  return Math.max(0, Math.floor(dailyLimit * AUTOLEARN_BUDGET_SHARE) - used);
+  const autolearnShare = Math.floor(dailyLimit * AUTOLEARN_BUDGET_SHARE);
+
+  // Le plus restrictif des deux : la part propre à l'auto-learning (jamais
+  // affectée par l'usage direct) ET le quota réel total (jamais dépassé,
+  // même combiné à un usage direct déjà élevé).
+  return Math.max(0, Math.min(autolearnShare - autolearnUsed, dailyLimit - totalUsed));
 }
 
 /**
@@ -38,6 +62,7 @@ export async function spendBudget(source: string, units: number = 1): Promise<bo
 
   for (let i = 0; i < units; i++) {
     await incrementRequestCount(source);
+    await incrementRequestCount(autolearnCounterKey(source));
   }
   return true;
 }
