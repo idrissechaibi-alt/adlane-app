@@ -526,7 +526,6 @@ export async function runInPlayComboTick(liveFixtures: LiveFixture[]): Promise<n
     )
   );
   const fresh: InPlayProposal[] = [];
-  const claimedFixtureIds = new Set<number>();
 
   // A) Paris RÉELS — 5 grands championnats, par créneau horaire, toutes les
   // ressources disponibles.
@@ -542,7 +541,6 @@ export async function runInPlayComboTick(liveFixtures: LiveFixture[]): Promise<n
       for (const scheduled of slotMatches) {
         const live = findLiveFixture(scheduled, liveFixtures);
         if (!live) continue;
-        claimedFixtureIds.add(live.fixtureId);
 
         if (
           live.statusShort === '1H' &&
@@ -581,15 +579,22 @@ export async function runInPlayComboTick(liveFixtures: LiveFixture[]): Promise<n
   // marché et affûter le modèle utilisé ensuite sur les vrais matchs — pas
   // pour imiter la présentation des vrais paris. Jamais notifié, jamais
   // affiché comme un vrai pari, jamais enrichi par Omniroute (juste une
-  // mesure statistique). Ne retraite pas un match déjà couvert par le
-  // pipeline réel ci-dessus.
+  // mesure statistique).
+  //
+  // Retraite AUSSI les matchs déjà couverts par le pipeline réel ci-dessus
+  // (on ne les exclut plus) : Football-Data.co.uk ne couvre aujourd'hui que
+  // les cinq grands championnats (LEAGUE_ID_TO_FD_CODE), donc les exclure ici
+  // laissait uniquement des matchs hors couverture — priors/estimation
+  // toujours nulles, d'où "0 match traité" en permanence. Aucun conflit de
+  // clé avec le pipeline réel : dédoublonnage indépendant
+  // (`${fixtureId}-${kind}` côté réel vs `${fixtureId}-${kind}-${market}`
+  // côté fictif) et écriture dans des listes plafonnées séparément.
   const universe = await getStoredUniverse();
   if (universe) {
     const universeById = new Map<number, UniverseMatch>(universe.map((m) => [m.fixtureId, m]));
 
     for (const live of liveFixtures) {
       if (live.statusShort !== '1H' && live.statusShort !== '2H') continue;
-      if (claimedFixtureIds.has(live.fixtureId)) continue;
 
       const universeMatch = universeById.get(live.fixtureId);
       if (!universeMatch) continue; // hors de l'univers suivi (pays non ciblés)
