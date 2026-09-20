@@ -268,19 +268,21 @@ export async function runNightlyReviewIfDue(): Promise<number> {
     if (dayProposals.length === 0) continue;
 
     // Scans 20e/60e minute (et l'ancien combo mi-temps, pour les
-    // enregistrements encore non réglés) : tous reposent sur le score final +
-    // mi-temps, récupérés en une requête groupée.
+    // enregistrements encore non réglés) : chaque jambe porte son propre
+    // fixtureId (un combo porte sur PLUSIEURS matchs différents du même
+    // créneau) — récupérés en une seule requête groupée pour toute la
+    // journée. Un combo n'est réglé QUE quand TOUS ses matchs ont un score
+    // final disponible ; sinon on retente au prochain bilan.
     if (apiConfig.apiFootball) {
-      const finals = await fetchFinalResults(
-        apiConfig.apiFootball,
-        dayProposals.map((p) => p.fixtureId)
-      );
+      const allFixtureIds = Array.from(new Set(dayProposals.flatMap((p) => p.legs.map((l) => l.fixtureId))));
+      const finals = await fetchFinalResults(apiConfig.apiFootball, allFixtureIds);
 
       for (const proposal of dayProposals) {
-        const result = finals.get(proposal.fixtureId);
-        if (!result) continue; // score indisponible : on laisse la proposition ouverte
+        const allResolved = proposal.legs.every((leg) => finals.has(leg.fixtureId));
+        if (!allResolved) continue; // au moins un match du combo n'a pas encore de score final
 
         for (const leg of proposal.legs) {
+          const result = finals.get(leg.fixtureId)!;
           const won = settleReprojectedLeg(leg.market, leg.selection, result);
           if (won == null) continue;
           leg.settled = true;

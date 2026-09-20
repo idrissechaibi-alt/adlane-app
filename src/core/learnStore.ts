@@ -333,29 +333,37 @@ export function writeFocusNotes(notes: FocusNote[]): void {
 // ==================== PROPOSITIONS EN COURS DE MATCH ====================
 
 /** Combo proposé en direct (20e minute, ou mi-temps). */
+/**
+ * Une jambe porte toujours sa PROPRE identité de match : un pari simple n'a
+ * qu'une jambe (1 match), un combo en a plusieurs, chacune sur un match
+ * DIFFÉRENT du même créneau horaire (jamais plusieurs marchés du même match
+ * combinés ensemble — voir inPlayCombos.ts).
+ */
+export interface InPlayProposalLeg {
+  /** Marché suivi auquel cette jambe est rattachée (voir TRACKED_MARKETS). */
+  market: TrackedMarket;
+  selection: string;
+  prob: number;
+  evidence: string;
+  /** Rempli au bilan de minuit : la jambe est-elle passée ? */
+  settled?: boolean;
+  won?: boolean;
+  fixtureId: number;
+  league: string;
+  homeTeam: string;
+  awayTeam: string;
+  scoreLabel: string;
+}
+
 export interface InPlayProposal {
   id: string;
   /** 'halftime' conservé pour la compatibilité des enregistrements existants (moniteur retiré). */
   kind: 'minute20' | 'minute60' | 'halftime';
   createdAt: string;
-  fixtureId: number;
-  league: string;
-  homeTeam: string;
-  awayTeam: string;
   minute: number;
-  scoreLabel: string;
   /** Fenêtre couverte, en clair ("20e → 45e", "2ème mi-temps + fin de match"). */
   window: string;
-  legs: Array<{
-    /** Marché suivi auquel cette jambe est rattachée (voir TRACKED_MARKETS). */
-    market: TrackedMarket;
-    selection: string;
-    prob: number;
-    evidence: string;
-    /** Rempli au bilan de minuit : la jambe est-elle passée ? */
-    settled?: boolean;
-    won?: boolean;
-  }>;
+  legs: InPlayProposalLeg[];
   combinedProb: number;
   /** true une fois la journée close et les jambes réglées. */
   reviewed?: boolean;

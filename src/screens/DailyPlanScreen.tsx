@@ -438,14 +438,17 @@ export default function DailyPlanScreen() {
             {inPlayProposals.map((proposal) => (
               <View key={proposal.id} style={styles.halftimeAlertRow}>
                 <Text style={styles.halftimeAlertMatch}>
-                  {proposal.kind === 'minute60' ? '⏱️' : proposal.kind === 'halftime' ? '⏸️' : '⚡'} {proposal.homeTeam} {proposal.scoreLabel} {proposal.awayTeam}
+                  {proposal.kind === 'minute60' ? '⏱️' : proposal.kind === 'halftime' ? '⏸️' : '⚡'}{' '}
+                  {proposal.legs.length === 1
+                    ? `${proposal.legs[0].homeTeam} ${proposal.legs[0].scoreLabel} ${proposal.legs[0].awayTeam}`
+                    : `Combo (${proposal.legs.length} matchs)`}
                 </Text>
                 <Text style={styles.halftimeAlertWindow}>
                   {proposal.window} — {(proposal.combinedProb * 100).toFixed(0)}% combiné
                 </Text>
                 {proposal.legs.map((leg, legIdx) => (
                   <Text key={legIdx} style={styles.halftimeAlertSelection}>
-                    • {leg.selection} ({(leg.prob * 100).toFixed(0)}%) — {leg.evidence}
+                    • {leg.homeTeam} {leg.scoreLabel} {leg.awayTeam} — {leg.selection} ({(leg.prob * 100).toFixed(0)}%) — {leg.evidence}
                   </Text>
                 ))}
               </View>
