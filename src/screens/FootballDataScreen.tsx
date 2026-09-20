@@ -20,7 +20,7 @@ import { FootballMatch, MarketOdds } from '../api/types';
 import { StandingEntry } from '../api/footballDataAPIs/ballDontLie';
 import { getAPIConfig, incrementRequestCount } from '../api/multiAPIManager';
 import { fetchCompetitionOdds, LEAGUE_ID_TO_ODDS_SPORT_KEY } from '../api/footballDataAPIs/theOddsAPI';
-import { normalizeTeamName } from '../core/teamNameMatch';
+import { normalizeTeamName, namesLikelyMatch } from '../core/teamNameMatch';
 import { EdgeCalculator, SurebetCalculator, ProbabilityCalculator } from '../calc/advancedCalculations';
 
 /**
@@ -188,12 +188,30 @@ export default function FootballDataScreen({ navigation }: any) {
         ])
       );
 
+      // Repli en inclusion partielle si la correspondance exacte échoue
+      // (football-data.org "Olympique de Marseille" vs TheOddsAPI
+      // "Marseille", etc. — cf. scheduler.ts) : hors Premier League, les
+      // noms officiels longs ne correspondent presque jamais mot pour mot
+      // aux noms courts des bookmakers.
+      const usedEntries = new Set<typeof result.data[number]>();
+
       const oddsMap: Record<string, MarketOdds[]> = {};
       for (const match of matches) {
-        const found = index.get(
-          `${normalizeTeamName(match.homeTeam)}|${normalizeTeamName(match.awayTeam)}`
-        );
+        const key = `${normalizeTeamName(match.homeTeam)}|${normalizeTeamName(match.awayTeam)}`;
+        let found = index.get(key);
+
+        if (!found) {
+          const homeNorm = normalizeTeamName(match.homeTeam);
+          const awayNorm = normalizeTeamName(match.awayTeam);
+          found = result.data.find((entry) =>
+            !usedEntries.has(entry) &&
+            namesLikelyMatch(homeNorm, normalizeTeamName(entry.homeTeam)) &&
+            namesLikelyMatch(awayNorm, normalizeTeamName(entry.awayTeam))
+          );
+        }
+
         if (!found) continue;
+        usedEntries.add(found);
 
         const markets: MarketOdds[] = [];
         if (found.home != null || found.draw != null || found.away != null) {

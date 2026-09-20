@@ -6,7 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { getAPIConfig, incrementRequestCount } from '../api/multiAPIManager';
 import { fetchCompetitionOdds, FOOTBALL_DATA_TO_ODDS_SPORT_KEY, SimpleMatchOdds } from '../api/footballDataAPIs/theOddsAPI';
-import { normalizeTeamName } from './teamNameMatch';
+import { normalizeTeamName, namesLikelyMatch } from './teamNameMatch';
 import { fetchWithTimeout } from './httpTimeout';
 
 const DAILY_SCHEDULE_KEY = '@daily_schedule_json';
@@ -50,6 +50,7 @@ async function enrichWithRealOdds(
   if (competitionsPresent.length === 0) return;
 
   const oddsIndex = new Map<string, SimpleMatchOdds>();
+  const allOddsEntries: SimpleMatchOdds[] = [];
 
   for (const competitionCode of competitionsPresent) {
     const sportKey = FOOTBALL_DATA_TO_ODDS_SPORT_KEY[competitionCode];
@@ -60,6 +61,7 @@ async function enrichWithRealOdds(
         for (const entry of result.data) {
           const key = `${normalizeTeamName(entry.homeTeam)}|${normalizeTeamName(entry.awayTeam)}`;
           oddsIndex.set(key, entry);
+          allOddsEntries.push(entry);
         }
       } else {
         console.warn(`[Scan Matinal] TheOddsAPI (${sportKey}) sans résultat: ${result.error}`);
@@ -69,10 +71,30 @@ async function enrichWithRealOdds(
     }
   }
 
+  // La correspondance exacte échoue souvent hors Premier League : les noms
+  // anglais coïncident déjà entre football-data.org et TheOddsAPI, mais
+  // "Olympique de Marseille"/"Olympique Lyonnais"/"Racing Club de Lens" (nom
+  // officiel complet) ne correspondent jamais exactement à "Marseille"/
+  // "Lyon"/"Lens" (nom court des bookmakers) — d'où des propositions qui ne
+  // portaient plus que sur la Premier League. Repli en inclusion partielle,
+  // une seule fois par entrée déjà utilisée par ailleurs.
+  const usedEntries = new Set<SimpleMatchOdds>();
   for (const match of matches) {
     const key = `${normalizeTeamName(match.homeTeam)}|${normalizeTeamName(match.awayTeam)}`;
-    const found = oddsIndex.get(key);
+    let found = oddsIndex.get(key);
+
+    if (!found) {
+      const homeNorm = normalizeTeamName(match.homeTeam);
+      const awayNorm = normalizeTeamName(match.awayTeam);
+      found = allOddsEntries.find((entry) =>
+        !usedEntries.has(entry) &&
+        namesLikelyMatch(homeNorm, normalizeTeamName(entry.homeTeam)) &&
+        namesLikelyMatch(awayNorm, normalizeTeamName(entry.awayTeam))
+      );
+    }
+
     if (found) {
+      usedEntries.add(found);
       if (found.home != null) match.odds.home = found.home;
       if (found.draw != null) match.odds.draw = found.draw;
       if (found.away != null) match.odds.away = found.away;
