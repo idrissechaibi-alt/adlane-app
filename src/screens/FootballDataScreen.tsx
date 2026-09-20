@@ -5,7 +5,6 @@ import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  FlatList,
   TouchableOpacity,
   ActivityIndicator,
   ScrollView,
@@ -316,87 +315,90 @@ export default function FootballDataScreen({ navigation }: any) {
         ))}
       </ScrollView>
 
-      {/* Error Message */}
-      {error && (
-        <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle" size={20} color="#ef4444" />
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
-      )}
+      {/*
+        Tout le reste défile dans UN SEUL ScrollView vertical (comme les
+        autres écrans de l'app). Auparavant, la liste "Matchs du jour" était
+        une FlatList posée directement dans la SafeAreaView sans conteneur
+        défilant qui la borne : elle s'étirait pour occuper tout l'espace
+        restant et masquait Value Bets/Surebets/Stats en dessous, donnant
+        l'impression d'un panneau resté "ouvert" et impossible à réduire.
+      */}
+      <ScrollView
+        style={styles.scrollArea}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
+        {error && (
+          <View style={styles.errorContainer}>
+            <Ionicons name="alert-circle" size={20} color="#ef4444" />
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        )}
 
-      {/* Match List */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Matchs du jour</Text>
-          <Text style={styles.sectionCount}>{fixtures.length} matchs</Text>
-        </View>
-
-        <FlatList
-          data={fixtures}
-          renderItem={renderMatch}
-          keyExtractor={item => item.id}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
-          contentContainerStyle={styles.matchList}
-        />
-      </View>
-
-      {/* Value Bets Section */}
-      {valueBets.length > 0 && (
+        {/* Match List */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Value Bets</Text>
-            <Ionicons name="diamond" size={20} color="#fbbf24" />
+            <Text style={styles.sectionTitle}>Matchs du jour</Text>
+            <Text style={styles.sectionCount}>{fixtures.length} matchs</Text>
           </View>
 
-          <FlatList
-            data={valueBets.slice(0, 5)}
-            renderItem={renderValueBet}
-            keyExtractor={(item, index) => `${item.match.id}-${index}`}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.valueBetList}
-          />
+          {fixtures.map((item) => (
+            <View key={item.id}>{renderMatch({ item })}</View>
+          ))}
         </View>
-      )}
 
-      {/* Surebets Section */}
-      {surebets.length > 0 && (
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Surebets</Text>
-            <Ionicons name="shield-checkmark" size={20} color="#10b981" />
-          </View>
+        {/* Value Bets Section */}
+        {valueBets.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Value Bets</Text>
+              <Ionicons name="diamond" size={20} color="#fbbf24" />
+            </View>
 
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {surebets.map((surebet, index) => (
-              <View key={index} style={styles.surebetCard}>
-                <Text style={styles.surebetProfit}>
-                  {(surebet.profitPercentage).toFixed(2)}%
-                </Text>
-                <Text style={styles.surebetLabel}>Profit garanti</Text>
-              </View>
+            {valueBets.slice(0, 5).map((item, index) => (
+              <View key={`${item.match.id}-${index}`}>{renderValueBet({ item })}</View>
             ))}
-          </ScrollView>
-        </View>
-      )}
+          </View>
+        )}
 
-      {/* Quick Stats */}
-      <View style={styles.statsContainer}>
-        <View style={styles.statBox}>
-          <Text style={styles.statValue}>{fixtures.filter(m => m.status === 'live').length}</Text>
-          <Text style={styles.statLabel}>En direct</Text>
+        {/* Surebets Section */}
+        {surebets.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Surebets</Text>
+              <Ionicons name="shield-checkmark" size={20} color="#10b981" />
+            </View>
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              {surebets.map((surebet, index) => (
+                <View key={index} style={styles.surebetCard}>
+                  <Text style={styles.surebetProfit}>
+                    {(surebet.profitPercentage).toFixed(2)}%
+                  </Text>
+                  <Text style={styles.surebetLabel}>Profit garanti</Text>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* Quick Stats */}
+        <View style={styles.statsContainer}>
+          <View style={styles.statBox}>
+            <Text style={styles.statValue}>{fixtures.filter(m => m.status === 'live').length}</Text>
+            <Text style={styles.statLabel}>En direct</Text>
+          </View>
+          <View style={styles.statBox}>
+            <Text style={styles.statValue}>{fixtures.filter(m => m.status === 'finished').length}</Text>
+            <Text style={styles.statLabel}>Terminés</Text>
+          </View>
+          <View style={styles.statBox}>
+            <Text style={styles.statValue}>{valueBets.length}</Text>
+            <Text style={styles.statLabel}>Value Bets</Text>
+          </View>
         </View>
-        <View style={styles.statBox}>
-          <Text style={styles.statValue}>{fixtures.filter(m => m.status === 'finished').length}</Text>
-          <Text style={styles.statLabel}>Terminés</Text>
-        </View>
-        <View style={styles.statBox}>
-          <Text style={styles.statValue}>{valueBets.length}</Text>
-          <Text style={styles.statLabel}>Value Bets</Text>
-        </View>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -425,6 +427,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#1e293b',
     borderBottomWidth: 1,
     borderBottomColor: '#334155'
+  },
+  scrollArea: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 24,
   },
   leagueButton: {
     paddingHorizontal: 16,

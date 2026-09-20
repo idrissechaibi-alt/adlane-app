@@ -102,10 +102,18 @@ export async function executeMorningScan(): Promise<DailyPlan> {
     // football-data.org applique une fenêtre par défaut non documentée qui
     // peut inclure des matchs d'hier ou de demain selon l'heure d'appel —
     // c'est ce qui faisait apparaître le planning d'une autre journée.
+    //
+    // dateTo = demain (pas aujourd'hui) : dateFrom=dateTo=aujourd'hui donnait
+    // "aucun match" à chaque appel, quelle que soit l'heure — signe que
+    // dateTo est traité comme une borne EXCLUSIVE (minuit de ce jour-là), ce
+    // qui exclut alors tous les matchs de la journée. Élargir dateTo à demain
+    // couvre toute la journée d'aujourd'hui, que la borne soit inclusive ou
+    // exclusive.
     const localToday = todayLocalDateString();
+    const localTomorrow = todayLocalDateString(new Date(Date.now() + 24 * 3_600_000));
     await incrementRequestCount('footballData');
     const response = await fetch(
-      `https://api.football-data.org/v4/matches?competitions=${COMPETITIONS}&dateFrom=${localToday}&dateTo=${localToday}`,
+      `https://api.football-data.org/v4/matches?competitions=${COMPETITIONS}&dateFrom=${localToday}&dateTo=${localTomorrow}`,
       { headers: { 'X-Auth-Token': apiKey } }
     );
 
@@ -115,7 +123,13 @@ export async function executeMorningScan(): Promise<DailyPlan> {
     }
 
     const data = await response.json();
-    const matches: any[] = data.matches || [];
+    // dateTo=demain élargit volontairement la fenêtre (voir commentaire
+    // ci-dessus) : on ne garde ici que ce qui tombe vraiment sur la journée
+    // locale demandée, jamais les matchs de demain qui auraient pu se
+    // glisser dans la réponse.
+    const matches: any[] = (data.matches || []).filter(
+      (m: any) => todayLocalDateString(new Date(m.utcDate)) === localToday
+    );
 
     const mappedMatches: ScheduledMatchDetail[] = matches.map(m => ({
       id: `m-${m.id}`,
