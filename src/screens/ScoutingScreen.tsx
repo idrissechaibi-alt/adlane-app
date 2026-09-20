@@ -17,7 +17,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { analyzeMatchWithOmniroute, DEFAULT_OMNIROUTE_CONFIG, AIAnalysisOutput } from '../core/omniroute';
 import { fetchGoogleSearchContext } from '../core/gemini';
-import { recordScoutingAnalysis } from '../core/scoutingReview';
+import { recordScoutingAnalysis, reconcileScoutingAnalysisNow } from '../core/scoutingReview';
+import { ScoutingRecord } from '../core/learnStore';
 import { fetchMatchContext, PerplexitySearchResult } from '../core/perplexity';
 import { getAgentLearningDigest } from '../core/autoLearn';
 import { getHistoricalPriors } from '../core/footballDataCoUk';
@@ -34,6 +35,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const GEMINI_KEY_STORAGE = 'app-adlane.gemini-api-key';
 // Même clé que celle utilisée par SettingsScreen pour sauvegarder la config Omniroute
 const OMNIROUTE_CONFIG_KEY = '@omniroute_config';
+// 90 min + mi-temps + arrêts de jeu, même marge que matchSettlement.ts/
+// scoutingReview.ts : en dessous, un match encore en cours (juste absent du
+// relevé live pour une raison quelconque) serait à tort traité comme terminé.
+const MATCH_FINISHED_BUFFER_MS = 150 * 60 * 1000;
 
 type Engine = 'gemini' | 'freeLLM' | 'omniroute' | 'aucun';
 
@@ -59,6 +64,7 @@ export default function ScoutingScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<AIAnalysisOutput | null>(null);
   const [diagnostic, setDiagnostic] = useState<AIDiagnostic | null>(null);
+  const [calibrationOutcome, setCalibrationOutcome] = useState<ScoutingRecord['outcome'] | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [webSources, setWebSources] = useState<PerplexitySearchResult[]>([]);
 
@@ -104,6 +110,7 @@ export default function ScoutingScreen() {
     setAnalysisResult(null);
     setAnalysisError(null);
     setWebSources([]);
+    setCalibrationOutcome(null);
 
     // Clé Gemini lue tôt : sert à la fois à la recherche Google (basique :
     // compos, horaires, confrontations précédentes) et à l'analyse structurée.
@@ -212,6 +219,7 @@ export default function ScoutingScreen() {
     // et l'analyse tournait comme si le match n'avait pas commencé.
     let liveDirective = '';
     let liveStatusNote = 'match non détecté en direct (analyse standard)';
+    let isFinishedMatch = false;
     try {
       const apiConfig = await getAPIConfig();
       if (!apiConfig.apiFootball) {
@@ -239,6 +247,18 @@ export default function ScoutingScreen() {
           } else {
             liveStatusNote = `match trouvé mais statut "${live.statusShort}" non géré (analyse standard)`;
           }
+        } else if (Date.now() - new Date(match.kickoff_utc).getTime() > MATCH_FINISHED_BUFFER_MS) {
+          // Match introuvable en direct ET son coup d'envoi remonte à plus de
+          // 2h30 : très probablement déjà terminé. Demande explicite :
+          // laisser Omniroute chercher le CONTEXTE (résumé, tournant du
+          // match, forme du jour) via ses outils de recherche web
+          // maintenant configurés — jamais lui demander de DEVINER le score
+          // final lui-même, récupéré séparément via une source structurée
+          // (football-data.org) juste après, pour ne jamais fausser la
+          // calibration avec un chiffre halluciné.
+          isFinishedMatch = true;
+          liveDirective = `⚠️ Ce match est TERMINÉ (coup d'envoi ${new Date(match.kickoff_utc).toLocaleString('fr-FR')}). N'essaie PAS de deviner ou de vérifier toi-même le score final — il sera confronté séparément à une source structurée. Utilise plutôt tes outils de recherche web pour expliquer le CONTEXTE (résumé du match, tournant, décisions arbitrales, forme des équipes ce jour-là), et fournis quand même les 10 marchés comme une estimation A PRIORI (avant coup d'envoi), pour comparaison avec le résultat réel.`;
+          liveStatusNote = 'match détecté comme terminé — analyse a priori + calibration immédiate';
         }
       }
     } catch (error: any) {
@@ -305,7 +325,27 @@ export default function ScoutingScreen() {
       const agentsNote = result.agentsUsed && result.agentsUsed.length > 0
         ? ` • ${result.agentsUsed.length} agent(s) : ${result.agentsUsed.join(', ')}${result.agentsFailed ? ` (${result.agentsFailed.length} échec(s))` : ''}`
         : '';
-      setDiagnostic({ engine: 'omniroute', status: 'success', message: `${result.markets.length} marché(s) reçu(s)${agentsNote} • ${liveStatusNote}.`, timestamp: new Date().toISOString() });
+
+      // Match déjà terminé : règle IMMÉDIATEMENT contre le résultat réel
+      // (source structurée, jamais la parole de l'agent) plutôt que
+      // d'attendre le prochain passage de fond — demande explicite.
+      let calibrationNote = '';
+      if (isFinishedMatch) {
+        try {
+          const outcome = await reconcileScoutingAnalysisNow(match.id);
+          setCalibrationOutcome(outcome);
+          if (outcome) {
+            const correct = outcome.settledLegs.filter((l) => l.correct).length;
+            calibrationNote = ` • Calibration : ${correct}/${outcome.settledLegs.length} marché(s) réglable(s) correct(s), score réel ${outcome.goalsHome}-${outcome.goalsAway}.`;
+          } else {
+            calibrationNote = ' • Calibration impossible pour l\'instant (résultat pas encore disponible côté source structurée).';
+          }
+        } catch (error: any) {
+          calibrationNote = ` • Calibration échouée (${error.message}).`;
+        }
+      }
+
+      setDiagnostic({ engine: 'omniroute', status: 'success', message: `${result.markets.length} marché(s) reçu(s)${agentsNote} • ${liveStatusNote}${calibrationNote}`, timestamp: new Date().toISOString() });
     } catch (error: any) {
       const message = error?.message || 'Erreur inconnue';
       console.error('Omniroute a échoué:', message);
@@ -349,7 +389,7 @@ export default function ScoutingScreen() {
     <View>
       <TouchableOpacity
         style={styles.backButton}
-        onPress={() => { setSelectedMatch(null); setAnalysisResult(null); setAnalysisError(null); setDiagnostic(null); setWebSources([]); }}
+        onPress={() => { setSelectedMatch(null); setAnalysisResult(null); setAnalysisError(null); setDiagnostic(null); setWebSources([]); setCalibrationOutcome(null); }}
       >
         <Ionicons name="arrow-back" size={20} color="#3b82f6" />
         <Text style={styles.backButtonText}>Retour à la liste</Text>
@@ -417,7 +457,28 @@ export default function ScoutingScreen() {
             <Text style={styles.diagnosticText}>
               Moteur : {diagnostic.engine === 'gemini' ? 'Google Gemini' : diagnostic.engine === 'freeLLM' ? 'Pool IA gratuit' : diagnostic.engine === 'omniroute' ? 'Omniroute' : 'Aucun'}
               {' • '}{new Date(diagnostic.timestamp).toLocaleTimeString('fr-FR')}
+              {'\n'}{diagnostic.message}
             </Text>
+          </View>
+        )}
+
+        {calibrationOutcome && (
+          <View style={styles.calibrationBox}>
+            <Text style={styles.sectionSubTitle}>
+              Calibration vs réalité — score final {calibrationOutcome.goalsHome}-{calibrationOutcome.goalsAway}
+            </Text>
+            {calibrationOutcome.settledLegs.map((leg, idx) => (
+              <View key={idx} style={styles.calibrationLegRow}>
+                <Ionicons
+                  name={leg.correct ? 'checkmark-circle' : 'close-circle'}
+                  size={14}
+                  color={leg.correct ? '#10b981' : '#ef4444'}
+                />
+                <Text style={styles.calibrationLegText}>
+                  {leg.market} — {leg.selection} ({(leg.estimated_prob * 100).toFixed(0)}% annoncé)
+                </Text>
+              </View>
+            ))}
           </View>
         )}
       </View>
@@ -475,8 +536,11 @@ const styles = StyleSheet.create({
   errorMessage: { color: '#94a3b8', fontSize: 12, textAlign: 'center', lineHeight: 18, paddingHorizontal: 8 },
   retryButton: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#3b82f6', borderRadius: 8, paddingVertical: 10, paddingHorizontal: 18, marginTop: 8 },
   retryButtonText: { color: '#ffffff', fontSize: 13, fontWeight: 'bold' },
-  diagnosticBox: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#334155' },
-  diagnosticText: { color: '#64748b', fontSize: 11 },
+  diagnosticBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#334155' },
+  diagnosticText: { color: '#64748b', fontSize: 11, flex: 1 },
+  calibrationBox: { marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#334155' },
+  calibrationLegRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 },
+  calibrationLegText: { color: '#94a3b8', fontSize: 12, flex: 1 },
   webSourcesBox: { marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#334155' },
   webSourceRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
   webSourceText: { color: '#94a3b8', fontSize: 11, flex: 1 },

@@ -104,6 +104,44 @@ function settleLeg(
 }
 
 /**
+ * Règle UN enregistrement à partir du score final réel (football-data.org)
+ * et, si besoin, des stats structurées (Football-Data.co.uk) — jamais une
+ * valeur devinée par une IA. Renvoie false si le résultat n'est pas encore
+ * disponible côté source structurée (retenter plus tard), true si réglé.
+ * Partagé entre le passage de fond (reconcileScoutingAnalyses, en lot) et le
+ * réglage immédiat à la demande (reconcileScoutingAnalysisNow, un seul
+ * match) — même logique, ne jamais la dupliquer.
+ */
+async function reconcileOneRecord(record: ScoutingRecord, apiKey: string): Promise<boolean> {
+  const numericId = record.id.replace(/^m-/, '');
+  const result = await fetchFinalResult(apiKey, numericId);
+  if (!result) return false; // pas encore FINISHED côté API (ou requête échouée)
+
+  // Corners/cartons : seulement si le record en contient, pour ne pas
+  // télécharger le CSV Football-Data.co.uk pour rien (ex: coupe nationale
+  // non couverte, ou record sans jambe sur ces marchés).
+  const needsMatchStats = record.legs.some((l) => l.market === 'corners' || l.market === 'cartons');
+  const matchStats = needsMatchStats
+    ? await getMatchStats(record.leagueId, record.homeTeam, record.awayTeam).catch(() => null)
+    : null;
+
+  const settledLegs = record.legs
+    .map((leg) => {
+      const correct = settleLeg(
+        leg, record.homeTeam, record.awayTeam,
+        result.goalsHome, result.goalsAway, result.htHome, result.htAway,
+        matchStats
+      );
+      return correct == null ? null : { ...leg, correct };
+    })
+    .filter((l): l is ScoutingRecordLeg & { correct: boolean } => l != null);
+
+  record.outcome = { ...result, settledLegs };
+  record.reviewed = true;
+  return true;
+}
+
+/**
  * Règle les analyses Scouting dont le match est terminé depuis assez
  * longtemps. Idempotent (reviewed:true une fois réglé) et sans risque en cas
  * d'échec réseau : un enregistrement non réglé est simplement retenté au
@@ -121,36 +159,36 @@ export async function reconcileScoutingAnalyses(): Promise<number> {
 
   let settledCount = 0;
   for (const record of pending) {
-    const numericId = record.id.replace(/^m-/, '');
-    const result = await fetchFinalResult(apiKey, numericId);
-    if (!result) continue; // pas encore FINISHED côté API (ou requête échouée) : retenté au prochain tour
-
-    // Corners/cartons : seulement si le record en contient, pour ne pas
-    // télécharger le CSV Football-Data.co.uk pour rien (ex: coupe nationale
-    // non couverte, ou record sans jambe sur ces marchés).
-    const needsMatchStats = record.legs.some((l) => l.market === 'corners' || l.market === 'cartons');
-    const matchStats = needsMatchStats
-      ? await getMatchStats(record.leagueId, record.homeTeam, record.awayTeam).catch(() => null)
-      : null;
-
-    const settledLegs = record.legs
-      .map((leg) => {
-        const correct = settleLeg(
-          leg, record.homeTeam, record.awayTeam,
-          result.goalsHome, result.goalsAway, result.htHome, result.htAway,
-          matchStats
-        );
-        return correct == null ? null : { ...leg, correct };
-      })
-      .filter((l): l is ScoutingRecordLeg & { correct: boolean } => l != null);
-
-    record.outcome = { ...result, settledLegs };
-    record.reviewed = true;
-    settledCount += 1;
+    if (await reconcileOneRecord(record, apiKey)) settledCount += 1;
   }
 
   writeScoutingRecords(records);
   return settledCount;
+}
+
+/**
+ * Règle IMMÉDIATEMENT l'analyse d'un match déjà terminé, sans attendre le
+ * prochain passage de fond — demande explicite : calibrer sur-le-champ une
+ * analyse Scouting lancée sur un match déjà joué. Renvoie l'outcome réglé
+ * (score réel + jambes correctes/incorrectes) si le résultat est déjà
+ * disponible, null sinon (match pas encore FINISHED côté source structurée,
+ * clé Football-Data manquante, ou aucun enregistrement à régler).
+ */
+export async function reconcileScoutingAnalysisNow(matchId: string): Promise<ScoutingRecord['outcome'] | null> {
+  const apiKey = await SecureStore.getItemAsync(FOOTBALL_DATA_KEY);
+  if (!apiKey) return null;
+
+  const records = readScoutingRecords();
+  // Le plus récent enregistrement non réglé pour ce match (au cas où il a
+  // été analysé plusieurs fois).
+  const record = [...records].reverse().find((r) => r.id === matchId && !r.reviewed);
+  if (!record) return null;
+
+  const settled = await reconcileOneRecord(record, apiKey);
+  if (!settled) return null;
+
+  writeScoutingRecords(records);
+  return record.outcome ?? null;
 }
 
 export interface ScoutingMarketAccuracy {
