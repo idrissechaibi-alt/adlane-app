@@ -9,7 +9,8 @@ import {
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
-  ActivityIndicator
+  ActivityIndicator,
+  Alert
 } from 'react-native';
 import { Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,6 +21,7 @@ import { computeMarketCalibrations } from '../core/calibration';
 import { generateImprovementReport } from '../core/reporter';
 import { MarketCalibration, Lesson, Bet, DailyReport } from '../types';
 import { useIsFocused } from '@react-navigation/native';
+import { runAutoLearnTick } from '../core/backgroundTasks';
 
 export default function EvolutionScreen() {
   const isFocused = useIsFocused();
@@ -33,6 +35,32 @@ export default function EvolutionScreen() {
   const [dailyReports, setDailyReports] = useState<DailyReport[]>([]);
   /** Batterie de paris fictifs du scan 20e/60e minute (inPlayCombos.ts, real:false) — distincte de paperBetsSummary (règles apprises d'autoLearn.ts). */
   const [fictionalCounter, setFictionalCounter] = useState<{ matches: number; placed: number; won: number } | null>(null);
+  const [forcingScan, setForcingScan] = useState(false);
+
+  /** Recharge les deux compteurs de la boucle fictive, sans toucher au reste
+   * de l'écran — utilisé au focus ET après un lancement manuel du scan. */
+  const refreshLiveCounters = () => {
+    try {
+      const bets = readPaperBets();
+      setPaperBetsSummary({
+        total: bets.length,
+        settled: bets.filter((b) => b.settled).length,
+        matches: new Set(bets.map((b) => b.fixtureId)).size,
+      });
+    } catch (error) {
+      console.warn('Paris fictifs indisponibles:', error);
+    }
+    try {
+      const fictional = readInPlayProposals().filter((p) => p.real === false);
+      setFictionalCounter({
+        matches: new Set(fictional.map((p) => p.legs[0]?.fixtureId)).size,
+        placed: fictional.length,
+        won: fictional.filter((p) => p.legs[0]?.settled && p.legs[0]?.won).length,
+      });
+    } catch (error) {
+      console.warn('Compteur de matchs fictifs indisponible:', error);
+    }
+  };
 
   useEffect(() => {
     if (isFocused) {
@@ -42,28 +70,33 @@ export default function EvolutionScreen() {
       } catch (error) {
         console.warn('Série des marchés indisponible:', error);
       }
-      try {
-        const bets = readPaperBets();
-        setPaperBetsSummary({
-          total: bets.length,
-          settled: bets.filter((b) => b.settled).length,
-          matches: new Set(bets.map((b) => b.fixtureId)).size,
-        });
-      } catch (error) {
-        console.warn('Paris fictifs indisponibles:', error);
-      }
-      try {
-        const fictional = readInPlayProposals().filter((p) => p.real === false);
-        setFictionalCounter({
-          matches: new Set(fictional.map((p) => p.legs[0]?.fixtureId)).size,
-          placed: fictional.length,
-          won: fictional.filter((p) => p.legs[0]?.settled && p.legs[0]?.won).length,
-        });
-      } catch (error) {
-        console.warn('Compteur de matchs fictifs indisponible:', error);
-      }
+      refreshLiveCounters();
     }
   }, [isFocused]);
+
+  /**
+   * Lance le tour complet (univers du jour, relevé live + étiquetage,
+   * consolidation du modèle d'auto-apprentissage, scan 20e/60e minute) tout
+   * de suite, sans attendre le prochain tick automatique (15 min en arrière-
+   * plan). Réutilise runAutoLearnTick telle quelle : le relevé live essaie
+   * d'abord API-Football, puis bascule sur Omniroute si le quota est épuisé
+   * ou la clé absente (voir backgroundTasks.ts/fetchSharedLiveFixtures) — et
+   * alimente au passage la même boucle d'auto-apprentissage (consolidation
+   * du modèle, paris papier) que le scan automatique, pas un chemin à part.
+   */
+  const handleForceScan = async () => {
+    if (forcingScan) return;
+    setForcingScan(true);
+    try {
+      await runAutoLearnTick();
+      refreshLiveCounters();
+      Alert.alert('Scan terminé', 'Le relevé en direct et la consolidation de la boucle d\'apprentissage viennent de tourner.');
+    } catch (error: any) {
+      Alert.alert('Scan échoué', error?.message || 'Erreur inconnue.');
+    } finally {
+      setForcingScan(false);
+    }
+  };
 
   const loadData = async () => {
     try {
@@ -110,6 +143,15 @@ export default function EvolutionScreen() {
             {'  •  '}
             <Text style={styles.liveCounterNumber}>{fictionalCounter.won}</Text> réussi{fictionalCounter.won > 1 ? 's' : ''}
           </Text>
+          <TouchableOpacity
+            style={styles.forceScanButton}
+            onPress={handleForceScan}
+            disabled={forcingScan}
+          >
+            {forcingScan
+              ? <ActivityIndicator size="small" color="#4ade80" />
+              : <Ionicons name="play-circle" size={22} color="#4ade80" />}
+          </TouchableOpacity>
         </View>
       )}
 
@@ -411,12 +453,16 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   liveCounterText: {
+    flex: 1,
     color: '#94a3b8',
     fontSize: 11,
   },
   liveCounterNumber: {
     fontWeight: 'bold',
     color: '#e2e8f0',
+  },
+  forceScanButton: {
+    paddingHorizontal: 4,
   },
   paperBetsBox: {
     flexDirection: 'row',
