@@ -328,7 +328,51 @@ export function estimateExpectedGoalsFromMarket(odds: {
   return best;
 }
 
-// ==================== RECALIBRAGE À LA MI-TEMPS ====================
+// ==================== LIGNES OVER/UNDER (marchés sans cote publiée) ====================
+
+/** P(Poisson(lambda) > line), line pouvant être X.5 ou un entier. */
+export function poissonOverProb(lambda: number, line: number): number {
+  let cdf = 0;
+  for (let k = 0; k <= Math.floor(line); k++) cdf += poissonProb(lambda, k);
+  return Math.max(0, Math.min(1, 1 - cdf));
+}
+
+/** Ligne X.5 la plus proche (juste en dessous) de la moyenne estimée. */
+export function lineNearMean(lambda: number): number {
+  return Math.max(0.5, Math.floor(lambda) - 0.5);
+}
+
+/**
+ * Parmi toutes les lignes X.5 au-dessus de la moyenne, la PLUS HAUTE dont la
+ * probabilité de dépassement reste >= threshold (viser le meilleur rapport
+ * gain/risque plutôt qu'une ligne "évidente" proche de la moyenne — ex. 9
+ * corners attendus, proposer "plus de 7" ou "plus de 8.5" plutôt que "plus de
+ * 4" qui n'a aucune valeur). La probabilité décroît strictement quand la
+ * ligne monte, donc un simple parcours croissant qui s'arrête au premier
+ * échec suffit à trouver le maximum.
+ *
+ * `alreadyObserved` (par défaut 0) permet de traiter un total déjà entamé en
+ * cours de match (ex: corners déjà comptés depuis le coup d'envoi) : la ligne
+ * porte sur le TOTAL (déjà observé + reste modélisé en Poisson(lambda)), pas
+ * seulement sur le reste.
+ */
+export function pickHighestConfidentOverLine(
+  lambda: number,
+  threshold: number,
+  alreadyObserved: number = 0
+): { line: number; prob: number } | null {
+  let best: { line: number; prob: number } | null = null;
+  const startLine = Math.max(0.5, lineNearMean(lambda) + alreadyObserved - 5);
+  for (let i = 0; i < 15; i++) {
+    const line = startLine + i;
+    const prob = poissonOverProb(lambda, line - alreadyObserved);
+    if (prob < threshold) break;
+    best = { line, prob };
+  }
+  return best;
+}
+
+// ==================== RECALIBRAGE EN COURS DE MATCH ====================
 
 /**
  * Part empirique approximative des buts marqués en 2ème mi-temps (les
@@ -336,10 +380,12 @@ export function estimateExpectedGoalsFromMarket(odds: {
  * historiquement une légère majorité de buts en 2ème période — fatigue,
  * changements tactiques, remplacements). Valeur ronde volontairement
  * conservatrice, pas une constante mesurée précisément sur ce jeu de données.
+ * Utilisée uniquement pour pondérer le début vs la fin de match ci-dessous,
+ * PAS comme un simple partage 45/45 minutes.
  */
 const SECOND_HALF_GOAL_SHARE = 0.55;
 
-export interface HalfTimeStats {
+export interface LiveMatchStats {
   shotsOnTargetHome?: number;
   shotsOnTargetAway?: number;
   possessionHome?: number; // 0-100
@@ -348,10 +394,17 @@ export interface HalfTimeStats {
   cornersAway?: number;
 }
 
-export interface HalfTimeContext {
+/**
+ * Contexte pour re-projeter le RESTE du match à partir de n'importe quel
+ * instant (20e, 45e/mi-temps, 60e minute...), pas seulement la mi-temps —
+ * généralisation de l'ancien HalfTimeContext, qui supposait toujours un
+ * découpage exact en 2 mi-temps de 45 minutes.
+ */
+export interface RemainingMatchContext {
   preMatchExpectedGoals: { home: number; away: number }; // sur 90 minutes, avant match
-  htScore: { home: number; away: number };
-  htStats?: HalfTimeStats;
+  elapsedMinutes: number; // minute de jeu actuelle
+  currentScore: { home: number; away: number };
+  currentStats?: LiveMatchStats;
 }
 
 export interface SecondHalfMarket {
@@ -373,28 +426,60 @@ function confidenceFromProb(prob: number): 'Faible' | 'Moyen' | 'Élevé' {
   return 'Faible';
 }
 
+// Taux de buts par minute impliqué par SECOND_HALF_GOAL_SHARE, pour pouvoir
+// intégrer la part de buts attendus sur N'IMPORTE QUELLE fenêtre (pas
+// seulement un découpage 45/45) — se réduit exactement au partage 45%/55%
+// d'origine à l'instant précis de la mi-temps (45e minute).
+const FIRST_HALF_RATE_PER_MIN = (1 - SECOND_HALF_GOAL_SHARE) / 45;
+const SECOND_HALF_RATE_PER_MIN = SECOND_HALF_GOAL_SHARE / 45;
+
 /**
- * Recalibre les buts attendus de 2ème mi-temps à partir des stats déjà
- * observées en 1ère mi-temps (tirs cadrés en priorité — plus fiable que la
- * possession sur un échantillon de 45 minutes). Ajustement volontairement
- * amorti et plafonné (+/-40%) : 45 minutes de jeu restent un petit
- * échantillon, on ne veut pas sur-réagir à une séquence ponctuelle.
+ * Fraction des événements attendus sur le match ENTIER (buts, mais aussi
+ * corners/cartons par réutilisation du même partage début/fin de match) qui
+ * reste à venir à partir de `elapsedMinutes`, jusqu'à la 90e.
  */
-function recalibrateSecondHalfGoals(ctx: HalfTimeContext): { home: number; away: number } {
+export function remainingMatchEventFraction(elapsedMinutes: number): number {
+  const e = Math.max(0, Math.min(90, elapsedMinutes));
+  if (e >= 45) return SECOND_HALF_RATE_PER_MIN * (90 - e);
+  return FIRST_HALF_RATE_PER_MIN * (45 - e) + SECOND_HALF_GOAL_SHARE;
+}
+
+/**
+ * Fraction des événements attendus sur le match ENTIER qui reste à venir
+ * avant la pause seulement (n'a de sens que pour `elapsedMinutes` < 45).
+ */
+export function remainingFirstHalfEventFraction(elapsedMinutes: number): number {
+  const e = Math.max(0, Math.min(45, elapsedMinutes));
+  return FIRST_HALF_RATE_PER_MIN * (45 - e);
+}
+
+/**
+ * Recalibre les buts attendus sur une fenêtre restante à partir des stats
+ * déjà observées (tirs cadrés en priorité — plus fiable que la possession sur
+ * un petit échantillon). Ajustement volontairement amorti et plafonné
+ * (+/-40%) : plus la fenêtre déjà jouée est courte (20 minutes), plus
+ * l'échantillon est petit, on ne veut pas sur-réagir à une séquence
+ * ponctuelle.
+ */
+function recalibrateGoalsForWindow(
+  preMatchExpectedGoals: { home: number; away: number },
+  windowFraction: number,
+  currentStats?: LiveMatchStats
+): { home: number; away: number } {
   const base = {
-    home: ctx.preMatchExpectedGoals.home * SECOND_HALF_GOAL_SHARE,
-    away: ctx.preMatchExpectedGoals.away * SECOND_HALF_GOAL_SHARE
+    home: preMatchExpectedGoals.home * windowFraction,
+    away: preMatchExpectedGoals.away * windowFraction
   };
 
-  const shotsHome = ctx.htStats?.shotsOnTargetHome;
-  const shotsAway = ctx.htStats?.shotsOnTargetAway;
+  const shotsHome = currentStats?.shotsOnTargetHome;
+  const shotsAway = currentStats?.shotsOnTargetAway;
 
   if (shotsHome == null || shotsAway == null || shotsHome + shotsAway === 0) {
     return base; // Pas de stats fiables : on garde la projection pré-match telle quelle
   }
 
-  const totalPreMatch = ctx.preMatchExpectedGoals.home + ctx.preMatchExpectedGoals.away;
-  const preShareHome = totalPreMatch > 0 ? ctx.preMatchExpectedGoals.home / totalPreMatch : 0.5;
+  const totalPreMatch = preMatchExpectedGoals.home + preMatchExpectedGoals.away;
+  const preShareHome = totalPreMatch > 0 ? preMatchExpectedGoals.home / totalPreMatch : 0.5;
   const shotShareHome = shotsHome / (shotsHome + shotsAway);
 
   const rawShift = shotShareHome - preShareHome;
@@ -466,44 +551,72 @@ function projectFullTimeMarkets(
 }
 
 /**
- * Point d'entrée : à partir du contexte de mi-temps (score, cotes pré-match,
- * stats optionnelles), renvoie les buts attendus recalibrés pour la 2ème MT
- * et une liste de marchés exploitables (2ème MT seule + ré-projection fin de
- * match), chacun avec sa probabilité estimée et son niveau de confiance.
+ * Point d'entrée générique : à partir de n'importe quel instant du match
+ * (20e, mi-temps, 60e...), renvoie les buts attendus recalibrés sur le RESTE
+ * DU MATCH ENTIER et une liste de marchés exploitables (reste du match seul +
+ * ré-projection fin de match tenant compte du score déjà acquis), chacun avec
+ * sa probabilité estimée et son niveau de confiance. Remplace l'ancien
+ * estimateSecondHalfMarket, qui supposait toujours un point de départ à la
+ * 45e minute pile.
  */
-export function estimateSecondHalfMarket(ctx: HalfTimeContext): SecondHalfEstimate {
-  const secondHalfExpectedGoals = recalibrateSecondHalfGoals(ctx);
-  const secondHalfModel = computePoissonModel(secondHalfExpectedGoals.home, secondHalfExpectedGoals.away);
+export function estimateRemainingMatchMarket(ctx: RemainingMatchContext): SecondHalfEstimate {
+  const fraction = remainingMatchEventFraction(ctx.elapsedMinutes);
+  const remainingExpectedGoals = recalibrateGoalsForWindow(ctx.preMatchExpectedGoals, fraction, ctx.currentStats);
+  const remainingModel = computePoissonModel(remainingExpectedGoals.home, remainingExpectedGoals.away);
 
-  const pAtLeastOneGoal2H = 1 - secondHalfModel.scoreMatrix[0][0];
+  const pAtLeastOneGoal = 1 - remainingModel.scoreMatrix[0][0];
 
   const markets: SecondHalfMarket[] = [
     {
-      market: '2MT_over_0_5',
-      selection: 'Plus de 0.5 but en 2ème mi-temps',
-      estimated_prob: pAtLeastOneGoal2H,
-      confidence: confidenceFromProb(pAtLeastOneGoal2H),
-      reasoning: `Buts attendus 2ème MT : ${secondHalfExpectedGoals.home.toFixed(2)} (dom.) / ${secondHalfExpectedGoals.away.toFixed(2)} (ext.).`
+      market: 'reste_over_0_5',
+      selection: 'Plus de 0.5 but sur le reste du match',
+      estimated_prob: pAtLeastOneGoal,
+      confidence: confidenceFromProb(pAtLeastOneGoal),
+      reasoning: `Buts attendus sur le reste du match (depuis la ${ctx.elapsedMinutes}e minute) : ${remainingExpectedGoals.home.toFixed(2)} (dom.) / ${remainingExpectedGoals.away.toFixed(2)} (ext.).`
     },
     ...(() => {
-      const { home, draw, away } = secondHalfModel.prob1X2;
+      const { home, draw, away } = remainingModel.prob1X2;
       const best = home >= away && home >= draw
-        ? { selection: 'Domicile gagne la 2ème MT', prob: home }
+        ? { selection: 'Domicile gagne le reste du match', prob: home }
         : away >= draw
-          ? { selection: 'Extérieur gagne la 2ème MT', prob: away }
-          : { selection: 'Nul en 2ème MT', prob: draw };
+          ? { selection: 'Extérieur gagne le reste du match', prob: away }
+          : { selection: 'Nul sur le reste du match', prob: draw };
       return [{
-        market: '2MT_1X2',
+        market: 'reste_1X2',
         selection: best.selection,
         estimated_prob: best.prob,
         confidence: confidenceFromProb(best.prob),
-        reasoning: 'Résultat estimé sur la seule 2ème mi-temps (indépendant du score déjà acquis).'
+        reasoning: 'Résultat estimé sur le reste du match uniquement (indépendant du score déjà acquis).'
       }];
     })(),
-    ...projectFullTimeMarkets(ctx.htScore, secondHalfModel)
+    ...projectFullTimeMarkets(ctx.currentScore, remainingModel)
   ];
 
-  return { secondHalfExpectedGoals, markets };
+  return { secondHalfExpectedGoals: remainingExpectedGoals, markets };
+}
+
+/**
+ * Variante pour la fenêtre "reste de la 1ère mi-temps seulement" (checkpoint
+ * de la 20e minute) : projette jusqu'à la pause, pas jusqu'à la 90e. N'a de
+ * sens que pour ctx.elapsedMinutes < 45.
+ */
+export function estimateRemainingFirstHalfMarket(ctx: RemainingMatchContext): SecondHalfEstimate {
+  const fraction = remainingFirstHalfEventFraction(ctx.elapsedMinutes);
+  const remainingExpectedGoals = recalibrateGoalsForWindow(ctx.preMatchExpectedGoals, fraction, ctx.currentStats);
+  const remainingModel = computePoissonModel(remainingExpectedGoals.home, remainingExpectedGoals.away);
+
+  const pAtLeastOneGoal = 1 - remainingModel.scoreMatrix[0][0];
+
+  return {
+    secondHalfExpectedGoals: remainingExpectedGoals,
+    markets: [{
+      market: 'mt1_over_0_5_restant',
+      selection: 'Encore un but avant la pause',
+      estimated_prob: pAtLeastOneGoal,
+      confidence: confidenceFromProb(pAtLeastOneGoal),
+      reasoning: `Buts attendus d'ici la pause (depuis la ${ctx.elapsedMinutes}e minute) : ${remainingExpectedGoals.home.toFixed(2)} (dom.) / ${remainingExpectedGoals.away.toFixed(2)} (ext.), score actuel ${ctx.currentScore.home}-${ctx.currentScore.away}.`
+    }]
+  };
 }
 
 /**

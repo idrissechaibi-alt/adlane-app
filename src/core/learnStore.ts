@@ -335,7 +335,8 @@ export function writeFocusNotes(notes: FocusNote[]): void {
 /** Combo proposé en direct (20e minute, ou mi-temps). */
 export interface InPlayProposal {
   id: string;
-  kind: 'minute20' | 'halftime';
+  /** 'halftime' conservé pour la compatibilité des enregistrements existants (moniteur retiré). */
+  kind: 'minute20' | 'minute60' | 'halftime';
   createdAt: string;
   fixtureId: number;
   league: string;

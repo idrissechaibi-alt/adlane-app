@@ -11,12 +11,10 @@ import * as TaskManager from 'expo-task-manager';
 import { ensureDailyUniverse } from './matchUniverse';
 import { runLiveMarkerTick } from './liveMarkers';
 import { consolidateLearning } from './autoLearn';
-import { checkHalftimeOpportunities } from './halftimeMonitor';
 import { enrichFocusMatches } from './focusEnrichment';
 import { runInPlayComboTick } from './inPlayCombos';
 import { runNightlyReviewIfDue } from './dailyReview';
 import { runMorningScanIfDue } from './scheduler';
-import { persistTodaysProposals } from './dailyWorkflow';
 import { reconcileScoutingAnalyses } from './scoutingReview';
 import { refreshDueLineups } from './lineupRefresh';
 import { readLearnedModel } from './learnStore';
@@ -26,8 +24,8 @@ const MINIMUM_INTERVAL_MINUTES = 15; // plancher Android, inutile de descendre
 
 /**
  * Un tour complet : univers du jour, relevé live + étiquetage, consolidation
- * du modèle, puis alertes mi-temps. Chaque étape est isolée : si l'une échoue
- * (réseau coupé, quota atteint), les autres continuent.
+ * du modèle, puis scan en direct 20e/60e minute. Chaque étape est isolée :
+ * si l'une échoue (réseau coupé, quota atteint), les autres continuent.
  */
 export async function runAutoLearnTick(): Promise<void> {
   // Scan matinal automatique (7h locales) : voir runMorningScanIfDue pour le
@@ -38,16 +36,10 @@ export async function runAutoLearnTick(): Promise<void> {
     console.warn('[Tâche de fond] Scan matinal automatique échoué:', error.message);
   }
 
-  // Persiste toutes les propositions du jour (solos + combinés), placées ou
-  // non : sans ça le bilan du soir ne peut jamais auditer que les vrais
-  // paris placés, alors que le rapport doit porter sur TOUT ce qui a été
-  // proposé (demande explicite).
-  try {
-    await persistTodaysProposals();
-  } catch (error: any) {
-    console.warn('[Tâche de fond] Sauvegarde des propositions du jour échouée:', error.message);
-  }
-
+  // Planning du Jour (solos/combinés pré-match) désactivé : les cotes
+  // avant-match ne sont plus jugées rentables (demande explicite). L'univers
+  // du jour ci-dessous reste construit — c'est la base des scans en direct
+  // (20e/60e minute), pas seulement du Planning du Jour.
   try {
     const model = readLearnedModel();
     await ensureDailyUniverse(model?.focusLeagues ?? []);
@@ -90,16 +82,13 @@ export async function runAutoLearnTick(): Promise<void> {
     console.warn('[Tâche de fond] Enrichissement des matchs suivis échoué:', error.message);
   }
 
+  // Scan en direct 20e minute (buts/corners/cartons 1ère MT + BTTS/total du
+  // match) et 60e minute (reste du match) — remplace l'ancien combo 20e
+  // minute (règles apprises seules) et le moniteur mi-temps.
   try {
     await runInPlayComboTick();
   } catch (error: any) {
-    console.warn('[Tâche de fond] Combos en direct échoués:', error.message);
-  }
-
-  try {
-    await checkHalftimeOpportunities();
-  } catch (error: any) {
-    console.warn('[Tâche de fond] Vérification mi-temps échouée:', error.message);
+    console.warn('[Tâche de fond] Scan en direct échoué:', error.message);
   }
 
   // Bilan de la journée écoulée : se déclenche au premier tour après minuit.

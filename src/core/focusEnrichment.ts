@@ -20,6 +20,7 @@ import { spendBudget } from './requestBudget';
 import { getStoredUniverse } from './matchUniverse';
 import { FocusNote, readFocusNotes, readLearnedModel, writeFocusNotes } from './learnStore';
 import { normalizeTeamName, namesLikelyMatch } from './teamNameMatch';
+import { getAgentLearningDigest } from './autoLearn';
 
 const GEMINI_KEY_STORAGE = 'app-adlane.gemini-api-key';
 const OMNIROUTE_CONFIG_KEY = '@omniroute_config';
@@ -115,6 +116,9 @@ export async function enrichFocusMatches(): Promise<number> {
     // spendBudget ici : serveur auto-hébergé par l'utilisateur, sans quota
     // gratuit externe à protéger (contrairement à Gemini/API-Football).
     if (omnirouteConfig) {
+      let learningDigest: string | null = null;
+      try { learningDigest = getAgentLearningDigest(); } catch { /* corpus pas encore assez riche : silencieux */ }
+
       try {
         const result = await askOmnirouteLight(
           "Tu es un analyste football. Réponds en français, en 5 puces factuelles maximum. " +
@@ -122,7 +126,8 @@ export async function enrichFocusMatches(): Promise<number> {
             "vérifiables (forme, absences, style de jeu, tendance corners/cartons, arbitre). " +
             "Si tu ne sais pas, dis-le plutôt que d'inventer.",
           `Contexte utile avant ${match.homeTeam} vs ${match.awayTeam} (${match.league}) ?` +
-            (note.googleContext ? `\n\nFaits déjà collectés :\n${note.googleContext}` : ''),
+            (note.googleContext ? `\n\nFaits déjà collectés :\n${note.googleContext}` : '') +
+            (learningDigest ? `\n\n${learningDigest}` : ''),
           omnirouteConfig
         );
         if (result) {

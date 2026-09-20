@@ -16,12 +16,11 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { executeMorningScan, getDailyPlan, checkAndUpdateT90Status, DailyPlan } from '../core/scheduler';
-import { generateDailyProposals, buildScheduledMatches, ProposedSlip } from '../core/dailyWorkflow';
+import { buildScheduledMatches, ProposedSlip } from '../core/dailyWorkflow';
 import { InPlayProposal, readInPlayProposals } from '../core/learnStore';
 import { getLineupRefresh, isT90Reached, LineupRefresh } from '../core/lineupRefresh';
 import { getAllBets, saveBet } from '../database/storage';
 import { DailyScheduleSlot } from '../types/database';
-import { HISTORICAL_BETS } from '../data/historical';
 
 export default function DailyPlanScreen() {
   const [loading, setLoading] = useState(false);
@@ -63,37 +62,24 @@ export default function DailyPlanScreen() {
     }
   };
 
-  /** Recharge l'état "compo confirmée à T-90" pour tous les matchs référencés par les propositions courantes. */
-  const loadLineupRefreshesFor = async (props: ProposedSlip[]) => {
-    const matchIds = new Set<string>();
-    for (const p of props) {
-      for (const leg of p.legs) {
-        if (leg.matchId) matchIds.add(leg.matchId);
-      }
-    }
-    const entries = await Promise.all(
-      Array.from(matchIds).map(async (id) => [id, await getLineupRefresh(id)] as const)
-    );
-    setLineupRefreshes(Object.fromEntries(entries));
-  };
-
   const loadInPlayProposals = () => {
     const today = new Date().toISOString().split('T')[0];
     setInPlayProposals(readInPlayProposals().filter((p) => p.createdAt.startsWith(today)));
   };
 
+  // Planning du Jour (solos/combinés pré-match) désactivé : les cotes
+  // avant-match ne sont plus jugées rentables (demande explicite). Le
+  // planning (créneaux, cotes, buts attendus) reste construit — c'est la
+  // base dont dépend le scan en direct 20e/60e minute (voir inPlayCombos.ts)
+  // — mais plus aucune proposition solo/combiné n'est générée à partir de lui.
   const loadDailyPlan = async () => {
     try {
       const existing = await getDailyPlan();
       if (existing) {
         setPlan(existing);
-        // Propositions générées dès que des matchs sont disponibles (pas besoin d'attendre T-90) :
-        // le compte à rebours T-90 reste affiché à titre indicatif par créneau.
-        const { matches, skippedNoOdds } = buildScheduledMatches(existing.slots);
+        const { skippedNoOdds } = buildScheduledMatches(existing.slots);
         setMatchesMissingOdds(skippedNoOdds);
-        const generated = matches.length > 0 ? await generateDailyProposals(matches, HISTORICAL_BETS) : [];
-        setProposals(generated);
-        void loadLineupRefreshesFor(generated);
+        setProposals([]);
       }
     } catch (error: any) {
       console.error('Erreur chargement planning:', error.message);
@@ -105,11 +91,9 @@ export default function DailyPlanScreen() {
     try {
       const newPlan = await executeMorningScan();
       setPlan(newPlan);
-      const { matches, skippedNoOdds } = buildScheduledMatches(newPlan.slots);
+      const { skippedNoOdds } = buildScheduledMatches(newPlan.slots);
       setMatchesMissingOdds(skippedNoOdds);
-      const generated = matches.length > 0 ? await generateDailyProposals(matches, HISTORICAL_BETS) : [];
-      setProposals(generated);
-      void loadLineupRefreshesFor(generated);
+      setProposals([]);
     } catch (error) {
       console.error('Erreur refresh:', error);
     } finally {
@@ -122,11 +106,9 @@ export default function DailyPlanScreen() {
     try {
       const newPlan = await executeMorningScan();
       setPlan(newPlan);
-      const { matches, skippedNoOdds } = buildScheduledMatches(newPlan.slots);
+      const { skippedNoOdds } = buildScheduledMatches(newPlan.slots);
       setMatchesMissingOdds(skippedNoOdds);
-      const generated = matches.length > 0 ? await generateDailyProposals(matches, HISTORICAL_BETS) : [];
-      setProposals(generated);
-      void loadLineupRefreshesFor(generated);
+      setProposals([]);
     } catch (error) {
       console.error('Erreur scan matinal:', error);
     } finally {
@@ -453,7 +435,7 @@ export default function DailyPlanScreen() {
             {inPlayProposals.map((proposal) => (
               <View key={proposal.id} style={styles.halftimeAlertRow}>
                 <Text style={styles.halftimeAlertMatch}>
-                  {proposal.kind === 'halftime' ? '⏸️' : '⚡'} {proposal.homeTeam} {proposal.scoreLabel} {proposal.awayTeam}
+                  {proposal.kind === 'minute60' ? '⏱️' : proposal.kind === 'halftime' ? '⏸️' : '⚡'} {proposal.homeTeam} {proposal.scoreLabel} {proposal.awayTeam}
                 </Text>
                 <Text style={styles.halftimeAlertWindow}>
                   {proposal.window} — {(proposal.combinedProb * 100).toFixed(0)}% combiné
@@ -467,6 +449,14 @@ export default function DailyPlanScreen() {
             ))}
           </View>
         )}
+
+        <View style={styles.oddsWarningBox}>
+          <Ionicons name="information-circle" size={20} color="#f59e0b" />
+          <Text style={styles.oddsWarningText}>
+            Propositions solo/combiné pré-match désactivées (cotes d'avant-match jugées plus assez rentables).
+            Les pronostics se font maintenant en direct, à la 20e et à la 60e minute — voir "Combos en direct du jour" ci-dessus une fois un match lancé.
+          </Text>
+        </View>
 
         {matchesMissingOdds > 0 && (
           <View style={styles.oddsWarningBox}>
