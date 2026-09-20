@@ -28,4 +28,11 @@ jobs:
           token: ${{ secrets.EAS_TOKEN }}
 
       - name: Publish update to production
-        run: eas update --branch production --message "${{ github.event.head_commit.message }}"
+        env:
+          # Passé par variable d'environnement plutôt qu'interpolé directement
+          # dans la commande : un message de commit contenant un guillemet
+          # (fréquent en français, ex. "Matchs du jour") casse sinon la
+          # commande en plusieurs arguments bruts et fait échouer eas update
+          # SANS publier — ce qui s'est produit sur au moins un commit.
+          EAS_UPDATE_MESSAGE: ${{ github.event.head_commit.message }}
+        run: eas update --branch production --message "$EAS_UPDATE_MESSAGE"
