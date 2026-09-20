@@ -664,138 +664,104 @@ export async function generateDailyProposals(
       emitCombo(label, pickBestPerMatch(candidates, pickBy).slice(0, maxLegs), confidenceLevel, description);
     };
 
-    /**
-     * Combiné "value" ciblant une cote cumulée minimale (demande explicite :
-     * "high risk high reward" doit vraiment l'être — au moins 6). Les jambes
-     * sont ajoutées de la plus probable à la moins probable jusqu'à
-     * atteindre la cible, pour maximiser les chances de réalisation à cote
-     * donnée plutôt que d'empiler des jambes au hasard. Si le créneau n'a
-     * pas assez de matchs/marchés qualifiés pour atteindre la cible, le
-     * combiné est soit annoté honnêtement, soit pas proposé du tout s'il
-     * reste trop loin du compte.
-     */
-    const buildValueCombo = (
-      label: string,
-      candidates: EvaluatedSelection[],
-      minOdds: number,
-      maxLegs: number
-    ): void => {
-      const sorted = pickBestPerMatch(candidates, 'modelProb');
-      const picked: EvaluatedSelection[] = [];
-      let cumulativeOdds = 1;
-      for (const sel of sorted) {
-        if (picked.length >= maxLegs || cumulativeOdds >= minOdds) break;
-        picked.push(sel);
-        cumulativeOdds *= sel.odds || 1;
-      }
-      if (picked.length < 2 || cumulativeOdds < 4) return; // trop loin de "value" pour être honnêtement présenté comme tel
-
-      const reached = cumulativeOdds >= minOdds;
-      emitCombo(
-        label,
-        picked,
-        'Faible',
-        reached
-          ? `Cote cumulée ${cumulativeOdds.toFixed(2)} (cible >= ${minOdds} atteinte) : jambes ajoutées de la plus probable à la moins probable pour maximiser les chances de réalisation à cette cote.`
-          : `Cote cumulée ${cumulativeOdds.toFixed(2)} : la cible >= ${minOdds} n'a pas pu être atteinte, ce créneau n'a pas assez de matchs/marchés qualifiés — reste le combiné le plus proche possible en gardant les jambes les plus probables.`
-      );
-    };
-
-    /**
-     * Combiné "gain maximisé" ciblant une PROBABILITÉ COMBINÉE (pas une cote)
-     * comprise entre minProb et maxProb (demande explicite : ni trop sûr —
-     * peu de gain — ni trop risqué). Les jambes les plus probables sont
-     * ajoutées en premier (pour ne pas gaspiller la marge de probabilité
-     * disponible), jusqu'à ce que la probabilité cumulée entre dans la
-     * fourchette visée ; on s'arrête dès qu'on y entre pour ne pas sacrifier
-     * plus de gain que nécessaire, et on ne descend jamais sous le plancher
-     * une fois qu'un combiné valide (>= 2 jambes) existe déjà.
-     */
-    const buildProbabilityBandCombo = (
-      label: string,
-      candidates: EvaluatedSelection[],
-      minProb: number,
-      maxProb: number,
-      maxLegs: number
-    ): void => {
-      const sorted = pickBestPerMatch(candidates, 'modelProb');
-      const picked: EvaluatedSelection[] = [];
-      let cumulativeProb = 1;
-
-      for (const sel of sorted) {
-        if (picked.length >= maxLegs) break;
-        const nextProb = cumulativeProb * sel.modelProb;
-        if (nextProb < minProb && picked.length >= 2) break; // déjà valide : ne pas descendre sous le plancher
-        picked.push(sel);
-        cumulativeProb = nextProb;
-        if (picked.length >= 2 && cumulativeProb <= maxProb) break; // entré dans la fourchette : gain déjà maximisé
-      }
-
-      if (picked.length < 2) return;
-
-      const inBand = cumulativeProb >= minProb && cumulativeProb <= maxProb;
-      emitCombo(
-        label,
-        picked,
-        'Moyen',
-        inBand
-          ? `Probabilité combinée ${(cumulativeProb * 100).toFixed(1)}% (visée ${(minProb * 100).toFixed(0)}-${(maxProb * 100).toFixed(0)}%) : jambes les plus probables ajoutées une à une jusqu'à entrer dans cette fourchette, pour maximiser le gain sans sortir de la zone de confiance voulue.`
-          : `Probabilité combinée ${(cumulativeProb * 100).toFixed(1)}% : ce créneau n'a pas assez de jambes qualifiées pour rester dans la fourchette ${(minProb * 100).toFixed(0)}-${(maxProb * 100).toFixed(0)}% visée — combiné le plus proche possible.`
-      );
-    };
-
     if (matchesInSlot >= 3) {
-      // Les profils à marchés mélangés grandissent avec la taille du créneau
-      // (plus de matchs qualifiés = plus de jambes possibles = combinés plus
-      // différenciés d'un créneau à l'autre), plafonné à 6 jambes.
-      const scaledMaxLegs = Math.min(matchesInSlot, 6);
+      // Regroupe les sélections qualifiées par match, triées par probabilité
+      // décroissante : la meilleure sert de base, les suivantes de variantes
+      // (marché différent sur ce même match) pour diversifier les combinés
+      // bâtis sur un même trio de matchs.
+      const byMatch = new Map<string, EvaluatedSelection[]>();
+      for (const s of slotSelections) {
+        const arr = byMatch.get(s.match.id) ?? [];
+        arr.push(s);
+        byMatch.set(s.match.id, arr);
+      }
+      for (const arr of byMatch.values()) arr.sort((a, b) => b.modelProb - a.modelProb);
+      const matchIds = Array.from(byMatch.keys());
 
-      buildCombo(
-        '🛡️ Sécurisé',
-        slotSelections.filter((s) => s.modelProb >= 0.65),
-        3,
-        'Élevé',
-        `Combiné prudent : uniquement des sélections >= 65% de probabilité modèle, peu de jambes pour limiter le risque cumulé.`
-      );
+      // Chaque combiné porte TOUJOURS sur 3 matchs distincts (jamais plus,
+      // jamais moins, demande explicite) — la diversité vient du NOMBRE de
+      // combinés générés (qui grandit avec la taille du créneau), pas de
+      // leur taille.
+      const matchTriples: string[][] = [];
+      for (let i = 0; i < matchIds.length; i++) {
+        for (let j = i + 1; j < matchIds.length; j++) {
+          for (let k = j + 1; k < matchIds.length; k++) {
+            matchTriples.push([matchIds[i], matchIds[j], matchIds[k]]);
+          }
+        }
+      }
 
-      buildCombo(
-        '⚖️ Équilibré',
-        slotSelections.filter((s) => s.modelProb >= 0.55),
-        scaledMaxLegs,
-        'Moyen',
-        `Combiné standard : sélections >= 55% de probabilité modèle, marchés mélangés.`
-      );
+      interface ComboCandidate { legs: EvaluatedSelection[]; prob: number; }
+      const candidates: ComboCandidate[] = [];
+      const seenTripleSignatures = new Set<string>();
+      const addCandidate = (legs: EvaluatedSelection[]): void => {
+        const signature = legs.map((l) => `${l.match.id}:${l.market}:${l.selection}`).sort().join('|');
+        if (seenTripleSignatures.has(signature)) return;
+        seenTripleSignatures.add(signature);
+        candidates.push({ legs, prob: legs.reduce((acc, l) => acc * l.modelProb, 1) });
+      };
 
-      buildCombo(
-        '⚽ Buts',
-        slotSelections.filter((s) => s.modelProb >= 0.55 && ['BTTS', 'OU_2_5', '1ere_mi_temps'].includes(s.market)),
-        scaledMaxLegs,
-        'Moyen',
-        `Combiné thématique buts (BTTS, Over/Under, 1ère mi-temps) : diversifie volontairement hors des résultats 1X2.`
-      );
+      for (const triple of matchTriples) {
+        const base = triple.map((id) => byMatch.get(id)![0]);
+        addCandidate(base);
 
-      buildCombo(
-        '🚩 Discipline',
-        slotSelections.filter((s) => s.modelProb >= 0.55 && ['corners', 'cards', 'fouls'].includes(s.market)),
-        scaledMaxLegs,
-        'Moyen',
-        `Combiné thématique discipline/rythme (corners, cartons, fautes) : estimé depuis les moyennes de saison réelles, pas de cote de marché pour ces marchés.`
-      );
+        // Variantes : sur chaque position du trio, essaie les sélections
+        // suivantes (marché différent) de CE match, les deux autres restant
+        // sur leur meilleure — explore toutes les combinaisons de marchés
+        // raisonnables sans exploser combinatoirement (2 alternatives max
+        // par position).
+        for (let pos = 0; pos < 3; pos++) {
+          const alts = byMatch.get(triple[pos])!;
+          for (let altIdx = 1; altIdx < Math.min(alts.length, 3); altIdx++) {
+            const legs = [...base];
+            legs[pos] = alts[altIdx];
+            addCandidate(legs);
+          }
+        }
+      }
 
-      buildValueCombo(
-        '🔥 Value / Risqué',
-        slotSelections.filter((s) => s.modelProb >= 0.45),
-        6,
-        8
-      );
+      // Classés par probabilité décroissante (demande explicite) : le
+      // premier est le plus sûr, chaque suivant un peu moins.
+      candidates.sort((a, b) => b.prob - a.prob);
 
-      buildProbabilityBandCombo(
-        '🎯 Gain maximisé (60-68%)',
-        slotSelections,
-        0.60,
-        0.68,
-        scaledMaxLegs
-      );
+      // Nombre de combinés visé : grandit avec le nombre de matchs du
+      // créneau (ex. 6 matchs -> 8 combinés), jamais moins de 4.
+      const targetCombos = Math.max(4, Math.min(matchesInSlot + 2, 8));
+      const mainCount = targetCombos - 1; // le dernier est le combiné libre/risqué ci-dessous
+
+      let rank = 0;
+      for (const cand of candidates) {
+        if (rank >= mainCount) break;
+        const inBand = cand.prob >= 0.60 && cand.prob <= 0.68;
+        rank++;
+        emitCombo(
+          `Combiné #${rank}`,
+          cand.legs,
+          inBand ? 'Moyen' : cand.prob > 0.68 ? 'Élevé' : 'Faible',
+          `Probabilité combinée ${(cand.prob * 100).toFixed(1)}%${inBand ? ' (dans la fourchette 60-68% visée)' : ''}.`
+        );
+      }
+
+      // Dernier combiné : libre, volontairement le plus risqué possible
+      // parmi les jambes encore qualifiées (chacune a déjà passé son seuil
+      // de probabilité minimal à l'évaluation individuelle du match —
+      // risqué, mais jamais fabriqué), hors fourchette 60-68% par
+      // construction (demande explicite : "je te laisse quartier libre").
+      const riskyByMatch = new Map<string, EvaluatedSelection>();
+      for (const s of [...slotSelections].sort((a, b) => a.modelProb - b.modelProb)) {
+        if (riskyByMatch.size >= 3) break;
+        if (!riskyByMatch.has(s.match.id)) riskyByMatch.set(s.match.id, s);
+      }
+      if (riskyByMatch.size >= 2) {
+        const riskyLegs = Array.from(riskyByMatch.values());
+        const riskyProb = riskyLegs.reduce((acc, l) => acc * l.modelProb, 1);
+        emitCombo(
+          `Combiné #${rank + 1} 🔥 Risqué (libre)`,
+          riskyLegs,
+          'Faible',
+          `Probabilité combinée ${(riskyProb * 100).toFixed(1)}% : combiné volontairement risqué (hors fourchette 60-68%), construit sur les jambes les moins probables encore qualifiées du créneau pour maximiser le gain potentiel sans jambe fabriquée.`
+        );
+      }
     } else {
       // 2 matchs seulement : pas assez de matière pour différencier plusieurs profils.
       buildCombo(
