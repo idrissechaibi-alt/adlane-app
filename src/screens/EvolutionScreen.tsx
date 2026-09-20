@@ -15,9 +15,9 @@ import { Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import MarketTrendChart from '../components/MarketTrendChart';
 import { MarketDayPoint, TRACKED_MARKETS, readMarketSeries, readPaperBets } from '../core/learnStore';
-import { getAllBets, getAllLessons, getAllCalibrations } from '../database/storage';
+import { getAllBets, getAllLessons, getAllCalibrations, getDailyReports } from '../database/storage';
 import { computeMarketCalibrations } from '../core/calibration';
-import { generateDailyReport, generateImprovementReport } from '../core/reporter';
+import { generateImprovementReport } from '../core/reporter';
 import { MarketCalibration, Lesson, Bet, DailyReport } from '../types';
 import { useIsFocused } from '@react-navigation/native';
 
@@ -30,6 +30,7 @@ export default function EvolutionScreen() {
   const [selectedTab, setSelectedTab] = useState<'courbes' | 'calibration' | 'lessons' | 'report'>('courbes');
   const [marketSeries, setMarketSeries] = useState<MarketDayPoint[]>([]);
   const [paperBetsSummary, setPaperBetsSummary] = useState<{ total: number; settled: number; matches: number } | null>(null);
+  const [dailyReports, setDailyReports] = useState<DailyReport[]>([]);
 
   useEffect(() => {
     if (isFocused) {
@@ -54,14 +55,16 @@ export default function EvolutionScreen() {
 
   const loadData = async () => {
     try {
-      const [dbBets, dbLessons, dbCalibrations] = await Promise.all([
+      const [dbBets, dbLessons, dbCalibrations, reports] = await Promise.all([
         getAllBets(),
         getAllLessons(),
         getAllCalibrations(),
+        getDailyReports(30),
       ]);
 
       setBets(dbBets);
       setLessons(dbLessons);
+      setDailyReports(reports);
 
       // Recalculer la calibration à partir des paris réglés
       const freshCalibrations = computeMarketCalibrations(dbBets);
@@ -72,8 +75,6 @@ export default function EvolutionScreen() {
       setLoading(false);
     }
   };
-
-  const dailyReport = generateDailyReport('2026-09-13', bets);
 
   if (loading) {
     return (
@@ -190,18 +191,37 @@ export default function EvolutionScreen() {
     </View>
   );
 
-  const renderReportView = () => (
-    <View>
-      <View style={styles.reportCard}>
-        <View style={styles.reportHeader}>
-          <Ionicons name="document-text" size={20} color="#10b981" />
-          <Text style={styles.reportTitle}>Rapport Quotidien - {dailyReport.date}</Text>
+  const renderReportView = () => {
+    if (dailyReports.length === 0) {
+      return (
+        <View style={styles.infoBox}>
+          <Ionicons name="information-circle" size={16} color="#60a5fa" />
+          <Text style={styles.infoText}>
+            Aucun bilan quotidien pour l'instant. Il est généré automatiquement à la clôture de chaque
+            journée (premier tour de fond après minuit), à partir des paris réellement placés ce jour-là.
+          </Text>
         </View>
+      );
+    }
 
-        <Text style={styles.reportContent}>{dailyReport.details}</Text>
+    // Le plus récent en premier (getDailyReports trie déjà createdAt DESC côté stockage).
+    const sorted = [...dailyReports].sort((a, b) => b.date.localeCompare(a.date));
+
+    return (
+      <View>
+        {sorted.map((report) => (
+          <View key={report.date} style={styles.reportCard}>
+            <View style={styles.reportHeader}>
+              <Ionicons name="document-text" size={20} color="#10b981" />
+              <Text style={styles.reportTitle}>Rapport Quotidien - {report.date}</Text>
+            </View>
+
+            <Text style={styles.reportContent}>{report.details}</Text>
+          </View>
+        ))}
       </View>
-    </View>
-  );
+    );
+  };
 
   const renderCurvesView = () => {
     const chartWidth = Dimensions.get('window').width - 32 - 24; // marges écran + carte

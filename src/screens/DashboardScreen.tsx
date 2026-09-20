@@ -23,7 +23,7 @@ export default function DashboardScreen() {
   const [bets, setBets] = useState<Bet[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedDate, setSelectedDate] = useState('2026-09-13');
+  const [expandedDates, setExpandedDates] = useState<Set<string> | null>(null); // null = pas encore initialisé
 
   useEffect(() => {
     if (isFocused) {
@@ -48,6 +48,35 @@ export default function DashboardScreen() {
     void loadBets();
   };
 
+  // Groupés par date, du plus récent au plus ancien — chaque groupe est une
+  // ligne rétractable (seule la plus récente est dépliée par défaut, pour ne
+  // pas charger tout l'historique à l'écran). Calculé avant le early-return
+  // "loading" pour respecter l'ordre des hooks (le useEffect qui suit doit
+  // s'exécuter à chaque rendu, jamais conditionnellement).
+  const betsByDate = new Map<string, Bet[]>();
+  for (const bet of bets) {
+    const group = betsByDate.get(bet.date) ?? [];
+    group.push(bet);
+    betsByDate.set(bet.date, group);
+  }
+  const sortedDates = Array.from(betsByDate.keys()).sort((a, b) => b.localeCompare(a));
+
+  useEffect(() => {
+    if (expandedDates === null && sortedDates.length > 0) {
+      setExpandedDates(new Set([sortedDates[0]]));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sortedDates.length]);
+
+  const toggleDate = (date: string) => {
+    setExpandedDates((prev) => {
+      const next = new Set(prev ?? []);
+      if (next.has(date)) next.delete(date);
+      else next.add(date);
+      return next;
+    });
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -58,7 +87,6 @@ export default function DashboardScreen() {
     );
   }
 
-  const dailySummary: LedgerSummary = calculateDailySummary(bets, selectedDate);
   const cumulativeSummary: LedgerSummary = calculateLedgerSummary(bets);
 
   const renderProgressBar = (value: number, max: number, color: string) => {
@@ -94,7 +122,7 @@ export default function DashboardScreen() {
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <Ionicons name="stats-chart" size={20} color="#3b82f6" />
-            <Text style={styles.cardTitle}>Bilan Cumulé (10 réglés)</Text>
+            <Text style={styles.cardTitle}>Bilan Cumulé ({cumulativeSummary.bets_settled} réglé{cumulativeSummary.bets_settled > 1 ? 's' : ''})</Text>
           </View>
 
           <View style={styles.statsGrid}>
@@ -131,115 +159,121 @@ export default function DashboardScreen() {
           </View>
         </View>
 
-        {/* Section Bilan Journée Sélectionnée */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Ionicons name="calendar" size={20} color="#10b981" />
-            <Text style={styles.cardTitle}>Journée du {selectedDate}</Text>
-          </View>
-
-          <View style={styles.statsGrid}>
-            <View style={styles.statBox}>
-              <Text style={styles.statLabel}>Net Jour</Text>
-              <Text style={[styles.statValue, dailySummary.net_pnl >= 0 ? styles.positive : styles.negative]}>
-                {dailySummary.net_pnl >= 0 ? '+' : ''}{dailySummary.net_pnl.toFixed(3)} u
-              </Text>
-            </View>
-
-            <View style={styles.statBox}>
-              <Text style={styles.statLabel}>ROI Jour</Text>
-              <Text style={[styles.statValue, dailySummary.roi >= 0 ? styles.positive : styles.negative]}>
-                {dailySummary.roi >= 0 ? '+' : ''}{dailySummary.roi.toFixed(1)}%
-              </Text>
-            </View>
-
-            <View style={styles.statBox}>
-              <Text style={styles.statLabel}>Paris Réglés</Text>
-              <Text style={styles.statValue}>{dailySummary.bets_settled}</Text>
-              <Text style={styles.statSub}>
-                {dailySummary.bets_won}V / {dailySummary.bets_lost}D
-              </Text>
-            </View>
-
-            <View style={styles.statBox}>
-              <Text style={styles.statLabel}>Mises du Jour</Text>
-              <Text style={styles.statValue}>{dailySummary.total_stake.toFixed(1)} u</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Historique des Paris */}
+        {/* Historique des Paris, regroupé par date */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Historique des Paris Réglés</Text>
+          <Text style={styles.sectionTitle}>Historique des Paris par Journée</Text>
         </View>
 
-        {bets.map(bet => {
-          const isWon = bet.status === 'won';
-          const isLost = bet.status === 'lost';
-          const isUnplayed = bet.excluded_from_pnl;
+        {sortedDates.length === 0 ? (
+          <View style={styles.disclaimerBox}>
+            <Ionicons name="information-circle-outline" size={18} color="#94a3b8" />
+            <Text style={styles.disclaimerText}>Aucun pari enregistré pour l'instant.</Text>
+          </View>
+        ) : (
+          sortedDates.map((date) => {
+            const dayBets = betsByDate.get(date)!;
+            const daySummary = calculateDailySummary(bets, date);
+            const isExpanded = expandedDates?.has(date) ?? false;
 
-          return (
-            <View key={bet.id} style={styles.betCard}>
-              <View style={styles.betCardTop}>
-                <View style={styles.betIdContainer}>
-                  <Text style={styles.betId}>{bet.id}</Text>
-                  <Text style={styles.betLeague}>{bet.league} • {bet.creneau_display}</Text>
-                </View>
-
-                <View style={[
-                  styles.statusBadge,
-                  isWon ? styles.badgeWon : isLost ? styles.badgeLost : styles.badgeUnplayed
-                ]}>
-                  <Text style={styles.statusText}>
-                    {isWon ? 'GAGNÉ' : isLost ? 'PERDU' : 'NON JOUÉ'}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Jambes du pari */}
-              <View style={styles.legsContainer}>
-                {bet.legs.map((leg, idx) => (
-                  <View key={idx} style={styles.legRow}>
-                    <Ionicons
-                      name={leg.result === 'won' ? 'checkmark-circle' : leg.result === 'lost' ? 'close-circle' : 'time'}
-                      size={16}
-                      color={leg.result === 'won' ? '#10b981' : leg.result === 'lost' ? '#ef4444' : '#94a3b8'}
-                    />
-                    <Text style={styles.legMatch}>{leg.match} :</Text>
-                    <Text style={styles.legSelection}>{leg.selection}</Text>
-                    {leg.is_void && <Text style={styles.voidTag}>(VOID)</Text>}
+            return (
+              <View key={date} style={styles.dateGroupCard}>
+                <TouchableOpacity style={styles.dateGroupHeader} onPress={() => toggleDate(date)}>
+                  <View style={styles.dateGroupLeft}>
+                    <Ionicons name="calendar" size={18} color="#10b981" />
+                    <Text style={styles.dateGroupTitle}>{date}</Text>
+                    <View style={styles.dateGroupBadge}>
+                      <Text style={styles.dateGroupBadgeText}>{dayBets.length}</Text>
+                    </View>
                   </View>
-                ))}
-              </View>
+                  <View style={styles.dateGroupRight}>
+                    <Text style={[styles.dateGroupSummary, daySummary.net_pnl >= 0 ? styles.positive : styles.negative]}>
+                      {daySummary.net_pnl >= 0 ? '+' : ''}{daySummary.net_pnl.toFixed(2)} u
+                    </Text>
+                    <Ionicons name={isExpanded ? 'chevron-up' : 'chevron-down'} size={18} color="#94a3b8" />
+                  </View>
+                </TouchableOpacity>
 
-              {/* Chiffres Financiers */}
-              <View style={styles.betFooter}>
-                <Text style={styles.betFooterText}>
-                  Cote : <Text style={styles.bold}>{bet.odds?.toFixed(2) || 'N/A'}</Text>
-                </Text>
-                <Text style={styles.betFooterText}>
-                  Mise : <Text style={styles.bold}>{bet.stake ? `${bet.stake} u` : 'N/A'}</Text>
-                </Text>
-                <Text style={[
-                  styles.betFooterText,
-                  (bet.net_pnl || 0) >= 0 ? styles.positive : styles.negative
-                ]}>
-                  Net : <Text style={styles.bold}>
-                    {(bet.net_pnl || 0) >= 0 ? '+' : ''}{bet.net_pnl?.toFixed(2) || '0.00'} u
-                  </Text>
-                </Text>
-              </View>
+                {isExpanded && (
+                  <View style={styles.dateGroupBody}>
+                    <View style={styles.dateGroupStatsRow}>
+                      <Text style={styles.dateGroupStatText}>
+                        {daySummary.bets_won}V / {daySummary.bets_lost}D sur {daySummary.bets_settled} réglé{daySummary.bets_settled > 1 ? 's' : ''}
+                      </Text>
+                      <Text style={styles.dateGroupStatText}>Mise {daySummary.total_stake.toFixed(1)} u</Text>
+                    </View>
 
-              {/* Analyse factuelle de cause */}
-              {bet.analysis ? (
-                <View style={styles.analysisBox}>
-                  <Ionicons name="bulb-outline" size={14} color="#60a5fa" />
-                  <Text style={styles.analysisText}>{bet.analysis}</Text>
-                </View>
-              ) : null}
-            </View>
-          );
-        })}
+                    {dayBets.map((bet) => {
+                      const isWon = bet.status === 'won';
+                      const isLost = bet.status === 'lost';
+
+                      return (
+                        <View key={bet.id} style={styles.betCard}>
+                          <View style={styles.betCardTop}>
+                            <View style={styles.betIdContainer}>
+                              <Text style={styles.betId}>{bet.id}</Text>
+                              <Text style={styles.betLeague}>{bet.league} • {bet.creneau_display}</Text>
+                            </View>
+
+                            <View style={[
+                              styles.statusBadge,
+                              isWon ? styles.badgeWon : isLost ? styles.badgeLost : styles.badgeUnplayed
+                            ]}>
+                              <Text style={styles.statusText}>
+                                {isWon ? 'GAGNÉ' : isLost ? 'PERDU' : bet.played ? 'EN ATTENTE' : 'NON JOUÉ'}
+                              </Text>
+                            </View>
+                          </View>
+
+                          {/* Jambes du pari */}
+                          <View style={styles.legsContainer}>
+                            {bet.legs.map((leg, idx) => (
+                              <View key={idx} style={styles.legRow}>
+                                <Ionicons
+                                  name={leg.result === 'won' ? 'checkmark-circle' : leg.result === 'lost' ? 'close-circle' : 'time'}
+                                  size={16}
+                                  color={leg.result === 'won' ? '#10b981' : leg.result === 'lost' ? '#ef4444' : '#94a3b8'}
+                                />
+                                <Text style={styles.legMatch}>{leg.match} :</Text>
+                                <Text style={styles.legSelection}>{leg.selection}</Text>
+                                {leg.is_void && <Text style={styles.voidTag}>(VOID)</Text>}
+                              </View>
+                            ))}
+                          </View>
+
+                          {/* Chiffres Financiers */}
+                          <View style={styles.betFooter}>
+                            <Text style={styles.betFooterText}>
+                              Cote : <Text style={styles.bold}>{bet.odds?.toFixed(2) || 'N/A'}</Text>
+                            </Text>
+                            <Text style={styles.betFooterText}>
+                              Mise : <Text style={styles.bold}>{bet.stake ? `${bet.stake} u` : 'N/A'}</Text>
+                            </Text>
+                            <Text style={[
+                              styles.betFooterText,
+                              (bet.net_pnl || 0) >= 0 ? styles.positive : styles.negative
+                            ]}>
+                              Net : <Text style={styles.bold}>
+                                {(bet.net_pnl || 0) >= 0 ? '+' : ''}{bet.net_pnl?.toFixed(2) || '0.00'} u
+                              </Text>
+                            </Text>
+                          </View>
+
+                          {/* Analyse factuelle de cause */}
+                          {bet.analysis ? (
+                            <View style={styles.analysisBox}>
+                              <Ionicons name="bulb-outline" size={14} color="#60a5fa" />
+                              <Text style={styles.analysisText}>{bet.analysis}</Text>
+                            </View>
+                          ) : null}
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+              </View>
+            );
+          })
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -364,6 +398,64 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: 'bold',
     color: '#f8fafc',
+  },
+  dateGroupCard: {
+    backgroundColor: '#1e293b',
+    borderRadius: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#334155',
+    overflow: 'hidden',
+  },
+  dateGroupHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 14,
+  },
+  dateGroupLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  dateGroupTitle: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#f8fafc',
+  },
+  dateGroupBadge: {
+    backgroundColor: '#334155',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  dateGroupBadgeText: {
+    fontSize: 11,
+    color: '#cbd5e1',
+    fontWeight: '600',
+  },
+  dateGroupRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  dateGroupSummary: {
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  dateGroupBody: {
+    borderTopWidth: 1,
+    borderTopColor: '#334155',
+    padding: 14,
+  },
+  dateGroupStatsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  dateGroupStatText: {
+    fontSize: 12,
+    color: '#94a3b8',
   },
   betCard: {
     backgroundColor: '#1e293b',

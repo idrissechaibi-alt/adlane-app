@@ -16,6 +16,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getAPIConfig } from '../api/multiAPIManager';
 import { spendBudget } from './requestBudget';
 import { syncEloForAllCoveredLeagues } from './eloRatings';
+import { settlePlacedBets } from './betSettlement';
+import { generateDailyReport } from './reporter';
+import { getAllBets, saveDailyReport } from '../database/storage';
 import {
   InPlayProposal,
   MarketDayPoint,
@@ -218,10 +221,33 @@ export async function runNightlyReviewIfDue(): Promise<number> {
   const rows = readTrainingRows(MAX_CATCHUP_DAYS + 2);
   const apiConfig = await getAPIConfig();
 
+  // Règle les vrais paris placés (bouton "Placer ce pari") avant de générer
+  // le bilan du jour : le rapport doit refléter des paris déjà réglés, pas
+  // des paris encore "pending". Indépendant des InPlayProposals ci-dessous.
+  try {
+    await settlePlacedBets();
+  } catch (error: any) {
+    console.warn('[Bilan] Règlement des paris placés échoué:', error.message);
+  }
+
   const series = readMarketSeries();
   let created = 0;
 
   for (const day of pendingDays) {
+    // Bilan quotidien texte (X paris proposés/gagnants, grandes lignes) sur
+    // les VRAIS paris placés ce jour-là — indépendant des InPlayProposals
+    // (qui alimentent uniquement la courbe par marché ci-dessous).
+    try {
+      const allBets = await getAllBets();
+      const betsThisDay = allBets.filter((b) => b.date === day && b.played);
+      if (betsThisDay.length > 0) {
+        const report = generateDailyReport(day, allBets);
+        await saveDailyReport(report);
+      }
+    } catch (error: any) {
+      console.warn(`[Bilan] Rapport quotidien du ${day} échoué:`, error.message);
+    }
+
     const dayProposals = allProposals.filter(
       (p) => p.createdAt.startsWith(day) && !p.reviewed
     );
