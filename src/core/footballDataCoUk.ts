@@ -1,14 +1,16 @@
-// Historique Football-Data.co.uk — corners, cartons, fautes, arbitre.
+// Historique Football-Data.co.uk — buts, corners, cartons, fautes, arbitre.
 //
 // CSV en libre accès, un fichier par ligue et par saison, mis à jour chaque
 // semaine (pas de scraping : juste un fetch() sur un fichier statique).
 // Contient les stats de match ET les cotes de clôture, mais seule la partie
-// "stats de match" nous intéresse ici — les cotes viennent déjà de
-// TheOddsAPI/API-Football ailleurs dans l'app.
+// "stats de match" nous intéresse ici.
 //
 // Sert de PRIOR pré-match (moyenne sur la saison en cours) pour les marchés
 // où la boucle d'auto-apprentissage n'a pas encore assez d'observations en
-// direct — jamais pour remplacer une donnée live une fois disponible.
+// direct — jamais pour remplacer une donnée live une fois disponible. Sert
+// aussi de base statistique pour les buts attendus pré-match (voir
+// estimateExpectedGoalsFromHistory) : les prédictions en arrière-plan
+// (scan en direct) n'ont donc plus besoin de cotes de bookmaker.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { normalizeTeamName } from './teamNameMatch';
@@ -121,6 +123,8 @@ function namesMatch(fdName: string, appName: string): boolean {
 interface CsvRow {
   homeTeam: string;
   awayTeam: string;
+  homeGoals: number;
+  awayGoals: number;
   homeCorners: number;
   awayCorners: number;
   homeCards: number; // jaunes + rouges
@@ -140,6 +144,7 @@ function parseCsv(text: string): CsvRow[] {
 
   const iHome = idx('HomeTeam');
   const iAway = idx('AwayTeam');
+  const iFTHG = idx('FTHG'); const iFTAG = idx('FTAG');
   const iHC = idx('HC'); const iAC = idx('AC');
   const iHY = idx('HY'); const iAY = idx('AY');
   const iHR = idx('HR'); const iAR = idx('AR');
@@ -161,6 +166,8 @@ function parseCsv(text: string): CsvRow[] {
     rows.push({
       homeTeam: cols[iHome]?.trim() || '',
       awayTeam: cols[iAway]?.trim() || '',
+      homeGoals: num(cols[iFTHG]),
+      awayGoals: num(cols[iFTAG]),
       homeCorners: num(cols[iHC]),
       awayCorners: num(cols[iAC]),
       homeCards: num(cols[iHY]) + num(cols[iHR]),
@@ -281,6 +288,67 @@ export async function getHistoricalPriors(
     : null;
 
   return { home: average(homeAcc), away: average(awayAcc), refereeCardAvg };
+}
+
+/**
+ * Estime les buts attendus pré-match SANS aucune cote de marché, à partir des
+ * scores réels de la saison en cours (Football-Data.co.uk, libre d'accès) —
+ * modèle classique attaque/défense (force d'attaque domicile × faiblesse de
+ * défense extérieure, et inversement), pas une valeur devinée par une IA.
+ * Sert de base statistique aux prédictions en arrière-plan (scan en direct),
+ * qui ne dépendent donc plus des cotes ni du Planning du Jour — seulement
+ * des championnats couverts par Football-Data.co.uk. Renvoie null si la
+ * ligue n'est pas couverte, ou si l'une des deux équipes n'a pas encore de
+ * confrontations à domicile/à l'extérieur cette saison (promue, etc.) —
+ * jamais une estimation par défaut fabriquée.
+ */
+export async function estimateExpectedGoalsFromHistory(
+  leagueId: string,
+  homeTeam: string,
+  awayTeam: string
+): Promise<{ home: number; away: number } | null> {
+  const rows = await fetchLeagueCsv(resolveLeagueId(leagueId));
+  if (!rows || rows.length === 0) return null;
+
+  let leagueHomeGoalsSum = 0;
+  let leagueAwayGoalsSum = 0;
+  let leagueMatches = 0;
+
+  let homeAsHomeGoalsFor = 0, homeAsHomeGoalsAgainst = 0, homeAsHomeMatches = 0;
+  let awayAsAwayGoalsFor = 0, awayAsAwayGoalsAgainst = 0, awayAsAwayMatches = 0;
+
+  for (const row of rows) {
+    leagueHomeGoalsSum += row.homeGoals;
+    leagueAwayGoalsSum += row.awayGoals;
+    leagueMatches += 1;
+
+    if (namesMatch(row.homeTeam, homeTeam)) {
+      homeAsHomeGoalsFor += row.homeGoals;
+      homeAsHomeGoalsAgainst += row.awayGoals;
+      homeAsHomeMatches += 1;
+    }
+    if (namesMatch(row.awayTeam, awayTeam)) {
+      awayAsAwayGoalsFor += row.awayGoals;
+      awayAsAwayGoalsAgainst += row.homeGoals;
+      awayAsAwayMatches += 1;
+    }
+  }
+
+  if (leagueMatches === 0 || homeAsHomeMatches === 0 || awayAsAwayMatches === 0) return null;
+
+  const leagueAvgHomeGoals = leagueHomeGoalsSum / leagueMatches;
+  const leagueAvgAwayGoals = leagueAwayGoalsSum / leagueMatches;
+  if (leagueAvgHomeGoals <= 0 || leagueAvgAwayGoals <= 0) return null;
+
+  const homeAttack = (homeAsHomeGoalsFor / homeAsHomeMatches) / leagueAvgHomeGoals;
+  const homeDefense = (homeAsHomeGoalsAgainst / homeAsHomeMatches) / leagueAvgAwayGoals;
+  const awayAttack = (awayAsAwayGoalsFor / awayAsAwayMatches) / leagueAvgAwayGoals;
+  const awayDefense = (awayAsAwayGoalsAgainst / awayAsAwayMatches) / leagueAvgHomeGoals;
+
+  return {
+    home: Math.max(0.1, leagueAvgHomeGoals * homeAttack * awayDefense),
+    away: Math.max(0.1, leagueAvgAwayGoals * awayAttack * homeDefense),
+  };
 }
 
 export interface SingleMatchStats {
