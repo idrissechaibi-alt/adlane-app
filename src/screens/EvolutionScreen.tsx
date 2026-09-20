@@ -14,7 +14,7 @@ import {
 import { Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import MarketTrendChart from '../components/MarketTrendChart';
-import { MarketDayPoint, TRACKED_MARKETS, readMarketSeries, readPaperBets } from '../core/learnStore';
+import { MarketDayPoint, TRACKED_MARKETS, readInPlayProposals, readMarketSeries, readPaperBets } from '../core/learnStore';
 import { getAllBets, getAllLessons, getAllCalibrations, getDailyReports } from '../database/storage';
 import { computeMarketCalibrations } from '../core/calibration';
 import { generateImprovementReport } from '../core/reporter';
@@ -31,6 +31,8 @@ export default function EvolutionScreen() {
   const [marketSeries, setMarketSeries] = useState<MarketDayPoint[]>([]);
   const [paperBetsSummary, setPaperBetsSummary] = useState<{ total: number; settled: number; matches: number } | null>(null);
   const [dailyReports, setDailyReports] = useState<DailyReport[]>([]);
+  /** Batterie de paris fictifs du scan 20e/60e minute (inPlayCombos.ts, real:false) — distincte de paperBetsSummary (règles apprises d'autoLearn.ts). */
+  const [fictionalCounter, setFictionalCounter] = useState<{ matches: number; placed: number; won: number } | null>(null);
 
   useEffect(() => {
     if (isFocused) {
@@ -49,6 +51,16 @@ export default function EvolutionScreen() {
         });
       } catch (error) {
         console.warn('Paris fictifs indisponibles:', error);
+      }
+      try {
+        const fictional = readInPlayProposals().filter((p) => p.real === false);
+        setFictionalCounter({
+          matches: new Set(fictional.map((p) => p.legs[0]?.fixtureId)).size,
+          placed: fictional.length,
+          won: fictional.filter((p) => p.legs[0]?.settled && p.legs[0]?.won).length,
+        });
+      } catch (error) {
+        console.warn('Compteur de matchs fictifs indisponible:', error);
       }
     }
   }, [isFocused]);
@@ -88,6 +100,19 @@ export default function EvolutionScreen() {
 
   const renderCalibrationView = () => (
     <View>
+      {fictionalCounter && (
+        <View style={styles.liveCounterRow}>
+          <Ionicons name="radio-button-on" size={10} color="#4ade80" />
+          <Text style={styles.liveCounterText}>
+            <Text style={styles.liveCounterNumber}>{fictionalCounter.matches}</Text> match{fictionalCounter.matches > 1 ? 's' : ''} traité{fictionalCounter.matches > 1 ? 's' : ''}
+            {'  •  '}
+            <Text style={styles.liveCounterNumber}>{fictionalCounter.placed}</Text> pari{fictionalCounter.placed > 1 ? 's' : ''} placé{fictionalCounter.placed > 1 ? 's' : ''}
+            {'  •  '}
+            <Text style={styles.liveCounterNumber}>{fictionalCounter.won}</Text> réussi{fictionalCounter.won > 1 ? 's' : ''}
+          </Text>
+        </View>
+      )}
+
       <View style={styles.infoBox}>
         <Ionicons name="information-circle" size={16} color="#60a5fa" />
         <Text style={styles.infoText}>
@@ -378,6 +403,20 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     fontSize: 11,
     lineHeight: 16,
+  },
+  liveCounterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 10,
+  },
+  liveCounterText: {
+    color: '#94a3b8',
+    fontSize: 11,
+  },
+  liveCounterNumber: {
+    fontWeight: 'bold',
+    color: '#e2e8f0',
   },
   paperBetsBox: {
     flexDirection: 'row',
