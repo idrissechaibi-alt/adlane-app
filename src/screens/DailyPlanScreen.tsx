@@ -82,7 +82,7 @@ export default function DailyPlanScreen() {
       // le compte à rebours T-90 reste affiché à titre indicatif par créneau.
       const { matches, skippedNoOdds } = buildScheduledMatches(existing.slots);
       setMatchesMissingOdds(skippedNoOdds);
-      setProposals(matches.length > 0 ? generateDailyProposals(matches, HISTORICAL_BETS) : []);
+      setProposals(matches.length > 0 ? await generateDailyProposals(matches, HISTORICAL_BETS) : []);
     }
   };
 
@@ -93,7 +93,7 @@ export default function DailyPlanScreen() {
       setPlan(newPlan);
       const { matches, skippedNoOdds } = buildScheduledMatches(newPlan.slots);
       setMatchesMissingOdds(skippedNoOdds);
-      setProposals(matches.length > 0 ? generateDailyProposals(matches, HISTORICAL_BETS) : []);
+      setProposals(matches.length > 0 ? await generateDailyProposals(matches, HISTORICAL_BETS) : []);
     } catch (error) {
       console.error('Erreur refresh:', error);
     } finally {
@@ -108,7 +108,7 @@ export default function DailyPlanScreen() {
       setPlan(newPlan);
       const { matches, skippedNoOdds } = buildScheduledMatches(newPlan.slots);
       setMatchesMissingOdds(skippedNoOdds);
-      const generated = matches.length > 0 ? generateDailyProposals(matches, HISTORICAL_BETS) : [];
+      const generated = matches.length > 0 ? await generateDailyProposals(matches, HISTORICAL_BETS) : [];
       setProposals(generated);
     } catch (error) {
       console.error('Erreur scan matinal:', error);

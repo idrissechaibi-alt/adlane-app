@@ -85,7 +85,7 @@ export function validateBet(bet: Bet, allBets: Bet[] = [], referenceTime?: Date)
   }
 
   // WARN_MARCHE_SANS_HISTO (§4 règle 5)
-  const marketsWithoutHistory: string[] = ['corners', 'fouls', 'cards', 'shots_on_target', 'saves'];
+  const marketsWithoutHistory: string[] = ['corners', 'fouls', 'cards', 'shots_on_target', 'saves', '1ere_mi_temps'];
   for (const leg of bet.legs) {
     if (marketsWithoutHistory.includes(leg.market) && bet.confidence_level === 'Élevé') {
       flags.push('WARN_MARCHE_SANS_HISTO');

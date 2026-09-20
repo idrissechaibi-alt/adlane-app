@@ -12,7 +12,8 @@ export type Market =
   | 'shots_on_target'
   | 'fouls'
   | 'cards'
-  | 'saves';
+  | 'saves'
+  | '1ere_mi_temps';
 
 export type ValidationFlag =
   | 'BLOCK_1X2_SOUS_50'           // Jambe 1X2 ou nul < 50%

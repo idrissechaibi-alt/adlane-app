@@ -2,7 +2,8 @@
 // Browse les 5 championnats, découpe en créneaux, génère et valide les propositions
 
 import { Bet, BetLeg, Market } from '../types';
-import { computeDixonColesModel, devigOdds1X2Shin, devigOddsTwoWayShin, computeEdge } from './poisson';
+import { computeDixonColesModel, computePoissonModel, poissonProb, devigOdds1X2Shin, devigOddsTwoWayShin, computeEdge } from './poisson';
+import { getHistoricalPriors } from './footballDataCoUk';
 import { validateBet } from './validator';
 
 export interface LeagueInfo {
@@ -211,26 +212,77 @@ export function groupMatchesBySlots(matches: ScheduledMatch[]): DaySlot[] {
   return slots.sort((a, b) => a.time_utc.localeCompare(b.time_utc));
 }
 
+interface EvaluatedSelection {
+  match: ScheduledMatch;
+  market: Market;
+  selection: string;
+  modelProb: number;
+  fairProb: number;
+  odds: number;
+  edgeRatio: number;
+  confidence: 'Faible' | 'Moyen' | 'Élevé';
+}
+
+/** P(X > line) pour une variable de Poisson de paramètre lambda (line est toujours un X.5, jamais d'ambiguïté de push). */
+function poissonOverProb(lambda: number, line: number): number {
+  let cdf = 0;
+  for (let k = 0; k <= Math.floor(line); k++) cdf += poissonProb(lambda, k);
+  return Math.max(0, Math.min(1, 1 - cdf));
+}
+
+/** Ligne X.5 la plus proche (juste en dessous) de la moyenne estimée. */
+function lineNearMean(lambda: number): number {
+  return Math.max(0.5, Math.floor(lambda) - 0.5);
+}
+
+/**
+ * Ajoute une sélection Over ET Under pour un marché sans cote de marché
+ * disponible (corners/cartons/fautes — estimés depuis les moyennes de saison
+ * Football-Data.co.uk, item A). Sans cote publiée, une jambe serait bloquée
+ * par BLOCK_COTE_MANQUANTE : on utilise donc la cote "juste" théorique
+ * (1/probabilité), explicitement signalée comme telle dans l'analyse plutôt
+ * que présentée comme une cote de bookmaker.
+ */
+function pushEstimatedOverUnder(
+  target: EvaluatedSelection[],
+  match: ScheduledMatch,
+  market: Market,
+  lambda: number,
+  unitLabel: string,
+  threshold: number
+): void {
+  if (!(lambda > 0)) return;
+  const line = lineNearMean(lambda);
+  const overProb = poissonOverProb(lambda, line);
+  const underProb = 1 - overProb;
+
+  if (overProb >= threshold) {
+    target.push({
+      match, market, selection: `Plus de ${line} ${unitLabel}`,
+      modelProb: overProb, fairProb: overProb, odds: Number((1 / overProb).toFixed(2)),
+      edgeRatio: 1, confidence: 'Faible',
+    });
+  }
+  if (underProb >= threshold) {
+    target.push({
+      match, market, selection: `Moins de ${line} ${unitLabel}`,
+      modelProb: underProb, fairProb: underProb, odds: Number((1 / underProb).toFixed(2)),
+      edgeRatio: 1, confidence: 'Faible',
+    });
+  }
+}
+
 /**
  * Génère des propositions de paris (Solos et Combinés) conformes aux règles
  */
-export function generateDailyProposals(
+export async function generateDailyProposals(
   matches: ScheduledMatch[],
   existingBets: Bet[] = []
-): ProposedSlip[] {
+): Promise<ProposedSlip[]> {
   const proposals: ProposedSlip[] = [];
 
   // 1. Analyse probabiliste individuelle de chaque match
-  const evaluatedSelections: Array<{
-    match: ScheduledMatch;
-    market: Market;
-    selection: string;
-    modelProb: number;
-    fairProb: number;
-    odds: number;
-    edgeRatio: number;
-    confidence: 'Faible' | 'Moyen' | 'Élevé';
-  }> = [];
+  const evaluatedSelections: EvaluatedSelection[] = [];
 
   for (const match of matches) {
     // Dixon-Coles (item D) plutôt que le Poisson indépendant simple : corrige
@@ -307,6 +359,60 @@ export function generateDailyProposals(
         confidence: 'Faible' // Règle §4.1 : BTTS toujours dégradé en faible
       });
     }
+
+    // Évaluation Under 2.5 et BTTS Non : les opposés existaient déjà côté
+    // marché (dévigés ci-dessus) mais n'étaient jamais proposés, réduisant
+    // artificiellement la diversité de marchés disponible pour les combinés.
+    const edgeUnder = computeEdge(poisson.probOU25.under, devigOU.no);
+    if (poisson.probOU25.under >= 0.55) {
+      evaluatedSelections.push({
+        match, market: 'OU_2_5', selection: 'Moins de 2,5 buts',
+        modelProb: poisson.probOU25.under, fairProb: devigOU.no, odds: match.odds.under_2_5,
+        edgeRatio: edgeUnder.edgeRatio, confidence: poisson.probOU25.under > 0.65 ? 'Élevé' : 'Moyen'
+      });
+    }
+
+    const edgeBTTSNon = computeEdge(poisson.probBTTS.no, devigBTTS.no);
+    if (poisson.probBTTS.no >= 0.58) {
+      evaluatedSelections.push({
+        match, market: 'BTTS', selection: 'Les deux équipes marquent (Non)',
+        modelProb: poisson.probBTTS.no, fairProb: devigBTTS.no, odds: match.odds.btts_no,
+        edgeRatio: edgeBTTSNon.edgeRatio, confidence: 'Faible'
+      });
+    }
+
+    // Buts avant la mi-temps : approximation par les buts attendus divisés
+    // par deux (aucune cote de mi-temps disponible ici pour dévigage réel —
+    // signalé "Faible" en conséquence, comme les autres marchés estimés).
+    const htModel = computePoissonModel(match.expectedHomeGoals / 2, match.expectedAwayGoals / 2);
+    const probOverHT05 = 1 - htModel.scoreMatrix[0][0];
+    const probUnderHT05 = htModel.scoreMatrix[0][0];
+    if (probOverHT05 >= 0.55) {
+      evaluatedSelections.push({
+        match, market: '1ere_mi_temps', selection: 'Plus de 0,5 but avant la pause',
+        modelProb: probOverHT05, fairProb: probOverHT05, odds: Number((1 / probOverHT05).toFixed(2)),
+        edgeRatio: 1, confidence: 'Faible'
+      });
+    }
+    if (probUnderHT05 >= 0.55) {
+      evaluatedSelections.push({
+        match, market: '1ere_mi_temps', selection: '0-0 à la pause (moins de 0,5 but)',
+        modelProb: probUnderHT05, fairProb: probUnderHT05, odds: Number((1 / probUnderHT05).toFixed(2)),
+        edgeRatio: 1, confidence: 'Faible'
+      });
+    }
+
+    // Corners / cartons / fautes : aucune cote de marché gratuite disponible
+    // pour ces marchés, donc estimation depuis les moyennes de saison réelles
+    // (Football-Data.co.uk, item A) plutôt que de les ignorer complètement.
+    // Silencieux si le championnat n'est pas couvert (coupes nationales) ou
+    // si une équipe n'est pas reconnue — jamais une valeur inventée.
+    const priors = await getHistoricalPriors(match.leagueId, match.homeTeam, match.awayTeam);
+    if (priors) {
+      pushEstimatedOverUnder(evaluatedSelections, match, 'corners', priors.home.cornersFor + priors.away.cornersFor, 'corners', 0.55);
+      pushEstimatedOverUnder(evaluatedSelections, match, 'cards', priors.home.cardsFor + priors.away.cardsFor, 'cartons', 0.55);
+      pushEstimatedOverUnder(evaluatedSelections, match, 'fouls', priors.home.foulsFor + priors.away.foulsFor, 'fautes', 0.55);
+    }
   }
 
   // 2. Création des propositions SOLO
@@ -366,88 +472,155 @@ export function generateDailyProposals(
     });
   }
 
-  // 3. Combinés PAR CRÉNEAU (pas un seul combiné "de volume" mélangeant des
-  // heures de coup d'envoi différentes) : quand plusieurs matchs démarrent au
-  // même moment, c'est justement l'occasion naturelle de les combiner —
-  // l'ancien comportement ne produisait qu'UN combiné pour toute la journée,
-  // qui pouvait ignorer un créneau avec 6 matchs simultanés si les 3
-  // premières jambes fortes venaient d'un autre créneau.
-  const strongLegs = evaluatedSelections.filter(s => s.modelProb >= 0.55 && s.market !== 'BTTS');
-  const MAX_LEGS_PER_COMBO = 4;
-
-  const strongLegsBySlot = new Map<string, typeof strongLegs>();
-  for (const leg of strongLegs) {
-    const key = leg.match.creneau_display;
-    const group = strongLegsBySlot.get(key) ?? [];
-    group.push(leg);
-    strongLegsBySlot.set(key, group);
+  // 3. Combinés PAR CRÉNEAU : les jambes ne sont JAMAIS combinées entre deux
+  // heures de coup d'envoi différentes, pour que les mises à jour mi-temps de
+  // tous les matchs d'un même combiné arrivent ensemble. Dès qu'un créneau
+  // réunit 3 matchs ou plus, plusieurs profils de combinés bien différenciés
+  // sont proposés (sécurisé -> équilibré -> thématique buts/stats -> value/
+  // risqué) au lieu d'un seul combiné générique — un créneau à 6 matchs avec
+  // tous les marchés dispo (BTTS, cartons, fautes, corners, 1ère mi-temps...)
+  // doit produire plusieurs combinés vraiment différents, pas juste des
+  // variations du même. Chaque profil n'est créé que s'il a assez de matière
+  // (jamais moins de 2 jambes, jamais deux combinés identiques).
+  const selectionsBySlot = new Map<string, EvaluatedSelection[]>();
+  for (const sel of evaluatedSelections) {
+    const key = sel.match.creneau_display;
+    const group = selectionsBySlot.get(key) ?? [];
+    group.push(sel);
+    selectionsBySlot.set(key, group);
   }
 
-  for (const [slotDisplay, slotLegs] of strongLegsBySlot.entries()) {
-    // Jamais deux sélections du même match dans un combiné : on garde la
-    // jambe la plus probable quand un match en propose plusieurs (ex: à la
-    // fois "Victoire domicile" et "Plus de 2,5 buts" au-dessus du seuil).
-    const bestPerMatch = new Map<string, (typeof slotLegs)[number]>();
-    for (const leg of slotLegs) {
-      const existing = bestPerMatch.get(leg.match.id);
-      if (!existing || leg.modelProb > existing.modelProb) bestPerMatch.set(leg.match.id, leg);
-    }
-    const candidates = Array.from(bestPerMatch.values());
-    if (candidates.length < 2) continue;
+  for (const [slotDisplay, slotSelections] of selectionsBySlot.entries()) {
+    const matchesInSlot = new Set(slotSelections.map((s) => s.match.id)).size;
+    if (matchesInSlot < 2) continue; // rien à combiner
 
-    const comboLegs: BetLeg[] = candidates.slice(0, MAX_LEGS_PER_COMBO).map((s, idx) => ({
-      id: `combo-leg-${slotDisplay}-${idx}`,
-      match: `${s.match.homeTeam} - ${s.match.awayTeam}`,
-      kickoff_utc: s.match.kickoff_utc,
-      league: s.match.leagueName,
-      market: s.market,
-      selection: s.selection,
-      odds: s.odds,
-      estimated_prob: s.modelProb,
-      is_void: false,
-      result: 'pending'
-    }));
+    const seenSignatures = new Set<string>();
 
-    const comboOdds = comboLegs.reduce((acc, l) => acc * (l.odds || 1), 1);
+    const buildCombo = (
+      label: string,
+      candidates: EvaluatedSelection[],
+      maxLegs: number,
+      confidenceLevel: 'Faible' | 'Moyen' | 'Élevé',
+      description: string,
+      pickBy: 'modelProb' | 'edgeRatio' = 'modelProb'
+    ): void => {
+      // Jamais deux jambes du même match : on garde la meilleure au sens du
+      // critère du profil (probabilité pour les profils prudents, edge
+      // estimé pour le profil "value").
+      const bestPerMatch = new Map<string, EvaluatedSelection>();
+      for (const sel of candidates) {
+        const existing = bestPerMatch.get(sel.match.id);
+        const better = !existing || (pickBy === 'edgeRatio' ? sel.edgeRatio > existing.edgeRatio : sel.modelProb > existing.modelProb);
+        if (better) bestPerMatch.set(sel.match.id, sel);
+      }
+      let picked = Array.from(bestPerMatch.values());
+      if (pickBy === 'edgeRatio') picked = picked.sort((a, b) => b.edgeRatio - a.edgeRatio);
+      picked = picked.slice(0, maxLegs);
+      if (picked.length < 2) return;
 
-    const comboCandidate: Bet = {
-      id: `combo-${slotDisplay.replace(/[^0-9a-z]/gi, '')}-${new Date().toISOString().split('T')[0]}`,
-      version: 1,
-      date: candidates[0].match.kickoff_utc.split('T')[0],
-      creneau_utc: candidates[0].match.kickoff_utc,
-      creneau_display: slotDisplay,
-      league: 'Multi-championnats',
-      legs: comboLegs,
-      odds: comboOdds,
-      stake: null,
-      excluded_from_pnl: true,
-      status: 'proposed',
-      played: false,
-      confiance: 65,
-      confidence_level: 'Moyen',
-      analysis: `Combiné ${comboLegs.length} jambes du créneau ${slotDisplay}, construit sur des probabilités >= 55%.`,
-      validation_flags: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      const signature = picked.map((s) => `${s.match.id}:${s.market}:${s.selection}`).sort().join('|');
+      if (seenSignatures.has(signature)) return; // combiné identique déjà proposé sous un autre profil
+      seenSignatures.add(signature);
+
+      const comboLegs: BetLeg[] = picked.map((s, idx) => ({
+        id: `combo-leg-${slotDisplay}-${label}-${idx}`,
+        match: `${s.match.homeTeam} - ${s.match.awayTeam}`,
+        kickoff_utc: s.match.kickoff_utc,
+        league: s.match.leagueName,
+        market: s.market,
+        selection: s.selection,
+        odds: s.odds,
+        estimated_prob: s.modelProb,
+        is_void: false,
+        result: 'pending'
+      }));
+
+      const comboOdds = comboLegs.reduce((acc, l) => acc * (l.odds || 1), 1);
+      const meanProb = picked.reduce((sum, s) => sum + s.modelProb, 0) / picked.length;
+
+      const comboCandidate: Bet = {
+        id: `combo-${slotDisplay.replace(/[^0-9a-z]/gi, '')}-${label.replace(/[^0-9a-z]/gi, '')}-${new Date().toISOString().split('T')[0]}`,
+        version: 1,
+        date: picked[0].match.kickoff_utc.split('T')[0],
+        creneau_utc: picked[0].match.kickoff_utc,
+        creneau_display: slotDisplay,
+        league: 'Multi-championnats',
+        legs: comboLegs,
+        odds: comboOdds,
+        stake: null,
+        excluded_from_pnl: true,
+        status: 'proposed',
+        played: false,
+        confiance: Math.round(meanProb * 100),
+        confidence_level: confidenceLevel,
+        analysis: description,
+        validation_flags: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      const validation = validateBet(comboCandidate, existingBets);
+
+      proposals.push({
+        id: comboCandidate.id,
+        type: 'combo',
+        title: `${label} — ${slotDisplay} (${comboLegs.length} jambes)`,
+        legs: comboLegs,
+        totalOdds: comboOdds,
+        confiance: comboCandidate.confiance || 50,
+        confidenceLevel,
+        analysis: comboCandidate.analysis,
+        validation: {
+          valid: validation.valid,
+          blockers: validation.blockers,
+          warnings: validation.warnings
+        }
+      });
     };
 
-    const validation = validateBet(comboCandidate, existingBets);
+    if (matchesInSlot >= 3) {
+      buildCombo(
+        '🛡️ Sécurisé',
+        slotSelections.filter((s) => s.modelProb >= 0.65),
+        3,
+        'Élevé',
+        `Combiné prudent : uniquement des sélections >= 65% de probabilité modèle, peu de jambes pour limiter le risque cumulé.`
+      );
 
-    proposals.push({
-      id: comboCandidate.id,
-      type: 'combo',
-      title: `Combiné ${slotDisplay} (${comboLegs.length} jambes)`,
-      legs: comboLegs,
-      totalOdds: comboOdds,
-      confiance: comboCandidate.confiance || 50,
-      confidenceLevel: 'Moyen',
-      analysis: comboCandidate.analysis,
-      validation: {
-        valid: validation.valid,
-        blockers: validation.blockers,
-        warnings: validation.warnings
-      }
-    });
+      buildCombo(
+        '⚖️ Équilibré',
+        slotSelections.filter((s) => s.modelProb >= 0.55),
+        4,
+        'Moyen',
+        `Combiné standard : sélections >= 55% de probabilité modèle, marchés mélangés.`
+      );
+
+      buildCombo(
+        '🎯 Buts & Stats',
+        slotSelections.filter((s) => s.modelProb >= 0.55 && s.market !== '1X2'),
+        4,
+        'Moyen',
+        `Combiné thématique (BTTS, Over/Under, corners, cartons, fautes, 1ère mi-temps) : diversifie volontairement les marchés plutôt que de miser uniquement sur des résultats 1X2.`
+      );
+
+      buildCombo(
+        '🔥 Value / Risqué',
+        slotSelections.filter((s) => s.modelProb >= 0.45),
+        5,
+        'Faible',
+        `Combiné plus risqué : seuil de probabilité abaissé à 45% mais jambes choisies par edge estimé (écart modèle/marché) plutôt que par probabilité brute, et plus de jambes pour un gain potentiel plus élevé — reste construit pour maximiser ses chances, pas au hasard.`,
+        'edgeRatio'
+      );
+    } else {
+      // 2 matchs seulement : pas assez de matière pour différencier 4 profils.
+      buildCombo(
+        'Combiné',
+        slotSelections.filter((s) => s.modelProb >= 0.55),
+        4,
+        'Moyen',
+        `Combiné du créneau ${slotDisplay}, construit sur des probabilités >= 55%.`
+      );
+    }
   }
 
   return proposals;
