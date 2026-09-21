@@ -90,6 +90,10 @@ import { sendLocalNotification } from './notifications';
 import { normalizeTeamName, namesLikelyMatch } from './teamNameMatch';
 import { OmnirouteConfig } from '../types';
 import { mapWithConcurrency } from './concurrency';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { sendTelegramMessage } from './telegram';
+import { matchesForDate, formatInternationalBreakCalendarMessages } from './internationalBreak';
+import { INTERNATIONAL_BREAK_CALENDAR } from '../data/internationalBreakCalendar';
 
 const CHECKPOINT20_MIN_MINUTE = 18;
 const CHECKPOINT20_MAX_MINUTE = 24;
@@ -669,6 +673,85 @@ function matchRefOfScheduled(m: ScheduledMatch): MatchRef {
   return { homeTeam: m.homeTeam, awayTeam: m.awayTeam, league: m.leagueName, leagueId: m.leagueId };
 }
 
+const INTL_BREAK_XG_CACHE_KEY = '@intl_break_xg_cache';
+const INTL_BREAK_ANNOUNCED_KEY = '@intl_break_announced_window';
+
+/**
+ * Matchs de la trêve internationale (Ligue des Nations, qualifs CAN) prévus
+ * AUJOURD'HUI, prêts pour le même traitement que les 5 grands championnats
+ * (voir processRealSlot plus bas) — vide en dehors de la fenêtre du
+ * calendrier (voir internationalBreak.ts), donc aucun effet le reste de
+ * l'année. Contrairement aux 5 grands championnats, aucune cote de marché
+ * n'existe pour ces matchs : les buts attendus viennent d'Omniroute (comme le
+ * programme fictif), calculés UNE FOIS par match puis mis en cache — sans ce
+ * cache, chaque tour (toutes les ~3-15 min) redemanderait la même estimation.
+ */
+async function getTodaysInternationalBreakMatches(
+  omnirouteConfig: OmnirouteConfig | null
+): Promise<ScheduledMatch[]> {
+  if (!omnirouteConfig) return [];
+
+  const today = new Date().toISOString().split('T')[0];
+  const todaysMatches = matchesForDate(INTERNATIONAL_BREAK_CALENDAR, today).filter((m) => m.kickoff_utc);
+  if (todaysMatches.length === 0) return [];
+
+  const cacheRaw = await AsyncStorage.getItem(INTL_BREAK_XG_CACHE_KEY);
+  const cache: Record<string, { home: number; away: number }> = cacheRaw ? JSON.parse(cacheRaw) : {};
+  let cacheTouched = false;
+
+  const scheduled: ScheduledMatch[] = [];
+  for (const m of todaysMatches) {
+    const key = `${m.homeTeam}-${m.awayTeam}-${m.date}`;
+    let xg = cache[key];
+    if (!xg) {
+      const estimated = await estimateExpectedGoalsViaOmniroute(
+        omnirouteConfig, m.homeTeam, m.awayTeam, m.competition
+      ).catch(() => null);
+      if (!estimated) continue; // pas d'estimation fiable ce tour : retenté au suivant
+      xg = estimated;
+      cache[key] = xg;
+      cacheTouched = true;
+    }
+
+    scheduled.push({
+      id: `intl-${key}`,
+      leagueId: m.group,
+      leagueName: m.competition,
+      flag: '🌍',
+      homeTeam: m.homeTeam,
+      awayTeam: m.awayTeam,
+      kickoff_utc: m.kickoff_utc!,
+      creneau_display: new Date(m.kickoff_utc!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      expectedHomeGoals: xg.home,
+      expectedAwayGoals: xg.away,
+      odds: { home: 0, draw: 0, away: 0, btts_yes: 0, btts_no: 0, over_2_5: 0, under_2_5: 0 },
+      context: `${m.competition} — ${m.group}`,
+    });
+  }
+
+  if (cacheTouched) await AsyncStorage.setItem(INTL_BREAK_XG_CACHE_KEY, JSON.stringify(cache));
+  return scheduled;
+}
+
+/**
+ * Envoie le calendrier complet de la trêve sur Telegram, UNE SEULE FOIS par
+ * fenêtre (marqueur AsyncStorage identifiant la fenêtre elle-même : changer
+ * le calendrier pour une nouvelle fenêtre — ex. les journées 3-4 de la CAN en
+ * novembre — redéclenche naturellement un envoi, sans code supplémentaire).
+ */
+async function announceInternationalBreakCalendarIfDue(): Promise<void> {
+  if (INTERNATIONAL_BREAK_CALENDAR.matches.length === 0) return;
+
+  const windowKey = `${INTERNATIONAL_BREAK_CALENDAR.windowStart}_${INTERNATIONAL_BREAK_CALENDAR.windowEnd}`;
+  const alreadyAnnounced = await AsyncStorage.getItem(INTL_BREAK_ANNOUNCED_KEY);
+  if (alreadyAnnounced === windowKey) return;
+
+  for (const message of formatInternationalBreakCalendarMessages(INTERNATIONAL_BREAK_CALENDAR)) {
+    await sendTelegramMessage(message);
+  }
+  await AsyncStorage.setItem(INTL_BREAK_ANNOUNCED_KEY, windowKey);
+}
+
 /**
  * Meilleure jambe (la plus probable, seuil MIN_LEG_PROB) d'un match candidat
  * à un checkpoint donné, ou null si aucune ne qualifie.
@@ -756,6 +839,74 @@ async function processRealSlotCheckpoint(
 }
 
 /**
+ * Traite un créneau de matchs RÉELS (5 grands championnats ou compétitions
+ * internationales pendant la trêve, voir runInPlayComboTick) : cherche le
+ * relevé live de chaque match (API-Football en priorité, repli Omniroute
+ * ciblé si absent du relevé partagé), puis délègue à
+ * processRealSlotCheckpoint pour les deux checkpoints.
+ */
+async function processRealSlot(
+  slotMatches: ScheduledMatch[],
+  liveFixtures: LiveFixture[],
+  omnirouteConfig: OmnirouteConfig | null,
+  alreadyProposed: Set<string>,
+  fresh: InPlayProposal[]
+): Promise<void> {
+  if (slotMatches.length === 0) return;
+
+  const candidates20: Array<{ scheduled: ScheduledMatch; live: LiveFixture }> = [];
+  const candidates60: Array<{ scheduled: ScheduledMatch; live: LiveFixture }> = [];
+
+  for (const scheduled of slotMatches) {
+    let live = findLiveFixture(scheduled, liveFixtures);
+    // Repli Omniroute CIBLÉ sur ce match précis (pas la découverte large du
+    // pipeline fictif) : un match d'argent réel absent du relevé live
+    // partagé — API-Football en panne, ou simplement pas mentionné par la
+    // découverte Omniroute générale — ne doit jamais rester sans
+    // vérification, sous peine de rater une notification de pari réel.
+    // Bornage au coup d'envoi théorique (± 130 min) pour ne pas interroger
+    // Omniroute sur des matchs qui n'ont clairement pas encore commencé ou
+    // sont clairement terminés.
+    if (!live && omnirouteConfig) {
+      const elapsedMs = Date.now() - Date.parse(scheduled.kickoff_utc);
+      if (Number.isFinite(elapsedMs) && elapsedMs >= 0 && elapsedMs <= 130 * 60 * 1000) {
+        live = (await fetchOmnirouteMatchStatus(
+          omnirouteConfig, scheduled.homeTeam, scheduled.awayTeam, scheduled.leagueName
+        ).catch(() => null)) ?? undefined;
+      }
+    }
+    if (!live) continue;
+
+    if (
+      live.statusShort === '1H' &&
+      live.minute >= CHECKPOINT20_MIN_MINUTE && live.minute <= CHECKPOINT20_MAX_MINUTE &&
+      !alreadyProposed.has(`${live.fixtureId}-minute20`)
+    ) {
+      candidates20.push({ scheduled, live });
+    }
+
+    if (
+      live.statusShort === '2H' &&
+      live.minute >= CHECKPOINT60_MIN_MINUTE && live.minute <= CHECKPOINT60_MAX_MINUTE &&
+      !alreadyProposed.has(`${live.fixtureId}-minute60`)
+    ) {
+      candidates60.push({ scheduled, live });
+    }
+  }
+
+  await processRealSlotCheckpoint(
+    'minute20', slotMatches.length, candidates20,
+    `20e → pause + match complet`, '20e minute — 1ère mi-temps + BTTS/total du match',
+    alreadyProposed, fresh
+  );
+  await processRealSlotCheckpoint(
+    'minute60', slotMatches.length, candidates60,
+    `60e → fin de match`, '60e minute — reste du match',
+    alreadyProposed, fresh
+  );
+}
+
+/**
  * Un tour de scan. Appelé par la tâche de fond (toutes les ~15 min) et par
  * la boucle de premier plan (3 min). Ne notifie jamais deux fois le même
  * match pour le même checkpoint. `liveFixtures` est déjà récupéré par
@@ -784,58 +935,28 @@ export async function runInPlayComboTick(liveFixtures: LiveFixture[]): Promise<n
   if (plan) {
     for (const slot of plan.slots) {
       const { matches: slotMatches } = buildScheduledMatches([slot]);
-      if (slotMatches.length === 0) continue;
+      await processRealSlot(slotMatches, liveFixtures, omnirouteConfig, alreadyProposed, fresh);
+    }
+  }
 
-      const candidates20: Array<{ scheduled: ScheduledMatch; live: LiveFixture }> = [];
-      const candidates60: Array<{ scheduled: ScheduledMatch; live: LiveFixture }> = [];
-
-      for (const scheduled of slotMatches) {
-        let live = findLiveFixture(scheduled, liveFixtures);
-        // Repli Omniroute CIBLÉ sur ce match précis (pas la découverte large
-        // du pipeline fictif) : un match d'argent réel absent du relevé live
-        // partagé — API-Football en panne, ou simplement pas mentionné par la
-        // découverte Omniroute générale — ne doit jamais rester sans
-        // vérification, sous peine de rater une notification de pari réel.
-        // Bornage au coup d'envoi théorique (± 130 min) pour ne pas
-        // interroger Omniroute sur des matchs qui n'ont clairement pas encore
-        // commencé ou sont clairement terminés.
-        if (!live && omnirouteConfig) {
-          const elapsedMs = Date.now() - Date.parse(scheduled.kickoff_utc);
-          if (Number.isFinite(elapsedMs) && elapsedMs >= 0 && elapsedMs <= 130 * 60 * 1000) {
-            live = (await fetchOmnirouteMatchStatus(
-              omnirouteConfig, scheduled.homeTeam, scheduled.awayTeam, scheduled.leagueName
-            ).catch(() => null)) ?? undefined;
-          }
-        }
-        if (!live) continue;
-
-        if (
-          live.statusShort === '1H' &&
-          live.minute >= CHECKPOINT20_MIN_MINUTE && live.minute <= CHECKPOINT20_MAX_MINUTE &&
-          !alreadyProposed.has(`${live.fixtureId}-minute20`)
-        ) {
-          candidates20.push({ scheduled, live });
-        }
-
-        if (
-          live.statusShort === '2H' &&
-          live.minute >= CHECKPOINT60_MIN_MINUTE && live.minute <= CHECKPOINT60_MAX_MINUTE &&
-          !alreadyProposed.has(`${live.fixtureId}-minute60`)
-        ) {
-          candidates60.push({ scheduled, live });
-        }
-      }
-
-      await processRealSlotCheckpoint(
-        'minute20', slotMatches.length, candidates20,
-        `20e → pause + match complet`, '20e minute — 1ère mi-temps + BTTS/total du match',
-        alreadyProposed, fresh
-      );
-      await processRealSlotCheckpoint(
-        'minute60', slotMatches.length, candidates60,
-        `60e → fin de match`, '60e minute — reste du match',
-        alreadyProposed, fresh
-      );
+  // A2) Compétitions internationales pendant la trêve (Ligue des Nations,
+  // qualifications CAN) — même traitement que A) ci-dessus (notifié, combos
+  // par créneau, toutes les ressources), puisque c'est tout ce qui se joue
+  // quand les 5 grands championnats sont en pause. Actif UNIQUEMENT dans la
+  // fenêtre du calendrier fourni (voir internationalBreakCalendar.ts) : en
+  // dehors, `getTodaysInternationalBreakMatches` renvoie toujours un tableau
+  // vide, donc ce bloc n'a aucun effet le reste de l'année.
+  await announceInternationalBreakCalendarIfDue();
+  const breakMatches = await getTodaysInternationalBreakMatches(omnirouteConfig);
+  if (breakMatches.length > 0) {
+    const bySlot = new Map<string, ScheduledMatch[]>();
+    for (const m of breakMatches) {
+      const arr = bySlot.get(m.creneau_display) ?? [];
+      arr.push(m);
+      bySlot.set(m.creneau_display, arr);
+    }
+    for (const slotMatches of bySlot.values()) {
+      await processRealSlot(slotMatches, liveFixtures, omnirouteConfig, alreadyProposed, fresh);
     }
   }
 
