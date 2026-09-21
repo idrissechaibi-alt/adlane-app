@@ -91,9 +91,9 @@ import { normalizeTeamName, namesLikelyMatch } from './teamNameMatch';
 import { OmnirouteConfig } from '../types';
 import { mapWithConcurrency } from './concurrency';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { sendTelegramMessage } from './telegram';
-import { matchesForDate, formatInternationalBreakCalendarMessages } from './internationalBreak';
+import { matchesForDate } from './internationalBreak';
 import { INTERNATIONAL_BREAK_CALENDAR } from '../data/internationalBreakCalendar';
+import { sendInternationalBreakCalendarNow } from './internationalBreakNotify';
 
 const CHECKPOINT20_MIN_MINUTE = 18;
 const CHECKPOINT20_MAX_MINUTE = 24;
@@ -738,6 +738,12 @@ async function getTodaysInternationalBreakMatches(
  * fenêtre (marqueur AsyncStorage identifiant la fenêtre elle-même : changer
  * le calendrier pour une nouvelle fenêtre — ex. les journées 3-4 de la CAN en
  * novembre — redéclenche naturellement un envoi, sans code supplémentaire).
+ *
+ * Le marqueur n'est posé QUE si l'envoi a vraiment réussi (sendTelegramMessage
+ * renvoie maintenant un booléen) : sans cette vérification, un échec réseau
+ * ponctuel au premier tour marquait quand même "déjà envoyé", et plus aucun
+ * tour suivant ne retentait — c'est exactement ce qui s'est produit la
+ * première fois (calendrier jamais reçu, marqueur posé quand même).
  */
 async function announceInternationalBreakCalendarIfDue(): Promise<void> {
   if (INTERNATIONAL_BREAK_CALENDAR.matches.length === 0) return;
@@ -746,10 +752,8 @@ async function announceInternationalBreakCalendarIfDue(): Promise<void> {
   const alreadyAnnounced = await AsyncStorage.getItem(INTL_BREAK_ANNOUNCED_KEY);
   if (alreadyAnnounced === windowKey) return;
 
-  for (const message of formatInternationalBreakCalendarMessages(INTERNATIONAL_BREAK_CALENDAR)) {
-    await sendTelegramMessage(message);
-  }
-  await AsyncStorage.setItem(INTL_BREAK_ANNOUNCED_KEY, windowKey);
+  const sent = await sendInternationalBreakCalendarNow();
+  if (sent) await AsyncStorage.setItem(INTL_BREAK_ANNOUNCED_KEY, windowKey);
 }
 
 /**

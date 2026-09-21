@@ -20,6 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { getAPIConfig, saveAPIConfig, APIConfig, incrementRequestCount } from '../api/multiAPIManager';
 import { DEFAULT_OMNIROUTE_CONFIG } from '../core/omniroute';
 import { TelegramConfig, sendTelegramMessage } from '../core/telegram';
+import { sendInternationalBreakCalendarNow } from '../core/internationalBreakNotify';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const OMNIROUTE_CONFIG_KEY = '@omniroute_config';
@@ -249,10 +250,36 @@ export default function SettingsScreen({ navigation }: any) {
       const configToTest = { ...telegram, enabled: true };
       await AsyncStorage.setItem(TELEGRAM_CONFIG_KEY, JSON.stringify(configToTest));
       setTelegram(configToTest);
-      await sendTelegramMessage('✅ APP adlane — test de connexion Telegram réussi.');
-      Alert.alert('✅ Envoyé', 'Vérifie ton chat Telegram : le message de test devrait être arrivé.');
+      const sent = await sendTelegramMessage('✅ APP adlane — test de connexion Telegram réussi.');
+      if (sent) {
+        Alert.alert('✅ Envoyé', 'Vérifie ton chat Telegram : le message de test devrait être arrivé.');
+      } else {
+        Alert.alert('❌ Échec', "Le message n'est pas parti (token/chat_id invalide, ou Telegram injoignable). Vérifie le token et le chat_id.");
+      }
     } catch (error: any) {
       Alert.alert('❌ Échec', error.message || "Impossible d'envoyer le message de test");
+    } finally {
+      setTestingTelegram(false);
+    }
+  };
+
+  /**
+   * Renvoie le calendrier de la trêve internationale MAINTENANT, sans
+   * attendre le prochain tour ni la déduplication "une fois par fenêtre" —
+   * utile pour vérifier tout de suite que l'envoi automatique fonctionne
+   * (ou pour le déclencher manuellement si le tour automatique a échoué).
+   */
+  const handleSendInternationalBreakCalendar = async () => {
+    setTestingTelegram(true);
+    try {
+      const sent = await sendInternationalBreakCalendarNow();
+      if (sent) {
+        Alert.alert('✅ Envoyé', 'Le calendrier de la trêve internationale a été envoyé sur Telegram.');
+      } else {
+        Alert.alert('❌ Échec', "L'envoi a échoué (Telegram non configuré/injoignable, ou calendrier vide). Vérifie d'abord le token/chat_id ci-dessus.");
+      }
+    } catch (error: any) {
+      Alert.alert('❌ Échec', error.message || "Impossible d'envoyer le calendrier");
     } finally {
       setTestingTelegram(false);
     }
@@ -500,6 +527,21 @@ export default function SettingsScreen({ navigation }: any) {
               <>
                 <Ionicons name="send" size={18} color="#ffffff" />
                 <Text style={styles.testButtonText}>Envoyer un message de test</Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.testButton, styles.testButtonPurple, testingTelegram && styles.testButtonDisabled]}
+            onPress={handleSendInternationalBreakCalendar}
+            disabled={testingTelegram}
+          >
+            {testingTelegram ? (
+              <ActivityIndicator color="#ffffff" size="small" />
+            ) : (
+              <>
+                <Ionicons name="calendar" size={18} color="#ffffff" />
+                <Text style={styles.testButtonText}>Renvoyer le calendrier de la trêve internationale</Text>
               </>
             )}
           </TouchableOpacity>

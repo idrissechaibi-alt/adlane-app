@@ -34,10 +34,15 @@ export async function loadTelegramConfig(): Promise<TelegramConfig | null> {
  * Envoie un message texte au chat Telegram configuré. Ne jette jamais : une
  * alerte Telegram manquée ne doit jamais faire échouer la détection
  * d'opportunité elle-même (la notification locale reste le canal garanti).
+ * Renvoie true seulement si le message est réellement parti — un appelant
+ * qui marque un envoi comme "fait" (pour ne jamais le répéter, ex. un
+ * calendrier envoyé une seule fois par fenêtre) DOIT vérifier ce retour :
+ * sans ça, un échec réseau ponctuel serait à tort marqué "envoyé" et ne
+ * serait plus jamais retenté.
  */
-export async function sendTelegramMessage(text: string): Promise<void> {
+export async function sendTelegramMessage(text: string): Promise<boolean> {
   const config = await loadTelegramConfig();
-  if (!config) return;
+  if (!config) return false;
 
   try {
     const response = await fetch(`https://api.telegram.org/bot${config.botToken}/sendMessage`, {
@@ -48,8 +53,11 @@ export async function sendTelegramMessage(text: string): Promise<void> {
     if (!response.ok) {
       const body = await response.text().catch(() => '');
       console.warn(`[Telegram] Envoi échoué (HTTP ${response.status}):`, body);
+      return false;
     }
+    return true;
   } catch (error: any) {
     console.warn('[Telegram] Envoi échoué:', error?.message);
+    return false;
   }
 }
