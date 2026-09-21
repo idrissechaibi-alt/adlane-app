@@ -337,7 +337,8 @@ const ATTEMPT_DETAIL_MAX_CHARS = 200;
  * faits du jour ; un modèle de langage seul répondra honnêtement qu'il n'a pas
  * accès au calendrier — réponse correcte et parfaitement inutile ici.
  */
-const SEARCH_CAPABLE_PATTERN = /search|web|news|crawl|perplexity|tavily|serper|brave|exa|browse|sonar/i;
+const SEARCH_CAPABLE_PATTERN =
+  /search|web|news|crawl|perplexity|tavily|serper|brave|exa|browse|sonar|jina|reader|fetch|tinyfish/i;
 
 /**
  * Trace entièrement faite d'erreurs : la question n'a jamais vraiment été
