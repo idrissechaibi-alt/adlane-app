@@ -1,9 +1,13 @@
-// Notifications locales — alerte l'utilisateur dès qu'une opportunité de
-// combinaison de 2ème mi-temps est détectée par le moniteur de mi-temps.
-// Local uniquement (pas de push distant) : pas de serveur, pas de token à gérer.
+// Notifications — alerte l'utilisateur dès qu'une opportunité de combinaison
+// de 2ème mi-temps est détectée par le moniteur de mi-temps. Deux canaux en
+// parallèle : la notification locale (garantie, aucune config requise) et,
+// si l'utilisateur a configuré un bot dans Paramètres, un relais Telegram
+// (voir telegram.ts) — utile pour garder un historique et recevoir l'alerte
+// sur d'autres appareils.
 
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
+import { sendTelegramMessage } from './telegram';
 
 const HALFTIME_CHANNEL_ID = 'halftime-opportunities';
 
@@ -42,22 +46,25 @@ export async function ensureNotificationPermissions(): Promise<boolean> {
 }
 
 /**
- * Envoie une notification locale immédiate.
+ * Envoie une notification locale immédiate, et en parallèle un message
+ * Telegram si un bot est configuré (voir telegram.ts) — les deux canaux sont
+ * indépendants : l'échec de l'un n'empêche jamais l'autre.
  */
 export async function sendLocalNotification(title: string, body: string, data?: Record<string, unknown>): Promise<void> {
   const granted = await ensureNotificationPermissions();
-  if (!granted) {
-    console.warn('[Notifications] Permission refusée, notification non envoyée:', title);
-    return;
+  if (granted) {
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title,
+        body,
+        data,
+        ...(Platform.OS === 'android' ? { channelId: HALFTIME_CHANNEL_ID } : {}),
+      },
+      trigger: null, // immédiat
+    });
+  } else {
+    console.warn('[Notifications] Permission refusée, notification locale non envoyée:', title);
   }
 
-  await Notifications.scheduleNotificationAsync({
-    content: {
-      title,
-      body,
-      data,
-      ...(Platform.OS === 'android' ? { channelId: HALFTIME_CHANNEL_ID } : {}),
-    },
-    trigger: null, // immédiat
-  });
+  await sendTelegramMessage(`${title}\n\n${body}`);
 }

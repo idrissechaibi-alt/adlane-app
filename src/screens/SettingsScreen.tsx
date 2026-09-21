@@ -19,9 +19,13 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { getAPIConfig, saveAPIConfig, APIConfig, incrementRequestCount } from '../api/multiAPIManager';
 import { DEFAULT_OMNIROUTE_CONFIG } from '../core/omniroute';
+import { TelegramConfig, sendTelegramMessage } from '../core/telegram';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const OMNIROUTE_CONFIG_KEY = '@omniroute_config';
+const TELEGRAM_CONFIG_KEY = '@telegram_config';
+
+const DEFAULT_TELEGRAM: TelegramConfig = { botToken: '', chatId: '', enabled: false };
 
 // Mots-clés courants pour repérer les agents de scraping/recherche web dans
 // un catalogue Omniroute qui peut exposer 1000+ agents — impossible de savoir
@@ -56,6 +60,10 @@ export default function SettingsScreen({ navigation }: any) {
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
 
+  // Telegram
+  const [telegram, setTelegram] = useState<TelegramConfig>(DEFAULT_TELEGRAM);
+  const [testingTelegram, setTestingTelegram] = useState(false);
+
   // Sélecteur de modèles Omniroute (endpoint /models expose parfois 1000+ agents,
   // impossible à taper à la main : on charge la liste et on coche dedans)
   const [modelPickerVisible, setModelPickerVisible] = useState(false);
@@ -77,6 +85,12 @@ export default function SettingsScreen({ navigation }: any) {
         setOmniroute(JSON.parse(omniRaw));
       }
 
+      // Charger config Telegram
+      const tgRaw = await AsyncStorage.getItem(TELEGRAM_CONFIG_KEY);
+      if (tgRaw) {
+        setTelegram(JSON.parse(tgRaw));
+      }
+
       // Charger config API
       const apiConf = await getAPIConfig();
       setApiConfig(apiConf);
@@ -92,6 +106,9 @@ export default function SettingsScreen({ navigation }: any) {
     try {
       // Sauvegarder Omniroute
       await AsyncStorage.setItem(OMNIROUTE_CONFIG_KEY, JSON.stringify(omniroute));
+
+      // Sauvegarder Telegram
+      await AsyncStorage.setItem(TELEGRAM_CONFIG_KEY, JSON.stringify(telegram));
 
       // Sauvegarder API config
       if (apiConfig) {
@@ -214,6 +231,32 @@ export default function SettingsScreen({ navigation }: any) {
       return true;
     });
   }, [availableModels, modelSearch, scrapingFilterActive]);
+
+  /**
+   * Teste le bot avec la config ACTUELLEMENT saisie (pas encore forcément
+   * sauvegardée) : sauvegarde d'abord silencieusement, puis envoie un
+   * message de test, pour que "Tester" fonctionne dès la première saisie
+   * sans obliger à appuyer sur "Sauvegarder" avant.
+   */
+  const handleTestTelegram = async () => {
+    if (!telegram.botToken.trim() || !telegram.chatId.trim()) {
+      Alert.alert('⚠️ Champs manquants', 'Renseigne le token du bot et le chat_id avant de tester.');
+      return;
+    }
+
+    setTestingTelegram(true);
+    try {
+      const configToTest = { ...telegram, enabled: true };
+      await AsyncStorage.setItem(TELEGRAM_CONFIG_KEY, JSON.stringify(configToTest));
+      setTelegram(configToTest);
+      await sendTelegramMessage('✅ APP adlane — test de connexion Telegram réussi.');
+      Alert.alert('✅ Envoyé', 'Vérifie ton chat Telegram : le message de test devrait être arrivé.');
+    } catch (error: any) {
+      Alert.alert('❌ Échec', error.message || "Impossible d'envoyer le message de test");
+    } finally {
+      setTestingTelegram(false);
+    }
+  };
 
   const handleTestAPIFootball = async () => {
     if (!apiConfig?.apiFootball) {
@@ -388,6 +431,75 @@ export default function SettingsScreen({ navigation }: any) {
               <>
                 <Ionicons name="checkmark-circle-outline" size={18} color="#ffffff" />
                 <Text style={styles.testButtonText}>Tester la connexion</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        {/* Section Telegram */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="paper-plane" size={24} color="#0ea5e9" />
+            <Text style={styles.sectionTitle}>Notifications Telegram</Text>
+          </View>
+
+          <Text style={styles.fieldHint}>
+            Reçois chaque opportunité détectée (paris en direct) directement dans un chat Telegram,
+            en plus de la notification du téléphone. 1) Crée un bot via @BotFather sur Telegram
+            (commande /newbot) et récupère son token. 2) Envoie-lui un message, puis ouvre
+            https://api.telegram.org/bot{'<TON_TOKEN>'}/getUpdates dans un navigateur pour lire ton
+            chat_id dans la réponse.
+          </Text>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Token du bot</Text>
+            <TextInput
+              style={styles.input}
+              value={telegram.botToken}
+              onChangeText={(text) => setTelegram({ ...telegram, botToken: text })}
+              placeholder="123456789:AAExxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+              placeholderTextColor="#64748b"
+              secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Chat ID</Text>
+            <TextInput
+              style={styles.input}
+              value={telegram.chatId}
+              onChangeText={(text) => setTelegram({ ...telegram, chatId: text })}
+              placeholder="ex: 123456789"
+              placeholderTextColor="#64748b"
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="numbers-and-punctuation"
+            />
+          </View>
+
+          <View style={styles.switchRow}>
+            <Text style={styles.switchLabel}>Activer les alertes Telegram</Text>
+            <Switch
+              value={telegram.enabled}
+              onValueChange={(value) => setTelegram({ ...telegram, enabled: value })}
+              trackColor={{ false: '#334155', true: '#0ea5e9' }}
+              thumbColor={telegram.enabled ? '#ffffff' : '#94a3b8'}
+            />
+          </View>
+
+          <TouchableOpacity
+            style={[styles.testButton, styles.testButtonBlueSky, testingTelegram && styles.testButtonDisabled]}
+            onPress={handleTestTelegram}
+            disabled={testingTelegram}
+          >
+            {testingTelegram ? (
+              <ActivityIndicator color="#ffffff" size="small" />
+            ) : (
+              <>
+                <Ionicons name="send" size={18} color="#ffffff" />
+                <Text style={styles.testButtonText}>Envoyer un message de test</Text>
               </>
             )}
           </TouchableOpacity>
@@ -776,6 +888,9 @@ const styles = StyleSheet.create({
   },
   testButtonPurple: {
     backgroundColor: '#7c3aed',
+  },
+  testButtonBlueSky: {
+    backgroundColor: '#0ea5e9',
   },
   testButtonDisabled: {
     opacity: 0.6,
