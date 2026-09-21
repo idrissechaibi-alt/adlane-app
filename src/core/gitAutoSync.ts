@@ -154,6 +154,34 @@ async function getGitHubToken(): Promise<string | null> {
   return token?.trim() || null;
 }
 
+/**
+ * Lit un fichier JSON du dépôt. Sert de canal de RÉCEPTION : le dépôt ne
+ * contient pas que les sauvegardes envoyées par l'app, il porte aussi des
+ * fichiers déposés à son intention — à commencer par le planning du jour
+ * (voir fictionalProgram.ts), préparé chaque matin hors de l'app.
+ *
+ * Renvoie null si le fichier n'existe pas ou si l'accès échoue : un canal de
+ * réception absent doit dégrader le comportement, jamais le bloquer.
+ */
+export async function fetchRepoJson<T>(repositoryPath: string): Promise<T | null> {
+  try {
+    const config = await getGitHubSyncConfig();
+    const token = await getGitHubToken();
+    if (!token) return null;
+
+    const response = await fetch(
+      `https://api.github.com/repos/${encodeURIComponent(config.repoOwner)}/${encodeURIComponent(config.repoName)}` +
+        `/contents/${repositoryPath}?ref=${encodeURIComponent(config.branch)}&t=${Date.now()}`,
+      { headers: { ...githubHeaders(token), Accept: 'application/vnd.github.v3.raw', 'Cache-Control': 'no-cache' } }
+    );
+    if (!response.ok) return null;
+
+    return (await response.json()) as T;
+  } catch {
+    return null;
+  }
+}
+
 async function createSnapshot(): Promise<SyncPayload> {
   const [bets, lessons, calibrations, dailyReports] = await Promise.all([
     getAllBets(),

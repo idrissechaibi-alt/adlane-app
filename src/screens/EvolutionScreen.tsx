@@ -177,8 +177,10 @@ export default function EvolutionScreen() {
       Alert.alert(
         'Scan terminé',
         `Omniroute : ${diag.omnirouteConfigured ? 'configuré' : 'NON CONFIGURÉ (Paramètres → endpoint + agents)'}.\n` +
-          `Programme fictif du jour (Omniroute) : ${diag.fictionalProgramSize} match(s) — ` +
-          `${diag.fictionalCountriesTried}/${diag.fictionalCountriesTotal} pays interrogés.\n` +
+          `Planning du jour : ${diag.fictionalProgramSize} match(s) — ` +
+          (diag.fictionalProgramFromFeed
+            ? 'liste transmise.\n'
+            : `balayage Omniroute, ${diag.fictionalCountriesTried}/${diag.fictionalCountriesTotal} pays interrogés.\n`) +
           (diag.fictionalNextKickoffUtc
             ? `Prochain match suivi : ${formatKickoff(diag.fictionalNextKickoffUtc)} (${diag.fictionalMatchesAhead} encore à venir aujourd'hui).\n`
             : diag.fictionalProgramSize > 0

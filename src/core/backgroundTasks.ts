@@ -83,8 +83,9 @@ export interface AutoLearnTickDiagnostics {
   /** Omniroute utilisable (endpoint + au moins un agent) : sans ça, TOUTE la
    * boucle de fond est muette, et chaque compteur reste à 0 sans erreur. */
   omnirouteConfigured: boolean;
-  /** Matchs du programme fictif du jour (Omniroute seul). */
+  /** Matchs du planning du jour, et provenance (liste transmise ou balayage). */
   fictionalProgramSize: number;
+  fictionalProgramFromFeed: boolean;
   /** Matchs du programme encore à venir, et heure du prochain coup d'envoi. */
   fictionalMatchesAhead: number;
   fictionalNextKickoffUtc?: string;
@@ -140,6 +141,7 @@ export async function runAutoLearnTick(): Promise<AutoLearnTickDiagnostics> {
   // quand : aucune API n'intervient.
   let fictionalProgramSize = 0;
   let omnirouteConfigured = false;
+  let fictionalProgramFromFeed = false;
   let fictionalMatchesAhead = 0;
   let fictionalNextKickoffUtc: string | undefined;
   let fictionalCountriesTried = 0;
@@ -152,6 +154,7 @@ export async function runAutoLearnTick(): Promise<AutoLearnTickDiagnostics> {
       const program = await ensureFictionalDailyProgram(omnirouteConfig);
       fictionalProgramSize = program.length;
       const status = await getFictionalProgramStatus();
+      fictionalProgramFromFeed = status.fromFeed;
       fictionalMatchesAhead = status.matchesAhead;
       fictionalNextKickoffUtc = status.nextKickoffUtc;
       fictionalCountriesTried = status.countriesTried;
@@ -225,6 +228,7 @@ export async function runAutoLearnTick(): Promise<AutoLearnTickDiagnostics> {
     universeSize,
     omnirouteConfigured,
     fictionalProgramSize,
+    fictionalProgramFromFeed,
     fictionalMatchesAhead,
     fictionalNextKickoffUtc,
     fictionalCountriesTried,

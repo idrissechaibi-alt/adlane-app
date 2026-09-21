@@ -1,31 +1,38 @@
-// Planning du jour de la boucle FICTIVE — 100 % Omniroute, zéro API payante.
+// Planning du jour de la boucle FICTIVE — les matchs à suivre et leurs
+// horaires. C'est la colonne vertébrale du pipeline fictif : sans lui, la
+// boucle n'a aucun match à suivre.
 //
-// Omniroute balaie pays par pays le calendrier du jour, TOUTES divisions
-// confondues (élite, D2, D3..., et catégories jeunes U19/U20/U21/réserves), et
-// renvoie les horaires de coup d'envoi. On en retient
-// MAX_FICTIONAL_MATCHES_PER_DAY, répartis équitablement entre pays plutôt que
-// concentrés sur les deux ou trois plus fournis.
+// DEUX sources, dans cet ordre :
 //
-// Entretien AUTOMATIQUE, sans rien à lancer à la main : le balayage avance de
-// quelques pays à chaque tour de fond, et toute une passe est rouverte chaque
-// heure sur les pays dont aucun match à venir n'est connu. Un match annoncé en
-// cours de journée finit donc par entrer au planning, et une panne d'agents le
-// matin ne condamne pas la soirée.
+//   1. Le planning TRANSMIS (data/programme-du-jour/<date>.json dans le
+//      dépôt), préparé chaque matin en dehors de l'application. Lire un
+//      calendrier complet demande de vraies recherches web, et les agents
+//      Omniroute du téléphone n'y arrivent pas de façon fiable (fournisseurs
+//      de recherche en panne, agents sans accès Internet). Préparer la liste
+//      à l'extérieur met le planning à l'abri de ces aléas.
+//   2. À défaut seulement, un balayage du calendrier par les agents, pays par
+//      pays — filet de sécurité pour les jours sans transmission.
+//
+// Dans les deux cas, Omniroute garde ensuite le travail qu'il fait bien :
+// suivre match par match des rencontres déjà connues (score, tirs, corners,
+// cartons) et appliquer le protocole 20e/60e minute.
 //
 // À quoi sert l'horaire : connaître le coup d'envoi suffit à savoir QUAND
-// aller regarder un match (20e puis 60e minute) — plus besoin d'un relevé
-// "tous les matchs en direct maintenant" côté fictif, ni donc d'API-Football.
-// Le planning est la colonne vertébrale du pipeline fictif : sans lui, la
-// boucle n'a aucun match à suivre.
+// surveiller un match, sans dépendre d'un relevé "tous les matchs en direct
+// maintenant" ni d'API-Football.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { OmnirouteConfig } from '../types';
 import { OmnirouteAttempt, askOmnirouteUsable, attemptsAllFailed } from './omniroute';
 import { syntheticFixtureId } from './halftimeMonitor';
+import { fetchRepoJson } from './gitAutoSync';
 
 const PROGRAM_KEY_PREFIX = '@fictional_program_';
 const CHECKED_KEY_PREFIX = '@fictional_checked_';
 const TIMELINE_KEY_PREFIX = '@fictional_timeline_';
+/** Clé sous laquelle le planning transmis est rangé, à part des pays balayés
+ * par les agents : il a sa propre provenance et ses propres règles. */
+const FEED_SOURCE_KEY = '__transmis__';
 
 /** Volume visé par jour (demande explicite). */
 export const MAX_FICTIONAL_MATCHES_PER_DAY = 250;
@@ -162,6 +169,63 @@ export async function writeMatchTimelines(
   }
 }
 
+/** Emplacement, dans le dépôt, du planning préparé chaque matin hors de
+ * l'app. Un fichier par jour : pas de conflit avec la sauvegarde
+ * quotidienne, et l'historique reste lisible. */
+function feedPath(date: string): string {
+  return `data/programme-du-jour/${date}.json`;
+}
+
+interface TransmittedProgram {
+  date: string;
+  generatedAt?: string;
+  matches: Array<{
+    home_team: string;
+    away_team: string;
+    competition?: string;
+    country?: string;
+    kickoff_utc: string;
+  }>;
+}
+
+/**
+ * Planning transmis à l'app : liste des matchs du jour avec leurs horaires,
+ * préparée le matin même en dehors de l'application puis déposée dans le
+ * dépôt.
+ *
+ * Pourquoi hors de l'app : lire un calendrier complet demande de vraies
+ * recherches web, et les agents Omniroute du téléphone n'y arrivent pas de
+ * façon fiable (fournisseurs de recherche en panne, agents sans accès
+ * Internet). Préparer la liste à l'extérieur et la déposer ici met le
+ * planning à l'abri de ces aléas ; Omniroute n'a plus qu'à appliquer le
+ * protocole de suivi sur des matchs déjà connus, ce qu'il fait match par
+ * match — une tâche bien plus simple qu'un balayage de calendrier.
+ */
+async function loadTransmittedProgram(date: string): Promise<FictionalMatch[] | null> {
+  const payload = await fetchRepoJson<TransmittedProgram>(feedPath(date));
+  if (!payload || !Array.isArray(payload.matches)) return null;
+
+  const matches: FictionalMatch[] = [];
+  for (const m of payload.matches) {
+    const homeTeam = typeof m?.home_team === 'string' ? m.home_team.trim() : '';
+    const awayTeam = typeof m?.away_team === 'string' ? m.away_team.trim() : '';
+    const kickoff = typeof m?.kickoff_utc === 'string' ? m.kickoff_utc.trim() : '';
+    if (!homeTeam || !awayTeam || !kickoff) continue;
+    if (!Number.isFinite(Date.parse(kickoff))) continue;
+
+    matches.push({
+      fixtureId: syntheticFixtureId(homeTeam, awayTeam, date),
+      homeTeam,
+      awayTeam,
+      league: m.competition?.trim() || 'Compétition inconnue',
+      country: m.country?.trim() || 'Inconnu',
+      kickoff_utc: kickoff,
+    });
+  }
+
+  return matches.length > 0 ? matches.slice(0, MAX_FICTIONAL_MATCHES_PER_DAY) : null;
+}
+
 /**
  * Extrait une liste de rencontres d'une réponse d'agent. Tolérant sur la
  * forme (tableau nu, ou objet sous "matches"/"fixtures"/"games") parce que
@@ -280,6 +344,8 @@ interface StoredProgram {
   lastTrace?: { country: string; attempts: OmnirouteAttempt[] };
   /** Début de la passe de balayage en cours — voir SWEEP_INTERVAL_MS. */
   sweepStartedAt?: string;
+  /** Dernière lecture réussie du planning transmis. */
+  feedLoadedAt?: string;
 }
 
 /**
@@ -326,6 +392,9 @@ function pendingCountries(stored: StoredProgram, now: number = Date.now()): stri
 
 export interface FictionalProgramStatus {
   matches: number;
+  /** true quand le planning vient du fichier transmis, false quand il a été
+   * bâti par le balayage de secours. */
+  fromFeed: boolean;
   /** Matchs du programme dont le coup d'envoi est encore à venir, et heure du
    * prochain : une nuit sans proposition n'est pas la même chose selon que la
    * boucle n'a rien à suivre ou qu'elle attend le premier coup d'envoi. */
@@ -350,6 +419,7 @@ export async function getFictionalProgramStatus(date: string = todayKey()): Prom
 
   return {
     matches: all.length,
+    fromFeed: (stored.byCountry[FEED_SOURCE_KEY]?.length ?? 0) > 0,
     matchesAhead: ahead.length,
     nextKickoffUtc: ahead[0]?.kickoff_utc,
     countriesTried: Object.keys(stored.attempts).length,
@@ -382,6 +452,27 @@ export async function ensureFictionalDailyProgram(
 ): Promise<FictionalMatch[]> {
   const stored = await readStoredProgram(date);
   const now = Date.now();
+
+  // 1) Planning transmis : la source normale. Relu à chaque tour tant qu'il
+  // n'a pas été reçu, et rafraîchi ensuite au rythme des passes — un match
+  // ajouté en cours de journée au fichier déposé entre ainsi au planning.
+  if (!stored.feedLoadedAt || now - Date.parse(stored.feedLoadedAt) >= SWEEP_INTERVAL_MS) {
+    const transmitted = await loadTransmittedProgram(date);
+    if (transmitted) {
+      const merged = new Map((stored.byCountry[FEED_SOURCE_KEY] ?? []).map((m) => [m.fixtureId, m]));
+      for (const match of transmitted) if (!merged.has(match.fixtureId)) merged.set(match.fixtureId, match);
+      stored.byCountry[FEED_SOURCE_KEY] = [...merged.values()];
+      stored.feedLoadedAt = new Date(now).toISOString();
+      await AsyncStorage.setItem(programKey(date), JSON.stringify(stored));
+    }
+  }
+
+  // 2) Balayage Omniroute — filet de sécurité seulement : il ne sert que les
+  // jours où aucun planning n'a été transmis. Inutile de faire chercher aux
+  // agents ce qu'on leur a déjà donné.
+  if ((stored.byCountry[FEED_SOURCE_KEY]?.length ?? 0) > 0) {
+    return selectFromStored(stored);
+  }
 
   // Passe horaire : toutes les heures, on rend de nouveau interrogeables les
   // pays dont on ne connaît aucun match à venir (jamais répondu, agents
@@ -430,8 +521,25 @@ export async function ensureFictionalDailyProgram(
     await AsyncStorage.setItem(programKey(date), JSON.stringify(stored));
   }
 
-  // Dédoublonnage inter-pays : une même rencontre annoncée dans deux réponses
-  // (coupe européenne, erreur de rattachement) ne doit être suivie qu'une fois.
+  return selectFromStored(stored);
+}
+
+/**
+ * Planning exploitable à partir de ce qui est stocké. Dédoublonne d'abord
+ * entre sources (une même rencontre peut figurer dans le planning transmis ET
+ * dans une réponse d'agent, ou dans deux pays pour une coupe européenne), puis
+ * répartit équitablement jusqu'au plafond du jour.
+ *
+ * Un planning transmis est déjà cadré (250 matchs, répartition voulue) et
+ * arrive sous une source unique : le répartir "équitablement entre pays" le
+ * viderait de tout sauf des premiers. Il est donc rendu tel quel.
+ */
+function selectFromStored(stored: StoredProgram): FictionalMatch[] {
+  const feed = stored.byCountry[FEED_SOURCE_KEY] ?? [];
+  if (feed.length > 0) {
+    return [...feed].sort((a, b) => a.kickoff_utc.localeCompare(b.kickoff_utc));
+  }
+
   const seen = new Set<number>();
   const byCountry = new Map<string, FictionalMatch[]>();
   for (const [country, matches] of Object.entries(stored.byCountry)) {
