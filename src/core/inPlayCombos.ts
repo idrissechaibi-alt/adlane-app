@@ -1,12 +1,16 @@
-// Scan en direct — deux points de décision fixes, plus rentables que les
-// cotes d'avant-match seules (devenues trop basses, demande explicite) :
+// Scan en direct — le match est SUIVI, pas photographié : la surveillance
+// commence au coup d'envoi et se poursuit jusqu'au point de décision, de sorte
+// que le pronostic s'appuie sur l'évolution réelle de la rencontre.
 //
-//   - 20e minute (milieu de 1ère mi-temps) : but 1ère MT ou pas, corners et
-//     cartons 1ère MT (projection statistique Poisson recalibrée sur les
-//     moyennes de saison Football-Data.co.uk), BTTS et total du match
-//     (projection sur le match ENTIER, pas seulement la 1ère MT).
-//   - 60e minute : reste du match (résultat, BTTS, total buts), recalibré
-//     avec tout ce qui s'est passé depuis le coup d'envoi.
+//   - Du coup d'envoi à la 20e minute : relevés réguliers (score, tirs cadrés,
+//     corners, cartons). À la 20e, pronostics sur le but en 1ère MT, les
+//     corners et cartons de la période (projetés au RYTHME constaté entre les
+//     relevés, pas à la moyenne depuis le coup d'envoi), plus BTTS et total du
+//     match entier.
+//   - De la mi-temps à la 60e minute : la surveillance reprend, puis
+//     pronostics sur le reste du match (résultat, BTTS, total buts).
+//   - En fin de match : chaque jambe est confrontée au score réel et le
+//     résultat repart dans la boucle d'apprentissage (voir dailyReview.ts).
 //
 // DEUX pipelines séparés, sur le même principe mais des ressources et une
 // présentation différentes (demande explicite) :
@@ -51,9 +55,12 @@ import { LiveFixture, fetchOmnirouteMatchStatus } from './halftimeMonitor';
 import { getHistoricalPriors } from './footballDataCoUk';
 import {
   FictionalMatch,
+  MatchSample,
   ensureFictionalDailyProgram,
   readCheckedCheckpoints,
+  readMatchTimelines,
   writeCheckedCheckpoints,
+  writeMatchTimelines,
 } from './fictionalProgram';
 import {
   estimateRemainingMatchMarket,
@@ -95,6 +102,13 @@ const MAX_FICTIONAL_CHECKS_PER_TICK = 25;
 /** En dessous, le rythme observé (corners/cartons par minute) porte trop peu
  * d'information pour extrapoler quoi que ce soit. */
 const MIN_MINUTES_FOR_PACE_PROJECTION = 15;
+/** Délai minimum entre deux relevés d'un même match pendant la surveillance :
+ * la boucle de premier plan repasse toutes les 3 minutes, inutile de
+ * réinterroger un agent aussi souvent pour le même match. */
+const MIN_MINUTES_BETWEEN_SAMPLES = 6;
+/** Durée minimale entre deux relevés pour qu'un rythme en soit déduit : sur
+ * trois minutes, un corner de plus ou de moins fausse tout. */
+const MIN_MINUTES_FOR_RATE = 8;
 
 /** Probabilité minimale pour qu'une jambe soit retenue (solo, combo, ou pari fictif). */
 const MIN_LEG_PROB = 0.55;
@@ -284,10 +298,49 @@ async function fetchRealLiveStats(fixtureId: number): Promise<LiveMatchStats | u
   }
 }
 
-/** Compte observé en direct d'événements cumulés depuis le coup d'envoi. */
+/** Compte observé en direct d'événements cumulés depuis le coup d'envoi, et
+ * rythme mesuré sur la fenêtre de surveillance quand plusieurs relevés ont été
+ * pris (voir observedFromTimeline). */
 interface ObservedLiveCounts {
   corners?: number;
   cards?: number;
+  /** Événements par minute, mesurés entre le premier et le dernier relevé. */
+  cornersPerMinute?: number;
+  cardsPerMinute?: number;
+}
+
+/**
+ * Condense la surveillance d'un match en compteurs exploitables : les totaux
+ * du dernier relevé, et surtout le RYTHME réellement constaté entre le premier
+ * et le dernier relevé de la fenêtre.
+ *
+ * Pourquoi le rythme plutôt que la simple moyenne depuis le coup d'envoi : un
+ * match à 4 corners dont 3 dans les cinq dernières minutes ne se projette pas
+ * comme un match à 4 corners étalés sur vingt minutes. Avec un seul relevé, les
+ * deux sont indiscernables — d'où la surveillance continue.
+ */
+function observedFromTimeline(timeline: MatchSample[]): ObservedLiveCounts {
+  const last = timeline[timeline.length - 1];
+  if (!last) return {};
+
+  const counts: ObservedLiveCounts = { corners: last.cornersTotal, cards: last.cardsTotal };
+
+  // Premier relevé de la même période de jeu que le dernier : un total de
+  // corners ne se compare qu'à l'intérieur d'une même mi-temps continue.
+  const first = timeline.find((s) => s.statusShort === last.statusShort);
+  if (!first || first === last) return counts;
+
+  const minutes = last.minute - first.minute;
+  if (minutes < MIN_MINUTES_FOR_RATE) return counts;
+
+  if (last.cornersTotal != null && first.cornersTotal != null) {
+    counts.cornersPerMinute = Math.max(0, (last.cornersTotal - first.cornersTotal) / minutes);
+  }
+  if (last.cardsTotal != null && first.cardsTotal != null) {
+    counts.cardsPerMinute = Math.max(0, (last.cardsTotal - first.cardsTotal) / minutes);
+  }
+
+  return counts;
 }
 
 /**
@@ -364,30 +417,37 @@ async function buildLegs20(
     }
   } else if (elapsedMinutes >= MIN_MINUTES_FOR_PACE_PROJECTION) {
     // Aucune moyenne de saison : projection au rythme observé dans CE match.
+    // Le rythme mesuré pendant la surveillance (entre deux relevés) prime sur
+    // la moyenne depuis le coup d'envoi — c'est lui qui reflète où en est le
+    // match maintenant, pas où il en était en moyenne.
     const remainingMinutes = Math.max(0, 45 - elapsedMinutes);
 
     if (observedCorners != null) {
-      const lambda = (observedCorners / elapsedMinutes) * remainingMinutes;
+      const perMinute = observedLive?.cornersPerMinute ?? observedCorners / elapsedMinutes;
+      const source = observedLive?.cornersPerMinute != null ? 'rythme suivi en direct' : 'moyenne depuis le coup d\'envoi';
+      const lambda = perMinute * remainingMinutes;
       const line = pickHighestConfidentOverLine(lambda, LINE_PICK_THRESHOLD, observedCorners);
       if (line) {
         legs.push({
           market: 'corners',
           selection: `Plus de ${line.line} corners en 1ère mi-temps`,
           prob: line.prob,
-          evidence: `${observedCorners} corner(s) en ${elapsedMinutes} min (rythme relevé en direct) → ${lambda.toFixed(1)} attendu(s) d'ici la pause.`
+          evidence: `${observedCorners} corner(s) à la ${elapsedMinutes}e minute, ${source} de ${perMinute.toFixed(2)}/min → ${lambda.toFixed(1)} attendu(s) d'ici la pause.`
         });
       }
     }
 
     if (observedCards != null) {
-      const lambda = (observedCards / elapsedMinutes) * remainingMinutes;
+      const perMinute = observedLive?.cardsPerMinute ?? observedCards / elapsedMinutes;
+      const source = observedLive?.cardsPerMinute != null ? 'rythme suivi en direct' : 'moyenne depuis le coup d\'envoi';
+      const lambda = perMinute * remainingMinutes;
       const line = pickHighestConfidentOverLine(lambda, LINE_PICK_THRESHOLD, observedCards);
       if (line) {
         legs.push({
           market: 'cartons',
           selection: `Plus de ${line.line} cartons en 1ère mi-temps`,
           prob: line.prob,
-          evidence: `${observedCards} carton(s) en ${elapsedMinutes} min (rythme relevé en direct) → ${lambda.toFixed(1)} attendu(s) d'ici la pause.`
+          evidence: `${observedCards} carton(s) à la ${elapsedMinutes}e minute, ${source} de ${perMinute.toFixed(2)}/min → ${lambda.toFixed(1)} attendu(s) d'ici la pause.`
         });
       }
     }
@@ -789,6 +849,8 @@ export async function runInPlayComboTick(liveFixtures: LiveFixture[]): Promise<n
   if (omnirouteConfig) {
     const program = await ensureFictionalDailyProgram(omnirouteConfig).catch(() => [] as FictionalMatch[]);
     const checked = await readCheckedCheckpoints();
+    const timelines = await readMatchTimelines();
+    let timelinesTouched = false;
     let checksThisTick = 0;
 
     for (const scheduled of program) {
@@ -798,16 +860,29 @@ export async function runInPlayComboTick(liveFixtures: LiveFixture[]): Promise<n
       if (!Number.isFinite(kickoff)) continue;
       const elapsedMinutes = (Date.now() - kickoff) / 60_000;
 
-      // Fenêtres en temps réel (pas en minutes de jeu) : la 20e minute de jeu
-      // tombe ~20 min après le coup d'envoi, la 60e ~75 min après (mi-temps
-      // comprise). Larges exprès — coup d'envoi retardé, arrêts de jeu — car
-      // la minute de jeu exacte est ensuite confirmée par Omniroute.
-      const kind: 'minute20' | 'minute60' | null =
-        elapsedMinutes >= 15 && elapsedMinutes <= 32 ? 'minute20'
-        : elapsedMinutes >= 66 && elapsedMinutes <= 88 ? 'minute60'
-        : null;
-      if (!kind) continue;
-      if (checked.has(`${scheduled.fixtureId}-${kind}`)) continue;
+      const checkpoint20Done = checked.has(`${scheduled.fixtureId}-minute20`);
+      const checkpoint60Done = checked.has(`${scheduled.fixtureId}-minute60`);
+      if (checkpoint20Done && checkpoint60Done) continue; // match déjà traité de bout en bout
+
+      // Deux fenêtres de SURVEILLANCE, en temps réel (pas en minutes de jeu) :
+      // du coup d'envoi jusqu'à la 20e minute, puis de la mi-temps jusqu'à la
+      // 60e. On relève le match régulièrement pendant toute la fenêtre, et le
+      // pronostic n'est émis qu'au checkpoint — à partir de l'ÉVOLUTION
+      // observée depuis le début, pas d'une photo isolée. Bornes larges à
+      // dessein (coup d'envoi retardé, arrêts de jeu) : la minute de jeu
+      // exacte est ensuite confirmée par le relevé lui-même.
+      const inFirstWatch = !checkpoint20Done && elapsedMinutes >= 0 && elapsedMinutes <= 35;
+      const inSecondWatch = !checkpoint60Done && elapsedMinutes >= 50 && elapsedMinutes <= 92;
+      if (!inFirstWatch && !inSecondWatch) continue;
+
+      // Cadence de surveillance : la boucle de premier plan repasse toutes les
+      // 3 minutes, inutile de réinterroger le même match aussi souvent.
+      const timeline = timelines[scheduled.fixtureId] ?? [];
+      const lastSample = timeline[timeline.length - 1];
+      const minutesSinceLastSample = lastSample
+        ? (Date.now() - Date.parse(lastSample.ts)) / 60_000
+        : Infinity;
+      if (minutesSinceLastSample < MIN_MINUTES_BETWEEN_SAMPLES) continue;
 
       checksThisTick++;
       const live = await fetchOmnirouteMatchStatus(
@@ -815,17 +890,38 @@ export async function runInPlayComboTick(liveFixtures: LiveFixture[]): Promise<n
       ).catch(() => null);
       if (!live) continue; // pas encore commencé, déjà fini, ou introuvable : on retentera
 
-      const inBand = kind === 'minute20'
-        ? live.statusShort === '1H' && live.minute >= CHECKPOINT20_MIN_MINUTE && live.minute <= CHECKPOINT20_MAX_MINUTE
-        : live.statusShort === '2H' && live.minute >= CHECKPOINT60_MIN_MINUTE && live.minute <= CHECKPOINT60_MAX_MINUTE;
+      timeline.push({
+        ts: new Date().toISOString(),
+        minute: live.minute,
+        statusShort: live.statusShort,
+        homeGoals: live.homeGoals,
+        awayGoals: live.awayGoals,
+        shotsOnTargetHome: live.shotsOnTargetHome,
+        shotsOnTargetAway: live.shotsOnTargetAway,
+        cornersTotal: live.cornersTotal,
+        cardsTotal: live.cardsTotal,
+      });
+      timelines[scheduled.fixtureId] = timeline;
+      timelinesTouched = true;
 
-      if (!inBand) {
-        // Trop tôt : on laisse le checkpoint ouvert pour le tour suivant.
-        // Déjà dépassé : inutile d'y revenir, la fenêtre est perdue.
-        const tooLate = kind === 'minute20'
-          ? live.minute > CHECKPOINT20_MAX_MINUTE || live.statusShort === '2H'
-          : live.minute > CHECKPOINT60_MAX_MINUTE;
-        if (tooLate) checked.add(`${scheduled.fixtureId}-${kind}`);
+      const kind: 'minute20' | 'minute60' | null =
+        !checkpoint20Done && live.statusShort === '1H' &&
+        live.minute >= CHECKPOINT20_MIN_MINUTE && live.minute <= CHECKPOINT20_MAX_MINUTE
+          ? 'minute20'
+          : !checkpoint60Done && live.statusShort === '2H' &&
+            live.minute >= CHECKPOINT60_MIN_MINUTE && live.minute <= CHECKPOINT60_MAX_MINUTE
+            ? 'minute60'
+            : null;
+
+      if (!kind) {
+        // Pas encore au checkpoint : on continue simplement à surveiller.
+        // Fenêtre dépassée en revanche : elle est perdue, inutile d'y revenir.
+        if (!checkpoint20Done && (live.statusShort === '2H' || live.minute > CHECKPOINT20_MAX_MINUTE)) {
+          checked.add(`${scheduled.fixtureId}-minute20`);
+        }
+        if (!checkpoint60Done && live.statusShort === '2H' && live.minute > CHECKPOINT60_MAX_MINUTE) {
+          checked.add(`${scheduled.fixtureId}-minute60`);
+        }
         continue;
       }
 
@@ -843,7 +939,7 @@ export async function runInPlayComboTick(liveFixtures: LiveFixture[]): Promise<n
         live.shotsOnTargetHome != null || live.shotsOnTargetAway != null
           ? { shotsOnTargetHome: live.shotsOnTargetHome, shotsOnTargetAway: live.shotsOnTargetAway }
           : undefined;
-      const observedLive = { corners: live.cornersTotal, cards: live.cardsTotal };
+      const observedLive = observedFromTimeline(timeline);
 
       const rawLegs = kind === 'minute20'
         ? await buildLegs20(match, live.fixtureId, live, preMatchExpectedGoals, currentStats, observedLive)
@@ -864,6 +960,7 @@ export async function runInPlayComboTick(liveFixtures: LiveFixture[]): Promise<n
     }
 
     await writeCheckedCheckpoints(checked);
+    if (timelinesTouched) await writeMatchTimelines(timelines);
   }
 
   if (fresh.length > 0) writeInPlayProposals([...existing, ...fresh]);

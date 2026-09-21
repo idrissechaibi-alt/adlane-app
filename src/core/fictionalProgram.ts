@@ -25,6 +25,7 @@ import { syntheticFixtureId } from './halftimeMonitor';
 
 const PROGRAM_KEY_PREFIX = '@fictional_program_';
 const CHECKED_KEY_PREFIX = '@fictional_checked_';
+const TIMELINE_KEY_PREFIX = '@fictional_timeline_';
 
 /** Volume visé par jour (demande explicite). */
 export const MAX_FICTIONAL_MATCHES_PER_DAY = 250;
@@ -117,6 +118,47 @@ export async function writeCheckedCheckpoints(checked: Set<string>, date: string
     await AsyncStorage.setItem(`${CHECKED_KEY_PREFIX}${date}`, JSON.stringify([...checked]));
   } catch {
     // mémoire best-effort : au pire on réinterroge, jamais bloquant
+  }
+}
+
+/**
+ * Un relevé d'un match à un instant donné. Le suivi commence au COUP D'ENVOI
+ * et se poursuit jusqu'au checkpoint : au moment de pronostiquer, on ne
+ * dispose donc pas d'une photo isolée mais de l'évolution réelle de la
+ * rencontre (rythme des corners, montée en puissance des tirs, score qui
+ * bouge). Deux relevés valent bien mieux qu'un seul : un match à 4 corners
+ * dont 3 dans les cinq dernières minutes ne se projette pas comme un match à
+ * 4 corners répartis depuis le début.
+ */
+export interface MatchSample {
+  ts: string;
+  minute: number;
+  statusShort: string;
+  homeGoals: number;
+  awayGoals: number;
+  shotsOnTargetHome?: number;
+  shotsOnTargetAway?: number;
+  cornersTotal?: number;
+  cardsTotal?: number;
+}
+
+export async function readMatchTimelines(date: string = todayKey()): Promise<Record<number, MatchSample[]>> {
+  try {
+    const raw = await AsyncStorage.getItem(`${TIMELINE_KEY_PREFIX}${date}`);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+export async function writeMatchTimelines(
+  timelines: Record<number, MatchSample[]>,
+  date: string = todayKey()
+): Promise<void> {
+  try {
+    await AsyncStorage.setItem(`${TIMELINE_KEY_PREFIX}${date}`, JSON.stringify(timelines));
+  } catch {
+    // suivi best-effort : perdre un relevé dégrade la finesse, ne casse rien
   }
 }
 
