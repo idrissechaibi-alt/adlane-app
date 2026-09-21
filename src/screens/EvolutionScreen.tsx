@@ -102,6 +102,16 @@ export default function EvolutionScreen() {
     }
   }, [isFocused]);
 
+  /** Heure locale du coup d'envoi + délai restant : "dans 6h12 (14:00)". */
+  const formatKickoff = (kickoffUtc: string) => {
+    const kickoff = Date.parse(kickoffUtc);
+    if (!Number.isFinite(kickoff)) return kickoffUtc;
+    const minutes = Math.max(0, Math.round((kickoff - Date.now()) / 60_000));
+    const delay = minutes >= 60 ? `dans ${Math.floor(minutes / 60)}h${String(minutes % 60).padStart(2, '0')}` : `dans ${minutes} min`;
+    const local = new Date(kickoff).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return `${delay} (${local})`;
+  };
+
   /**
    * Résume en une phrase ce qui a bloqué le dernier pays interrogé, plutôt que
    * d'empiler une ligne par agent : ce qui compte, c'est de savoir S'IL FAUT
@@ -169,6 +179,11 @@ export default function EvolutionScreen() {
         `Omniroute : ${diag.omnirouteConfigured ? 'configuré' : 'NON CONFIGURÉ (Paramètres → endpoint + agents)'}.\n` +
           `Programme fictif du jour (Omniroute) : ${diag.fictionalProgramSize} match(s) — ` +
           `${diag.fictionalCountriesTried}/${diag.fictionalCountriesTotal} pays interrogés.\n` +
+          (diag.fictionalNextKickoffUtc
+            ? `Prochain match suivi : ${formatKickoff(diag.fictionalNextKickoffUtc)} (${diag.fictionalMatchesAhead} encore à venir aujourd'hui).\n`
+            : diag.fictionalProgramSize > 0
+              ? "Tous les matchs du programme ont déjà eu lieu aujourd'hui.\n"
+              : '') +
           (diag.fictionalLastTrace ? `${summarizeTrace(diag.fictionalLastTrace)}\n` : '') +
           `Univers du jour (API) : ${diag.universeSize} match(s) suivis.\n` +
           `Relevé live : ${diag.liveFixturesFound} match(s) en direct — source : ${LIVE_FIXTURES_SOURCE_LABEL[diag.liveFixturesSource] ?? diag.liveFixturesSource}.\n` +

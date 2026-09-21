@@ -85,6 +85,9 @@ export interface AutoLearnTickDiagnostics {
   omnirouteConfigured: boolean;
   /** Matchs du programme fictif du jour (Omniroute seul). */
   fictionalProgramSize: number;
+  /** Matchs du programme encore à venir, et heure du prochain coup d'envoi. */
+  fictionalMatchesAhead: number;
+  fictionalNextKickoffUtc?: string;
   /** Avancement du balayage pays par pays (il s'étale sur plusieurs tours). */
   fictionalCountriesTried: number;
   fictionalCountriesTotal: number;
@@ -137,6 +140,8 @@ export async function runAutoLearnTick(): Promise<AutoLearnTickDiagnostics> {
   // quand : aucune API n'intervient.
   let fictionalProgramSize = 0;
   let omnirouteConfigured = false;
+  let fictionalMatchesAhead = 0;
+  let fictionalNextKickoffUtc: string | undefined;
   let fictionalCountriesTried = 0;
   let fictionalCountriesTotal = 0;
   let fictionalLastTrace: { country: string; attempts: OmnirouteAttempt[] } | undefined;
@@ -147,6 +152,8 @@ export async function runAutoLearnTick(): Promise<AutoLearnTickDiagnostics> {
       const program = await ensureFictionalDailyProgram(omnirouteConfig);
       fictionalProgramSize = program.length;
       const status = await getFictionalProgramStatus();
+      fictionalMatchesAhead = status.matchesAhead;
+      fictionalNextKickoffUtc = status.nextKickoffUtc;
       fictionalCountriesTried = status.countriesTried;
       fictionalCountriesTotal = status.countriesTotal;
       fictionalLastTrace = status.lastTrace;
@@ -218,6 +225,8 @@ export async function runAutoLearnTick(): Promise<AutoLearnTickDiagnostics> {
     universeSize,
     omnirouteConfigured,
     fictionalProgramSize,
+    fictionalMatchesAhead,
+    fictionalNextKickoffUtc,
     fictionalCountriesTried,
     fictionalCountriesTotal,
     fictionalLastTrace,

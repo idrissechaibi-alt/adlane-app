@@ -263,6 +263,11 @@ function pendingCountries(stored: StoredProgram): string[] {
 
 export interface FictionalProgramStatus {
   matches: number;
+  /** Matchs du programme dont le coup d'envoi est encore à venir, et heure du
+   * prochain : une nuit sans proposition n'est pas la même chose selon que la
+   * boucle n'a rien à suivre ou qu'elle attend le premier coup d'envoi. */
+  matchesAhead: number;
+  nextKickoffUtc?: string;
   /** Pays interrogés au moins une fois aujourd'hui — l'avancement visible du
    * balayage, et non le nombre de pays définitivement clos (qui resterait à 0
    * tant qu'aucun n'a ni livré de match ni épuisé ses essais). */
@@ -274,8 +279,16 @@ export interface FictionalProgramStatus {
 
 export async function getFictionalProgramStatus(date: string = todayKey()): Promise<FictionalProgramStatus> {
   const stored = await readStoredProgram(date);
+  const all = Object.values(stored.byCountry).flat();
+  const now = Date.now();
+  const ahead = all
+    .filter((m) => Date.parse(m.kickoff_utc) > now)
+    .sort((a, b) => a.kickoff_utc.localeCompare(b.kickoff_utc));
+
   return {
-    matches: Object.values(stored.byCountry).reduce((sum, list) => sum + list.length, 0),
+    matches: all.length,
+    matchesAhead: ahead.length,
+    nextKickoffUtc: ahead[0]?.kickoff_utc,
     countriesTried: Object.keys(stored.attempts).length,
     countriesTotal: FICTIONAL_COUNTRIES.length,
     lastTrace: stored.lastTrace,
