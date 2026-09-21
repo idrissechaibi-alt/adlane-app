@@ -8,6 +8,7 @@ import { getAPIConfig, incrementRequestCount } from '../api/multiAPIManager';
 import { fetchCompetitionOdds, FOOTBALL_DATA_TO_ODDS_SPORT_KEY, SimpleMatchOdds } from '../api/footballDataAPIs/theOddsAPI';
 import { normalizeTeamName, namesLikelyMatch } from './teamNameMatch';
 import { fetchWithTimeout } from './httpTimeout';
+import { sendTelegramMessage } from './telegram';
 
 const DAILY_SCHEDULE_KEY = '@daily_schedule_json';
 const FOOTBALL_DATA_KEY = 'app-adlane.football-data-api-key';
@@ -194,11 +195,34 @@ export async function executeMorningScan(): Promise<DailyPlan> {
 
     await AsyncStorage.setItem(DAILY_SCHEDULE_KEY, JSON.stringify(plan));
     await AsyncStorage.setItem(LAST_SCAN_DATE_KEY, localToday);
+    await sendTelegramMessage(formatMorningPlanMessage(plan));
     return plan;
   } catch (error: any) {
     console.error('Erreur Scan Matinal:', error.message);
     throw error;
   }
+}
+
+/** Telegram refuse un message au-delà de 4096 caractères. */
+const TELEGRAM_MAX_MESSAGE_LENGTH = 4000;
+
+function formatMorningPlanMessage(plan: DailyPlan): string {
+  if (plan.totalMatches === 0) {
+    return `📅 Planning du ${plan.date} : aucun match aujourd'hui sur les 5 grands championnats.`;
+  }
+
+  const lines = [`📅 Planning du ${plan.date} — ${plan.totalMatches} match(s), ${plan.slots.length} créneau(x)`];
+  for (const slot of plan.slots) {
+    lines.push('', `⏰ ${slot.slotTimeDisplay} (${slot.matchesCount})`);
+    for (const m of slot.matches) {
+      lines.push(`${m.flag} ${m.homeTeam} - ${m.awayTeam} (${m.leagueName})`);
+    }
+  }
+
+  const text = lines.join('\n');
+  return text.length > TELEGRAM_MAX_MESSAGE_LENGTH
+    ? `${text.slice(0, TELEGRAM_MAX_MESSAGE_LENGTH)}\n… (liste tronquée, voir l'app pour le détail complet)`
+    : text;
 }
 
 function getLeagueFlag(code: string): string {

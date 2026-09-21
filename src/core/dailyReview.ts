@@ -36,6 +36,8 @@ import {
 import { loadOmnirouteConfig } from './focusEnrichment';
 import { askOmnirouteUsable } from './omniroute';
 import { OmnirouteConfig } from '../types';
+import { sendTelegramMessage } from './telegram';
+import { buildFictionalMarketStats, formatFictionalDigestMessage } from './dailyDigest';
 
 const LAST_REVIEW_KEY = '@last_daily_review';
 const LAST_ELO_SYNC_KEY = '@last_elo_sync';
@@ -330,6 +332,7 @@ export async function runNightlyReviewIfDue(): Promise<number> {
 
   const series = readMarketSeries();
   let created = 0;
+  const telegramDigests: string[] = [];
 
   for (const day of pendingDays) {
     const dayProposals = allProposals.filter(
@@ -401,6 +404,13 @@ export async function runNightlyReviewIfDue(): Promise<number> {
     if (settledOutcomes.length > 0) appendPredictionOutcomes(settledOutcomes);
 
     const points = buildDayPoints(day, dayProposals);
+
+    // Capturé AVANT la fusion des points du jour dans `series` juste
+    // dessous : `cumulativeHitRateBefore` doit comparer contre l'historique
+    // STRICTEMENT antérieur à `day`, jamais contre lui-même.
+    const digestMessage = formatFictionalDigestMessage(day, buildFictionalMarketStats(dayProposals), series);
+    if (digestMessage) telegramDigests.push(digestMessage);
+
     // Une journée déjà présente dans la série est remplacée, jamais dupliquée.
     for (const point of points) {
       const existingIndex = series.findIndex((p) => p.date === point.date && p.market === point.market);
@@ -413,6 +423,10 @@ export async function runNightlyReviewIfDue(): Promise<number> {
   writeInPlayProposals(allProposals);
   writeMarketSeries(series.sort((a, b) => a.date.localeCompare(b.date)));
   await AsyncStorage.setItem(LAST_REVIEW_KEY, yesterday);
+
+  for (const digest of telegramDigests) {
+    await sendTelegramMessage(digest);
+  }
 
   return created;
 }
