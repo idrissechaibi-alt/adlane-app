@@ -29,14 +29,36 @@ const MAX_MATCHES_PER_COUNTRY = 60;
 /** Pays balayés par tour : chaque pays coûte au moins une requête d'agent
  * (plusieurs si les premiers ne ramènent rien), donc un tour doit rester
  * court — le programme se complète sur les tours suivants. */
-const MAX_COUNTRIES_PER_RUN = 4;
+const MAX_COUNTRIES_PER_RUN = 6;
+/** Essais accordés à un pays dans la journée : une réponse vide vient plus
+ * souvent d'un agent qui n'a pas su chercher que d'un pays sans match. */
+const MAX_ATTEMPTS_PER_COUNTRY = 3;
 
-/** 20 pays européens, toutes leurs divisions et catégories d'âge. */
+/**
+ * Pays balayés, toutes divisions et catégories d'âge confondues. Couverture
+ * large volontairement : le corpus d'apprentissage gagne à voir des contextes
+ * de jeu très différents (rythmes, arbitrage, nombre de buts), pas seulement
+ * les grands championnats européens. Les fuseaux asiatiques ont en plus le bon
+ * goût de jouer quand l'Europe dort — la boucle tourne donc aussi la nuit.
+ */
 export const FICTIONAL_COUNTRIES = [
-  'Angleterre', 'Espagne', 'Italie', 'Allemagne', 'France',
-  'Portugal', 'Pays-Bas', 'Belgique', 'Écosse', 'Turquie',
-  'Grèce', 'Suisse', 'Autriche', 'Danemark', 'Norvège',
-  'Suède', 'Pologne', 'République tchèque', 'Croatie', 'Serbie',
+  // Europe de l'Ouest et du Sud
+  'Angleterre', 'Écosse', 'Pays de Galles', 'Irlande', 'Irlande du Nord',
+  'Espagne', 'Portugal', 'France', 'Italie', 'Allemagne',
+  'Autriche', 'Suisse', 'Pays-Bas', 'Belgique', 'Grèce', 'Chypre',
+  // Europe du Nord
+  'Danemark', 'Norvège', 'Suède', 'Finlande', 'Islande',
+  // Europe centrale et de l'Est
+  'Pologne', 'République tchèque', 'Slovaquie', 'Hongrie', 'Roumanie',
+  'Bulgarie', 'Croatie', 'Serbie', 'Slovénie', 'Bosnie-Herzégovine',
+  'Ukraine', 'Russie', 'Turquie', 'Israël',
+  // Asie et Océanie
+  'Japon', 'Corée du Sud', 'Chine', 'Arabie saoudite', 'Qatar',
+  'Émirats arabes unis', 'Iran', 'Irak', 'Ouzbékistan', 'Inde',
+  'Thaïlande', 'Vietnam', 'Indonésie', 'Malaisie', 'Australie',
+  // Amériques
+  'Brésil', 'Argentine', 'Mexique', 'États-Unis', 'Colombie',
+  'Chili', 'Uruguay', 'Pérou', 'Équateur', 'Paraguay',
 ];
 
 export interface FictionalMatch {
@@ -195,19 +217,40 @@ interface StoredProgram {
   date: string;
   /** Rencontres retenues, par pays déjà balayé. */
   byCountry: Record<string, FictionalMatch[]>;
-  /** Pays déjà interrogés aujourd'hui (même s'ils n'ont rien donné). */
-  doneCountries: string[];
+  /** Nombre de tentatives par pays aujourd'hui. */
+  attempts: Record<string, number>;
 }
 
 async function readStoredProgram(date: string): Promise<StoredProgram> {
   try {
     const raw = await AsyncStorage.getItem(programKey(date));
     const parsed = raw ? JSON.parse(raw) : null;
-    if (parsed?.byCountry && Array.isArray(parsed.doneCountries)) return parsed;
+    if (parsed?.byCountry) {
+      if (parsed.attempts) return parsed;
+      // Ancien format (liste de pays "faits") : une tentative déjà consommée
+      // chacun, donc ceux restés vides gardent droit à un nouvel essai.
+      const attempts: Record<string, number> = {};
+      for (const country of parsed.doneCountries ?? []) attempts[country] = 1;
+      return { date, byCountry: parsed.byCountry, attempts };
+    }
   } catch {
     // stockage illisible : on repart d'un programme vide plutôt que de planter
   }
-  return { date, byCountry: {}, doneCountries: [] };
+  return { date, byCountry: {}, attempts: {} };
+}
+
+/**
+ * Pays restant à interroger, les jamais-tentés d'abord. Un pays qui n'a rien
+ * donné garde droit à d'autres essais (jusqu'à MAX_ATTEMPTS_PER_COUNTRY) :
+ * une réponse vide vient plus souvent d'un agent qui n'a pas su chercher que
+ * d'un pays réellement sans match ce jour-là — le marquer définitivement fait
+ * du premier coup suffisait à condamner la journée entière.
+ */
+function pendingCountries(stored: StoredProgram): string[] {
+  const eligible = FICTIONAL_COUNTRIES.filter(
+    (c) => (stored.byCountry[c]?.length ?? 0) === 0 && (stored.attempts[c] ?? 0) < MAX_ATTEMPTS_PER_COUNTRY
+  );
+  return eligible.sort((a, b) => (stored.attempts[a] ?? 0) - (stored.attempts[b] ?? 0));
 }
 
 export interface FictionalProgramStatus {
@@ -220,7 +263,7 @@ export async function getFictionalProgramStatus(date: string = todayKey()): Prom
   const stored = await readStoredProgram(date);
   return {
     matches: Object.values(stored.byCountry).reduce((sum, list) => sum + list.length, 0),
-    countriesDone: stored.doneCountries.length,
+    countriesDone: FICTIONAL_COUNTRIES.length - pendingCountries(stored).length,
     countriesTotal: FICTIONAL_COUNTRIES.length,
   };
 }
@@ -246,13 +289,12 @@ export async function ensureFictionalDailyProgram(
   maxCountriesPerRun: number = MAX_COUNTRIES_PER_RUN
 ): Promise<FictionalMatch[]> {
   const stored = await readStoredProgram(date);
-  const done = new Set(stored.doneCountries);
-  const pending = FICTIONAL_COUNTRIES.filter((c) => !done.has(c));
+  const pending = pendingCountries(stored);
 
   for (const country of pending.slice(0, maxCountriesPerRun)) {
     const matches = await fetchCountryFixtures(config, country, date);
     if (matches.length > 0) stored.byCountry[country] = matches;
-    stored.doneCountries.push(country);
+    stored.attempts[country] = (stored.attempts[country] ?? 0) + 1;
   }
 
   if (pending.length > 0) {
