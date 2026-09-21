@@ -15,7 +15,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { OmnirouteConfig } from '../types';
-import { askOmnirouteUsable } from './omniroute';
+import { OmnirouteAttempt, askOmnirouteUsable } from './omniroute';
 import { syntheticFixtureId } from './halftimeMonitor';
 
 const PROGRAM_KEY_PREFIX = '@fictional_program_';
@@ -164,7 +164,8 @@ function extractFixtures(text: string, country: string, dateKey: string): Fictio
 async function fetchCountryFixtures(
   config: OmnirouteConfig,
   country: string,
-  dateKey: string
+  dateKey: string,
+  trace?: OmnirouteAttempt[]
 ): Promise<FictionalMatch[]> {
   try {
     const result = await askOmnirouteUsable(
@@ -178,7 +179,8 @@ async function fetchCountryFixtures(
         'Réponds avec ce JSON exact, sans rien autour :\n' +
         '{"matches": [{"home_team": string, "away_team": string, "competition": string, "kickoff_utc": "YYYY-MM-DDTHH:MM:SSZ"}]}',
       config,
-      (text) => extractFixtures(text, country, dateKey)
+      (text) => extractFixtures(text, country, dateKey),
+      trace
     );
     return result?.value ?? [];
   } catch (error: any) {
@@ -219,6 +221,11 @@ interface StoredProgram {
   byCountry: Record<string, FictionalMatch[]>;
   /** Nombre de tentatives par pays aujourd'hui. */
   attempts: Record<string, number>;
+  /** Ce que les agents ont répondu au dernier pays interrogé — conservé pour
+   * pouvoir montrer POURQUOI un balayage ne ramène rien (refus, prose hors
+   * format, agent sans accès Internet, endpoint injoignable...) au lieu
+   * d'afficher un 0 sans explication. */
+  lastTrace?: { country: string; attempts: OmnirouteAttempt[] };
 }
 
 async function readStoredProgram(date: string): Promise<StoredProgram> {
@@ -255,16 +262,22 @@ function pendingCountries(stored: StoredProgram): string[] {
 
 export interface FictionalProgramStatus {
   matches: number;
-  countriesDone: number;
+  /** Pays interrogés au moins une fois aujourd'hui — l'avancement visible du
+   * balayage, et non le nombre de pays définitivement clos (qui resterait à 0
+   * tant qu'aucun n'a ni livré de match ni épuisé ses essais). */
+  countriesTried: number;
   countriesTotal: number;
+  /** Réponses des agents au dernier pays interrogé, pour diagnostic. */
+  lastTrace?: { country: string; attempts: OmnirouteAttempt[] };
 }
 
 export async function getFictionalProgramStatus(date: string = todayKey()): Promise<FictionalProgramStatus> {
   const stored = await readStoredProgram(date);
   return {
     matches: Object.values(stored.byCountry).reduce((sum, list) => sum + list.length, 0),
-    countriesDone: FICTIONAL_COUNTRIES.length - pendingCountries(stored).length,
+    countriesTried: Object.keys(stored.attempts).length,
     countriesTotal: FICTIONAL_COUNTRIES.length,
+    lastTrace: stored.lastTrace,
   };
 }
 
@@ -292,9 +305,11 @@ export async function ensureFictionalDailyProgram(
   const pending = pendingCountries(stored);
 
   for (const country of pending.slice(0, maxCountriesPerRun)) {
-    const matches = await fetchCountryFixtures(config, country, date);
+    const trace: OmnirouteAttempt[] = [];
+    const matches = await fetchCountryFixtures(config, country, date, trace);
     if (matches.length > 0) stored.byCountry[country] = matches;
     stored.attempts[country] = (stored.attempts[country] ?? 0) + 1;
+    stored.lastTrace = { country, attempts: trace };
   }
 
   if (pending.length > 0) {

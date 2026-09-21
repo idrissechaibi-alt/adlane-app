@@ -318,11 +318,24 @@ export async function askOmnirouteLight(
  * `extract` renvoie null quand la réponse n'apporte rien : on passe alors à
  * l'agent suivant.
  */
+/** Ce qu'un agent a répondu, en clair — pour pouvoir MONTRER pourquoi une
+ * requête n'a rien donné plutôt que d'afficher un 0 muet. */
+export interface OmnirouteAttempt {
+  model: string;
+  outcome: 'exploitable' | 'sans_contenu_utile' | 'erreur';
+  /** Début de la réponse brute, ou message d'erreur. Tronqué : sert à
+   * reconnaître un refus, une prose hors format ou un souci d'accès. */
+  detail: string;
+}
+
+const ATTEMPT_DETAIL_MAX_CHARS = 200;
+
 export async function askOmnirouteUsable<T>(
   systemPrompt: string,
   userPrompt: string,
   config: OmnirouteConfig,
-  extract: (text: string) => T | null
+  extract: (text: string) => T | null,
+  trace?: OmnirouteAttempt[]
 ): Promise<{ value: T; model: string } | null> {
   const models = rankModels(
     config.selectedModel
@@ -332,13 +345,27 @@ export async function askOmnirouteUsable<T>(
       .filter((m) => !NEVER_USE_PATTERN.test(m))
   );
 
+  if (models.length === 0) {
+    trace?.push({ model: '(aucun)', outcome: 'erreur', detail: 'Aucun agent sélectionné dans Paramètres.' });
+    return null;
+  }
+
   for (const model of models) {
     try {
       const result = await callSingleAgent(model, systemPrompt, userPrompt, config);
       const value = extract(result.rawResponse);
-      if (value !== null) return { value, model };
+      if (value !== null) {
+        trace?.push({ model, outcome: 'exploitable', detail: result.rawResponse.slice(0, ATTEMPT_DETAIL_MAX_CHARS) });
+        return { value, model };
+      }
+      trace?.push({
+        model,
+        outcome: 'sans_contenu_utile',
+        detail: (result.rawResponse || '(réponse vide)').slice(0, ATTEMPT_DETAIL_MAX_CHARS),
+      });
       console.warn(`[Omniroute] "${model}" a répondu sans rien d'exploitable, agent suivant.`);
     } catch (error: any) {
+      trace?.push({ model, outcome: 'erreur', detail: String(error?.message ?? error).slice(0, ATTEMPT_DETAIL_MAX_CHARS) });
       console.warn(`[Omniroute] "${model}" a échoué:`, error?.message);
     }
   }
