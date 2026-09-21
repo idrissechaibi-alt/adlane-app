@@ -26,6 +26,7 @@ import { OmnirouteConfig } from '../types';
 import { OmnirouteAttempt, askOmnirouteUsable, attemptsAllFailed } from './omniroute';
 import { syntheticFixtureId } from './halftimeMonitor';
 import { fetchRepoJson } from './gitAutoSync';
+import { mapWithConcurrency } from './concurrency';
 
 const PROGRAM_KEY_PREFIX = '@fictional_program_';
 const CHECKED_KEY_PREFIX = '@fictional_checked_';
@@ -46,6 +47,10 @@ const MAX_COUNTRIES_PER_RUN = 6;
 /** Essais accordés à un pays par passe de balayage : une réponse vide vient
  * plus souvent d'un agent qui n'a pas su chercher que d'un pays sans match. */
 const MAX_ATTEMPTS_PER_COUNTRY = 3;
+/** Pays interrogés simultanément pendant un balayage : assez pour accélérer
+ * nettement (25 candidats à concurrence 6 ~ 4-5x plus vite qu'en séquentiel),
+ * assez peu pour ne pas saturer un serveur Omniroute auto-hébergé. */
+const COUNTRY_SWEEP_CONCURRENCY = 6;
 /** Périodicité de reprise du balayage : toutes les heures, les pays sans match
  * à venir connu sont réinterrogés, pour que le planning suive les annonces de
  * la journée au lieu de figer celle du premier tour. */
@@ -491,9 +496,20 @@ export async function ensureFictionalDailyProgram(
 
   const pending = pendingCountries(stored, now);
 
-  for (const country of pending.slice(0, maxCountriesPerRun)) {
+  // Les pays sont interrogés en PARALLÈLE (bornés à COUNTRY_SWEEP_CONCURRENCY
+  // à la fois) : chaque calendrier est indépendant des autres, rien ne
+  // justifiait de les attendre un par un — c'était l'essentiel du temps
+  // d'attente d'un tour manuel. La concurrence reste bornée pour ne pas
+  // envoyer d'un coup une rafale de requêtes au serveur Omniroute
+  // auto-hébergé, qui l'encaisserait mal.
+  await mapWithConcurrency(pending.slice(0, maxCountriesPerRun), COUNTRY_SWEEP_CONCURRENCY, async (country) => {
     const trace: OmnirouteAttempt[] = [];
-    const matches = await fetchCountryFixtures(config, country, date, trace);
+    let matches: FictionalMatch[] = [];
+    try {
+      matches = await fetchCountryFixtures(config, country, date, trace);
+    } catch (error: any) {
+      console.warn(`[Programme fictif] ${country} a échoué pendant le balayage parallèle:`, error?.message);
+    }
     if (matches.length > 0) {
       // Fusion, jamais remplacement : un match déjà au planning peut être en
       // cours de suivi (checkpoint 20e passé, 60e à venir) — le faire
@@ -512,7 +528,7 @@ export async function ensureFictionalDailyProgram(
       stored.attempts[country] = (stored.attempts[country] ?? 0) + 1;
     }
     stored.lastTrace = { country, attempts: trace };
-  }
+  });
 
   // L'horodatage de la passe doit être enregistré même quand il n'y avait rien
   // à interroger, sinon la prochaine lecture le croit expiré et rouvre une

@@ -89,6 +89,7 @@ import {
 import { sendLocalNotification } from './notifications';
 import { normalizeTeamName, namesLikelyMatch } from './teamNameMatch';
 import { OmnirouteConfig } from '../types';
+import { mapWithConcurrency } from './concurrency';
 
 const CHECKPOINT20_MIN_MINUTE = 18;
 const CHECKPOINT20_MAX_MINUTE = 24;
@@ -99,6 +100,11 @@ const CHECKPOINT60_MAX_MINUTE = 64;
  * Omniroute de quelques secondes, et un tour doit rester court (la boucle de
  * premier plan repasse toutes les 3 minutes). */
 const MAX_FICTIONAL_CHECKS_PER_TICK = 25;
+/** Vérifications fictives en vol simultanément pendant un tour : assez pour
+ * accélérer nettement le bouton play (25 candidats à concurrence 6 ~ 4-5x plus
+ * vite qu'en séquentiel), assez peu pour ne pas saturer le serveur Omniroute
+ * auto-hébergé. */
+const FICTIONAL_CHECK_CONCURRENCY = 6;
 /** En dessous, le rythme observé (corners/cartons par minute) porte trop peu
  * d'information pour extrapoler quoi que ce soit. */
 const MIN_MINUTES_FOR_PACE_PROJECTION = 15;
@@ -703,11 +709,18 @@ async function processRealSlotCheckpoint(
 ): Promise<void> {
   if (candidates.length === 0) return;
 
-  const perMatch: LegWithContext[] = [];
-  for (const { scheduled, live } of candidates) {
-    const best = await bestLegFor(kind, scheduled, live);
-    if (best) perMatch.push(best);
-  }
+  // Chaque match du créneau est indépendant des autres — vérifiés en
+  // parallèle (petit créneau réel, 5 grands championnats, jamais plus d'une
+  // poignée de matchs simultanés : pas besoin de borner la concurrence ici).
+  const perMatchResults = await mapWithConcurrency(candidates, candidates.length, async ({ scheduled, live }) => {
+    try {
+      return await bestLegFor(kind, scheduled, live);
+    } catch (error: any) {
+      console.warn(`[Scan en direct] Vérification réelle de ${scheduled.homeTeam} vs ${scheduled.awayTeam} échouée:`, error?.message);
+      return null;
+    }
+  });
+  const perMatch: LegWithContext[] = perMatchResults.filter((r): r is LegWithContext => r !== null);
   if (perMatch.length === 0) return;
 
   if (slotMatchCount < SLOT_COMBO_THRESHOLD) {
@@ -851,10 +864,15 @@ export async function runInPlayComboTick(liveFixtures: LiveFixture[]): Promise<n
     const checked = await readCheckedCheckpoints();
     const timelines = await readMatchTimelines();
     let timelinesTouched = false;
-    let checksThisTick = 0;
 
+    // Phase 1 — sélection des candidats à interroger ce tour, SANS aucun
+    // appel réseau : juste de la lecture d'état déjà en mémoire (checkpoints
+    // consommés, fenêtre de surveillance, cadence des relevés). Sépare le tri
+    // (rapide) de la vérification (lente) pour pouvoir paralléliser cette
+    // dernière à l'étape suivante.
+    const candidates: FictionalMatch[] = [];
     for (const scheduled of program) {
-      if (checksThisTick >= MAX_FICTIONAL_CHECKS_PER_TICK) break;
+      if (candidates.length >= MAX_FICTIONAL_CHECKS_PER_TICK) break;
 
       const kickoff = Date.parse(scheduled.kickoff_utc);
       if (!Number.isFinite(kickoff)) continue;
@@ -884,80 +902,99 @@ export async function runInPlayComboTick(liveFixtures: LiveFixture[]): Promise<n
         : Infinity;
       if (minutesSinceLastSample < MIN_MINUTES_BETWEEN_SAMPLES) continue;
 
-      checksThisTick++;
-      const live = await fetchOmnirouteMatchStatus(
-        omnirouteConfig, scheduled.homeTeam, scheduled.awayTeam, scheduled.league
-      ).catch(() => null);
-      if (!live) continue; // pas encore commencé, déjà fini, ou introuvable : on retentera
-
-      timeline.push({
-        ts: new Date().toISOString(),
-        minute: live.minute,
-        statusShort: live.statusShort,
-        homeGoals: live.homeGoals,
-        awayGoals: live.awayGoals,
-        shotsOnTargetHome: live.shotsOnTargetHome,
-        shotsOnTargetAway: live.shotsOnTargetAway,
-        cornersTotal: live.cornersTotal,
-        cardsTotal: live.cardsTotal,
-      });
-      timelines[scheduled.fixtureId] = timeline;
-      timelinesTouched = true;
-
-      const kind: 'minute20' | 'minute60' | null =
-        !checkpoint20Done && live.statusShort === '1H' &&
-        live.minute >= CHECKPOINT20_MIN_MINUTE && live.minute <= CHECKPOINT20_MAX_MINUTE
-          ? 'minute20'
-          : !checkpoint60Done && live.statusShort === '2H' &&
-            live.minute >= CHECKPOINT60_MIN_MINUTE && live.minute <= CHECKPOINT60_MAX_MINUTE
-            ? 'minute60'
-            : null;
-
-      if (!kind) {
-        // Pas encore au checkpoint : on continue simplement à surveiller.
-        // Fenêtre dépassée en revanche : elle est perdue, inutile d'y revenir.
-        if (!checkpoint20Done && (live.statusShort === '2H' || live.minute > CHECKPOINT20_MAX_MINUTE)) {
-          checked.add(`${scheduled.fixtureId}-minute20`);
-        }
-        if (!checkpoint60Done && live.statusShort === '2H' && live.minute > CHECKPOINT60_MAX_MINUTE) {
-          checked.add(`${scheduled.fixtureId}-minute60`);
-        }
-        continue;
-      }
-
-      const match: MatchRef = {
-        homeTeam: scheduled.homeTeam,
-        awayTeam: scheduled.awayTeam,
-        league: scheduled.league,
-        leagueId: '', // aucun identifiant de championnat : tout vient d'Omniroute
-      };
-      const preMatchExpectedGoals = await estimateExpectedGoalsViaOmniroute(
-        omnirouteConfig, match.homeTeam, match.awayTeam, match.league
-      ).catch(() => null);
-
-      const currentStats: LiveMatchStats | undefined =
-        live.shotsOnTargetHome != null || live.shotsOnTargetAway != null
-          ? { shotsOnTargetHome: live.shotsOnTargetHome, shotsOnTargetAway: live.shotsOnTargetAway }
-          : undefined;
-      const observedLive = observedFromTimeline(timeline);
-
-      const rawLegs = kind === 'minute20'
-        ? await buildLegs20(match, live.fixtureId, live, preMatchExpectedGoals, currentStats, observedLive)
-        : buildLegs60(live, preMatchExpectedGoals, currentStats);
-
-      const window = kind === 'minute20' ? '20e → pause + match complet' : '60e → fin de match';
-      for (const leg of rawLegs.filter((l) => l.prob >= MIN_LEG_PROB)) {
-        const dedupKey = `${live.fixtureId}-${kind}-${leg.market}`;
-        if (alreadyProposed.has(dedupKey)) continue;
-        const proposal = buildProposalFromItems(kind, [{ leg, fixtureId: live.fixtureId, match, live }], window, false);
-        if (proposal) {
-          fresh.push(proposal);
-          alreadyProposed.add(dedupKey);
-        }
-      }
-
-      checked.add(`${scheduled.fixtureId}-${kind}`);
+      candidates.push(scheduled);
     }
+
+    // Phase 2 — les vérifications sont INDÉPENDANTES les unes des autres :
+    // interrogées en parallèle (bornées à FICTIONAL_CHECK_CONCURRENCY à la
+    // fois) plutôt qu'une par une comme avant, qui pouvait faire durer un
+    // tour manuel plusieurs minutes pour un simple bouton play. Chaque
+    // vérification touche ses propres clés (son propre fixtureId) dans
+    // `checked`/`timelines`/`alreadyProposed` : aucune ne peut écraser le
+    // résultat d'une autre, la parallélisation ne change donc rien au fond,
+    // seulement au temps d'attente.
+    await mapWithConcurrency(candidates, FICTIONAL_CHECK_CONCURRENCY, async (scheduled) => {
+      try {
+        const live = await fetchOmnirouteMatchStatus(
+          omnirouteConfig, scheduled.homeTeam, scheduled.awayTeam, scheduled.league
+        ).catch(() => null);
+        if (!live) return; // pas encore commencé, déjà fini, ou introuvable : on retentera
+
+        const timeline = timelines[scheduled.fixtureId] ?? [];
+        timeline.push({
+          ts: new Date().toISOString(),
+          minute: live.minute,
+          statusShort: live.statusShort,
+          homeGoals: live.homeGoals,
+          awayGoals: live.awayGoals,
+          shotsOnTargetHome: live.shotsOnTargetHome,
+          shotsOnTargetAway: live.shotsOnTargetAway,
+          cornersTotal: live.cornersTotal,
+          cardsTotal: live.cardsTotal,
+        });
+        timelines[scheduled.fixtureId] = timeline;
+        timelinesTouched = true;
+
+        const checkpoint20Done = checked.has(`${scheduled.fixtureId}-minute20`);
+        const checkpoint60Done = checked.has(`${scheduled.fixtureId}-minute60`);
+
+        const kind: 'minute20' | 'minute60' | null =
+          !checkpoint20Done && live.statusShort === '1H' &&
+          live.minute >= CHECKPOINT20_MIN_MINUTE && live.minute <= CHECKPOINT20_MAX_MINUTE
+            ? 'minute20'
+            : !checkpoint60Done && live.statusShort === '2H' &&
+              live.minute >= CHECKPOINT60_MIN_MINUTE && live.minute <= CHECKPOINT60_MAX_MINUTE
+              ? 'minute60'
+              : null;
+
+        if (!kind) {
+          // Pas encore au checkpoint : on continue simplement à surveiller.
+          // Fenêtre dépassée en revanche : elle est perdue, inutile d'y revenir.
+          if (!checkpoint20Done && (live.statusShort === '2H' || live.minute > CHECKPOINT20_MAX_MINUTE)) {
+            checked.add(`${scheduled.fixtureId}-minute20`);
+          }
+          if (!checkpoint60Done && live.statusShort === '2H' && live.minute > CHECKPOINT60_MAX_MINUTE) {
+            checked.add(`${scheduled.fixtureId}-minute60`);
+          }
+          return;
+        }
+
+        const match: MatchRef = {
+          homeTeam: scheduled.homeTeam,
+          awayTeam: scheduled.awayTeam,
+          league: scheduled.league,
+          leagueId: '', // aucun identifiant de championnat : tout vient d'Omniroute
+        };
+        const preMatchExpectedGoals = await estimateExpectedGoalsViaOmniroute(
+          omnirouteConfig, match.homeTeam, match.awayTeam, match.league
+        ).catch(() => null);
+
+        const currentStats: LiveMatchStats | undefined =
+          live.shotsOnTargetHome != null || live.shotsOnTargetAway != null
+            ? { shotsOnTargetHome: live.shotsOnTargetHome, shotsOnTargetAway: live.shotsOnTargetAway }
+            : undefined;
+        const observedLive = observedFromTimeline(timeline);
+
+        const rawLegs = kind === 'minute20'
+          ? await buildLegs20(match, live.fixtureId, live, preMatchExpectedGoals, currentStats, observedLive)
+          : buildLegs60(live, preMatchExpectedGoals, currentStats);
+
+        const window = kind === 'minute20' ? '20e → pause + match complet' : '60e → fin de match';
+        for (const leg of rawLegs.filter((l) => l.prob >= MIN_LEG_PROB)) {
+          const dedupKey = `${live.fixtureId}-${kind}-${leg.market}`;
+          if (alreadyProposed.has(dedupKey)) continue;
+          const proposal = buildProposalFromItems(kind, [{ leg, fixtureId: live.fixtureId, match, live }], window, false);
+          if (proposal) {
+            fresh.push(proposal);
+            alreadyProposed.add(dedupKey);
+          }
+        }
+
+        checked.add(`${scheduled.fixtureId}-${kind}`);
+      } catch (error: any) {
+        console.warn(`[Scan en direct] Vérification fictive de ${scheduled.homeTeam} vs ${scheduled.awayTeam} échouée:`, error?.message);
+      }
+    });
 
     await writeCheckedCheckpoints(checked);
     if (timelinesTouched) await writeMatchTimelines(timelines);
