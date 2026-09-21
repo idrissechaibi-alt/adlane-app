@@ -330,20 +330,48 @@ export interface OmnirouteAttempt {
 
 const ATTEMPT_DETAIL_MAX_CHARS = 200;
 
+/**
+ * Agents branchés sur un moteur de recherche ou un outil de navigation,
+ * reconnus à leur nom (firecrawl/web, serper-search/news, tavily, perplexity,
+ * brave, exa...). Eux seuls peuvent répondre à une question portant sur des
+ * faits du jour ; un modèle de langage seul répondra honnêtement qu'il n'a pas
+ * accès au calendrier — réponse correcte et parfaitement inutile ici.
+ */
+const SEARCH_CAPABLE_PATTERN = /search|web|news|crawl|perplexity|tavily|serper|brave|exa|browse|sonar/i;
+
+/**
+ * Trace entièrement faite d'erreurs : la question n'a jamais vraiment été
+ * posée (fournisseurs coupés, endpoint injoignable). À distinguer d'un "aucun
+ * résultat" — ne pas confondre les deux évite de conclure "pas de match ce
+ * jour-là" quand c'est l'infrastructure qui est tombée.
+ */
+export function attemptsAllFailed(attempts: OmnirouteAttempt[]): boolean {
+  return attempts.length > 0 && attempts.every((a) => a.outcome === 'erreur');
+}
+
 export async function askOmnirouteUsable<T>(
   systemPrompt: string,
   userPrompt: string,
   config: OmnirouteConfig,
   extract: (text: string) => T | null,
-  trace?: OmnirouteAttempt[]
+  trace?: OmnirouteAttempt[],
+  preferSearchCapable: boolean = false
 ): Promise<{ value: T; model: string } | null> {
-  const models = rankModels(
-    config.selectedModel
-      .split(/[,\n]/)
-      .map((m) => m.trim())
-      .filter(Boolean)
-      .filter((m) => !NEVER_USE_PATTERN.test(m))
-  );
+  const selected = config.selectedModel
+    .split(/[,\n]/)
+    .map((m) => m.trim())
+    .filter(Boolean)
+    .filter((m) => !NEVER_USE_PATTERN.test(m));
+
+  // Pour une question portant sur des faits du jour, les agents capables de
+  // chercher passent devant, quelle que soit la qualité du modèle : un très
+  // bon modèle sans accès au web ne peut que répondre à côté.
+  const models = preferSearchCapable
+    ? [
+        ...rankModels(selected.filter((m) => SEARCH_CAPABLE_PATTERN.test(m))),
+        ...rankModels(selected.filter((m) => !SEARCH_CAPABLE_PATTERN.test(m))),
+      ]
+    : rankModels(selected);
 
   if (models.length === 0) {
     trace?.push({ model: '(aucun)', outcome: 'erreur', detail: 'Aucun agent sélectionné dans Paramètres.' });

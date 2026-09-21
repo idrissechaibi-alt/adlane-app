@@ -175,7 +175,9 @@ async function fetchFinalResultsViaOmniroute(
           htHome: typeof parsed.ht_home_goals === 'number' ? parsed.ht_home_goals : 0,
           htAway: typeof parsed.ht_away_goals === 'number' ? parsed.ht_away_goals : 0,
         };
-      }
+      },
+      undefined,
+      true // score final : réservé aux agents capables de chercher
     ).catch((error: any) => {
       console.warn('[Bilan] Résultat final Omniroute échoué:', error?.message);
       return null;

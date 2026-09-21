@@ -15,7 +15,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { OmnirouteConfig } from '../types';
-import { OmnirouteAttempt, askOmnirouteUsable } from './omniroute';
+import { OmnirouteAttempt, askOmnirouteUsable, attemptsAllFailed } from './omniroute';
 import { syntheticFixtureId } from './halftimeMonitor';
 
 const PROGRAM_KEY_PREFIX = '@fictional_program_';
@@ -180,7 +180,8 @@ async function fetchCountryFixtures(
         '{"matches": [{"home_team": string, "away_team": string, "competition": string, "kickoff_utc": "YYYY-MM-DDTHH:MM:SSZ"}]}',
       config,
       (text) => extractFixtures(text, country, dateKey),
-      trace
+      trace,
+      true // calendrier du jour : seuls les agents capables de chercher peuvent répondre
     );
     return result?.value ?? [];
   } catch (error: any) {
@@ -308,7 +309,15 @@ export async function ensureFictionalDailyProgram(
     const trace: OmnirouteAttempt[] = [];
     const matches = await fetchCountryFixtures(config, country, date, trace);
     if (matches.length > 0) stored.byCountry[country] = matches;
-    stored.attempts[country] = (stored.attempts[country] ?? 0) + 1;
+    // Une tentative n'est comptée que si un agent a VRAIMENT répondu. Quand
+    // tous échouent (fournisseurs de recherche coupés côté Omniroute,
+    // endpoint injoignable), la question n'a jamais été posée : compter ça
+    // comme un essai épuiserait les trois tentatives de chaque pays sur une
+    // panne passagère et condamnerait la journée sans qu'aucun calendrier
+    // n'ait été consulté.
+    if (!attemptsAllFailed(trace)) {
+      stored.attempts[country] = (stored.attempts[country] ?? 0) + 1;
+    }
     stored.lastTrace = { country, attempts: trace };
   }
 

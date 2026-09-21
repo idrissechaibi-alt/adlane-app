@@ -171,7 +171,9 @@ export async function fetchOmnirouteAllLiveFixtures(config: OmnirouteConfig): Pr
       }
       // Liste vide = agent incapable de chercher : on tente le suivant.
       return fixtures.length > 0 ? fixtures : null;
-    }
+    },
+    undefined,
+    true
   ).catch((error: any) => {
     console.warn('[Découverte live Omniroute] Échec:', error?.message);
     return null;
@@ -269,7 +271,9 @@ export async function fetchOmnirouteMatchStatus(
           cardsTotal: numberOrUndefined(parsed.cards_total),
         },
       };
-    }
+    },
+    undefined,
+    true // score en direct : réservé aux agents capables de chercher
   ).catch((error: any) => {
     console.warn('[Statut live Omniroute] Échec:', error?.message);
     return null;

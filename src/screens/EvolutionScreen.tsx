@@ -102,6 +102,39 @@ export default function EvolutionScreen() {
     }
   }, [isFocused]);
 
+  /**
+   * Résume en une phrase ce qui a bloqué le dernier pays interrogé, plutôt que
+   * d'empiler une ligne par agent : ce qui compte, c'est de savoir S'IL FAUT
+   * agir côté Omniroute (fournisseurs de recherche coupés, aucun agent
+   * capable de naviguer) ou simplement attendre.
+   */
+  const summarizeTrace = (trace: { country: string; attempts: Array<{ model: string; outcome: string; detail: string }> }) => {
+    const { country, attempts } = trace;
+    if (attempts.length === 0) return `Dernier pays (${country}) : aucun agent interrogé.`;
+
+    const errors = attempts.filter((a) => a.outcome === 'erreur');
+    const blocked = errors.filter((a) => /circuit breaker|503/i.test(a.detail));
+
+    if (blocked.length > 0 && errors.length === attempts.length) {
+      const providers = Array.from(new Set(blocked.map((a) => a.model.split('/')[0]))).join(', ');
+      return (
+        `Dernier pays (${country}) : AUCUN agent de recherche disponible — ${providers} renvoient ` +
+        `"circuit breaker open" côté Omniroute (clés de provider à vérifier). Les agents sans accès web ` +
+        `ne peuvent pas lire un calendrier.`
+      );
+    }
+
+    const searched = attempts.filter((a) => a.outcome !== 'erreur');
+    if (searched.length > 0 && attempts.every((a) => a.outcome !== 'exploitable')) {
+      return (
+        `Dernier pays (${country}) : ${searched.length} agent(s) ont répondu sans calendrier exploitable` +
+        (blocked.length > 0 ? `, et ${blocked.length} agent(s) de recherche sont coupés (circuit breaker).` : '.')
+      );
+    }
+
+    return `Dernier pays (${country}) : ${attempts[attempts.length - 1].model} → ${attempts[attempts.length - 1].outcome}.`;
+  };
+
   const LIVE_FIXTURES_SOURCE_LABEL: Record<string, string> = {
     api_football: 'API-Football',
     omniroute: 'Omniroute (découverte autonome)',
@@ -136,14 +169,7 @@ export default function EvolutionScreen() {
         `Omniroute : ${diag.omnirouteConfigured ? 'configuré' : 'NON CONFIGURÉ (Paramètres → endpoint + agents)'}.\n` +
           `Programme fictif du jour (Omniroute) : ${diag.fictionalProgramSize} match(s) — ` +
           `${diag.fictionalCountriesTried}/${diag.fictionalCountriesTotal} pays interrogés.\n` +
-          (diag.fictionalLastTrace
-            ? `Dernier pays (${diag.fictionalLastTrace.country}) : ` +
-              (diag.fictionalLastTrace.attempts.length === 0
-                ? 'aucun agent interrogé.\n'
-                : diag.fictionalLastTrace.attempts
-                    .map((a) => `${a.model} → ${a.outcome} : ${a.detail}`)
-                    .join('\n') + '\n')
-            : '') +
+          (diag.fictionalLastTrace ? `${summarizeTrace(diag.fictionalLastTrace)}\n` : '') +
           `Univers du jour (API) : ${diag.universeSize} match(s) suivis.\n` +
           `Relevé live : ${diag.liveFixturesFound} match(s) en direct — source : ${LIVE_FIXTURES_SOURCE_LABEL[diag.liveFixturesSource] ?? diag.liveFixturesSource}.\n` +
           `Marqueurs : ${diag.liveMarkerObserved} observé(s), ${diag.liveMarkerClosed} clôturé(s).\n` +
