@@ -1,16 +1,21 @@
-// Programme du jour de la boucle FICTIVE — 100 % Omniroute, zéro API payante.
+// Planning du jour de la boucle FICTIVE — 100 % Omniroute, zéro API payante.
 //
-// Une seule construction par jour (au premier tour après minuit) : Omniroute
-// balaie pays par pays le calendrier du jour, TOUTES divisions confondues
-// (élite, D2, D3..., et catégories jeunes U19/U20/U21/réserves), et renvoie
-// les horaires de coup d'envoi. On en retient MAX_FICTIONAL_MATCHES_PER_DAY,
-// répartis équitablement entre pays plutôt que concentrés sur les deux ou
-// trois plus fournis.
+// Omniroute balaie pays par pays le calendrier du jour, TOUTES divisions
+// confondues (élite, D2, D3..., et catégories jeunes U19/U20/U21/réserves), et
+// renvoie les horaires de coup d'envoi. On en retient
+// MAX_FICTIONAL_MATCHES_PER_DAY, répartis équitablement entre pays plutôt que
+// concentrés sur les deux ou trois plus fournis.
+//
+// Entretien AUTOMATIQUE, sans rien à lancer à la main : le balayage avance de
+// quelques pays à chaque tour de fond, et toute une passe est rouverte chaque
+// heure sur les pays dont aucun match à venir n'est connu. Un match annoncé en
+// cours de journée finit donc par entrer au planning, et une panne d'agents le
+// matin ne condamne pas la soirée.
 //
 // À quoi sert l'horaire : connaître le coup d'envoi suffit à savoir QUAND
 // aller regarder un match (20e puis 60e minute) — plus besoin d'un relevé
 // "tous les matchs en direct maintenant" côté fictif, ni donc d'API-Football.
-// Le programme est la colonne vertébrale du pipeline fictif : sans lui, la
+// Le planning est la colonne vertébrale du pipeline fictif : sans lui, la
 // boucle n'a aucun match à suivre.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -30,9 +35,13 @@ const MAX_MATCHES_PER_COUNTRY = 60;
  * (plusieurs si les premiers ne ramènent rien), donc un tour doit rester
  * court — le programme se complète sur les tours suivants. */
 const MAX_COUNTRIES_PER_RUN = 6;
-/** Essais accordés à un pays dans la journée : une réponse vide vient plus
- * souvent d'un agent qui n'a pas su chercher que d'un pays sans match. */
+/** Essais accordés à un pays par passe de balayage : une réponse vide vient
+ * plus souvent d'un agent qui n'a pas su chercher que d'un pays sans match. */
 const MAX_ATTEMPTS_PER_COUNTRY = 3;
+/** Périodicité de reprise du balayage : toutes les heures, les pays sans match
+ * à venir connu sont réinterrogés, pour que le planning suive les annonces de
+ * la journée au lieu de figer celle du premier tour. */
+const SWEEP_INTERVAL_MS = 60 * 60 * 1000;
 
 /**
  * Pays balayés, toutes divisions et catégories d'âge confondues. Couverture
@@ -227,6 +236,18 @@ interface StoredProgram {
    * format, agent sans accès Internet, endpoint injoignable...) au lieu
    * d'afficher un 0 sans explication. */
   lastTrace?: { country: string; attempts: OmnirouteAttempt[] };
+  /** Début de la passe de balayage en cours — voir SWEEP_INTERVAL_MS. */
+  sweepStartedAt?: string;
+}
+
+/**
+ * Un pays n'est plus interrogé tant qu'on lui connaît un match À VENIR : son
+ * planning est déjà fait. Dès que ses matchs connus sont tous joués, il
+ * redevient candidat — c'est ce qui fait que le programme continue de se
+ * remplir au fil de la journée au lieu de figer la photo du matin.
+ */
+function hasUpcomingMatch(stored: StoredProgram, country: string, now: number): boolean {
+  return (stored.byCountry[country] ?? []).some((m) => Date.parse(m.kickoff_utc) > now);
 }
 
 async function readStoredProgram(date: string): Promise<StoredProgram> {
@@ -254,9 +275,9 @@ async function readStoredProgram(date: string): Promise<StoredProgram> {
  * d'un pays réellement sans match ce jour-là — le marquer définitivement fait
  * du premier coup suffisait à condamner la journée entière.
  */
-function pendingCountries(stored: StoredProgram): string[] {
+function pendingCountries(stored: StoredProgram, now: number = Date.now()): string[] {
   const eligible = FICTIONAL_COUNTRIES.filter(
-    (c) => (stored.byCountry[c]?.length ?? 0) === 0 && (stored.attempts[c] ?? 0) < MAX_ATTEMPTS_PER_COUNTRY
+    (c) => !hasUpcomingMatch(stored, c, now) && (stored.attempts[c] ?? 0) < MAX_ATTEMPTS_PER_COUNTRY
   );
   return eligible.sort((a, b) => (stored.attempts[a] ?? 0) - (stored.attempts[b] ?? 0));
 }
@@ -296,19 +317,21 @@ export async function getFictionalProgramStatus(date: string = todayKey()): Prom
 }
 
 /**
- * Construit (ou complète) le programme fictif du jour, puis renvoie la
- * sélection courante.
+ * Construit, complète et RAFRAÎCHIT le planning du jour, puis renvoie la
+ * sélection courante. Appelée à chaque tour de fond : il n'y a rien à lancer
+ * à la main, le planning se tient à jour tout seul.
  *
  * Construction INCRÉMENTALE : quelques pays par tour seulement. Balayer les
- * 20 pays d'un coup, c'est 20 requêtes d'agent à la suite — plusieurs minutes
+ * 60 pays d'un coup, c'est 60 requêtes d'agent à la suite — plusieurs minutes
  * pendant lesquelles le tour entier est bloqué (et l'utilisateur qui vient
- * d'appuyer sur play attend devant un écran figé). Le programme se remplit
- * donc sur les premiers tours de la journée, et devient exploitable dès le
- * premier pays qui répond.
+ * d'appuyer sur play attend devant un écran figé). Le planning se remplit
+ * donc sur les premiers tours, et devient exploitable dès le premier pays qui
+ * répond.
  *
- * Un pays interrogé est marqué comme fait même s'il n'a rien donné : sans ça,
- * les pays sans matchs du jour seraient réinterrogés indéfiniment et les
- * suivants jamais atteints.
+ * Rafraîchissement HORAIRE : une fois par heure, les pays sans match à venir
+ * connu repassent dans la file. C'est ce qui fait qu'un match annoncé en cours
+ * de journée finit par entrer au planning, et qu'une panne d'agents à 8h ne
+ * condamne pas la soirée.
  */
 export async function ensureFictionalDailyProgram(
   config: OmnirouteConfig,
@@ -316,12 +339,36 @@ export async function ensureFictionalDailyProgram(
   maxCountriesPerRun: number = MAX_COUNTRIES_PER_RUN
 ): Promise<FictionalMatch[]> {
   const stored = await readStoredProgram(date);
-  const pending = pendingCountries(stored);
+  const now = Date.now();
+
+  // Passe horaire : toutes les heures, on rend de nouveau interrogeables les
+  // pays dont on ne connaît aucun match à venir (jamais répondu, agents
+  // momentanément coupés, ou tous leurs matchs déjà joués). Sans cette
+  // relance, le planning resterait figé sur la photo prise au premier tour de
+  // la journée, et une panne passagère des agents condamnerait un pays
+  // jusqu'au lendemain.
+  const sweepAge = stored.sweepStartedAt ? now - Date.parse(stored.sweepStartedAt) : Infinity;
+  const sweepOpened = !Number.isFinite(sweepAge) || sweepAge >= SWEEP_INTERVAL_MS;
+  if (sweepOpened) {
+    stored.sweepStartedAt = new Date(now).toISOString();
+    for (const country of FICTIONAL_COUNTRIES) {
+      if (!hasUpcomingMatch(stored, country, now)) delete stored.attempts[country];
+    }
+  }
+
+  const pending = pendingCountries(stored, now);
 
   for (const country of pending.slice(0, maxCountriesPerRun)) {
     const trace: OmnirouteAttempt[] = [];
     const matches = await fetchCountryFixtures(config, country, date, trace);
-    if (matches.length > 0) stored.byCountry[country] = matches;
+    if (matches.length > 0) {
+      // Fusion, jamais remplacement : un match déjà au planning peut être en
+      // cours de suivi (checkpoint 20e passé, 60e à venir) — le faire
+      // disparaître d'une réponse à l'autre interromprait son suivi.
+      const merged = new Map((stored.byCountry[country] ?? []).map((m) => [m.fixtureId, m]));
+      for (const match of matches) if (!merged.has(match.fixtureId)) merged.set(match.fixtureId, match);
+      stored.byCountry[country] = [...merged.values()];
+    }
     // Une tentative n'est comptée que si un agent a VRAIMENT répondu. Quand
     // tous échouent (fournisseurs de recherche coupés côté Omniroute,
     // endpoint injoignable), la question n'a jamais été posée : compter ça
@@ -334,7 +381,10 @@ export async function ensureFictionalDailyProgram(
     stored.lastTrace = { country, attempts: trace };
   }
 
-  if (pending.length > 0) {
+  // L'horodatage de la passe doit être enregistré même quand il n'y avait rien
+  // à interroger, sinon la prochaine lecture le croit expiré et rouvre une
+  // passe à chaque tour au lieu d'une par heure.
+  if (pending.length > 0 || sweepOpened) {
     await AsyncStorage.setItem(programKey(date), JSON.stringify(stored));
   }
 
