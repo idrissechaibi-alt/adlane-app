@@ -305,6 +305,48 @@ export async function askOmnirouteLight(
 }
 
 /**
+ * Comme askOmnirouteLight, mais la ronde continue tant qu'aucun agent n'a
+ * renvoyé un contenu EXPLOITABLE — pas seulement un agent qui n'a pas planté.
+ *
+ * Indispensable pour les requêtes de collecte de données réelles (calendrier
+ * du jour, score en direct) : un agent dépourvu d'outil de navigation répond
+ * correctement "je n'ai rien trouvé" — une réponse valide, non fautive, mais
+ * vide. askOmnirouteLight s'arrêtait là et renvoyait ce vide, si bien qu'un
+ * seul agent sans outils en tête de ronde suffisait à rendre muets TOUS les
+ * agents capables de scraper placés derrière lui.
+ *
+ * `extract` renvoie null quand la réponse n'apporte rien : on passe alors à
+ * l'agent suivant.
+ */
+export async function askOmnirouteUsable<T>(
+  systemPrompt: string,
+  userPrompt: string,
+  config: OmnirouteConfig,
+  extract: (text: string) => T | null
+): Promise<{ value: T; model: string } | null> {
+  const models = rankModels(
+    config.selectedModel
+      .split(/[,\n]/)
+      .map((m) => m.trim())
+      .filter(Boolean)
+      .filter((m) => !NEVER_USE_PATTERN.test(m))
+  );
+
+  for (const model of models) {
+    try {
+      const result = await callSingleAgent(model, systemPrompt, userPrompt, config);
+      const value = extract(result.rawResponse);
+      if (value !== null) return { value, model };
+      console.warn(`[Omniroute] "${model}" a répondu sans rien d'exploitable, agent suivant.`);
+    } catch (error: any) {
+      console.warn(`[Omniroute] "${model}" a échoué:`, error?.message);
+    }
+  }
+
+  return null;
+}
+
+/**
  * Envoie une requête d'analyse à Omniroute. Système de "ronde" : les modèles
  * configurés dans config.selectedModel sont essayés UN PAR UN, dans l'ordre
  * de priorité (meilleurs modèles connus en premier), en s'arrêtant au premier

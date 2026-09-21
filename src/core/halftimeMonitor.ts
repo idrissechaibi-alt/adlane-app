@@ -4,7 +4,7 @@
 // retiré (remplacé par le scan unifié 20e/60e minute).
 
 import { fetchWithTimeout } from './httpTimeout';
-import { askOmnirouteLight } from './omniroute';
+import { askOmnirouteLight, askOmnirouteUsable } from './omniroute';
 import { OmnirouteConfig } from '../types';
 
 export interface LiveFixture {
@@ -126,9 +126,7 @@ const OMNIROUTE_LIVE_STATUS_SET = new Set(['1H', 'HT', '2H']);
  * jamais les vrais fixtureId API-Football.
  */
 export async function fetchOmnirouteAllLiveFixtures(config: OmnirouteConfig): Promise<LiveFixture[]> {
-  let result: { text: string; model: string } | null;
-  try {
-    result = await askOmnirouteLight(
+  const result = await askOmnirouteUsable<LiveFixture[]>(
       'Tu es un outil de lecture de scores de football EN DIRECT, comme la page d\'accueil de Flashscore ou ' +
         "Sofascore. Réponds UNIQUEMENT par un JSON strict, sans texte autour. N'INVENTE RIEN : ne liste QUE des " +
         'matchs que tu peux confirmer être actuellement en cours sur une source de score en direct fiable. Si tu ' +
@@ -140,44 +138,46 @@ export async function fetchOmnirouteAllLiveFixtures(config: OmnirouteConfig): Pr
         '{"matches": [{"home_team": string, "away_team": string, "competition": string, ' +
         '"status": "1H"|"HT"|"2H", "minute": number, "home_goals": number, "away_goals": number}]}\n' +
         'Tableau vide si tu ne trouves aucun match en cours confirmé.',
-      config
-    );
-  } catch (error: any) {
-    console.warn('[Découverte live Omniroute] Échec:', error.message);
-    return [];
-  }
-  if (!result) return [];
+    config,
+    (text) => {
+      let parsed: any;
+      try {
+        const jsonMatch = text.match(/[[{][\s\S]*[\]}]/);
+        parsed = JSON.parse(jsonMatch ? jsonMatch[0] : text);
+      } catch {
+        return null;
+      }
 
-  let parsed: any;
-  try {
-    const jsonMatch = result.text.match(/\{[\s\S]*\}/);
-    parsed = JSON.parse(jsonMatch ? jsonMatch[0] : result.text);
-  } catch {
-    return [];
-  }
+      const rawMatches: any[] = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.matches) ? parsed.matches : [];
+      const dateKey = new Date().toISOString().split('T')[0];
 
-  const rawMatches: any[] = Array.isArray(parsed.matches) ? parsed.matches : [];
-  const dateKey = new Date().toISOString().split('T')[0];
+      const fixtures: LiveFixture[] = [];
+      for (const m of rawMatches.slice(0, MAX_OMNIROUTE_DISCOVERED_LIVE_FIXTURES)) {
+        const homeTeam = typeof m?.home_team === 'string' ? m.home_team.trim() : '';
+        const awayTeam = typeof m?.away_team === 'string' ? m.away_team.trim() : '';
+        if (!homeTeam || !awayTeam) continue;
+        if (!OMNIROUTE_LIVE_STATUS_SET.has(m.status)) continue;
 
-  const fixtures: LiveFixture[] = [];
-  for (const m of rawMatches.slice(0, MAX_OMNIROUTE_DISCOVERED_LIVE_FIXTURES)) {
-    const homeTeam = typeof m.home_team === 'string' ? m.home_team.trim() : '';
-    const awayTeam = typeof m.away_team === 'string' ? m.away_team.trim() : '';
-    if (!homeTeam || !awayTeam) continue;
-    if (!OMNIROUTE_LIVE_STATUS_SET.has(m.status)) continue;
+        fixtures.push({
+          statusShort: m.status,
+          homeTeam,
+          awayTeam,
+          homeGoals: typeof m.home_goals === 'number' && Number.isFinite(m.home_goals) ? m.home_goals : 0,
+          awayGoals: typeof m.away_goals === 'number' && Number.isFinite(m.away_goals) ? m.away_goals : 0,
+          fixtureId: syntheticFixtureId(homeTeam, awayTeam, dateKey),
+          minute: typeof m.minute === 'number' && Number.isFinite(m.minute) ? m.minute : 0,
+          league: typeof m.competition === 'string' && m.competition.trim() ? m.competition.trim() : undefined,
+        });
+      }
+      // Liste vide = agent incapable de chercher : on tente le suivant.
+      return fixtures.length > 0 ? fixtures : null;
+    }
+  ).catch((error: any) => {
+    console.warn('[Découverte live Omniroute] Échec:', error?.message);
+    return null;
+  });
 
-    fixtures.push({
-      statusShort: m.status,
-      homeTeam,
-      awayTeam,
-      homeGoals: typeof m.home_goals === 'number' && Number.isFinite(m.home_goals) ? m.home_goals : 0,
-      awayGoals: typeof m.away_goals === 'number' && Number.isFinite(m.away_goals) ? m.away_goals : 0,
-      fixtureId: syntheticFixtureId(homeTeam, awayTeam, dateKey),
-      minute: typeof m.minute === 'number' && Number.isFinite(m.minute) ? m.minute : 0,
-      league: typeof m.competition === 'string' && m.competition.trim() ? m.competition.trim() : undefined,
-    });
-  }
-  return fixtures;
+  return result?.value ?? [];
 }
 
 const OMNIROUTE_MATCH_STATUS_MAP: Record<string, string> = { '1H': '1H', HT: 'HT', '2H': '2H' };
@@ -218,9 +218,12 @@ export async function fetchOmnirouteMatchStatus(
   awayTeam: string,
   league: string
 ): Promise<LiveFixtureDetail | null> {
-  let result: { text: string; model: string } | null;
-  try {
-    result = await askOmnirouteLight(
+  // La ronde ne s'arrête que sur une réponse TRANCHÉE. "not_found" veut dire
+  // que l'agent n'a pas su chercher : on passe au suivant, qui a peut-être
+  // les outils pour. "not_started"/"finished" sont au contraire des réponses
+  // fermes (enveloppe non nulle, contenu nul) : inutile d'interroger la suite
+  // de la ronde pour se l'entendre redire.
+  const result = await askOmnirouteUsable<{ fixture: LiveFixtureDetail | null }>(
       'Tu es un outil de lecture de score de football EN DIRECT. Réponds UNIQUEMENT par un JSON strict, ' +
         "sans texte autour. N'invente RIEN : si tu ne trouves pas ce match sur une source de score en direct " +
         'fiable (Sofascore, Flashscore, l\'API du diffuseur...), réponds avec status "not_found" ; si seul le ' +
@@ -233,40 +236,44 @@ export async function fetchOmnirouteMatchStatus(
         '"home_goals": number|null, "away_goals": number|null, ' +
         '"shots_on_target_home": number|null, "shots_on_target_away": number|null, ' +
         '"corners_total": number|null, "cards_total": number|null}',
-      config
-    );
-  } catch (error: any) {
-    console.warn('[Statut live Omniroute] Échec:', error.message);
+    config,
+    (text) => {
+      let parsed: any;
+      try {
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        parsed = JSON.parse(jsonMatch ? jsonMatch[0] : text);
+      } catch {
+        return null;
+      }
+
+      if (parsed?.status === 'not_found' || !parsed?.status) return null; // agent suivant
+      const statusShort = OMNIROUTE_MATCH_STATUS_MAP[parsed.status];
+      if (!statusShort) return { fixture: null }; // not_started / finished : réponse ferme
+
+      const numberOrUndefined = (v: unknown): number | undefined =>
+        typeof v === 'number' && Number.isFinite(v) ? v : undefined;
+
+      return {
+        fixture: {
+          statusShort,
+          homeTeam,
+          awayTeam,
+          homeGoals: numberOrUndefined(parsed.home_goals) ?? 0,
+          awayGoals: numberOrUndefined(parsed.away_goals) ?? 0,
+          fixtureId: syntheticFixtureId(homeTeam, awayTeam, new Date().toISOString().split('T')[0]),
+          minute: numberOrUndefined(parsed.minute) ?? 0,
+          league,
+          shotsOnTargetHome: numberOrUndefined(parsed.shots_on_target_home),
+          shotsOnTargetAway: numberOrUndefined(parsed.shots_on_target_away),
+          cornersTotal: numberOrUndefined(parsed.corners_total),
+          cardsTotal: numberOrUndefined(parsed.cards_total),
+        },
+      };
+    }
+  ).catch((error: any) => {
+    console.warn('[Statut live Omniroute] Échec:', error?.message);
     return null;
-  }
-  if (!result) return null;
+  });
 
-  let parsed: any;
-  try {
-    const jsonMatch = result.text.match(/\{[\s\S]*\}/);
-    parsed = JSON.parse(jsonMatch ? jsonMatch[0] : result.text);
-  } catch {
-    return null;
-  }
-
-  const statusShort = OMNIROUTE_MATCH_STATUS_MAP[parsed.status];
-  if (!statusShort) return null; // not_started / finished / not_found : rien à observer maintenant
-
-  const numberOrUndefined = (v: unknown): number | undefined =>
-    typeof v === 'number' && Number.isFinite(v) ? v : undefined;
-
-  return {
-    statusShort,
-    homeTeam,
-    awayTeam,
-    homeGoals: numberOrUndefined(parsed.home_goals) ?? 0,
-    awayGoals: numberOrUndefined(parsed.away_goals) ?? 0,
-    fixtureId: syntheticFixtureId(homeTeam, awayTeam, new Date().toISOString().split('T')[0]),
-    minute: numberOrUndefined(parsed.minute) ?? 0,
-    league,
-    shotsOnTargetHome: numberOrUndefined(parsed.shots_on_target_home),
-    shotsOnTargetAway: numberOrUndefined(parsed.shots_on_target_away),
-    cornersTotal: numberOrUndefined(parsed.corners_total),
-    cardsTotal: numberOrUndefined(parsed.cards_total),
-  };
+  return result?.value.fixture ?? null;
 }

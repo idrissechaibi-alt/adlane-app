@@ -106,7 +106,8 @@ export default function EvolutionScreen() {
       Alert.alert(
         'Scan terminé',
         `Omniroute : ${diag.omnirouteConfigured ? 'configuré' : 'NON CONFIGURÉ (Paramètres → endpoint + agents)'}.\n` +
-          `Programme fictif du jour (Omniroute) : ${diag.fictionalProgramSize} match(s).\n` +
+          `Programme fictif du jour (Omniroute) : ${diag.fictionalProgramSize} match(s) — ` +
+          `${diag.fictionalCountriesDone}/${diag.fictionalCountriesTotal} pays balayés.\n` +
           `Univers du jour (API) : ${diag.universeSize} match(s) suivis.\n` +
           `Relevé live : ${diag.liveFixturesFound} match(s) en direct — source : ${LIVE_FIXTURES_SOURCE_LABEL[diag.liveFixturesSource] ?? diag.liveFixturesSource}.\n` +
           `Marqueurs : ${diag.liveMarkerObserved} observé(s), ${diag.liveMarkerClosed} clôturé(s).\n` +

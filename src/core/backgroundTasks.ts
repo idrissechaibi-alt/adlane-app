@@ -11,7 +11,7 @@ import * as TaskManager from 'expo-task-manager';
 import { getAPIConfig } from '../api/multiAPIManager';
 import { spendBudget } from './requestBudget';
 import { ensureDailyUniverse } from './matchUniverse';
-import { ensureFictionalDailyProgram } from './fictionalProgram';
+import { ensureFictionalDailyProgram, getFictionalProgramStatus } from './fictionalProgram';
 import { runLiveMarkerTick } from './liveMarkers';
 import { fetchLiveFixtures, fetchOmnirouteAllLiveFixtures, LiveFixture } from './halftimeMonitor';
 import { consolidateLearning } from './autoLearn';
@@ -84,6 +84,9 @@ export interface AutoLearnTickDiagnostics {
   omnirouteConfigured: boolean;
   /** Matchs du programme fictif du jour (Omniroute seul). */
   fictionalProgramSize: number;
+  /** Avancement du balayage pays par pays (il s'étale sur plusieurs tours). */
+  fictionalCountriesDone: number;
+  fictionalCountriesTotal: number;
   liveFixturesFound: number;
   liveFixturesSource: SharedLiveFixturesResult['source'];
   liveMarkerObserved: number;
@@ -131,12 +134,17 @@ export async function runAutoLearnTick(): Promise<AutoLearnTickDiagnostics> {
   // quand : aucune API n'intervient.
   let fictionalProgramSize = 0;
   let omnirouteConfigured = false;
+  let fictionalCountriesDone = 0;
+  let fictionalCountriesTotal = 0;
   try {
     const omnirouteConfig = await loadOmnirouteConfig();
     omnirouteConfigured = Boolean(omnirouteConfig);
     if (omnirouteConfig) {
       const program = await ensureFictionalDailyProgram(omnirouteConfig);
       fictionalProgramSize = program.length;
+      const status = await getFictionalProgramStatus();
+      fictionalCountriesDone = status.countriesDone;
+      fictionalCountriesTotal = status.countriesTotal;
     }
   } catch (error: any) {
     console.warn('[Tâche de fond] Programme fictif du jour indisponible:', error.message);
@@ -205,6 +213,8 @@ export async function runAutoLearnTick(): Promise<AutoLearnTickDiagnostics> {
     universeSize,
     omnirouteConfigured,
     fictionalProgramSize,
+    fictionalCountriesDone,
+    fictionalCountriesTotal,
     liveFixturesFound: liveFixtures.length,
     liveFixturesSource: shared.source,
     liveMarkerObserved,

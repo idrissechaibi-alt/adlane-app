@@ -15,7 +15,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { OmnirouteConfig } from '../types';
-import { askOmnirouteLight } from './omniroute';
+import { askOmnirouteUsable } from './omniroute';
 import { syntheticFixtureId } from './halftimeMonitor';
 
 const PROGRAM_KEY_PREFIX = '@fictional_program_';
@@ -26,6 +26,10 @@ export const MAX_FICTIONAL_MATCHES_PER_DAY = 250;
 /** Garde-fou par pays : au-delà, la réponse est probablement bavarde plutôt
  * que réellement exhaustive — on tronque sans bloquer. */
 const MAX_MATCHES_PER_COUNTRY = 60;
+/** Pays balayés par tour : chaque pays coûte au moins une requête d'agent
+ * (plusieurs si les premiers ne ramènent rien), donc un tour doit rester
+ * court — le programme se complète sur les tours suivants. */
+const MAX_COUNTRIES_PER_RUN = 4;
 
 /** 20 pays européens, toutes leurs divisions et catégories d'âge. */
 export const FICTIONAL_COUNTRIES = [
@@ -85,52 +89,39 @@ export async function writeCheckedCheckpoints(checked: Set<string>, date: string
   }
 }
 
-/** Calendrier du jour d'un pays, toutes divisions — une requête Omniroute. */
-async function fetchCountryFixtures(
-  config: OmnirouteConfig,
-  country: string,
-  dateKey: string
-): Promise<FictionalMatch[]> {
-  let result: { text: string; model: string } | null;
-  try {
-    result = await askOmnirouteLight(
-      'Tu es un outil de lecture de CALENDRIER de football, comme la page "matchs du jour" de Flashscore. ' +
-        "Réponds UNIQUEMENT par un JSON strict, sans texte autour. N'INVENTE RIEN : ne liste que des " +
-        'rencontres réellement programmées à cette date, avec leur heure de coup d\'envoi en UTC. ' +
-        "Si tu n'es pas sûr d'une rencontre ou de son horaire, ne l'inclus pas.",
-      `Liste les matchs de football programmés le ${dateKey} en ${country}.\n` +
-        'Prends TOUTES les divisions disponibles : élite, 2e, 3e, 4e division, coupes nationales, ' +
-        'ET les catégories jeunes et réserves (U19, U20, U21, équipes B).\n' +
-        'Réponds avec ce JSON exact, sans rien autour :\n' +
-        '{"matches": [{"home_team": string, "away_team": string, "competition": string, "kickoff_utc": "YYYY-MM-DDTHH:MM:SSZ"}]}\n' +
-        'Tableau vide si tu ne trouves aucune rencontre confirmée ce jour-là dans ce pays.',
-      config
-    );
-  } catch (error: any) {
-    console.warn(`[Programme fictif] ${country} indisponible:`, error.message);
-    return [];
-  }
-  if (!result) return [];
-
+/**
+ * Extrait une liste de rencontres d'une réponse d'agent. Tolérant sur la
+ * forme (tableau nu, ou objet sous "matches"/"fixtures"/"games") parce que
+ * les agents d'un déploiement Omniroute ne répondent pas tous pareil — mais
+ * strict sur le fond : une rencontre sans équipes ou sans horaire lisible est
+ * inexploitable (on ne saurait pas quand aller la regarder).
+ *
+ * Renvoie null quand la réponse n'apporte RIEN : c'est ce qui fait passer la
+ * ronde à l'agent suivant (askOmnirouteUsable) plutôt que d'accepter le vide
+ * d'un agent sans outil de navigation.
+ */
+function extractFixtures(text: string, country: string, dateKey: string): FictionalMatch[] | null {
   let parsed: any;
   try {
-    const jsonMatch = result.text.match(/\{[\s\S]*\}/);
-    parsed = JSON.parse(jsonMatch ? jsonMatch[0] : result.text);
+    const jsonMatch = text.match(/[[{][\s\S]*[\]}]/);
+    parsed = JSON.parse(jsonMatch ? jsonMatch[0] : text);
   } catch {
-    return [];
+    return null;
   }
 
-  const raw: any[] = Array.isArray(parsed.matches) ? parsed.matches : [];
-  const matches: FictionalMatch[] = [];
+  const raw: any[] = Array.isArray(parsed)
+    ? parsed
+    : Array.isArray(parsed?.matches) ? parsed.matches
+    : Array.isArray(parsed?.fixtures) ? parsed.fixtures
+    : Array.isArray(parsed?.games) ? parsed.games
+    : [];
 
+  const matches: FictionalMatch[] = [];
   for (const m of raw.slice(0, MAX_MATCHES_PER_COUNTRY)) {
-    const homeTeam = typeof m.home_team === 'string' ? m.home_team.trim() : '';
-    const awayTeam = typeof m.away_team === 'string' ? m.away_team.trim() : '';
-    const kickoff = typeof m.kickoff_utc === 'string' ? m.kickoff_utc.trim() : '';
+    const homeTeam = typeof m?.home_team === 'string' ? m.home_team.trim() : '';
+    const awayTeam = typeof m?.away_team === 'string' ? m.away_team.trim() : '';
+    const kickoff = typeof m?.kickoff_utc === 'string' ? m.kickoff_utc.trim() : '';
     if (!homeTeam || !awayTeam || !kickoff) continue;
-    // Un horaire illisible rend le match inexploitable (on ne saurait pas
-    // quand aller le regarder) : mieux vaut l'écarter que de le suivre au
-    // hasard.
     if (!Number.isFinite(Date.parse(kickoff))) continue;
 
     matches.push({
@@ -143,7 +134,35 @@ async function fetchCountryFixtures(
     });
   }
 
-  return matches;
+  return matches.length > 0 ? matches : null;
+}
+
+/** Calendrier du jour d'un pays, toutes divisions — une requête Omniroute,
+ * relancée sur l'agent suivant tant qu'aucun n'a ramené de rencontre. */
+async function fetchCountryFixtures(
+  config: OmnirouteConfig,
+  country: string,
+  dateKey: string
+): Promise<FictionalMatch[]> {
+  try {
+    const result = await askOmnirouteUsable(
+      'Tu es un outil de lecture de CALENDRIER de football, comme la page "matchs du jour" de Flashscore. ' +
+        'Tu as accès à Internet : consulte une source de calendrier fiable avant de répondre. ' +
+        "Réponds UNIQUEMENT par un JSON strict, sans texte autour. N'INVENTE RIEN : ne liste que des " +
+        'rencontres réellement programmées à cette date, avec leur heure de coup d\'envoi en UTC.',
+      `Liste les matchs de football programmés le ${dateKey} en ${country}.\n` +
+        'Prends TOUTES les divisions disponibles : élite, 2e, 3e, 4e division, coupes nationales, ' +
+        'ET les catégories jeunes et réserves (U19, U20, U21, équipes B).\n' +
+        'Réponds avec ce JSON exact, sans rien autour :\n' +
+        '{"matches": [{"home_team": string, "away_team": string, "competition": string, "kickoff_utc": "YYYY-MM-DDTHH:MM:SSZ"}]}',
+      config,
+      (text) => extractFixtures(text, country, dateKey)
+    );
+    return result?.value ?? [];
+  } catch (error: any) {
+    console.warn(`[Programme fictif] ${country} indisponible:`, error.message);
+    return [];
+  }
 }
 
 /**
@@ -172,31 +191,79 @@ function selectBalanced(byCountry: Map<string, FictionalMatch[]>, limit: number)
   return selected.sort((a, b) => a.kickoff_utc.localeCompare(b.kickoff_utc));
 }
 
+interface StoredProgram {
+  date: string;
+  /** Rencontres retenues, par pays déjà balayé. */
+  byCountry: Record<string, FictionalMatch[]>;
+  /** Pays déjà interrogés aujourd'hui (même s'ils n'ont rien donné). */
+  doneCountries: string[];
+}
+
+async function readStoredProgram(date: string): Promise<StoredProgram> {
+  try {
+    const raw = await AsyncStorage.getItem(programKey(date));
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (parsed?.byCountry && Array.isArray(parsed.doneCountries)) return parsed;
+  } catch {
+    // stockage illisible : on repart d'un programme vide plutôt que de planter
+  }
+  return { date, byCountry: {}, doneCountries: [] };
+}
+
+export interface FictionalProgramStatus {
+  matches: number;
+  countriesDone: number;
+  countriesTotal: number;
+}
+
+export async function getFictionalProgramStatus(date: string = todayKey()): Promise<FictionalProgramStatus> {
+  const stored = await readStoredProgram(date);
+  return {
+    matches: Object.values(stored.byCountry).reduce((sum, list) => sum + list.length, 0),
+    countriesDone: stored.doneCountries.length,
+    countriesTotal: FICTIONAL_COUNTRIES.length,
+  };
+}
+
 /**
- * Construit (ou relit) le programme fictif du jour. Idempotent : une fois
- * construit et non vide, aucun nouvel appel Omniroute de la journée. Un
- * programme vide n'est jamais mis en cache comme définitif — il sera
- * retenté au tour suivant (Omniroute momentanément injoignable ne doit pas
- * condamner la journée entière).
+ * Construit (ou complète) le programme fictif du jour, puis renvoie la
+ * sélection courante.
+ *
+ * Construction INCRÉMENTALE : quelques pays par tour seulement. Balayer les
+ * 20 pays d'un coup, c'est 20 requêtes d'agent à la suite — plusieurs minutes
+ * pendant lesquelles le tour entier est bloqué (et l'utilisateur qui vient
+ * d'appuyer sur play attend devant un écran figé). Le programme se remplit
+ * donc sur les premiers tours de la journée, et devient exploitable dès le
+ * premier pays qui répond.
+ *
+ * Un pays interrogé est marqué comme fait même s'il n'a rien donné : sans ça,
+ * les pays sans matchs du jour seraient réinterrogés indéfiniment et les
+ * suivants jamais atteints.
  */
 export async function ensureFictionalDailyProgram(
   config: OmnirouteConfig,
-  date: string = todayKey()
+  date: string = todayKey(),
+  maxCountriesPerRun: number = MAX_COUNTRIES_PER_RUN
 ): Promise<FictionalMatch[]> {
-  const cached = await readFictionalProgram(date);
-  if (cached && cached.length > 0) return cached;
+  const stored = await readStoredProgram(date);
+  const done = new Set(stored.doneCountries);
+  const pending = FICTIONAL_COUNTRIES.filter((c) => !done.has(c));
 
-  const byCountry = new Map<string, FictionalMatch[]>();
-  for (const country of FICTIONAL_COUNTRIES) {
+  for (const country of pending.slice(0, maxCountriesPerRun)) {
     const matches = await fetchCountryFixtures(config, country, date);
-    if (matches.length > 0) byCountry.set(country, matches);
+    if (matches.length > 0) stored.byCountry[country] = matches;
+    stored.doneCountries.push(country);
   }
 
-  // Dédoublonnage inter-pays : une même rencontre annoncée dans deux
-  // réponses (coupe européenne, erreur de rattachement) ne doit être suivie
-  // qu'une fois.
+  if (pending.length > 0) {
+    await AsyncStorage.setItem(programKey(date), JSON.stringify(stored));
+  }
+
+  // Dédoublonnage inter-pays : une même rencontre annoncée dans deux réponses
+  // (coupe européenne, erreur de rattachement) ne doit être suivie qu'une fois.
   const seen = new Set<number>();
-  for (const [country, matches] of byCountry) {
+  const byCountry = new Map<string, FictionalMatch[]>();
+  for (const [country, matches] of Object.entries(stored.byCountry)) {
     byCountry.set(
       country,
       matches.filter((m) => {
@@ -207,9 +274,5 @@ export async function ensureFictionalDailyProgram(
     );
   }
 
-  const program = selectBalanced(byCountry, MAX_FICTIONAL_MATCHES_PER_DAY);
-  if (program.length === 0) return [];
-
-  await AsyncStorage.setItem(programKey(date), JSON.stringify(program));
-  return program;
+  return selectBalanced(byCountry, MAX_FICTIONAL_MATCHES_PER_DAY);
 }

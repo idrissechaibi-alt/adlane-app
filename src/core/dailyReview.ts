@@ -34,7 +34,7 @@ import {
   writeMarketSeries,
 } from './learnStore';
 import { loadOmnirouteConfig } from './focusEnrichment';
-import { askOmnirouteLight } from './omniroute';
+import { askOmnirouteUsable } from './omniroute';
 import { OmnirouteConfig } from '../types';
 
 const LAST_REVIEW_KEY = '@last_daily_review';
@@ -142,44 +142,46 @@ async function fetchFinalResultsViaOmniroute(
   const results = new Map<number, FinalResult>();
 
   for (const { fixtureId, homeTeam, awayTeam } of matches) {
-    let result: { text: string; model: string } | null;
-    try {
-      result = await askOmnirouteLight(
-        'Tu es un outil de lecture de résultats de football TERMINÉS. Réponds UNIQUEMENT par un JSON strict, ' +
-          "sans texte autour. N'invente RIEN : si ce match n'est pas terminé, ou que tu ne trouves pas son score " +
-          'sur une source fiable, réponds avec finished: false.',
-        `Match : ${homeTeam} vs ${awayTeam}.\n` +
-          'Ce match est-il terminé ? Si oui, quels sont le score final ET le score à la mi-temps ?\n' +
-          'Réponds avec ce JSON exact, sans rien autour :\n' +
-          '{"finished": boolean, "home_goals": number|null, "away_goals": number|null, ' +
-          '"ht_home_goals": number|null, "ht_away_goals": number|null}',
-        omnirouteConfig
-      );
-    } catch (error: any) {
-      console.warn('[Bilan] Résultat final Omniroute échoué:', error.message);
-      continue;
-    }
-    if (!result) continue;
+    // Ronde jusqu'à une réponse exploitable : un agent sans outil de recherche
+    // répondrait "pas trouvé" et, s'il était en tête de ronde, empêcherait
+    // tous les autres de régler le match.
+    const result = await askOmnirouteUsable<FinalResult>(
+      'Tu es un outil de lecture de résultats de football TERMINÉS. Réponds UNIQUEMENT par un JSON strict, ' +
+        "sans texte autour. N'invente RIEN : si ce match n'est pas terminé, ou que tu ne trouves pas son score " +
+        'sur une source fiable, réponds avec finished: false.',
+      `Match : ${homeTeam} vs ${awayTeam}.\n` +
+        'Ce match est-il terminé ? Si oui, quels sont le score final ET le score à la mi-temps ?\n' +
+        'Réponds avec ce JSON exact, sans rien autour :\n' +
+        '{"finished": boolean, "home_goals": number|null, "away_goals": number|null, ' +
+        '"ht_home_goals": number|null, "ht_away_goals": number|null}',
+      omnirouteConfig,
+      (text) => {
+        let parsed: any;
+        try {
+          const jsonMatch = text.match(/\{[\s\S]*\}/);
+          parsed = JSON.parse(jsonMatch ? jsonMatch[0] : text);
+        } catch {
+          return null;
+        }
+        if (!parsed?.finished) return null;
 
-    let parsed: any;
-    try {
-      const jsonMatch = result.text.match(/\{[\s\S]*\}/);
-      parsed = JSON.parse(jsonMatch ? jsonMatch[0] : result.text);
-    } catch {
-      continue;
-    }
-    if (!parsed.finished) continue;
+        const goalsHome = parsed.home_goals;
+        const goalsAway = parsed.away_goals;
+        if (typeof goalsHome !== 'number' || typeof goalsAway !== 'number') return null;
 
-    const goalsHome = parsed.home_goals;
-    const goalsAway = parsed.away_goals;
-    if (typeof goalsHome !== 'number' || typeof goalsAway !== 'number') continue;
-
-    results.set(fixtureId, {
-      goalsHome,
-      goalsAway,
-      htHome: typeof parsed.ht_home_goals === 'number' ? parsed.ht_home_goals : 0,
-      htAway: typeof parsed.ht_away_goals === 'number' ? parsed.ht_away_goals : 0,
+        return {
+          goalsHome,
+          goalsAway,
+          htHome: typeof parsed.ht_home_goals === 'number' ? parsed.ht_home_goals : 0,
+          htAway: typeof parsed.ht_away_goals === 'number' ? parsed.ht_away_goals : 0,
+        };
+      }
+    ).catch((error: any) => {
+      console.warn('[Bilan] Résultat final Omniroute échoué:', error?.message);
+      return null;
     });
+
+    if (result) results.set(fixtureId, result.value);
   }
 
   return results;

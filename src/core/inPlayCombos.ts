@@ -65,7 +65,7 @@ import {
 } from './poisson';
 import { applyMarketExpertise, getAgentLearningDigest, scoreAllTargets } from './autoLearn';
 import { getFocusNoteByTeams, renderFocusNote, loadOmnirouteConfig } from './focusEnrichment';
-import { askOmnirouteLight } from './omniroute';
+import { askOmnirouteLight, askOmnirouteUsable } from './omniroute';
 import { fetchMarkers } from './liveMarkers';
 import { spendBudget } from './requestBudget';
 import { getAPIConfig } from '../api/multiAPIManager';
@@ -221,44 +221,43 @@ async function estimateExpectedGoalsViaOmniroute(
   awayTeam: string,
   league: string
 ): Promise<{ home: number; away: number } | null> {
-  let result: { text: string; model: string } | null;
-  try {
-    result = await askOmnirouteLight(
-      "Tu es un outil de PRONOSTIC STATISTIQUE avant-match. Réponds UNIQUEMENT par un JSON strict, " +
-        "sans texte autour. Base-toi sur la forme récente (5-10 derniers matchs), les buts marqués/encaissés " +
-        "et l'effectif connu de chaque équipe. N'INVENTE RIEN : si tu ne trouves pas d'information fiable sur " +
-        "ces deux équipes, réponds avec null pour les deux valeurs plutôt qu'une estimation approximative.",
-      `Match à venir ou en cours : ${homeTeam} (domicile) vs ${awayTeam} (extérieur), ${league}.\n` +
-        'Estime le nombre de buts attendus (expected goals) pour CE match précis, à partir de la forme ' +
-        "récente et de l'effectif de chaque équipe.\n" +
-        'Réponds avec ce JSON exact, sans rien autour :\n' +
-        '{"expected_goals_home": number|null, "expected_goals_away": number|null}',
-      config
-    );
-  } catch (error: any) {
-    console.warn('[Scan en direct] Estimation Omniroute des buts attendus échouée:', error.message);
-    return null;
-  }
-  if (!result) return null;
+  const result = await askOmnirouteUsable<{ home: number; away: number }>(
+    "Tu es un outil de PRONOSTIC STATISTIQUE avant-match. Réponds UNIQUEMENT par un JSON strict, " +
+      "sans texte autour. Base-toi sur la forme récente (5-10 derniers matchs), les buts marqués/encaissés " +
+      "et l'effectif connu de chaque équipe. N'INVENTE RIEN : si tu ne trouves pas d'information fiable sur " +
+      "ces deux équipes, réponds avec null pour les deux valeurs plutôt qu'une estimation approximative.",
+    `Match à venir ou en cours : ${homeTeam} (domicile) vs ${awayTeam} (extérieur), ${league}.\n` +
+      'Estime le nombre de buts attendus (expected goals) pour CE match précis, à partir de la forme ' +
+      "récente et de l'effectif de chaque équipe.\n" +
+      'Réponds avec ce JSON exact, sans rien autour :\n' +
+      '{"expected_goals_home": number|null, "expected_goals_away": number|null}',
+    config,
+    (text) => {
+      let parsed: any;
+      try {
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        parsed = JSON.parse(jsonMatch ? jsonMatch[0] : text);
+      } catch {
+        return null;
+      }
 
-  let parsed: any;
-  try {
-    const jsonMatch = result.text.match(/\{[\s\S]*\}/);
-    parsed = JSON.parse(jsonMatch ? jsonMatch[0] : result.text);
-  } catch {
-    return null;
-  }
+      const home = parsed?.expected_goals_home;
+      const away = parsed?.expected_goals_away;
+      if (typeof home !== 'number' || typeof away !== 'number' || !Number.isFinite(home) || !Number.isFinite(away)) {
+        return null; // agent sans information utilisable : au suivant
+      }
 
-  const home = parsed.expected_goals_home;
-  const away = parsed.expected_goals_away;
-  if (typeof home !== 'number' || typeof away !== 'number' || !Number.isFinite(home) || !Number.isFinite(away)) {
+      return {
+        home: Math.min(OMNIROUTE_EXPECTED_GOALS_MAX, Math.max(OMNIROUTE_EXPECTED_GOALS_MIN, home)),
+        away: Math.min(OMNIROUTE_EXPECTED_GOALS_MAX, Math.max(OMNIROUTE_EXPECTED_GOALS_MIN, away)),
+      };
+    }
+  ).catch((error: any) => {
+    console.warn('[Scan en direct] Estimation Omniroute des buts attendus échouée:', error?.message);
     return null;
-  }
+  });
 
-  return {
-    home: Math.min(OMNIROUTE_EXPECTED_GOALS_MAX, Math.max(OMNIROUTE_EXPECTED_GOALS_MIN, home)),
-    away: Math.min(OMNIROUTE_EXPECTED_GOALS_MAX, Math.max(OMNIROUTE_EXPECTED_GOALS_MIN, away)),
-  };
+  return result?.value ?? null;
 }
 
 /**
