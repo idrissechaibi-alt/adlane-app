@@ -79,6 +79,9 @@ const MINIMUM_INTERVAL_MINUTES = 15; // plancher Android, inutile de descendre
 
 export interface AutoLearnTickDiagnostics {
   universeSize: number;
+  /** Omniroute utilisable (endpoint + au moins un agent) : sans ça, TOUTE la
+   * boucle de fond est muette, et chaque compteur reste à 0 sans erreur. */
+  omnirouteConfigured: boolean;
   /** Matchs du programme fictif du jour (Omniroute seul). */
   fictionalProgramSize: number;
   liveFixturesFound: number;
@@ -127,8 +130,10 @@ export async function runAutoLearnTick(): Promise<AutoLearnTickDiagnostics> {
   // programme, et lui seul, qui dit au pipeline fictif quels matchs suivre et
   // quand : aucune API n'intervient.
   let fictionalProgramSize = 0;
+  let omnirouteConfigured = false;
   try {
     const omnirouteConfig = await loadOmnirouteConfig();
+    omnirouteConfigured = Boolean(omnirouteConfig);
     if (omnirouteConfig) {
       const program = await ensureFictionalDailyProgram(omnirouteConfig);
       fictionalProgramSize = program.length;
@@ -198,6 +203,7 @@ export async function runAutoLearnTick(): Promise<AutoLearnTickDiagnostics> {
 
   return {
     universeSize,
+    omnirouteConfigured,
     fictionalProgramSize,
     liveFixturesFound: liveFixtures.length,
     liveFixturesSource: shared.source,

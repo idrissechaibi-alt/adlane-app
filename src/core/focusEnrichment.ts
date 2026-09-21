@@ -33,12 +33,29 @@ const ENRICH_UNTIL_MINUTES_AFTER = 60;
 /** Un match n'est ré-enrichi qu'au-delà de ce délai. */
 const REFRESH_AFTER_MINUTES = 120;
 
+/**
+ * Porte d'entrée d'Omniroute pour TOUTE la boucle de fond (enrichissement,
+ * marqueurs live, scan 20e/60e, programme fictif, règlement des résultats).
+ *
+ * Critère : un endpoint ET au moins un agent sélectionné — exactement ce que
+ * vérifient déjà ScoutingScreen et lineupRefresh, et exactement ce que
+ * l'écran Paramètres promet ("ce bouton est indicatif : dès qu'un endpoint et
+ * au moins un agent sont renseignés, Omniroute sert automatiquement de
+ * secours, même si ce bouton reste désactivé").
+ *
+ * Le champ `enabled` (interrupteur "Activer Omniroute", à false par défaut)
+ * était exigé ICI et nulle part ailleurs : avec l'interrupteur laissé sur sa
+ * position par défaut, Scouting IA fonctionnait parfaitement — donc Omniroute
+ * paraissait configuré — pendant que chaque appel de la boucle de fond
+ * renvoyait null AVANT la moindre requête HTTP. D'où un "Omniroute ne lance
+ * aucune action" total et silencieux, quelle que soit la suite du code.
+ */
 export async function loadOmnirouteConfig(): Promise<OmnirouteConfig | null> {
   try {
     const raw = await AsyncStorage.getItem(OMNIROUTE_CONFIG_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (!parsed.enabled || !parsed.endpoint || !parsed.selectedModel) return null;
+    if (!parsed.endpoint || !parsed.selectedModel?.trim()) return null;
     return { ...DEFAULT_OMNIROUTE_CONFIG, ...parsed };
   } catch {
     return null;
