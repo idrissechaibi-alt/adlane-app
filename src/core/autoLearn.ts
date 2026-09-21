@@ -26,8 +26,10 @@ import {
   TrackedMarket,
   TrainingRow,
   marketLabel,
+  appendPredictionOutcomes,
   readAgentDigest,
   readCrossCheckSamples,
+  readInPlayProposals,
   readLearnedModel,
   readMarketSeries,
   readPaperBets,
@@ -469,10 +471,50 @@ export function applyMarketExpertise(
 }
 
 /**
+ * Récupère dans le corpus d'expertise les jambes déjà réglées qui n'y figurent
+ * pas encore. Utile pour tout ce qui a été proposé et réglé AVANT que
+ * dailyReview n'écrive ces résultats (les propositions gardaient alors leur
+ * verdict pour elles seules), et comme filet si une écriture a échoué.
+ * Idempotent : une jambe déjà enregistrée n'est jamais recomptée.
+ */
+function backfillOutcomesFromProposals(): number {
+  const known = new Set(
+    readPredictionOutcomes(30).map((o) => `${o.fixtureId}-${o.kind}-${o.market}-${o.selection}`)
+  );
+
+  const missing: PredictionOutcome[] = [];
+  for (const proposal of readInPlayProposals()) {
+    for (const leg of proposal.legs) {
+      if (!leg.settled || leg.won == null) continue;
+      const key = `${leg.fixtureId}-${proposal.kind}-${leg.market}-${leg.selection}`;
+      if (known.has(key)) continue;
+      known.add(key);
+      missing.push({
+        ts: proposal.createdAt,
+        fixtureId: leg.fixtureId,
+        league: leg.league,
+        market: leg.market,
+        selection: leg.selection,
+        predictedProb: leg.prob,
+        won: leg.won,
+        kind: proposal.kind,
+        minute: proposal.minute,
+        real: proposal.real !== false,
+      });
+    }
+  }
+
+  if (missing.length > 0) appendPredictionOutcomes(missing);
+  return missing.length;
+}
+
+/**
  * Consolidation complète : règles, paris papier, recalibrage, expertise par
  * marché, digest. Appelée à la fin de chaque tour de fond.
  */
 export async function consolidateLearning(): Promise<LearnedModel | null> {
+  backfillOutcomesFromProposals();
+
   const rows = readTrainingRows(14);
   const marketExpertise = computeMarketExpertise(readPredictionOutcomes(30));
 

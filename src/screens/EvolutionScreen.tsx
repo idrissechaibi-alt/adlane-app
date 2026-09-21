@@ -15,7 +15,7 @@ import {
 import { Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import MarketTrendChart from '../components/MarketTrendChart';
-import { MarketDayPoint, TRACKED_MARKETS, readInPlayProposals, readMarketSeries, readPaperBets } from '../core/learnStore';
+import { MarketDayPoint, TRACKED_MARKETS, TrackedMarket, marketLabel, readInPlayProposals, readMarketSeries, readPaperBets, readPredictionOutcomes } from '../core/learnStore';
 import { getAllBets, getAllLessons, getAllCalibrations, getDailyReports } from '../database/storage';
 import { computeMarketCalibrations } from '../core/calibration';
 import { generateImprovementReport } from '../core/reporter';
@@ -36,6 +36,11 @@ export default function EvolutionScreen() {
   /** Batterie de paris fictifs du scan 20e/60e minute (inPlayCombos.ts, real:false) — distincte de paperBetsSummary (règles apprises d'autoLearn.ts). */
   const [fictionalCounter, setFictionalCounter] = useState<{ matches: number; placed: number; won: number } | null>(null);
   const [forcingScan, setForcingScan] = useState(false);
+  /** Fiabilité mesurée des pronos du scan 20e/60e — source distincte des paris
+   * placés en base, que les cartes de calibration historiques lisent. */
+  const [scanCalibration, setScanCalibration] = useState<
+    Array<{ market: TrackedMarket; total: number; won: number; meanPredicted: number; hitRate: number }>
+  >([]);
 
   /** Recharge les deux compteurs de la boucle fictive, sans toucher au reste
    * de l'écran — utilisé au focus ET après un lancement manuel du scan. */
@@ -49,6 +54,29 @@ export default function EvolutionScreen() {
       });
     } catch (error) {
       console.warn('Paris fictifs indisponibles:', error);
+    }
+    try {
+      const byMarket = new Map<TrackedMarket, { total: number; won: number; predictedSum: number }>();
+      for (const outcome of readPredictionOutcomes(30)) {
+        const entry = byMarket.get(outcome.market) ?? { total: 0, won: 0, predictedSum: 0 };
+        entry.total += 1;
+        entry.predictedSum += outcome.predictedProb;
+        if (outcome.won) entry.won += 1;
+        byMarket.set(outcome.market, entry);
+      }
+      setScanCalibration(
+        Array.from(byMarket.entries())
+          .map(([market, e]) => ({
+            market,
+            total: e.total,
+            won: e.won,
+            meanPredicted: e.predictedSum / e.total,
+            hitRate: e.won / e.total,
+          }))
+          .sort((a, b) => b.total - a.total)
+      );
+    } catch (error) {
+      console.warn('Calibration du scan indisponible:', error);
     }
     try {
       const fictional = readInPlayProposals().filter((p) => p.real === false);
@@ -211,6 +239,61 @@ export default function EvolutionScreen() {
         </Text>
       </View>
 
+      {/* Pronos du scan 20e/60e minute : ils ne passent JAMAIS par la table
+          des paris (ils ne sont pas "placés"), donc les cartes plus bas ne
+          peuvent pas les refléter — d'où cette section, alimentée par les
+          résultats réellement mesurés de chaque proposition. */}
+      <Text style={styles.sectionTitle}>Pronos du scan 20e/60e minute</Text>
+      {scanCalibration.length === 0 ? (
+        <View style={styles.infoBox}>
+          <Ionicons name="information-circle" size={16} color="#60a5fa" />
+          <Text style={styles.infoText}>
+            Aucune proposition encore réglée. Chaque prono du scan est confronté au score réel
+            en fin de match, et vient nourrir cette mesure.
+          </Text>
+        </View>
+      ) : (
+        scanCalibration.map((cal) => {
+          const delta = (cal.meanPredicted - cal.hitRate) * 100;
+          const statusColor = cal.total < 5 ? '#64748b' : delta > 15 ? '#f59e0b' : '#10b981';
+          const statusLabel = cal.total < 5 ? 'Échantillon faible' : delta > 15 ? 'Suspect' : 'Calibré';
+
+          return (
+            <View key={cal.market} style={styles.calibrationCard}>
+              <View style={styles.calibrationHeader}>
+                <Text style={styles.marketLabel}>{marketLabel(cal.market)}</Text>
+                <View style={[styles.statusBadge, { borderColor: statusColor }]}>
+                  <Text style={[styles.statusText, { color: statusColor }]}>{statusLabel}</Text>
+                </View>
+              </View>
+
+              <View style={styles.calibrationStats}>
+                <View style={styles.statItem}>
+                  <Text style={styles.statLabel}>Prédictions</Text>
+                  <Text style={styles.statValue}>{cal.total}</Text>
+                  <Text style={styles.statSub}>{cal.won} gagnées</Text>
+                </View>
+                <View style={styles.statItem}>
+                  <Text style={styles.statLabel}>Taux Prédit</Text>
+                  <Text style={styles.statValue}>{(cal.meanPredicted * 100).toFixed(1)}%</Text>
+                </View>
+                <View style={styles.statItem}>
+                  <Text style={styles.statLabel}>Taux Réel</Text>
+                  <Text style={[styles.statValue, { color: statusColor }]}>{(cal.hitRate * 100).toFixed(1)}%</Text>
+                </View>
+                <View style={styles.statItem}>
+                  <Text style={styles.statLabel}>Écart</Text>
+                  <Text style={[styles.statValue, delta > 0 ? styles.negative : styles.positive]}>
+                    {delta > 0 ? '+' : ''}{delta.toFixed(1)}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          );
+        })
+      )}
+
+      <Text style={styles.sectionTitle}>Paris réellement placés</Text>
       {calibrations.map((cal, idx) => {
         if (cal.total_predictions === 0) return null;
 
@@ -589,6 +672,13 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     flex: 1,
     lineHeight: 16,
+  },
+  sectionTitle: {
+    color: '#e2e8f0',
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginTop: 8,
+    marginBottom: 8,
   },
   calibrationCard: {
     backgroundColor: '#1e293b',
