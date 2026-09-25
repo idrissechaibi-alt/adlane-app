@@ -21,7 +21,8 @@ import { computeMarketCalibrations } from '../core/calibration';
 import { generateImprovementReport } from '../core/reporter';
 import { MarketCalibration, Lesson, Bet, DailyReport } from '../types';
 import { useIsFocused } from '@react-navigation/native';
-import { runAutoLearnTick } from '../core/backgroundTasks';
+import { runAutoLearnTick, AutoLearnTickDiagnostics } from '../core/backgroundTasks';
+import { sendTelegramMessage } from '../core/telegram';
 
 export default function EvolutionScreen() {
   const isFocused = useIsFocused();
@@ -152,6 +153,34 @@ export default function EvolutionScreen() {
     aucune_echec_omniroute: 'aucun — repli Omniroute en échec',
   };
 
+  /** Même texte pour l'alerte à l'écran ET pour l'envoi Telegram (voir
+   * handleForceScan) — un seul format à tenir à jour. */
+  const formatScanDiagnostics = (diag: AutoLearnTickDiagnostics): string =>
+    `🔍 Scan forcé terminé\n` +
+    `Omniroute : ${diag.omnirouteConfigured ? 'configuré' : 'NON CONFIGURÉ (Paramètres → endpoint + agents)'}.\n` +
+    `Planning du jour : ${diag.fictionalProgramSize} match(s) — ` +
+    (diag.fictionalProgramFromFeed
+      ? 'liste transmise.\n'
+      : `balayage Omniroute, ${diag.fictionalCountriesTried}/${diag.fictionalCountriesTotal} pays interrogés.\n`) +
+    (diag.fictionalNextKickoffUtc
+      ? `Prochain match suivi : ${formatKickoff(diag.fictionalNextKickoffUtc)} (${diag.fictionalMatchesAhead} encore à venir aujourd'hui).\n`
+      : diag.fictionalProgramSize > 0
+        ? "Tous les matchs du programme ont déjà eu lieu aujourd'hui.\n"
+        : '') +
+    (diag.fictionalLastTrace ? `${summarizeTrace(diag.fictionalLastTrace)}\n` : '') +
+    `Univers du jour (API) : ${diag.universeSize} match(s) suivis.\n` +
+    `Relevé live : ${diag.liveFixturesFound} match(s) en direct — source : ${LIVE_FIXTURES_SOURCE_LABEL[diag.liveFixturesSource] ?? diag.liveFixturesSource}.\n` +
+    `Marqueurs : ${diag.liveMarkerObserved} observé(s), ${diag.liveMarkerClosed} clôturé(s).\n` +
+    `Scan 20e/60e minute : ${diag.freshInPlayProposals} nouvelle(s) proposition(s).\n` +
+    (diag.intlBreak
+      ? diag.intlBreak.withinWindow
+        ? `Trêve internationale : ${diag.intlBreak.matchesScheduledToday} match(s) aujourd'hui, ` +
+          `${diag.intlBreak.matchesWithExpectedGoals} estimé(s) (Omniroute), ` +
+          `${diag.intlBreak.matchesLiveFound} en direct ce tour, ` +
+          `${diag.intlBreak.matchesInCheckpointWindow} au checkpoint pile à ce tour.`
+        : 'Trêve internationale : hors fenêtre (calendrier inactif aujourd\'hui).'
+      : 'Trêve internationale : diagnostic indisponible (le scan en direct a échoué avant de l\'atteindre).');
+
   /**
    * Lance le tour complet (univers du jour, relevé live + étiquetage,
    * consolidation du modèle d'auto-apprentissage, scan 20e/60e minute) tout
@@ -162,11 +191,10 @@ export default function EvolutionScreen() {
    * alimente au passage la même boucle d'auto-apprentissage (consolidation
    * du modèle, paris papier) que le scan automatique, pas un chemin à part.
    *
-   * L'alerte affiche le diagnostic chiffré renvoyé par runAutoLearnTick,
-   * plutôt qu'un simple "terminé" : un compteur resté à 0 peut venir d'au
-   * moins trois causes différentes (aucun match en direct en ce moment,
-   * univers du jour vide car jamais construit, Omniroute non configuré) —
-   * sans ce détail, impossible de savoir laquelle sans deviner.
+   * Le résultat part AUSSI sur Telegram (demande explicite) : le scan peut
+   * prendre du temps (Omniroute, appels API), et attendre l'alerte à l'écran
+   * n'est pas toujours possible — le même diagnostic arrive sur Telegram dès
+   * que le tour se termine, que l'app soit encore ouverte ou non.
    */
   const handleForceScan = async () => {
     if (forcingScan) return;
@@ -174,34 +202,13 @@ export default function EvolutionScreen() {
     try {
       const diag = await runAutoLearnTick();
       refreshLiveCounters();
-      Alert.alert(
-        'Scan terminé',
-        `Omniroute : ${diag.omnirouteConfigured ? 'configuré' : 'NON CONFIGURÉ (Paramètres → endpoint + agents)'}.\n` +
-          `Planning du jour : ${diag.fictionalProgramSize} match(s) — ` +
-          (diag.fictionalProgramFromFeed
-            ? 'liste transmise.\n'
-            : `balayage Omniroute, ${diag.fictionalCountriesTried}/${diag.fictionalCountriesTotal} pays interrogés.\n`) +
-          (diag.fictionalNextKickoffUtc
-            ? `Prochain match suivi : ${formatKickoff(diag.fictionalNextKickoffUtc)} (${diag.fictionalMatchesAhead} encore à venir aujourd'hui).\n`
-            : diag.fictionalProgramSize > 0
-              ? "Tous les matchs du programme ont déjà eu lieu aujourd'hui.\n"
-              : '') +
-          (diag.fictionalLastTrace ? `${summarizeTrace(diag.fictionalLastTrace)}\n` : '') +
-          `Univers du jour (API) : ${diag.universeSize} match(s) suivis.\n` +
-          `Relevé live : ${diag.liveFixturesFound} match(s) en direct — source : ${LIVE_FIXTURES_SOURCE_LABEL[diag.liveFixturesSource] ?? diag.liveFixturesSource}.\n` +
-          `Marqueurs : ${diag.liveMarkerObserved} observé(s), ${diag.liveMarkerClosed} clôturé(s).\n` +
-          `Scan 20e/60e minute : ${diag.freshInPlayProposals} nouvelle(s) proposition(s).\n` +
-          (diag.intlBreak
-            ? diag.intlBreak.withinWindow
-              ? `Trêve internationale : ${diag.intlBreak.matchesScheduledToday} match(s) aujourd'hui, ` +
-                `${diag.intlBreak.matchesWithExpectedGoals} estimé(s) (Omniroute), ` +
-                `${diag.intlBreak.matchesLiveFound} en direct ce tour, ` +
-                `${diag.intlBreak.matchesInCheckpointWindow} au checkpoint pile à ce tour.`
-              : 'Trêve internationale : hors fenêtre (calendrier inactif aujourd\'hui).'
-            : 'Trêve internationale : diagnostic indisponible (le scan en direct a échoué avant de l\'atteindre).')
-      );
+      const message = formatScanDiagnostics(diag);
+      Alert.alert('Scan terminé', message);
+      await sendTelegramMessage(message);
     } catch (error: any) {
+      const message = `❌ Scan forcé échoué : ${error?.message || 'erreur inconnue'}.`;
       Alert.alert('Scan échoué', error?.message || 'Erreur inconnue.');
+      await sendTelegramMessage(message);
     } finally {
       setForcingScan(false);
     }
