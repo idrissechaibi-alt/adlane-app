@@ -17,7 +17,7 @@ import { fetchLiveFixtures, fetchOmnirouteAllLiveFixtures, LiveFixture } from '.
 import { consolidateLearning } from './autoLearn';
 import { OmnirouteAttempt } from './omniroute';
 import { enrichFocusMatches, loadOmnirouteConfig } from './focusEnrichment';
-import { runInPlayComboTick } from './inPlayCombos';
+import { runInPlayComboTick, InternationalBreakTickDiagnostics } from './inPlayCombos';
 import { runNightlyReviewIfDue } from './dailyReview';
 import { runMorningScanIfDue } from './scheduler';
 import { reconcileScoutingAnalyses } from './scoutingReview';
@@ -99,6 +99,10 @@ export interface AutoLearnTickDiagnostics {
   liveMarkerObserved: number;
   liveMarkerClosed: number;
   freshInPlayProposals: number;
+  /** Compétitions internationales pendant la trêve (Ligue des Nations, CAN) :
+   * absent uniquement si runInPlayComboTick a échoué avant même de calculer
+   * ce diagnostic (voir le try/catch autour de son appel plus bas). */
+  intlBreak?: InternationalBreakTickDiagnostics;
 }
 
 /**
@@ -211,8 +215,11 @@ export async function runAutoLearnTick(): Promise<AutoLearnTickDiagnostics> {
   // match) et 60e minute (reste du match) — remplace l'ancien combo 20e
   // minute (règles apprises seules) et le moniteur mi-temps.
   let freshInPlayProposals = 0;
+  let intlBreak: InternationalBreakTickDiagnostics | undefined;
   try {
-    freshInPlayProposals = await runInPlayComboTick(liveFixtures);
+    const result = await runInPlayComboTick(liveFixtures);
+    freshInPlayProposals = result.freshProposals;
+    intlBreak = result.intlBreak;
   } catch (error: any) {
     console.warn('[Tâche de fond] Scan en direct échoué:', error.message);
   }
@@ -239,6 +246,7 @@ export async function runAutoLearnTick(): Promise<AutoLearnTickDiagnostics> {
     liveMarkerObserved,
     liveMarkerClosed,
     freshInPlayProposals,
+    intlBreak,
   };
 }
 

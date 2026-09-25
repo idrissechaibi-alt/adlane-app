@@ -190,7 +190,15 @@ export default function EvolutionScreen() {
           `Univers du jour (API) : ${diag.universeSize} match(s) suivis.\n` +
           `Relevé live : ${diag.liveFixturesFound} match(s) en direct — source : ${LIVE_FIXTURES_SOURCE_LABEL[diag.liveFixturesSource] ?? diag.liveFixturesSource}.\n` +
           `Marqueurs : ${diag.liveMarkerObserved} observé(s), ${diag.liveMarkerClosed} clôturé(s).\n` +
-          `Scan 20e/60e minute : ${diag.freshInPlayProposals} nouvelle(s) proposition(s).`
+          `Scan 20e/60e minute : ${diag.freshInPlayProposals} nouvelle(s) proposition(s).\n` +
+          (diag.intlBreak
+            ? diag.intlBreak.withinWindow
+              ? `Trêve internationale : ${diag.intlBreak.matchesScheduledToday} match(s) aujourd'hui, ` +
+                `${diag.intlBreak.matchesWithExpectedGoals} estimé(s) (Omniroute), ` +
+                `${diag.intlBreak.matchesLiveFound} en direct ce tour, ` +
+                `${diag.intlBreak.matchesInCheckpointWindow} au checkpoint pile à ce tour.`
+              : 'Trêve internationale : hors fenêtre (calendrier inactif aujourd\'hui).'
+            : 'Trêve internationale : diagnostic indisponible (le scan en direct a échoué avant de l\'atteindre).')
       );
     } catch (error: any) {
       Alert.alert('Scan échoué', error?.message || 'Erreur inconnue.');

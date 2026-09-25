@@ -49,7 +49,7 @@
 // chaque jambe avec le contexte disponible — il ne touche jamais aux
 // chiffres.
 
-import { getDailyPlan } from './scheduler';
+import { getDailyPlan, todayLocalDateString } from './scheduler';
 import { buildScheduledMatches, ScheduledMatch } from './dailyWorkflow';
 import { LiveFixture, fetchOmnirouteMatchStatus } from './halftimeMonitor';
 import { getHistoricalPriors } from './footballDataCoUk';
@@ -91,7 +91,7 @@ import { normalizeTeamName, namesLikelyMatch } from './teamNameMatch';
 import { OmnirouteConfig } from '../types';
 import { mapWithConcurrency } from './concurrency';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { matchesForDate } from './internationalBreak';
+import { matchesForDate, isWithinBreakWindow } from './internationalBreak';
 import { INTERNATIONAL_BREAK_CALENDAR } from '../data/internationalBreakCalendar';
 import { sendInternationalBreakCalendarNow } from './internationalBreakNotify';
 
@@ -676,6 +676,22 @@ function matchRefOfScheduled(m: ScheduledMatch): MatchRef {
 const INTL_BREAK_XG_CACHE_KEY = '@intl_break_xg_cache';
 const INTL_BREAK_ANNOUNCED_KEY = '@intl_break_announced_window';
 
+export interface InternationalBreakTickDiagnostics {
+  withinWindow: boolean;
+  /** Matchs prévus aujourd'hui d'après le calendrier, avant tout filtre. */
+  matchesScheduledToday: number;
+  /** Combien ont une estimation Omniroute de buts attendus exploitable ce tour
+   * (les autres sont retentés au tour suivant, voir la boucle plus bas). */
+  matchesWithExpectedGoals: number;
+  /** Combien ont été retrouvés "en direct" ce tour (API-Football ou repli
+   * Omniroute ciblé) parmi ceux qui avaient une estimation. */
+  matchesLiveFound: number;
+  /** Combien étaient dans une fenêtre de checkpoint (20e ou 60e minute) PILE
+   * à ce tour précis — un compteur à 0 ici est normal la plupart du temps
+   * (les fenêtres ne durent que quelques minutes sur un match de 90+). */
+  matchesInCheckpointWindow: number;
+}
+
 /**
  * Matchs de la trêve internationale (Ligue des Nations, qualifs CAN) prévus
  * AUJOURD'HUI, prêts pour le même traitement que les 5 grands championnats
@@ -688,12 +704,18 @@ const INTL_BREAK_ANNOUNCED_KEY = '@intl_break_announced_window';
  */
 async function getTodaysInternationalBreakMatches(
   omnirouteConfig: OmnirouteConfig | null
-): Promise<ScheduledMatch[]> {
-  if (!omnirouteConfig) return [];
-
-  const today = new Date().toISOString().split('T')[0];
+): Promise<{ matches: ScheduledMatch[]; diagnostics: Pick<InternationalBreakTickDiagnostics, 'withinWindow' | 'matchesScheduledToday' | 'matchesWithExpectedGoals'> }> {
+  // Date LOCALE (comme le reste de l'app, cf. scheduler.ts/todayLocalDateString) :
+  // une date UTC ferait basculer un match tôt/tard du mauvais côté de minuit
+  // pour un fuseau non-UTC.
+  const today = todayLocalDateString();
+  const withinWindow = isWithinBreakWindow(INTERNATIONAL_BREAK_CALENDAR, today);
   const todaysMatches = matchesForDate(INTERNATIONAL_BREAK_CALENDAR, today).filter((m) => m.kickoff_utc);
-  if (todaysMatches.length === 0) return [];
+  const diagBase = { withinWindow, matchesScheduledToday: todaysMatches.length };
+
+  if (!omnirouteConfig || todaysMatches.length === 0) {
+    return { matches: [], diagnostics: { ...diagBase, matchesWithExpectedGoals: 0 } };
+  }
 
   const cacheRaw = await AsyncStorage.getItem(INTL_BREAK_XG_CACHE_KEY);
   const cache: Record<string, { home: number; away: number }> = cacheRaw ? JSON.parse(cacheRaw) : {};
@@ -730,7 +752,7 @@ async function getTodaysInternationalBreakMatches(
   }
 
   if (cacheTouched) await AsyncStorage.setItem(INTL_BREAK_XG_CACHE_KEY, JSON.stringify(cache));
-  return scheduled;
+  return { matches: scheduled, diagnostics: { ...diagBase, matchesWithExpectedGoals: scheduled.length } };
 }
 
 /**
@@ -855,11 +877,12 @@ async function processRealSlot(
   omnirouteConfig: OmnirouteConfig | null,
   alreadyProposed: Set<string>,
   fresh: InPlayProposal[]
-): Promise<void> {
-  if (slotMatches.length === 0) return;
+): Promise<{ liveFound: number; inCheckpointWindow: number }> {
+  if (slotMatches.length === 0) return { liveFound: 0, inCheckpointWindow: 0 };
 
   const candidates20: Array<{ scheduled: ScheduledMatch; live: LiveFixture }> = [];
   const candidates60: Array<{ scheduled: ScheduledMatch; live: LiveFixture }> = [];
+  let liveFound = 0;
 
   for (const scheduled of slotMatches) {
     let live = findLiveFixture(scheduled, liveFixtures);
@@ -880,6 +903,7 @@ async function processRealSlot(
       }
     }
     if (!live) continue;
+    liveFound++;
 
     if (
       live.statusShort === '1H' &&
@@ -908,6 +932,8 @@ async function processRealSlot(
     `60e → fin de match`, '60e minute — reste du match',
     alreadyProposed, fresh
   );
+
+  return { liveFound, inCheckpointWindow: candidates20.length + candidates60.length };
 }
 
 /**
@@ -918,7 +944,12 @@ async function processRealSlot(
  * avec liveMarkers.ts) — avant ce partage, chaque module refaisait sa propre
  * requête, doublant la consommation du quota API-Football à chaque tour.
  */
-export async function runInPlayComboTick(liveFixtures: LiveFixture[]): Promise<number> {
+export interface InPlayComboTickResult {
+  freshProposals: number;
+  intlBreak: InternationalBreakTickDiagnostics;
+}
+
+export async function runInPlayComboTick(liveFixtures: LiveFixture[]): Promise<InPlayComboTickResult> {
   const existing = readInPlayProposals();
   // Réel : une jambe proposée bloque TOUT le match pour ce checkpoint (peu
   // importe le marché). Fictif : chaque marché est une jambe indépendante
@@ -951,7 +982,9 @@ export async function runInPlayComboTick(liveFixtures: LiveFixture[]): Promise<n
   // dehors, `getTodaysInternationalBreakMatches` renvoie toujours un tableau
   // vide, donc ce bloc n'a aucun effet le reste de l'année.
   await announceInternationalBreakCalendarIfDue();
-  const breakMatches = await getTodaysInternationalBreakMatches(omnirouteConfig);
+  const { matches: breakMatches, diagnostics: breakDiagBase } = await getTodaysInternationalBreakMatches(omnirouteConfig);
+  let intlLiveFound = 0;
+  let intlInCheckpointWindow = 0;
   if (breakMatches.length > 0) {
     const bySlot = new Map<string, ScheduledMatch[]>();
     for (const m of breakMatches) {
@@ -960,9 +993,16 @@ export async function runInPlayComboTick(liveFixtures: LiveFixture[]): Promise<n
       bySlot.set(m.creneau_display, arr);
     }
     for (const slotMatches of bySlot.values()) {
-      await processRealSlot(slotMatches, liveFixtures, omnirouteConfig, alreadyProposed, fresh);
+      const result = await processRealSlot(slotMatches, liveFixtures, omnirouteConfig, alreadyProposed, fresh);
+      intlLiveFound += result.liveFound;
+      intlInCheckpointWindow += result.inCheckpointWindow;
     }
   }
+  const intlBreak: InternationalBreakTickDiagnostics = {
+    ...breakDiagBase,
+    matchesLiveFound: intlLiveFound,
+    matchesInCheckpointWindow: intlInCheckpointWindow,
+  };
 
   // B) Paris FICTIFS (boucle d'auto-apprentissage) — 100 % Omniroute, aucune
   // API, aucune cote, aucune donnée payante. AUCUN combo : une batterie de
@@ -1126,5 +1166,5 @@ export async function runInPlayComboTick(liveFixtures: LiveFixture[]): Promise<n
   }
 
   if (fresh.length > 0) writeInPlayProposals([...existing, ...fresh]);
-  return fresh.length;
+  return { freshProposals: fresh.length, intlBreak };
 }
