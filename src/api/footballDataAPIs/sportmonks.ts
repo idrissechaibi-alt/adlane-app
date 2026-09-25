@@ -80,11 +80,20 @@ export async function fetchSportmonksFixturesByDate(
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
   const data = await response.json();
-  const errorMessage = data.message || (Array.isArray(data.errors) ? data.errors.join(', ') : undefined);
-  if (errorMessage) throw new Error(errorMessage);
+  // Sportmonks accompagne parfois une réponse HTTP 200 PARFAITEMENT VALIDE
+  // (aucune rencontre ce jour-là) d'un texte générique dans `message`
+  // ("No result(s) found... or you don't have access to it via your current
+  // subscription") — le même texte pour "rien à cette date" et "accès refusé".
+  // Seule l'ABSENCE du tableau `data` signale un vrai problème (mauvaise clé,
+  // requête malformée) ; un tableau vide est un résultat normal, pas une
+  // erreur — confondre les deux avait fait passer des scans sans aucun match
+  // pour des pannes.
+  if (!Array.isArray(data.data)) {
+    throw new Error(data.message || (Array.isArray(data.errors) ? data.errors.join(', ') : 'réponse invalide'));
+  }
 
   const fixtures: SportmonksFixture[] = [];
-  for (const item of data.data || []) {
+  for (const item of data.data) {
     const participants: any[] = item.participants || [];
     const home = participants.find((p) => p.meta?.location === 'home');
     const away = participants.find((p) => p.meta?.location === 'away');
@@ -124,11 +133,16 @@ export async function fetchSportmonksInPlayMatches(apiToken: string): Promise<Sp
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
   const data = await response.json();
-  const errorMessage = data.message || (Array.isArray(data.errors) ? data.errors.join(', ') : undefined);
-  if (errorMessage) throw new Error(errorMessage);
+  // Voir le commentaire équivalent dans fetchSportmonksFixturesByDate : un
+  // tableau `data` vide (aucun match en direct CE tour précis, le cas le
+  // plus fréquent) est un résultat normal même quand Sportmonks y accole un
+  // message générique — seule son absence signale un vrai problème.
+  if (!Array.isArray(data.data)) {
+    throw new Error(data.message || (Array.isArray(data.errors) ? data.errors.join(', ') : 'réponse invalide'));
+  }
 
   const matches: SportmonksInPlayMatch[] = [];
-  for (const item of data.data || []) {
+  for (const item of data.data) {
     const half: SportmonksInPlayMatch['half'] | null =
       item.state_id === STATE_ID_1ST_HALF ? '1H'
       : item.state_id === STATE_ID_HALFTIME ? 'HT'
