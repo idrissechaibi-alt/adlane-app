@@ -257,9 +257,14 @@ export default function EvolutionScreen() {
             onPress={handleForceScan}
             disabled={forcingScan}
           >
-            {forcingScan
-              ? <ActivityIndicator size="small" color="#4ade80" />
-              : <Ionicons name="play-circle" size={22} color="#4ade80" />}
+            {forcingScan ? (
+              <ActivityIndicator size="small" color="#4ade80" />
+            ) : (
+              <>
+                <Ionicons name="play-circle" size={18} color="#4ade80" />
+                <Text style={styles.forceScanButtonText}>Forcer le scan</Text>
+              </>
+            )}
           </TouchableOpacity>
         </View>
       )}
@@ -626,7 +631,20 @@ const styles = StyleSheet.create({
     color: '#e2e8f0',
   },
   forceScanButton: {
-    paddingHorizontal: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: 'rgba(74, 222, 128, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(74, 222, 128, 0.3)',
+  },
+  forceScanButtonText: {
+    color: '#4ade80',
+    fontSize: 11,
+    fontWeight: '600',
   },
   paperBetsBox: {
     flexDirection: 'row',
