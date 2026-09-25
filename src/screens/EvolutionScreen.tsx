@@ -179,7 +179,10 @@ export default function EvolutionScreen() {
           `${diag.intlBreak.matchesLiveFound} en direct ce tour, ` +
           `${diag.intlBreak.matchesInCheckpointWindow} au checkpoint pile à ce tour.`
         : 'Trêve internationale : hors fenêtre (calendrier inactif aujourd\'hui).'
-      : 'Trêve internationale : diagnostic indisponible (le scan en direct a échoué avant de l\'atteindre).');
+      : 'Trêve internationale : diagnostic indisponible (le scan en direct a échoué avant de l\'atteindre).') +
+    (diag.sportmonksConfirmedMatches != null
+      ? `\nSportmonks : ${diag.sportmonksConfirmedMatches} match(s) confirmé(s) en direct dans le monde ce tour.`
+      : '\nSportmonks : non configuré ou injoignable ce tour (repli Omniroute à l\'aveugle comme avant).');
 
   /**
    * Lance le tour complet (univers du jour, relevé live + étiquetage,

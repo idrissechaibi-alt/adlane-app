@@ -103,6 +103,9 @@ export interface AutoLearnTickDiagnostics {
    * absent uniquement si runInPlayComboTick a échoué avant même de calculer
    * ce diagnostic (voir le try/catch autour de son appel plus bas). */
   intlBreak?: InternationalBreakTickDiagnostics;
+  /** null = Sportmonks non configuré/en échec ce tour ; undefined seulement
+   * si runInPlayComboTick a échoué avant de le calculer. */
+  sportmonksConfirmedMatches?: number | null;
 }
 
 /**
@@ -236,10 +239,12 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
   // minute (règles apprises seules) et le moniteur mi-temps.
   let freshInPlayProposals = 0;
   let intlBreak: InternationalBreakTickDiagnostics | undefined;
+  let sportmonksConfirmedMatches: number | null | undefined;
   try {
     const result = await runInPlayComboTick(liveFixtures);
     freshInPlayProposals = result.freshProposals;
     intlBreak = result.intlBreak;
+    sportmonksConfirmedMatches = result.sportmonksConfirmedMatches;
   } catch (error: any) {
     console.warn('[Tâche de fond] Scan en direct échoué:', error.message);
   }
@@ -267,6 +272,7 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
     liveMarkerClosed,
     freshInPlayProposals,
     intlBreak,
+    sportmonksConfirmedMatches,
   };
 }
 

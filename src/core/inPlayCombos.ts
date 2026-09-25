@@ -94,6 +94,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { matchesForDate, isWithinBreakWindow } from './internationalBreak';
 import { INTERNATIONAL_BREAK_CALENDAR } from '../data/internationalBreakCalendar';
 import { sendInternationalBreakCalendarNow } from './internationalBreakNotify';
+import { fetchSportmonksInPlayMatches, SportmonksInPlayMatch } from '../api/footballDataAPIs/sportmonks';
 
 const CHECKPOINT20_MIN_MINUTE = 18;
 const CHECKPOINT20_MAX_MINUTE = 24;
@@ -885,7 +886,8 @@ async function processRealSlot(
   liveFixtures: LiveFixture[],
   omnirouteConfig: OmnirouteConfig | null,
   alreadyProposed: Set<string>,
-  fresh: InPlayProposal[]
+  fresh: InPlayProposal[],
+  sportmonksInPlay: SportmonksInPlayMatch[] | null
 ): Promise<{ liveFound: number; inCheckpointWindow: number }> {
   if (slotMatches.length === 0) return { liveFound: 0, inCheckpointWindow: 0 };
 
@@ -903,9 +905,26 @@ async function processRealSlot(
     // Bornage au coup d'envoi théorique (± 130 min) pour ne pas interroger
     // Omniroute sur des matchs qui n'ont clairement pas encore commencé ou
     // sont clairement terminés.
+    //
+    // Confirmation Sportmonks AVANT d'appeler Omniroute (quand disponible) :
+    // Sportmonks (3000 requêtes/jour, quasiment jamais épuisé) dit si ce
+    // match est VRAIMENT en 1ère/2e mi-temps ou à la pause en ce moment,
+    // sans consommer le moindre agent Omniroute pour les matchs qui ne sont
+    // en réalité pas en cours — ça évite de solliciter des agents déjà sous
+    // pression (circuit breaker) pour rien. Sportmonks ne fournit JAMAIS la
+    // minute exacte ici (voir sportmonks.ts) : seul Omniroute la donne, ce
+    // filtre décide juste si ça vaut le coup de le lui demander.
     if (!live && omnirouteConfig) {
       const elapsedMs = Date.now() - Date.parse(scheduled.kickoff_utc);
-      if (Number.isFinite(elapsedMs) && elapsedMs >= 0 && elapsedMs <= 130 * 60 * 1000) {
+      const withinKickoffWindow = Number.isFinite(elapsedMs) && elapsedMs >= 0 && elapsedMs <= 130 * 60 * 1000;
+      const sportmonksSaysNotLive =
+        sportmonksInPlay !== null &&
+        !sportmonksInPlay.some((m) =>
+          namesLikelyMatch(normalizeTeamName(m.homeTeam), normalizeTeamName(scheduled.homeTeam)) &&
+          namesLikelyMatch(normalizeTeamName(m.awayTeam), normalizeTeamName(scheduled.awayTeam))
+        );
+
+      if (withinKickoffWindow && !sportmonksSaysNotLive) {
         live = (await fetchOmnirouteMatchStatus(
           omnirouteConfig, scheduled.homeTeam, scheduled.awayTeam, scheduled.leagueName
         ).catch(() => null)) ?? undefined;
@@ -956,6 +975,10 @@ async function processRealSlot(
 export interface InPlayComboTickResult {
   freshProposals: number;
   intlBreak: InternationalBreakTickDiagnostics;
+  /** null = Sportmonks non configuré ou appel en échec ce tour (repli
+   * Omniroute à l'aveugle, comportement d'avant) ; sinon, nombre de matchs
+   * confirmés en 1ère/2e mi-temps ou à la pause dans le monde entier. */
+  sportmonksConfirmedMatches: number | null;
 }
 
 export async function runInPlayComboTick(liveFixtures: LiveFixture[]): Promise<InPlayComboTickResult> {
@@ -973,13 +996,22 @@ export async function runInPlayComboTick(liveFixtures: LiveFixture[]): Promise<I
   const fresh: InPlayProposal[] = [];
   const omnirouteConfig = await loadOmnirouteConfig();
 
+  // Confirmation Sportmonks (voir processRealSlot) : un seul appel par tour,
+  // partagé entre tous les créneaux réels et internationaux — null si
+  // indisponible (pas de clé, ou appel en échec), auquel cas chaque créneau
+  // retombe sur le comportement d'avant (tenter Omniroute à l'aveugle).
+  const apiConfig = await getAPIConfig();
+  const sportmonksInPlay = apiConfig.sportmonks
+    ? await fetchSportmonksInPlayMatches(apiConfig.sportmonks).catch(() => null)
+    : null;
+
   // A) Paris RÉELS — 5 grands championnats, par créneau horaire, toutes les
   // ressources disponibles.
   const plan = await getDailyPlan();
   if (plan) {
     for (const slot of plan.slots) {
       const { matches: slotMatches } = buildScheduledMatches([slot]);
-      await processRealSlot(slotMatches, liveFixtures, omnirouteConfig, alreadyProposed, fresh);
+      await processRealSlot(slotMatches, liveFixtures, omnirouteConfig, alreadyProposed, fresh, sportmonksInPlay);
     }
   }
 
@@ -1002,7 +1034,7 @@ export async function runInPlayComboTick(liveFixtures: LiveFixture[]): Promise<I
       bySlot.set(m.creneau_display, arr);
     }
     for (const slotMatches of bySlot.values()) {
-      const result = await processRealSlot(slotMatches, liveFixtures, omnirouteConfig, alreadyProposed, fresh);
+      const result = await processRealSlot(slotMatches, liveFixtures, omnirouteConfig, alreadyProposed, fresh, sportmonksInPlay);
       intlLiveFound += result.liveFound;
       intlInCheckpointWindow += result.inCheckpointWindow;
     }
@@ -1175,5 +1207,9 @@ export async function runInPlayComboTick(liveFixtures: LiveFixture[]): Promise<I
   }
 
   if (fresh.length > 0) writeInPlayProposals([...existing, ...fresh]);
-  return { freshProposals: fresh.length, intlBreak };
+  return {
+    freshProposals: fresh.length,
+    intlBreak,
+    sportmonksConfirmedMatches: sportmonksInPlay?.length ?? null,
+  };
 }
