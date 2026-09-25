@@ -178,6 +178,7 @@ export default function EvolutionScreen() {
       ? 'liste transmise.\n'
       : `${diag.fictionalSportmonksMatches} via Sportmonks, ${diag.fictionalOmnirouteMatches} via balayage Omniroute ` +
         `(dernier recours, ${diag.fictionalCountriesTried}/${diag.fictionalCountriesTotal} pays interrogés).\n`) +
+    (diag.fictionalSportmonksError ? `Sportmonks (programme du jour) : ${diag.fictionalSportmonksError}.\n` : '') +
     (diag.fictionalNextKickoffUtc
       ? `Prochain match suivi : ${formatKickoff(diag.fictionalNextKickoffUtc)} (${diag.fictionalMatchesAhead} encore à venir aujourd'hui).\n`
       : diag.fictionalProgramSize > 0
@@ -198,7 +199,7 @@ export default function EvolutionScreen() {
       : 'Trêve internationale : diagnostic indisponible (le scan en direct a échoué avant de l\'atteindre).') +
     (diag.sportmonksConfirmedMatches != null
       ? `\nSportmonks : ${diag.sportmonksConfirmedMatches} match(s) confirmé(s) en direct dans le monde ce tour.`
-      : '\nSportmonks : non configuré ou injoignable ce tour (repli Omniroute à l\'aveugle comme avant).') +
+      : `\nSportmonks : ${diag.sportmonksError ?? 'injoignable ce tour'} (repli Omniroute à l\'aveugle comme avant).`) +
     (diag.sofaScoreConfirmedMatches != null
       ? `\nSofaScore : ${diag.sofaScoreConfirmedMatches} match(s) confirmé(s) en direct dans le monde ce tour.`
       : '\nSofaScore : injoignable ce tour (bloqué par leur protection anti-bot selon le réseau — repli Omniroute à l\'aveugle comme avant).');

@@ -383,22 +383,31 @@ const MAX_SPORTMONKS_PAGES_PER_FETCH = 40;
  * partielle ou vide, et le balayage Omniroute prend le relais pour les pays
  * manquants).
  */
+interface SportmonksWorldFixturesResult {
+  byCountry: Map<string, FictionalMatch[]>;
+  /** Raison précise d'un arrêt anticipé (quota épuisé ou appel en échec) —
+   * absente quand tout s'est bien passé. Un "0 via Sportmonks" affiché sans
+   * cette explication était impossible à distinguer d'une clé absente, d'une
+   * clé invalide ou d'un blocage réseau. */
+  error?: string;
+}
+
 async function fetchWorldFixturesViaSportmonks(
   apiToken: string,
   dateKey: string
-): Promise<Map<string, FictionalMatch[]>> {
+): Promise<SportmonksWorldFixturesResult> {
   const byCountry = new Map<string, FictionalMatch[]>();
   let cursor: string | null = null;
 
   for (let page = 0; page < MAX_SPORTMONKS_PAGES_PER_FETCH; page++) {
-    if (!(await spendBudget('sportmonks'))) break; // quota du jour épuisé
+    if (!(await spendBudget('sportmonks'))) return { byCountry, error: 'quota du jour épuisé' };
 
     let result;
     try {
       result = await fetchSportmonksFixturesByDate(apiToken, dateKey, cursor);
     } catch (error: any) {
       console.warn('[Programme fictif] Sportmonks indisponible:', error?.message);
-      break;
+      return { byCountry, error: error?.message || 'erreur inconnue' };
     }
 
     for (const fixture of result.fixtures) {
@@ -423,7 +432,7 @@ async function fetchWorldFixturesViaSportmonks(
     cursor = result.nextCursor;
   }
 
-  return byCountry;
+  return { byCountry };
 }
 
 /** Calendrier du jour d'un pays, toutes divisions — une requête Omniroute,
@@ -501,6 +510,10 @@ interface StoredProgram {
   /** Dernière lecture réussie (même partielle) du calendrier Sportmonks —
    * même rythme de rafraîchissement que le planning transmis. */
   sportmonksLoadedAt?: string;
+  /** Raison précise du dernier échec/absence Sportmonks (voir
+   * SportmonksWorldFixturesResult). Effacée dès qu'un appel réussit sans
+   * erreur, pour ne jamais afficher une erreur périmée. */
+  sportmonksLastError?: string;
 }
 
 /**
@@ -567,6 +580,10 @@ export interface FictionalProgramStatus {
    * deviner à partir du seul décompte total. */
   sportmonksMatches: number;
   omnirouteMatches: number;
+  /** Raison précise d'un "0 via Sportmonks" — clé absente, quota épuisé, ou
+   * message d'erreur HTTP/réseau exact plutôt qu'un générique "injoignable"
+   * qui ne permettait pas de distinguer les cas. */
+  sportmonksLastError?: string;
 }
 
 export async function getFictionalProgramStatus(date: string = todayKey()): Promise<FictionalProgramStatus> {
@@ -587,6 +604,7 @@ export async function getFictionalProgramStatus(date: string = todayKey()): Prom
     lastTrace: stored.lastTrace,
     sportmonksMatches: all.filter((m) => m.source === 'sportmonks').length,
     omnirouteMatches: all.filter((m) => m.source === 'omniroute').length,
+    sportmonksLastError: stored.sportmonksLastError,
   };
 }
 
@@ -645,7 +663,7 @@ export async function ensureFictionalDailyProgram(
     apiConfig.sportmonks &&
     (!stored.sportmonksLoadedAt || now - Date.parse(stored.sportmonksLoadedAt) >= SWEEP_INTERVAL_MS)
   ) {
-    const bySportmonksCountry = await fetchWorldFixturesViaSportmonks(apiConfig.sportmonks, date);
+    const { byCountry: bySportmonksCountry, error } = await fetchWorldFixturesViaSportmonks(apiConfig.sportmonks, date);
     for (const [country, matches] of bySportmonksCountry) {
       // Fusion, jamais remplacement : un match déjà au planning peut être en
       // cours de suivi (checkpoint 20e passé, 60e à venir).
@@ -654,6 +672,10 @@ export async function ensureFictionalDailyProgram(
       stored.byCountry[country] = [...merged.values()];
     }
     stored.sportmonksLoadedAt = new Date(now).toISOString();
+    stored.sportmonksLastError = error;
+    await AsyncStorage.setItem(programKey(date), JSON.stringify(stored));
+  } else if (!apiConfig.sportmonks && stored.sportmonksLastError !== 'clé absente (Gestion des API)') {
+    stored.sportmonksLastError = 'clé absente (Gestion des API)';
     await AsyncStorage.setItem(programKey(date), JSON.stringify(stored));
   }
 

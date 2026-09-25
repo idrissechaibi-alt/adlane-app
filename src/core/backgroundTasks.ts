@@ -148,6 +148,10 @@ export interface AutoLearnTickDiagnostics {
    * recours (demande explicite : démotion d'Omniroute). */
   fictionalSportmonksMatches: number;
   fictionalOmnirouteMatches: number;
+  /** Raison précise d'un "0 via Sportmonks" (clé absente, quota épuisé, ou
+   * message d'erreur exact) — remplace un "injoignable" générique impossible
+   * à agir dessus. */
+  fictionalSportmonksError?: string;
   liveFixturesFound: number;
   liveFixturesSource: SharedLiveFixturesResult['source'];
   liveMarkerObserved: number;
@@ -162,6 +166,9 @@ export interface AutoLearnTickDiagnostics {
   sportmonksConfirmedMatches?: number | null;
   /** Même principe, côté SofaScore. */
   sofaScoreConfirmedMatches?: number | null;
+  /** Raison précise d'un sportmonksConfirmedMatches null (clé absente, ou
+   * message d'erreur exact) — remplace un "injoignable" générique. */
+  sportmonksError?: string;
 }
 
 /**
@@ -234,6 +241,7 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
   let fictionalLastTrace: { country: string; attempts: OmnirouteAttempt[] } | undefined;
   let fictionalSportmonksMatches = 0;
   let fictionalOmnirouteMatches = 0;
+  let fictionalSportmonksError: string | undefined;
   try {
     const omnirouteConfig = await loadOmnirouteConfig();
     omnirouteConfigured = Boolean(omnirouteConfig);
@@ -248,6 +256,7 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
     fictionalLastTrace = status.lastTrace;
     fictionalSportmonksMatches = status.sportmonksMatches;
     fictionalOmnirouteMatches = status.omnirouteMatches;
+    fictionalSportmonksError = status.sportmonksLastError;
   } catch (error: any) {
     console.warn('[Tâche de fond] Programme fictif du jour indisponible:', error.message);
   }
@@ -301,12 +310,14 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
   let intlBreak: InternationalBreakTickDiagnostics | undefined;
   let sportmonksConfirmedMatches: number | null | undefined;
   let sofaScoreConfirmedMatches: number | null | undefined;
+  let sportmonksError: string | undefined;
   try {
     const result = await runInPlayComboTick(liveFixtures);
     freshInPlayProposals = result.freshProposals;
     intlBreak = result.intlBreak;
     sportmonksConfirmedMatches = result.sportmonksConfirmedMatches;
     sofaScoreConfirmedMatches = result.sofaScoreConfirmedMatches;
+    sportmonksError = result.sportmonksError;
   } catch (error: any) {
     console.warn('[Tâche de fond] Scan en direct échoué:', error.message);
   }
@@ -330,6 +341,7 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
     fictionalLastTrace,
     fictionalSportmonksMatches,
     fictionalOmnirouteMatches,
+    fictionalSportmonksError,
     liveFixturesFound: liveFixtures.length,
     liveFixturesSource: shared.source,
     liveMarkerObserved,
@@ -338,6 +350,7 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
     intlBreak,
     sportmonksConfirmedMatches,
     sofaScoreConfirmedMatches,
+    sportmonksError,
   };
 }
 

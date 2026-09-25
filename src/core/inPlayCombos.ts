@@ -1000,6 +1000,12 @@ export interface InPlayComboTickResult {
    * clé requise, mais bloqué par leur protection anti-bot selon le réseau —
    * null recouvre les deux cas : injoignable ce tour). */
   sofaScoreConfirmedMatches: number | null;
+  /** Raison précise du null ci-dessus : "clé absente" et "appel en échec"
+   * s'affichaient jusqu'ici sous le même message générique, rendant
+   * impossible de distinguer une clé manquante d'une clé invalide ou d'un
+   * blocage réseau sans deviner. Absent quand sportmonksConfirmedMatches
+   * n'est pas null (pas d'erreur à expliquer). */
+  sportmonksError?: string;
 }
 
 export async function runInPlayComboTick(liveFixtures: LiveFixture[]): Promise<InPlayComboTickResult> {
@@ -1028,10 +1034,13 @@ export async function runInPlayComboTick(liveFixtures: LiveFixture[]): Promise<I
   // compteur global (incrementRequestCount) sans passer par spendBudget, qui
   // réserverait 70% du quota à l'auto-learning et grèverait à tort la part
   // laissée à cet usage direct.
+  let sportmonksError: string | undefined = apiConfig.sportmonks
+    ? undefined
+    : 'clé absente (Gestion des API)';
   const sportmonksInPlay = apiConfig.sportmonks
     ? await fetchSportmonksInPlayMatches(apiConfig.sportmonks)
         .then((matches) => { void incrementRequestCount('sportmonks'); return matches; })
-        .catch(() => null)
+        .catch((error: any) => { sportmonksError = error?.message || 'erreur inconnue'; return null; })
     : null;
   const sofaScoreInPlay = await fetchSofaScoreInPlayMatches().catch(() => null);
 
@@ -1242,5 +1251,6 @@ export async function runInPlayComboTick(liveFixtures: LiveFixture[]): Promise<I
     intlBreak,
     sportmonksConfirmedMatches: sportmonksInPlay?.length ?? null,
     sofaScoreConfirmedMatches: sofaScoreInPlay?.length ?? null,
+    sportmonksError,
   };
 }
