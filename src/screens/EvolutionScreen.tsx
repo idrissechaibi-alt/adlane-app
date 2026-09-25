@@ -21,7 +21,7 @@ import { computeMarketCalibrations } from '../core/calibration';
 import { generateImprovementReport } from '../core/reporter';
 import { MarketCalibration, Lesson, Bet, DailyReport } from '../types';
 import { useIsFocused } from '@react-navigation/native';
-import { runAutoLearnTick, AutoLearnTickDiagnostics } from '../core/backgroundTasks';
+import { runAutoLearnTick, AutoLearnTickDiagnostics, getNativeBackgroundTickStats, NativeBackgroundTickStats } from '../core/backgroundTasks';
 import { sendTelegramMessage } from '../core/telegram';
 
 export default function EvolutionScreen() {
@@ -153,10 +153,25 @@ export default function EvolutionScreen() {
     aucune_echec_omniroute: 'aucun — repli Omniroute en échec',
   };
 
+  /** "il y a 3h12" à partir d'un horodatage passé — pendant du delay positif
+   * de formatKickoff (à venir), mais pour du passé. */
+  const formatElapsedSince = (isoTimestamp: string) => {
+    const ts = Date.parse(isoTimestamp);
+    if (!Number.isFinite(ts)) return isoTimestamp;
+    const minutes = Math.max(0, Math.round((Date.now() - ts) / 60_000));
+    if (minutes < 60) return `il y a ${minutes} min`;
+    const hours = Math.floor(minutes / 60);
+    return `il y a ${hours}h${String(minutes % 60).padStart(2, '0')}`;
+  };
+
   /** Même texte pour l'alerte à l'écran ET pour l'envoi Telegram (voir
    * handleForceScan) — un seul format à tenir à jour. */
-  const formatScanDiagnostics = (diag: AutoLearnTickDiagnostics): string =>
+  const formatScanDiagnostics = (diag: AutoLearnTickDiagnostics, nativeTickStats: NativeBackgroundTickStats): string =>
     `🔍 Scan forcé terminé\n` +
+    `Tâche de fond native (Android) : ` +
+    (nativeTickStats.lastTickAt
+      ? `dernier réveil ${formatElapsedSince(nativeTickStats.lastTickAt)} (${nativeTickStats.ticksLast24h} fois sur les dernières 24h — visée : ~96/jour).\n`
+      : "jamais réveillée depuis l'installation ou la dernière réinitialisation — vérifie Paramètres Android → Batterie → cette app → 'Sans restriction' (l'optimisation de batterie par défaut la bloque sur beaucoup de téléphones).\n") +
     `Omniroute : ${diag.omnirouteConfigured ? 'configuré' : 'NON CONFIGURÉ (Paramètres → endpoint + agents)'}.\n` +
     `Planning du jour : ${diag.fictionalProgramSize} match(s) — ` +
     (diag.fictionalProgramFromFeed
@@ -208,7 +223,8 @@ export default function EvolutionScreen() {
     try {
       const diag = await runAutoLearnTick();
       refreshLiveCounters();
-      const message = formatScanDiagnostics(diag);
+      const nativeTickStats = await getNativeBackgroundTickStats();
+      const message = formatScanDiagnostics(diag, nativeTickStats);
       Alert.alert('Scan terminé', message);
       await sendTelegramMessage(message);
     } catch (error: any) {

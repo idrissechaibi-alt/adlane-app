@@ -8,6 +8,7 @@
 
 import * as BackgroundTask from 'expo-background-task';
 import * as TaskManager from 'expo-task-manager';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getAPIConfig } from '../api/multiAPIManager';
 import { spendBudget } from './requestBudget';
 import { ensureDailyUniverse } from './matchUniverse';
@@ -77,6 +78,54 @@ async function fetchSharedLiveFixtures(): Promise<SharedLiveFixturesResult> {
 
 export const AUTOLEARN_TASK_NAME = 'adlane-autolearn-tick';
 const MINIMUM_INTERVAL_MINUTES = 15; // plancher Android, inutile de descendre
+
+const NATIVE_BG_TICK_LOG_KEY = '@native_bg_tick_log';
+const MAX_LOGGED_TICKS = 200;
+
+/** Horodatage à chaque réveil de la VRAIE tâche native (voir
+ * TaskManager.defineTask plus bas) — jamais depuis la boucle de premier plan
+ * (3 min, seulement app ouverte) ni le bouton "Forcer le scan", qui ne
+ * disent rien de la fréquence réelle décidée par Android en arrière-plan.
+ * Best-effort : un échec ici ne doit jamais faire échouer le tour lui-même. */
+async function recordNativeBackgroundTick(): Promise<void> {
+  try {
+    const raw = await AsyncStorage.getItem(NATIVE_BG_TICK_LOG_KEY);
+    const log: string[] = raw ? JSON.parse(raw) : [];
+    log.push(new Date().toISOString());
+    await AsyncStorage.setItem(NATIVE_BG_TICK_LOG_KEY, JSON.stringify(log.slice(-MAX_LOGGED_TICKS)));
+  } catch (error: any) {
+    console.warn('[Tâche de fond] Enregistrement du réveil natif échoué:', error?.message);
+  }
+}
+
+export interface NativeBackgroundTickStats {
+  /** null si la tâche native ne s'est jamais réveillée depuis l'installation
+   * (ou depuis la dernière purge du stockage) — à distinguer d'un simple
+   * délai : voir ticksLast24h pour la fréquence réelle récente. */
+  lastTickAt: string | null;
+  ticksLast24h: number;
+}
+
+/**
+ * Fréquence RÉELLE des réveils de la tâche native en arrière-plan — sert à
+ * distinguer "le pipeline ne détecte rien" de "Android ne réveille quasiment
+ * jamais la tâche" (optimisation de batterie, Doze). Le plancher Android
+ * annoncé (~15 min) n'est qu'un minimum demandé, jamais une garantie : sans
+ * ce chiffre, un manque de propositions est indiscernable de l'intérieur de
+ * l'app entre ces deux causes très différentes (l'une se corrige dans les
+ * réglages Android, l'autre nulle part dans ce code).
+ */
+export async function getNativeBackgroundTickStats(): Promise<NativeBackgroundTickStats> {
+  try {
+    const raw = await AsyncStorage.getItem(NATIVE_BG_TICK_LOG_KEY);
+    const log: string[] = raw ? JSON.parse(raw) : [];
+    const cutoff = Date.now() - 24 * 3_600_000;
+    const ticksLast24h = log.filter((ts) => Date.parse(ts) >= cutoff).length;
+    return { lastTickAt: log.length > 0 ? log[log.length - 1] : null, ticksLast24h };
+  } catch {
+    return { lastTickAt: null, ticksLast24h: 0 };
+  }
+}
 
 export interface AutoLearnTickDiagnostics {
   universeSize: number;
@@ -284,6 +333,7 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
 // La définition doit se faire au chargement du module, hors de tout composant :
 // le système peut réveiller l'app directement sur cette tâche.
 TaskManager.defineTask(AUTOLEARN_TASK_NAME, async () => {
+  await recordNativeBackgroundTick();
   try {
     await runAutoLearnTick();
     return BackgroundTask.BackgroundTaskResult.Success;
