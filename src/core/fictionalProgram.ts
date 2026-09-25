@@ -2,20 +2,24 @@
 // horaires. C'est la colonne vertébrale du pipeline fictif : sans lui, la
 // boucle n'a aucun match à suivre.
 //
-// DEUX sources, dans cet ordre :
+// TROIS sources, dans cet ordre :
 //
 //   1. Le planning TRANSMIS (data/programme-du-jour/<date>.json dans le
-//      dépôt), préparé chaque matin en dehors de l'application. Lire un
-//      calendrier complet demande de vraies recherches web, et les agents
-//      Omniroute du téléphone n'y arrivent pas de façon fiable (fournisseurs
-//      de recherche en panne, agents sans accès Internet). Préparer la liste
-//      à l'extérieur met le planning à l'abri de ces aléas.
-//   2. À défaut seulement, un balayage du calendrier par les agents, pays par
-//      pays — filet de sécurité pour les jours sans transmission.
+//      dépôt), préparé chaque matin en dehors de l'application.
+//   2. Sportmonks (/fixtures/date/{date}) — calendrier MONDIAL de la date en
+//      un flux de données structuré, découverte PRIMAIRE en l'absence de
+//      planning transmis. Remplace le balayage Omniroute pays-par-pays sur
+//      ce point précis : plus de "circuit breaker" possible puisqu'il n'y a
+//      plus d'agent de recherche dans la boucle.
+//   3. À défaut seulement (clé Sportmonks absente, quota épuisé, ou pays que
+//      Sportmonks n'a pas couverts ce jour-là), un balayage du calendrier par
+//      les agents Omniroute, pays par pays — dernier recours (demande
+//      explicite), plus filet de sécurité que source normale désormais.
 //
-// Dans les deux cas, Omniroute garde ensuite le travail qu'il fait bien :
+// Dans tous les cas, Omniroute garde ensuite le travail qu'il fait bien :
 // suivre match par match des rencontres déjà connues (score, tirs, corners,
-// cartons) et appliquer le protocole 20e/60e minute.
+// cartons) et appliquer le protocole 20e/60e minute — ce fichier ne fait que
+// construire la LISTE des matchs à surveiller, jamais leur suivi en direct.
 //
 // À quoi sert l'horaire : connaître le coup d'envoi suffit à savoir QUAND
 // surveiller un match, sans dépendre d'un relevé "tous les matchs en direct
@@ -27,6 +31,9 @@ import { OmnirouteAttempt, askOmnirouteUsable, attemptsAllFailed } from './omnir
 import { syntheticFixtureId } from './halftimeMonitor';
 import { fetchRepoJson } from './gitAutoSync';
 import { mapWithConcurrency } from './concurrency';
+import { fetchSportmonksFixturesByDate } from '../api/footballDataAPIs/sportmonks';
+import { spendBudget } from './requestBudget';
+import { getAPIConfig } from '../api/multiAPIManager';
 
 const PROGRAM_KEY_PREFIX = '@fictional_program_';
 const CHECKED_KEY_PREFIX = '@fictional_checked_';
@@ -91,6 +98,10 @@ export interface FictionalMatch {
   league: string;
   country: string;
   kickoff_utc: string;
+  /** D'où vient cette rencontre — absent pour le planning transmis (déjà
+   * distingué par sa propre clé de stockage). Sert uniquement au diagnostic
+   * affiché (quelle source alimente réellement le programme du jour). */
+  source?: 'sportmonks' | 'omniroute';
 }
 
 function todayKey(): string {
@@ -273,10 +284,146 @@ function extractFixtures(text: string, country: string, dateKey: string): Fictio
       league: typeof m.competition === 'string' && m.competition.trim() ? m.competition.trim() : `${country} (division inconnue)`,
       country,
       kickoff_utc: kickoff,
+      source: 'omniroute',
     });
   }
 
   return matches.length > 0 ? matches : null;
+}
+
+/** Alias anglais (tels que renvoyés par Sportmonks) vers le libellé français
+ * canonique utilisé dans FICTIONAL_COUNTRIES. Plusieurs alias possibles par
+ * pays : les fournisseurs de données n'orthographient pas tous pareil (ex.
+ * "Czech Republic" vs "Czechia"). Un pays absent de cette table n'est pas
+ * retenu depuis Sportmonks (hors périmètre choisi), mais reste éligible au
+ * balayage Omniroute si jamais il y figurait par erreur. */
+const SPORTMONKS_COUNTRY_ALIASES: Record<string, string[]> = {
+  'Angleterre': ['England'],
+  'Écosse': ['Scotland'],
+  'Pays de Galles': ['Wales'],
+  'Irlande': ['Republic of Ireland', 'Ireland'],
+  'Irlande du Nord': ['Northern Ireland'],
+  'Espagne': ['Spain'],
+  'Portugal': ['Portugal'],
+  'France': ['France'],
+  'Italie': ['Italy'],
+  'Allemagne': ['Germany'],
+  'Autriche': ['Austria'],
+  'Suisse': ['Switzerland'],
+  'Pays-Bas': ['Netherlands'],
+  'Belgique': ['Belgium'],
+  'Grèce': ['Greece'],
+  'Chypre': ['Cyprus'],
+  'Danemark': ['Denmark'],
+  'Norvège': ['Norway'],
+  'Suède': ['Sweden'],
+  'Finlande': ['Finland'],
+  'Islande': ['Iceland'],
+  'Pologne': ['Poland'],
+  'République tchèque': ['Czech Republic', 'Czechia'],
+  'Slovaquie': ['Slovakia'],
+  'Hongrie': ['Hungary'],
+  'Roumanie': ['Romania'],
+  'Bulgarie': ['Bulgaria'],
+  'Croatie': ['Croatia'],
+  'Serbie': ['Serbia'],
+  'Slovénie': ['Slovenia'],
+  'Bosnie-Herzégovine': ['Bosnia and Herzegovina'],
+  'Ukraine': ['Ukraine'],
+  'Russie': ['Russia'],
+  'Turquie': ['Turkey', 'Türkiye'],
+  'Israël': ['Israel'],
+  'Japon': ['Japan'],
+  'Corée du Sud': ['South Korea', 'Korea Republic'],
+  'Chine': ['China', 'China PR'],
+  'Arabie saoudite': ['Saudi Arabia'],
+  'Qatar': ['Qatar'],
+  'Émirats arabes unis': ['United Arab Emirates'],
+  'Iran': ['Iran'],
+  'Irak': ['Iraq'],
+  'Ouzbékistan': ['Uzbekistan'],
+  'Inde': ['India'],
+  'Thaïlande': ['Thailand'],
+  'Vietnam': ['Vietnam'],
+  'Indonésie': ['Indonesia'],
+  'Malaisie': ['Malaysia'],
+  'Australie': ['Australia'],
+  'Brésil': ['Brazil'],
+  'Argentine': ['Argentina'],
+  'Mexique': ['Mexico'],
+  'États-Unis': ['United States', 'USA'],
+  'Colombie': ['Colombia'],
+  'Chili': ['Chile'],
+  'Uruguay': ['Uruguay'],
+  'Pérou': ['Peru'],
+  'Équateur': ['Ecuador'],
+  'Paraguay': ['Paraguay'],
+};
+
+const SPORTMONKS_ENGLISH_TO_FRENCH_COUNTRY = new Map<string, string>();
+for (const [french, aliases] of Object.entries(SPORTMONKS_COUNTRY_ALIASES)) {
+  for (const alias of aliases) SPORTMONKS_ENGLISH_TO_FRENCH_COUNTRY.set(alias.toLowerCase(), french);
+}
+
+/** Pages Sportmonks à lire au maximum pour une date : garde-fou contre une
+ * pagination qui ne se terminerait jamais, pas un plafond qu'on s'attend à
+ * atteindre (quelques pages suffisent pour couvrir les 60 pays visés). */
+const MAX_SPORTMONKS_PAGES_PER_FETCH = 40;
+
+/**
+ * Calendrier mondial du jour lu directement chez Sportmonks (une date, tous
+ * pays et divisions couverts) — remplace le balayage pays-par-pays par agent
+ * comme découverte PRIMAIRE : un flux de données structuré, donc plus de
+ * "circuit breaker" possible. Ne garde que les pays de FICTIONAL_COUNTRIES
+ * (les autres élargiraient le corpus sans qu'on les ait choisis).
+ *
+ * Chaque page coûte une requête de quota (spendBudget) : la boucle s'arrête
+ * dès que le budget du jour est épuisé, avec ce qui a déjà été lu — jamais
+ * bloquant, jamais une erreur remontée à l'appelant (au pire la Map est
+ * partielle ou vide, et le balayage Omniroute prend le relais pour les pays
+ * manquants).
+ */
+async function fetchWorldFixturesViaSportmonks(
+  apiToken: string,
+  dateKey: string
+): Promise<Map<string, FictionalMatch[]>> {
+  const byCountry = new Map<string, FictionalMatch[]>();
+  let cursor: string | null = null;
+
+  for (let page = 0; page < MAX_SPORTMONKS_PAGES_PER_FETCH; page++) {
+    if (!(await spendBudget('sportmonks'))) break; // quota du jour épuisé
+
+    let result;
+    try {
+      result = await fetchSportmonksFixturesByDate(apiToken, dateKey, cursor);
+    } catch (error: any) {
+      console.warn('[Programme fictif] Sportmonks indisponible:', error?.message);
+      break;
+    }
+
+    for (const fixture of result.fixtures) {
+      const french = SPORTMONKS_ENGLISH_TO_FRENCH_COUNTRY.get(fixture.country.toLowerCase());
+      if (!french) continue; // pays hors périmètre FICTIONAL_COUNTRIES
+
+      const list = byCountry.get(french) ?? [];
+      if (list.length >= MAX_MATCHES_PER_COUNTRY) continue;
+      list.push({
+        fixtureId: syntheticFixtureId(fixture.homeTeam, fixture.awayTeam, dateKey),
+        homeTeam: fixture.homeTeam,
+        awayTeam: fixture.awayTeam,
+        league: fixture.league,
+        country: french,
+        kickoff_utc: fixture.kickoffUtc,
+        source: 'sportmonks',
+      });
+      byCountry.set(french, list);
+    }
+
+    if (!result.nextCursor) break;
+    cursor = result.nextCursor;
+  }
+
+  return byCountry;
 }
 
 /** Calendrier du jour d'un pays, toutes divisions — une requête Omniroute,
@@ -351,6 +498,9 @@ interface StoredProgram {
   sweepStartedAt?: string;
   /** Dernière lecture réussie du planning transmis. */
   feedLoadedAt?: string;
+  /** Dernière lecture réussie (même partielle) du calendrier Sportmonks —
+   * même rythme de rafraîchissement que le planning transmis. */
+  sportmonksLoadedAt?: string;
 }
 
 /**
@@ -412,6 +562,11 @@ export interface FictionalProgramStatus {
   countriesTotal: number;
   /** Réponses des agents au dernier pays interrogé, pour diagnostic. */
   lastTrace?: { country: string; attempts: OmnirouteAttempt[] };
+  /** Répartition par provenance (hors planning transmis) — pour vérifier
+   * concrètement que Sportmonks alimente bien le programme plutôt que de
+   * deviner à partir du seul décompte total. */
+  sportmonksMatches: number;
+  omnirouteMatches: number;
 }
 
 export async function getFictionalProgramStatus(date: string = todayKey()): Promise<FictionalProgramStatus> {
@@ -430,6 +585,8 @@ export async function getFictionalProgramStatus(date: string = todayKey()): Prom
     countriesTried: Object.keys(stored.attempts).length,
     countriesTotal: FICTIONAL_COUNTRIES.length,
     lastTrace: stored.lastTrace,
+    sportmonksMatches: all.filter((m) => m.source === 'sportmonks').length,
+    omnirouteMatches: all.filter((m) => m.source === 'omniroute').length,
   };
 }
 
@@ -451,7 +608,7 @@ export async function getFictionalProgramStatus(date: string = todayKey()): Prom
  * condamne pas la soirée.
  */
 export async function ensureFictionalDailyProgram(
-  config: OmnirouteConfig,
+  config: OmnirouteConfig | null,
   date: string = todayKey(),
   maxCountriesPerRun: number = MAX_COUNTRIES_PER_RUN
 ): Promise<FictionalMatch[]> {
@@ -472,10 +629,41 @@ export async function ensureFictionalDailyProgram(
     }
   }
 
-  // 2) Balayage Omniroute — filet de sécurité seulement : il ne sert que les
-  // jours où aucun planning n'a été transmis. Inutile de faire chercher aux
-  // agents ce qu'on leur a déjà donné.
+  // 2) Sportmonks / Omniroute : inutiles tous les deux si un planning transmis
+  // couvre déjà la journée.
   if ((stored.byCountry[FEED_SOURCE_KEY]?.length ?? 0) > 0) {
+    return selectFromStored(stored);
+  }
+
+  // 3) Sportmonks — découverte PRIMAIRE en l'absence de planning transmis :
+  // un flux de données structuré (calendrier mondial de la date), donc plus
+  // de risque de "circuit breaker" côté agents de recherche. Même rythme de
+  // rafraîchissement horaire que le planning transmis, pour ne pas reconsommer
+  // du quota à chaque tour de 3 minutes.
+  const apiConfig = await getAPIConfig();
+  if (
+    apiConfig.sportmonks &&
+    (!stored.sportmonksLoadedAt || now - Date.parse(stored.sportmonksLoadedAt) >= SWEEP_INTERVAL_MS)
+  ) {
+    const bySportmonksCountry = await fetchWorldFixturesViaSportmonks(apiConfig.sportmonks, date);
+    for (const [country, matches] of bySportmonksCountry) {
+      // Fusion, jamais remplacement : un match déjà au planning peut être en
+      // cours de suivi (checkpoint 20e passé, 60e à venir).
+      const merged = new Map((stored.byCountry[country] ?? []).map((m) => [m.fixtureId, m]));
+      for (const match of matches) if (!merged.has(match.fixtureId)) merged.set(match.fixtureId, match);
+      stored.byCountry[country] = [...merged.values()];
+    }
+    stored.sportmonksLoadedAt = new Date(now).toISOString();
+    await AsyncStorage.setItem(programKey(date), JSON.stringify(stored));
+  }
+
+  // 4) Balayage Omniroute — DERNIER RECOURS (demande explicite) : ne sert
+  // plus qu'à combler les pays que Sportmonks n'a pas couverts ce jour-là
+  // (clé absente, quota épuisé, championnat hors couverture) — pendingCountries
+  // exclut déjà tout pays pour lequel Sportmonks vient de trouver un match.
+  // Sans configuration Omniroute, cette étape est simplement sautée : le
+  // programme reste alimenté par le planning transmis et/ou Sportmonks.
+  if (!config) {
     return selectFromStored(stored);
   }
 

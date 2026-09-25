@@ -143,6 +143,11 @@ export interface AutoLearnTickDiagnostics {
   fictionalCountriesTotal: number;
   /** Ce que les agents ont répondu au dernier pays interrogé. */
   fictionalLastTrace?: { country: string; attempts: OmnirouteAttempt[] };
+  /** Répartition par provenance (hors planning transmis) — pour vérifier que
+   * Sportmonks alimente bien le programme plutôt qu'Omniroute en dernier
+   * recours (demande explicite : démotion d'Omniroute). */
+  fictionalSportmonksMatches: number;
+  fictionalOmnirouteMatches: number;
   liveFixturesFound: number;
   liveFixturesSource: SharedLiveFixturesResult['source'];
   liveMarkerObserved: number;
@@ -211,12 +216,14 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
     console.warn('[Tâche de fond] Univers du jour indisponible:', error.message);
   }
 
-  // Programme du jour de la boucle FICTIVE : Omniroute balaie une fois par
-  // jour le calendrier de 20 pays européens (toutes divisions, catégories
-  // jeunes comprises) et en retient 250 matchs avec leurs horaires. Idempotent
-  // — construit au premier tour après minuit, relu tel quel ensuite. C'est ce
-  // programme, et lui seul, qui dit au pipeline fictif quels matchs suivre et
-  // quand : aucune API n'intervient.
+  // Programme du jour de la boucle FICTIVE : découvert par planning transmis,
+  // Sportmonks (calendrier mondial, découverte primaire) ou, en dernier
+  // recours seulement, un balayage Omniroute pays par pays (voir
+  // fictionalProgram.ts). Idempotent — construit au premier tour après
+  // minuit puis rafraîchi au rythme des passes, relu tel quel entre-temps.
+  // Ne dépend PLUS d'Omniroute pour fonctionner : Sportmonks (ou le planning
+  // transmis) suffit désormais, Omniroute ne comble que ce qu'ils n'ont pas
+  // couvert.
   let fictionalProgramSize = 0;
   let omnirouteConfigured = false;
   let fictionalProgramFromFeed = false;
@@ -225,20 +232,22 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
   let fictionalCountriesTried = 0;
   let fictionalCountriesTotal = 0;
   let fictionalLastTrace: { country: string; attempts: OmnirouteAttempt[] } | undefined;
+  let fictionalSportmonksMatches = 0;
+  let fictionalOmnirouteMatches = 0;
   try {
     const omnirouteConfig = await loadOmnirouteConfig();
     omnirouteConfigured = Boolean(omnirouteConfig);
-    if (omnirouteConfig) {
-      const program = await ensureFictionalDailyProgram(omnirouteConfig);
-      fictionalProgramSize = program.length;
-      const status = await getFictionalProgramStatus();
-      fictionalProgramFromFeed = status.fromFeed;
-      fictionalMatchesAhead = status.matchesAhead;
-      fictionalNextKickoffUtc = status.nextKickoffUtc;
-      fictionalCountriesTried = status.countriesTried;
-      fictionalCountriesTotal = status.countriesTotal;
-      fictionalLastTrace = status.lastTrace;
-    }
+    const program = await ensureFictionalDailyProgram(omnirouteConfig);
+    fictionalProgramSize = program.length;
+    const status = await getFictionalProgramStatus();
+    fictionalProgramFromFeed = status.fromFeed;
+    fictionalMatchesAhead = status.matchesAhead;
+    fictionalNextKickoffUtc = status.nextKickoffUtc;
+    fictionalCountriesTried = status.countriesTried;
+    fictionalCountriesTotal = status.countriesTotal;
+    fictionalLastTrace = status.lastTrace;
+    fictionalSportmonksMatches = status.sportmonksMatches;
+    fictionalOmnirouteMatches = status.omnirouteMatches;
   } catch (error: any) {
     console.warn('[Tâche de fond] Programme fictif du jour indisponible:', error.message);
   }
@@ -319,6 +328,8 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
     fictionalCountriesTried,
     fictionalCountriesTotal,
     fictionalLastTrace,
+    fictionalSportmonksMatches,
+    fictionalOmnirouteMatches,
     liveFixturesFound: liveFixtures.length,
     liveFixturesSource: shared.source,
     liveMarkerObserved,

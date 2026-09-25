@@ -176,7 +176,8 @@ export default function EvolutionScreen() {
     `Planning du jour : ${diag.fictionalProgramSize} match(s) — ` +
     (diag.fictionalProgramFromFeed
       ? 'liste transmise.\n'
-      : `balayage Omniroute, ${diag.fictionalCountriesTried}/${diag.fictionalCountriesTotal} pays interrogés.\n`) +
+      : `${diag.fictionalSportmonksMatches} via Sportmonks, ${diag.fictionalOmnirouteMatches} via balayage Omniroute ` +
+        `(dernier recours, ${diag.fictionalCountriesTried}/${diag.fictionalCountriesTotal} pays interrogés).\n`) +
     (diag.fictionalNextKickoffUtc
       ? `Prochain match suivi : ${formatKickoff(diag.fictionalNextKickoffUtc)} (${diag.fictionalMatchesAhead} encore à venir aujourd'hui).\n`
       : diag.fictionalProgramSize > 0

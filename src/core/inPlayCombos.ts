@@ -75,7 +75,7 @@ import { getFocusNoteByTeams, renderFocusNote, loadOmnirouteConfig } from './foc
 import { askOmnirouteLight, askOmnirouteUsable } from './omniroute';
 import { fetchMarkers } from './liveMarkers';
 import { spendBudget } from './requestBudget';
-import { getAPIConfig } from '../api/multiAPIManager';
+import { getAPIConfig, incrementRequestCount } from '../api/multiAPIManager';
 import {
   InPlayProposal,
   InPlayProposalLeg,
@@ -1024,8 +1024,14 @@ export async function runInPlayComboTick(liveFixtures: LiveFixture[]): Promise<I
   // mais bloque certaines requêtes selon le réseau), auquel cas ce créneau
   // retombe sur le comportement d'avant (tenter Omniroute à l'aveugle).
   const apiConfig = await getAPIConfig();
+  // Usage DIRECT (pipeline réel), pas l'auto-apprentissage : compté sur le
+  // compteur global (incrementRequestCount) sans passer par spendBudget, qui
+  // réserverait 70% du quota à l'auto-learning et grèverait à tort la part
+  // laissée à cet usage direct.
   const sportmonksInPlay = apiConfig.sportmonks
-    ? await fetchSportmonksInPlayMatches(apiConfig.sportmonks).catch(() => null)
+    ? await fetchSportmonksInPlayMatches(apiConfig.sportmonks)
+        .then((matches) => { void incrementRequestCount('sportmonks'); return matches; })
+        .catch(() => null)
     : null;
   const sofaScoreInPlay = await fetchSofaScoreInPlayMatches().catch(() => null);
 
