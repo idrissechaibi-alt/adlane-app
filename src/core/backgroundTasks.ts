@@ -106,6 +106,8 @@ export interface AutoLearnTickDiagnostics {
   /** null = Sportmonks non configuré/en échec ce tour ; undefined seulement
    * si runInPlayComboTick a échoué avant de le calculer. */
   sportmonksConfirmedMatches?: number | null;
+  /** Même principe, côté SofaScore. */
+  sofaScoreConfirmedMatches?: number | null;
 }
 
 /**
@@ -240,11 +242,13 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
   let freshInPlayProposals = 0;
   let intlBreak: InternationalBreakTickDiagnostics | undefined;
   let sportmonksConfirmedMatches: number | null | undefined;
+  let sofaScoreConfirmedMatches: number | null | undefined;
   try {
     const result = await runInPlayComboTick(liveFixtures);
     freshInPlayProposals = result.freshProposals;
     intlBreak = result.intlBreak;
     sportmonksConfirmedMatches = result.sportmonksConfirmedMatches;
+    sofaScoreConfirmedMatches = result.sofaScoreConfirmedMatches;
   } catch (error: any) {
     console.warn('[Tâche de fond] Scan en direct échoué:', error.message);
   }
@@ -273,6 +277,7 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
     freshInPlayProposals,
     intlBreak,
     sportmonksConfirmedMatches,
+    sofaScoreConfirmedMatches,
   };
 }
 

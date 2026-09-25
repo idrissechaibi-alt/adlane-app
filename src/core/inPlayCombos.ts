@@ -95,6 +95,7 @@ import { matchesForDate, isWithinBreakWindow } from './internationalBreak';
 import { INTERNATIONAL_BREAK_CALENDAR } from '../data/internationalBreakCalendar';
 import { sendInternationalBreakCalendarNow } from './internationalBreakNotify';
 import { fetchSportmonksInPlayMatches, SportmonksInPlayMatch } from '../api/footballDataAPIs/sportmonks';
+import { getInPlayMatches as fetchSofaScoreInPlayMatches, SofaScoreInPlayMatch } from '../api/footballDataAPIs/sofaScore';
 
 const CHECKPOINT20_MIN_MINUTE = 18;
 const CHECKPOINT20_MAX_MINUTE = 24;
@@ -881,13 +882,27 @@ async function processRealSlotCheckpoint(
  * ciblé si absent du relevé partagé), puis délègue à
  * processRealSlotCheckpoint pour les deux checkpoints.
  */
+/** Une source de confirmation (Sportmonks, SofaScore) a-t-elle ce match dans
+ * sa liste "en cours" ? Toujours par correspondance floue de noms d'équipes
+ * (aucun identifiant commun entre ces sources et le planning). */
+function matchConfirmedBy(
+  matches: Array<{ homeTeam: string; awayTeam: string }>,
+  scheduled: ScheduledMatch
+): boolean {
+  return matches.some((m) =>
+    namesLikelyMatch(normalizeTeamName(m.homeTeam), normalizeTeamName(scheduled.homeTeam)) &&
+    namesLikelyMatch(normalizeTeamName(m.awayTeam), normalizeTeamName(scheduled.awayTeam))
+  );
+}
+
 async function processRealSlot(
   slotMatches: ScheduledMatch[],
   liveFixtures: LiveFixture[],
   omnirouteConfig: OmnirouteConfig | null,
   alreadyProposed: Set<string>,
   fresh: InPlayProposal[],
-  sportmonksInPlay: SportmonksInPlayMatch[] | null
+  sportmonksInPlay: SportmonksInPlayMatch[] | null,
+  sofaScoreInPlay: SofaScoreInPlayMatch[] | null
 ): Promise<{ liveFound: number; inCheckpointWindow: number }> {
   if (slotMatches.length === 0) return { liveFound: 0, inCheckpointWindow: 0 };
 
@@ -906,25 +921,27 @@ async function processRealSlot(
     // Omniroute sur des matchs qui n'ont clairement pas encore commencé ou
     // sont clairement terminés.
     //
-    // Confirmation Sportmonks AVANT d'appeler Omniroute (quand disponible) :
-    // Sportmonks (3000 requêtes/jour, quasiment jamais épuisé) dit si ce
-    // match est VRAIMENT en 1ère/2e mi-temps ou à la pause en ce moment,
-    // sans consommer le moindre agent Omniroute pour les matchs qui ne sont
-    // en réalité pas en cours — ça évite de solliciter des agents déjà sous
-    // pression (circuit breaker) pour rien. Sportmonks ne fournit JAMAIS la
-    // minute exacte ici (voir sportmonks.ts) : seul Omniroute la donne, ce
-    // filtre décide juste si ça vaut le coup de le lui demander.
+    // Confirmation Sportmonks/SofaScore AVANT d'appeler Omniroute (quand
+    // disponibles) : ces deux sources disent si ce match est VRAIMENT en
+    // cours en ce moment, sans consommer le moindre agent Omniroute pour les
+    // matchs qui ne le sont pas — ça évite de solliciter des agents déjà
+    // sous pression (circuit breaker) pour rien. Ni l'une ni l'autre ne
+    // fournit la minute exacte ici (voir sportmonks.ts/sofaScore.ts) : seul
+    // Omniroute la donne, ce filtre décide juste si ça vaut le coup de la
+    // lui demander. On ne saute l'appel que si TOUTES les sources
+    // effectivement disponibles ce tour s'accordent à dire "non" — une
+    // seule source manquante ou en désaccord suffit à laisser passer.
     if (!live && omnirouteConfig) {
       const elapsedMs = Date.now() - Date.parse(scheduled.kickoff_utc);
       const withinKickoffWindow = Number.isFinite(elapsedMs) && elapsedMs >= 0 && elapsedMs <= 130 * 60 * 1000;
-      const sportmonksSaysNotLive =
-        sportmonksInPlay !== null &&
-        !sportmonksInPlay.some((m) =>
-          namesLikelyMatch(normalizeTeamName(m.homeTeam), normalizeTeamName(scheduled.homeTeam)) &&
-          namesLikelyMatch(normalizeTeamName(m.awayTeam), normalizeTeamName(scheduled.awayTeam))
-        );
 
-      if (withinKickoffWindow && !sportmonksSaysNotLive) {
+      const availableVerdicts = [
+        sportmonksInPlay !== null ? matchConfirmedBy(sportmonksInPlay, scheduled) : null,
+        sofaScoreInPlay !== null ? matchConfirmedBy(sofaScoreInPlay, scheduled) : null,
+      ].filter((v): v is boolean => v !== null);
+      const allAvailableSourcesSayNotLive = availableVerdicts.length > 0 && availableVerdicts.every((v) => !v);
+
+      if (withinKickoffWindow && !allAvailableSourcesSayNotLive) {
         live = (await fetchOmnirouteMatchStatus(
           omnirouteConfig, scheduled.homeTeam, scheduled.awayTeam, scheduled.leagueName
         ).catch(() => null)) ?? undefined;
@@ -979,6 +996,10 @@ export interface InPlayComboTickResult {
    * Omniroute à l'aveugle, comportement d'avant) ; sinon, nombre de matchs
    * confirmés en 1ère/2e mi-temps ou à la pause dans le monde entier. */
   sportmonksConfirmedMatches: number | null;
+  /** Même principe que sportmonksConfirmedMatches, côté SofaScore (aucune
+   * clé requise, mais bloqué par leur protection anti-bot selon le réseau —
+   * null recouvre les deux cas : injoignable ce tour). */
+  sofaScoreConfirmedMatches: number | null;
 }
 
 export async function runInPlayComboTick(liveFixtures: LiveFixture[]): Promise<InPlayComboTickResult> {
@@ -996,14 +1017,17 @@ export async function runInPlayComboTick(liveFixtures: LiveFixture[]): Promise<I
   const fresh: InPlayProposal[] = [];
   const omnirouteConfig = await loadOmnirouteConfig();
 
-  // Confirmation Sportmonks (voir processRealSlot) : un seul appel par tour,
-  // partagé entre tous les créneaux réels et internationaux — null si
-  // indisponible (pas de clé, ou appel en échec), auquel cas chaque créneau
+  // Confirmations Sportmonks/SofaScore (voir processRealSlot) : un seul
+  // appel de chaque par tour, partagés entre tous les créneaux réels et
+  // internationaux — null si indisponible (pas de clé pour Sportmonks,
+  // appel en échec pour l'un ou l'autre — SofaScore n'a pas besoin de clé
+  // mais bloque certaines requêtes selon le réseau), auquel cas ce créneau
   // retombe sur le comportement d'avant (tenter Omniroute à l'aveugle).
   const apiConfig = await getAPIConfig();
   const sportmonksInPlay = apiConfig.sportmonks
     ? await fetchSportmonksInPlayMatches(apiConfig.sportmonks).catch(() => null)
     : null;
+  const sofaScoreInPlay = await fetchSofaScoreInPlayMatches().catch(() => null);
 
   // A) Paris RÉELS — 5 grands championnats, par créneau horaire, toutes les
   // ressources disponibles.
@@ -1011,7 +1035,7 @@ export async function runInPlayComboTick(liveFixtures: LiveFixture[]): Promise<I
   if (plan) {
     for (const slot of plan.slots) {
       const { matches: slotMatches } = buildScheduledMatches([slot]);
-      await processRealSlot(slotMatches, liveFixtures, omnirouteConfig, alreadyProposed, fresh, sportmonksInPlay);
+      await processRealSlot(slotMatches, liveFixtures, omnirouteConfig, alreadyProposed, fresh, sportmonksInPlay, sofaScoreInPlay);
     }
   }
 
@@ -1034,7 +1058,7 @@ export async function runInPlayComboTick(liveFixtures: LiveFixture[]): Promise<I
       bySlot.set(m.creneau_display, arr);
     }
     for (const slotMatches of bySlot.values()) {
-      const result = await processRealSlot(slotMatches, liveFixtures, omnirouteConfig, alreadyProposed, fresh, sportmonksInPlay);
+      const result = await processRealSlot(slotMatches, liveFixtures, omnirouteConfig, alreadyProposed, fresh, sportmonksInPlay, sofaScoreInPlay);
       intlLiveFound += result.liveFound;
       intlInCheckpointWindow += result.inCheckpointWindow;
     }
@@ -1211,5 +1235,6 @@ export async function runInPlayComboTick(liveFixtures: LiveFixture[]): Promise<I
     freshProposals: fresh.length,
     intlBreak,
     sportmonksConfirmedMatches: sportmonksInPlay?.length ?? null,
+    sofaScoreConfirmedMatches: sofaScoreInPlay?.length ?? null,
   };
 }

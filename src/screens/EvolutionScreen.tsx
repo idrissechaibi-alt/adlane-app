@@ -182,7 +182,10 @@ export default function EvolutionScreen() {
       : 'Trêve internationale : diagnostic indisponible (le scan en direct a échoué avant de l\'atteindre).') +
     (diag.sportmonksConfirmedMatches != null
       ? `\nSportmonks : ${diag.sportmonksConfirmedMatches} match(s) confirmé(s) en direct dans le monde ce tour.`
-      : '\nSportmonks : non configuré ou injoignable ce tour (repli Omniroute à l\'aveugle comme avant).');
+      : '\nSportmonks : non configuré ou injoignable ce tour (repli Omniroute à l\'aveugle comme avant).') +
+    (diag.sofaScoreConfirmedMatches != null
+      ? `\nSofaScore : ${diag.sofaScoreConfirmedMatches} match(s) confirmé(s) en direct dans le monde ce tour.`
+      : '\nSofaScore : injoignable ce tour (bloqué par leur protection anti-bot selon le réseau — repli Omniroute à l\'aveugle comme avant).');
 
   /**
    * Lance le tour complet (univers du jour, relevé live + étiquetage,

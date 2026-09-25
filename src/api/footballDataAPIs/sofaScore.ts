@@ -96,6 +96,45 @@ export async function getTodayFixtures(
   }
 }
 
+export interface SofaScoreInPlayMatch {
+  homeTeam: string;
+  awayTeam: string;
+}
+
+/**
+ * Tous les matchs actuellement EN COURS (football, toutes compétitions),
+ * dans le monde entier — sert de confirmation avant d'interroger Omniroute
+ * pour la minute précise (voir inPlayCombos.ts), exactement comme Sportmonks
+ * (fetchSportmonksInPlayMatches). Repose UNIQUEMENT sur `status.type ===
+ * 'inprogress'` : c'est le seul champ de statut confirmé de façon cohérente
+ * par plusieurs sources indépendantes lors de l'intégration — jamais sur un
+ * numéro de code de statut (valeurs contradictoires selon les sources
+ * consultées), ni sur un champ de minute de jeu (jamais vérifié de façon
+ * fiable, l'accès direct à l'API depuis cet environnement de développement
+ * ayant été bloqué par leur protection anti-bot). Jette en cas d'échec — à
+ * l'appelant de traiter ça comme "confirmation indisponible", jamais comme
+ * "aucun match en direct" (voir le commentaire "best-effort" en tête de
+ * fichier : ce blocage réseau est documenté comme dépendant du réseau/IP).
+ */
+export async function getInPlayMatches(): Promise<SofaScoreInPlayMatch[]> {
+  const today = new Date().toISOString().split('T')[0];
+  const response = await fetchWithTimeout(`${BASE_URL}/sport/football/scheduled-events/${today}`);
+  if (!response.ok) throw new Error(`SofaScore a renvoyé HTTP ${response.status}`);
+
+  const data = await response.json();
+  const events: any[] = data.events || [];
+
+  const matches: SofaScoreInPlayMatch[] = [];
+  for (const event of events) {
+    if (event.status?.type !== 'inprogress') continue;
+    const homeTeam = event.homeTeam?.name;
+    const awayTeam = event.awayTeam?.name;
+    if (!homeTeam || !awayTeam) continue;
+    matches.push({ homeTeam, awayTeam });
+  }
+  return matches;
+}
+
 export async function getMatchStatistics(
   config: SofaScoreConfig,
   matchId: string
