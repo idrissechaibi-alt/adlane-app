@@ -13,6 +13,7 @@ import { sendTelegramMessage } from './telegram';
 const DAILY_SCHEDULE_KEY = '@daily_schedule_json';
 const FOOTBALL_DATA_KEY = 'app-adlane.football-data-api-key';
 const LAST_SCAN_DATE_KEY = '@last_morning_scan_date';
+const LAST_TELEGRAM_PLAN_DATE_KEY = '@last_telegram_plan_date';
 
 /**
  * Date du jour au format YYYY-MM-DD en heure LOCALE de l'appareil (pas UTC) :
@@ -195,7 +196,17 @@ export async function executeMorningScan(): Promise<DailyPlan> {
 
     await AsyncStorage.setItem(DAILY_SCHEDULE_KEY, JSON.stringify(plan));
     await AsyncStorage.setItem(LAST_SCAN_DATE_KEY, localToday);
-    await sendTelegramMessage(formatMorningPlanMessage(plan));
+
+    // Une seule fois par jour sur Telegram, même si executeMorningScan est
+    // rappelée plusieurs fois (rafraîchissement manuel depuis l'écran
+    // Planning, en plus du scan automatique) — sans ce garde-fou, le même
+    // "aucun match aujourd'hui" partait sur Telegram à chaque rafraîchissement.
+    const lastTelegramPlanDate = await AsyncStorage.getItem(LAST_TELEGRAM_PLAN_DATE_KEY);
+    if (lastTelegramPlanDate !== localToday) {
+      const sent = await sendTelegramMessage(formatMorningPlanMessage(plan));
+      if (sent) await AsyncStorage.setItem(LAST_TELEGRAM_PLAN_DATE_KEY, localToday);
+    }
+
     return plan;
   } catch (error: any) {
     console.error('Erreur Scan Matinal:', error.message);

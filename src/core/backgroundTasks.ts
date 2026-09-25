@@ -116,6 +116,26 @@ export interface AutoLearnTickDiagnostics {
  * compteur qui reste silencieusement à 0.
  */
 export async function runAutoLearnTick(): Promise<AutoLearnTickDiagnostics> {
+  // Trois déclencheurs indépendants appellent cette fonction (tâche native
+  // en arrière-plan, boucle de premier plan toutes les 3 min, bouton
+  // "Forcer le scan") : sans ce verrou, deux tours pouvaient tourner en
+  // CONCURRENCE (ex. le tour automatique se déclenche pendant qu'un tour
+  // manuel est en cours) — chacun lisait les propositions déjà connues
+  // AVANT que l'autre n'ait écrit la sienne, et proposait donc deux fois le
+  // même match/checkpoint (constaté : 3 notifications Telegram quasi
+  // identiques pour le même match en moins d'une minute). Un tour déjà en
+  // vol est simplement réutilisé — jamais de double exécution simultanée.
+  if (inFlightTick) return inFlightTick;
+
+  inFlightTick = runAutoLearnTickLocked().finally(() => {
+    inFlightTick = null;
+  });
+  return inFlightTick;
+}
+
+let inFlightTick: Promise<AutoLearnTickDiagnostics> | null = null;
+
+async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
   // Scan matinal automatique (7h locales) : voir runMorningScanIfDue pour le
   // principe de déclenchement (premier tour après l'heure cible, idempotent).
   try {

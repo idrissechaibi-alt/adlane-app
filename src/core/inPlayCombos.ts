@@ -644,19 +644,28 @@ function buildProposalFromItems(
   };
 }
 
+/**
+ * Le pari (ou combiné) en clair d'abord, jamais noyé dans le jargon interne
+ * (fenêtre de checkpoint, libellés techniques) — demande explicite : on doit
+ * pouvoir lire le message et savoir IMMÉDIATEMENT quoi jouer, sans avoir à
+ * déchiffrer la structure du message.
+ */
 async function notifyProposal(proposal: InPlayProposal): Promise<void> {
-  const legsText = proposal.legs
-    .map((l) => `• ${l.homeTeam} ${l.scoreLabel} ${l.awayTeam} — ${l.selection} (${(l.prob * 100).toFixed(0)}%)`)
-    .join('\n');
   const emoji = proposal.kind === 'minute20' ? '⚡' : '⏱️';
-  const title = proposal.legs.length === 1
-    ? `${emoji} ${proposal.minute}e — ${proposal.legs[0].homeTeam} ${proposal.legs[0].scoreLabel} ${proposal.legs[0].awayTeam}`
-    : `${emoji} ${proposal.minute}e — Combo (${proposal.legs.length} matchs)`;
-  await sendLocalNotification(
-    title,
-    `${proposal.window} — ${(proposal.combinedProb * 100).toFixed(0)}% combiné\n${legsText}`,
-    { kind: proposal.kind }
-  );
+
+  if (proposal.legs.length === 1) {
+    const leg = proposal.legs[0];
+    const title = `${emoji} ${proposal.minute}e — ${leg.homeTeam} ${leg.scoreLabel} ${leg.awayTeam}`;
+    const body = `🎯 Pari : ${leg.selection}\nConfiance : ${(leg.prob * 100).toFixed(0)}%`;
+    await sendLocalNotification(title, body, { kind: proposal.kind });
+    return;
+  }
+
+  const title = `${emoji} ${proposal.minute}e — Combiné ${proposal.legs.length} matchs (${(proposal.combinedProb * 100).toFixed(0)}% combiné)`;
+  const body = proposal.legs
+    .map((l, i) => `${i + 1}) ${l.homeTeam} ${l.scoreLabel} ${l.awayTeam}\n   🎯 ${l.selection} (${(l.prob * 100).toFixed(0)}%)`)
+    .join('\n');
+  await sendLocalNotification(title, body, { kind: proposal.kind });
 }
 
 function findLiveFixture(scheduled: { homeTeam: string; awayTeam: string }, liveFixtures: LiveFixture[]): LiveFixture | undefined {
