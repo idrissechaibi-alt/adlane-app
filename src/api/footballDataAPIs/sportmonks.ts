@@ -159,3 +159,73 @@ export async function fetchSportmonksInPlayMatches(apiToken: string): Promise<Sp
   }
   return matches;
 }
+
+/**
+ * Test manuel (bouton "Tester" de Gestion des API) : appelle les DEUX
+ * endpoints réellement utilisés par l'app (/livescores et /fixtures/date) et
+ * rapporte ce que Sportmonks a VRAIMENT répondu, sans filtrer par état de
+ * match ni par pays — contrairement aux fonctions ci-dessus, dont le rôle
+ * n'est pas de diagnostiquer mais de fournir des données déjà nettoyées à la
+ * boucle en direct.
+ *
+ * Distingue explicitement les cas qui se ressemblent depuis l'app mais ont
+ * des causes différentes : clé invalide (échec sur les deux), plan qui ne
+ * couvre pas telle compétition (message générique sur un seul), ou
+ * simplement aucun match en direct à cet instant (tableau vide, sans
+ * message) — plutôt que le "non configuré ou injoignable" générique qui a
+ * fait tourner en rond.
+ */
+export async function testSportmonksConnection(apiToken: string): Promise<{ ok: boolean; message: string }> {
+  const lines: string[] = [];
+  let ok = true;
+
+  try {
+    const response = await fetchWithTimeout(
+      `${BASE_URL}/livescores?api_token=${encodeURIComponent(apiToken)}&include=participants`
+    );
+    if (!response.ok) {
+      ok = false;
+      lines.push(`Livescores : HTTP ${response.status}.`);
+    } else {
+      const data = await response.json();
+      if (!Array.isArray(data.data)) {
+        ok = false;
+        lines.push(`Livescores : ${data.message || (Array.isArray(data.errors) ? data.errors.join(', ') : 'réponse invalide')}`);
+      } else {
+        const total = data.data.length;
+        const byHalf = data.data.filter((item: any) =>
+          [STATE_ID_1ST_HALF, STATE_ID_HALFTIME, STATE_ID_2ND_HALF].includes(item.state_id)
+        ).length;
+        lines.push(`Livescores : ${total} match(s) en direct au total, dont ${byHalf} en 1ère/2e mi-temps ou à la pause.`);
+      }
+    }
+  } catch (error: any) {
+    ok = false;
+    lines.push(`Livescores : ${error?.message || 'erreur réseau'}.`);
+  }
+
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const response = await fetchWithTimeout(
+      `${BASE_URL}/fixtures/date/${today}?api_token=${encodeURIComponent(apiToken)}&include=league.country&per_page=5`
+    );
+    if (!response.ok) {
+      ok = false;
+      lines.push(`Calendrier du jour : HTTP ${response.status}.`);
+    } else {
+      const data = await response.json();
+      if (!Array.isArray(data.data)) {
+        ok = false;
+        lines.push(`Calendrier du jour : ${data.message || (Array.isArray(data.errors) ? data.errors.join(', ') : 'réponse invalide')}`);
+      } else {
+        const total = typeof data.pagination?.count === 'number' ? data.pagination.count : data.data.length;
+        lines.push(`Calendrier du jour : ${total} match(s) au total ce jour (toutes compétitions couvertes par le plan).`);
+      }
+    }
+  } catch (error: any) {
+    ok = false;
+    lines.push(`Calendrier du jour : ${error?.message || 'erreur réseau'}.`);
+  }
+
+  return { ok, message: lines.join('\n') };
+}

@@ -10,9 +10,10 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   getAPIConfig, saveAPIConfig, testAPIConnection, APIConfig,
-  getAllRequestCounts, resetRequestCount,
+  getAllRequestCounts, resetRequestCount, incrementRequestCount,
   getQuotaConfig, setQuotaSetting, getQuotaUsage, QuotaUsage, QuotaPeriod
 } from '../api/multiAPIManager';
+import { testSportmonksConnection } from '../api/footballDataAPIs/sportmonks';
 
 const OMNIROUTE_CONFIG_KEY = '@omniroute_config';
 
@@ -47,7 +48,7 @@ const API_SOURCES: APISourceMeta[] = [
   },
   {
     id: 'sportmonks', name: 'Sportmonks', icon: 'server', color: '#8b5cf6',
-    desc: 'API complète pro • $40/mois', placeholder: 'Votre token...', testable: false
+    desc: 'API complète pro • $40/mois', placeholder: 'Votre token...', testable: true
   },
   {
     id: 'sofaScore', name: 'SofaScore (secours)', icon: 'stats-chart', color: '#ec4899',
@@ -124,8 +125,27 @@ export default function APIManagementScreen({ navigation }: any) {
     if (!config) return;
     setTesting(source.id);
     try {
-      const ok = await testAPIConnection(source.id, config);
-      Alert.alert(ok ? '✅ Connexion OK' : '⚠️ Échec', ok ? `${source.name} répond correctement.` : `Impossible de joindre ${source.name}. Vérifiez la clé.`);
+      // Sportmonks : test dédié qui rapporte la réponse RÉELLE des deux
+      // endpoints utilisés par l'app (voir testSportmonksConnection) — un
+      // simple OK/échec ne permettait pas de distinguer clé invalide, plan
+      // ne couvrant pas telle compétition, ou simplement aucun match en
+      // direct à cet instant.
+      if (source.id === 'sportmonks') {
+        if (!config.sportmonks) {
+          Alert.alert('⚠️ Échec', 'Aucune clé Sportmonks renseignée.');
+        } else {
+          const { ok, message } = await testSportmonksConnection(config.sportmonks);
+          // Deux vrais appels Sportmonks (livescores + calendrier du jour) :
+          // comptés comme les autres tests, pour que la conso affichée reste
+          // exacte.
+          await incrementRequestCount('sportmonks');
+          await incrementRequestCount('sportmonks');
+          Alert.alert(ok ? '✅ Connexion OK' : '⚠️ Échec', message);
+        }
+      } else {
+        const ok = await testAPIConnection(source.id, config);
+        Alert.alert(ok ? '✅ Connexion OK' : '⚠️ Échec', ok ? `${source.name} répond correctement.` : `Impossible de joindre ${source.name}. Vérifiez la clé.`);
+      }
     } catch (e: any) {
       Alert.alert('❌ Échec', e.message || `Impossible de joindre ${source.name}`);
     } finally {
