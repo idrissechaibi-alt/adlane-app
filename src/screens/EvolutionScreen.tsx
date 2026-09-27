@@ -187,6 +187,7 @@ export default function EvolutionScreen() {
     (diag.fictionalLastTrace ? `${summarizeTrace(diag.fictionalLastTrace)}\n` : '') +
     `Univers du jour (API) : ${diag.universeSize} match(s) suivis.\n` +
     `Relevé live : ${diag.liveFixturesFound} match(s) en direct — source : ${LIVE_FIXTURES_SOURCE_LABEL[diag.liveFixturesSource] ?? diag.liveFixturesSource}.\n` +
+    (diag.apiFootballError ? `API-Football (relevé live) : ${diag.apiFootballError}.\n` : '') +
     `Marqueurs : ${diag.liveMarkerObserved} observé(s), ${diag.liveMarkerClosed} clôturé(s).\n` +
     `Scan 20e/60e minute : ${diag.freshInPlayProposals} nouvelle(s) proposition(s).\n` +
     (diag.intlBreak

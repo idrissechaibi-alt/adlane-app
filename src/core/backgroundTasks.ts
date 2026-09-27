@@ -32,6 +32,13 @@ interface SharedLiveFixturesResult {
    * indiscernable d'un vrai calme (aucun match en ce moment) ou d'Omniroute
    * non configuré. */
   source: 'api_football' | 'omniroute' | 'aucune_omniroute_non_configure' | 'aucune_echec_omniroute';
+  /** Raison précise d'un repli sur Omniroute côté API-Football (message
+   * d'erreur exact de data.errors, ou HTTP xxx) — sans ça, "source: omniroute"
+   * ne dit pas si la clé est en cause, le quota, ou (fréquent chez
+   * API-Football) un endpoint restreint sur certains plans, comme
+   * /fixtures?live=all qui peut être hors plan alors que /status répond très
+   * bien. Absent quand source vaut 'api_football' (pas d'échec à expliquer). */
+  apiFootballError?: string;
 }
 
 /**
@@ -54,25 +61,29 @@ interface SharedLiveFixturesResult {
  */
 async function fetchSharedLiveFixtures(): Promise<SharedLiveFixturesResult> {
   const apiConfig = await getAPIConfig();
+  let apiFootballError: string | undefined;
 
   if (apiConfig.apiFootball && (await spendBudget('apiFootball'))) {
     try {
       const fixtures = await fetchLiveFixtures(apiConfig.apiFootball);
       return { fixtures, source: 'api_football' };
     } catch (error: any) {
+      apiFootballError = error?.message || 'erreur inconnue';
       console.warn('[Tâche de fond] Relevé live API-Football échoué, repli Omniroute:', error.message);
     }
+  } else if (!apiConfig.apiFootball) {
+    apiFootballError = 'clé absente (Gestion des API)';
   }
 
   const omnirouteConfig = await loadOmnirouteConfig();
-  if (!omnirouteConfig) return { fixtures: [], source: 'aucune_omniroute_non_configure' };
+  if (!omnirouteConfig) return { fixtures: [], source: 'aucune_omniroute_non_configure', apiFootballError };
 
   try {
     const fixtures = await fetchOmnirouteAllLiveFixtures(omnirouteConfig);
-    return { fixtures, source: 'omniroute' };
+    return { fixtures, source: 'omniroute', apiFootballError };
   } catch (error: any) {
     console.warn('[Tâche de fond] Repli Omniroute pour le relevé live échoué:', error.message);
-    return { fixtures: [], source: 'aucune_echec_omniroute' };
+    return { fixtures: [], source: 'aucune_echec_omniroute', apiFootballError };
   }
 }
 
@@ -154,6 +165,10 @@ export interface AutoLearnTickDiagnostics {
   fictionalSportmonksError?: string;
   liveFixturesFound: number;
   liveFixturesSource: SharedLiveFixturesResult['source'];
+  /** Raison précise d'un repli sur Omniroute (clé absente, ou message
+   * d'erreur exact d'API-Football) — absent quand liveFixturesSource vaut
+   * 'api_football' (pas d'échec à expliquer). */
+  apiFootballError?: string;
   liveMarkerObserved: number;
   liveMarkerClosed: number;
   freshInPlayProposals: number;
@@ -344,6 +359,7 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
     fictionalSportmonksError,
     liveFixturesFound: liveFixtures.length,
     liveFixturesSource: shared.source,
+    apiFootballError: shared.apiFootballError,
     liveMarkerObserved,
     liveMarkerClosed,
     freshInPlayProposals,
