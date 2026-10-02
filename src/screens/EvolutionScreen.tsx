@@ -227,23 +227,34 @@ export default function EvolutionScreen() {
    * n'est pas toujours possible — le même diagnostic arrive sur Telegram dès
    * que le tour se termine, que l'app soit encore ouverte ou non.
    */
-  const handleForceScan = async () => {
+  const handleForceScan = () => {
     if (forcingScan) return;
     setForcingScan(true);
-    try {
-      const diag = await runAutoLearnTick();
-      refreshLiveCounters();
-      const nativeTickStats = await getNativeBackgroundTickStats();
-      const message = formatScanDiagnostics(diag, nativeTickStats);
-      Alert.alert('Scan terminé', message);
-      await sendTelegramMessage(message);
-    } catch (error: any) {
-      const message = `❌ Scan forcé échoué : ${error?.message || 'erreur inconnue'}.`;
-      Alert.alert('Scan échoué', error?.message || 'Erreur inconnue.');
-      await sendTelegramMessage(message);
-    } finally {
-      setForcingScan(false);
-    }
+    // Ne BLOQUE plus l'écran jusqu'à la fin : avec de vrais appels IA
+    // (FreeLLMAPI) qui réussissent désormais au lieu d'échouer instantanément
+    // comme avec l'ancien Omniroute, un tour complet peut prendre plusieurs
+    // minutes — rester devant un bouton qui tourne tout ce temps donnait
+    // l'impression que le scan était bloqué. On confirme le lancement tout de
+    // suite et on laisse le tick continuer en tâche de fond ; le résultat
+    // arrive sur Telegram dès qu'il est prêt, sans qu'il faille rester sur
+    // cet écran. runAutoLearnTick() se protège lui-même contre un double
+    // lancement (verrou interne), donc pas de risque à relancer entre-temps.
+    Alert.alert(
+      'Scan lancé',
+      "Il tourne en arrière-plan — ça peut prendre plusieurs minutes avec de vrais appels IA. Le résultat arrivera sur Telegram, pas besoin d'attendre ici."
+    );
+    runAutoLearnTick()
+      .then(async (diag) => {
+        refreshLiveCounters();
+        const nativeTickStats = await getNativeBackgroundTickStats();
+        const message = formatScanDiagnostics(diag, nativeTickStats);
+        await sendTelegramMessage(message);
+      })
+      .catch(async (error: any) => {
+        const message = `❌ Scan forcé échoué : ${error?.message || 'erreur inconnue'}.`;
+        await sendTelegramMessage(message);
+      })
+      .finally(() => setForcingScan(false));
   };
 
   const loadData = async () => {
