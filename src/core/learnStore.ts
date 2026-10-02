@@ -511,6 +511,43 @@ export function writeMarketSeriesFictional(points: MarketDayPoint[]): void {
   writeText(fileIn('market-series-fictional.json'), JSON.stringify(points.slice(-400)));
 }
 
+// ==================== TAUX D'ERREUR GLOBAL, PAR JOUR ====================
+//
+// Un instantané quotidien du taux de réussite CUMULÉ des paris papier
+// (model.paperBets.hitRate), pris à chaque consolidation (fin de chaque tour
+// de fond — fiable, contrairement au bilan de minuit qui dépend du
+// règlement des scores finaux via Omniroute, plus fragile). Sert UNIQUEMENT
+// à répondre à "quel est le taux d'erreur actuel, et son évolution depuis
+// hier" sans attendre que les courbes par marché (MarketDayPoint) aient un
+// cycle de règlement réussi — une question plus simple, sur des données déjà
+// disponibles et déjà fiables.
+
+export interface DailyAccuracySnapshot {
+  date: string;
+  hitRate: number;
+  total: number;
+  won: number;
+}
+
+export function readAccuracySnapshots(): DailyAccuracySnapshot[] {
+  const content = readTextSafe(fileIn('accuracy-snapshots.json'));
+  if (!content) return [];
+  try {
+    return JSON.parse(content);
+  } catch {
+    return [];
+  }
+}
+
+/** Remplace l'instantané du jour s'il existe déjà (idempotent sur plusieurs
+ * tours du même jour), garde un historique glissant de 60 jours. */
+export function recordAccuracySnapshot(snapshot: DailyAccuracySnapshot): void {
+  const existing = readAccuracySnapshots();
+  const withoutToday = existing.filter((s) => s.date !== snapshot.date);
+  const updated = [...withoutToday, snapshot].sort((a, b) => a.date.localeCompare(b.date));
+  writeText(fileIn('accuracy-snapshots.json'), JSON.stringify(updated.slice(-60)));
+}
+
 export function readInPlayProposals(): InPlayProposal[] {
   const content = readTextSafe(fileIn('inplay-proposals.json'));
   if (!content) return [];

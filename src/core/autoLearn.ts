@@ -35,11 +35,14 @@ import {
   readPaperBets,
   readPredictionOutcomes,
   readTrainingRows,
+  readAccuracySnapshots,
+  recordAccuracySnapshot,
   writeAgentDigest,
   writeLearnedModel,
   writePaperBets,
 } from './learnStore';
 import { computeScoutingAccuracy } from './scoutingReview';
+import { todayLocalDateString } from './scheduler';
 
 /** Fiabilité observée du scan en direct (20e/60e minute), par marché, sur les N derniers jours — réel ET fictif confondus (les deux réglés de la même façon, voir dailyReview.ts). */
 function computeCheckpointCalibration(days: number = 30) {
@@ -565,7 +568,56 @@ export async function consolidateLearning(): Promise<LearnedModel | null> {
 
   writeLearnedModel(model);
   writeAgentDigest(renderDigest(model, focus.markets, rows));
+
+  // Instantané quotidien du taux de réussite cumulé — pour répondre
+  // directement à "quel est le taux d'erreur actuel, et son évolution depuis
+  // hier" sans dépendre du règlement des scores finaux (dailyReview.ts),
+  // plus fragile. Écrit à chaque tour : le dernier du jour remplace les
+  // précédents (voir recordAccuracySnapshot), donc toujours à jour.
+  if (settled.length > 0) {
+    recordAccuracySnapshot({ date: todayLocalDateString(), hitRate, total: settled.length, won });
+  }
+
   return model;
+}
+
+export interface AccuracyTrend {
+  /** Taux d'erreur actuel (100 - taux de réussite), en pourcentage. */
+  errorRatePercent: number;
+  /** Taux de réussite actuel, en pourcentage — pour affichage complémentaire. */
+  hitRatePercent: number;
+  /** Nombre de paris papier réglés derrière ce taux (plus c'est haut, plus
+   * c'est fiable). */
+  sampleSize: number;
+  /** Évolution du taux de réussite en POINTS de pourcentage depuis hier
+   * (positif = amélioration), ou null si aucun instantané n'existe pour
+   * hier précisément (app pas utilisée ce jour-là, ou tout premier jour). */
+  evolutionVsYesterdayPoints: number | null;
+}
+
+/**
+ * Réponse directe à "quel est le taux d'erreur actuel, et son évolution
+ * depuis hier" — construite sur les instantanés quotidiens du taux de
+ * réussite cumulé (voir recordAccuracySnapshot), jamais sur les courbes par
+ * marché (MarketDayPoint), qui dépendent du règlement des scores finaux par
+ * Omniroute (dailyReview.ts) et peuvent rester vides plus longtemps.
+ */
+export function getAccuracyTrend(): AccuracyTrend | null {
+  const snapshots = readAccuracySnapshots();
+  if (snapshots.length === 0) return null;
+
+  const latest = snapshots[snapshots.length - 1];
+  const yesterday = todayLocalDateString(new Date(Date.now() - 24 * 3_600_000));
+  const yesterdaySnapshot = snapshots.find((s) => s.date === yesterday);
+
+  return {
+    errorRatePercent: (1 - latest.hitRate) * 100,
+    hitRatePercent: latest.hitRate * 100,
+    sampleSize: latest.total,
+    evolutionVsYesterdayPoints: yesterdaySnapshot
+      ? (latest.hitRate - yesterdaySnapshot.hitRate) * 100
+      : null,
+  };
 }
 
 function renderDigest(model: LearnedModel, markets: string[], rows: TrainingRow[]): string {

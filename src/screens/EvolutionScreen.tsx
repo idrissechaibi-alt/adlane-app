@@ -23,7 +23,7 @@ import { MarketCalibration, Lesson, Bet, DailyReport } from '../types';
 import { useIsFocused } from '@react-navigation/native';
 import { runAutoLearnTick, AutoLearnTickDiagnostics, getNativeBackgroundTickStats, NativeBackgroundTickStats } from '../core/backgroundTasks';
 import { sendTelegramMessage } from '../core/telegram';
-import { getAgentLearningDigest } from '../core/autoLearn';
+import { getAgentLearningDigest, getAccuracyTrend, AccuracyTrend } from '../core/autoLearn';
 
 export default function EvolutionScreen() {
   const isFocused = useIsFocused();
@@ -37,6 +37,10 @@ export default function EvolutionScreen() {
    * (voir learnStore.ts) ; marketSeries (combiné) reste utilisé uniquement
    * pour dater le dernier bilan effectué. */
   const [marketSeriesReal, setMarketSeriesReal] = useState<MarketDayPoint[]>([]);
+  /** Taux d'erreur actuel + évolution vs hier — calculé sur les paris papier
+   * (toujours fiable), pas sur les courbes par marché (qui dépendent du
+   * règlement des scores finaux et peuvent rester vides plus longtemps). */
+  const [accuracyTrend, setAccuracyTrend] = useState<AccuracyTrend | null>(null);
   const [marketSeriesFictional, setMarketSeriesFictional] = useState<MarketDayPoint[]>([]);
   const [paperBetsSummary, setPaperBetsSummary] = useState<{ total: number; settled: number; matches: number } | null>(null);
   const [dailyReports, setDailyReports] = useState<DailyReport[]>([]);
@@ -106,6 +110,11 @@ export default function EvolutionScreen() {
         setMarketSeriesFictional(readMarketSeriesFictional());
       } catch (error) {
         console.warn('Série des marchés indisponible:', error);
+      }
+      try {
+        setAccuracyTrend(getAccuracyTrend());
+      } catch (error) {
+        console.warn('Taux d\'erreur indisponible:', error);
       }
       refreshLiveCounters();
     }
@@ -568,6 +577,42 @@ export default function EvolutionScreen() {
 
     return (
       <View>
+        {accuracyTrend ? (
+          <View style={styles.accuracyTrendBox}>
+            <View style={styles.accuracyTrendCol}>
+              <Text style={styles.accuracyTrendValue}>{accuracyTrend.errorRatePercent.toFixed(1)}%</Text>
+              <Text style={styles.accuracyTrendLabel}>Taux d'erreur actuel</Text>
+            </View>
+            <View style={styles.accuracyTrendDivider} />
+            <View style={styles.accuracyTrendCol}>
+              {accuracyTrend.evolutionVsYesterdayPoints != null ? (
+                <Text
+                  style={[
+                    styles.accuracyTrendValue,
+                    { color: accuracyTrend.evolutionVsYesterdayPoints >= 0 ? '#4ade80' : '#f87171' },
+                  ]}
+                >
+                  {accuracyTrend.evolutionVsYesterdayPoints >= 0 ? '+' : ''}
+                  {accuracyTrend.evolutionVsYesterdayPoints.toFixed(1)} pts
+                </Text>
+              ) : (
+                <Text style={styles.accuracyTrendValueMuted}>—</Text>
+              )}
+              <Text style={styles.accuracyTrendLabel}>
+                Évolution du taux de réussite vs hier
+              </Text>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.infoBox}>
+            <Ionicons name="information-circle" size={16} color="#60a5fa" />
+            <Text style={styles.infoText}>
+              Pas encore assez de paris papier réglés pour calculer un taux d'erreur. Ça vient avec les
+              premiers tours de fond.
+            </Text>
+          </View>
+        )}
+
         {paperBetsSummary && paperBetsSummary.total > 0 && (
           <View style={styles.paperBetsBox}>
             <Ionicons name="pulse" size={16} color="#a78bfa" />
@@ -748,6 +793,40 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(167, 139, 250, 0.3)',
     padding: 12,
     marginBottom: 12,
+  },
+  accuracyTrendBox: {
+    flexDirection: 'row',
+    backgroundColor: '#1e293b',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#334155',
+    paddingVertical: 14,
+    marginBottom: 12,
+  },
+  accuracyTrendCol: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 4,
+  },
+  accuracyTrendDivider: {
+    width: 1,
+    backgroundColor: '#334155',
+  },
+  accuracyTrendValue: {
+    color: '#f8fafc',
+    fontSize: 22,
+    fontWeight: 'bold',
+  },
+  accuracyTrendValueMuted: {
+    color: '#64748b',
+    fontSize: 22,
+    fontWeight: 'bold',
+  },
+  accuracyTrendLabel: {
+    color: '#94a3b8',
+    fontSize: 11,
+    textAlign: 'center',
+    paddingHorizontal: 12,
   },
   learningDigestButton: {
     flexDirection: 'row',
