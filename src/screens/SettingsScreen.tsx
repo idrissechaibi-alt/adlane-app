@@ -127,14 +127,20 @@ export default function SettingsScreen({ navigation }: any) {
   const handleTestOmniroute = async () => {
     setTesting(true);
     try {
-      const response = await fetch(`${omniroute.endpoint}/models`, {
+      // execution_status=ready : filtre reconnu par FreeLLMAPI (ignoré sans
+      // risque par un autre serveur OpenAI-compatible) — ne renvoie que les
+      // modèles RÉELLEMENT utilisables maintenant (clé provider valide, quota
+      // non épuisé), pas tout le catalogue dont une bonne partie peut être en
+      // "circuit breaker" ou sans clé configurée. Compter le catalogue entier
+      // ici afficherait un nombre flatteur mais trompeur.
+      const response = await fetch(`${omniroute.endpoint}/models?execution_status=ready`, {
         headers: omniroute.apiKey ? { 'Authorization': `Bearer ${omniroute.apiKey}` } : {},
         timeout: 10000
       } as any);
 
       if (response.ok) {
         const data = await response.json();
-        Alert.alert('✅ Omniroute OK', `Connexion réussie. ${data.data?.length || 0} modèles disponibles.`);
+        Alert.alert('✅ Omniroute OK', `Connexion réussie. ${data.data?.length || 0} modèles RÉELLEMENT utilisables maintenant.`);
       } else {
         Alert.alert('⚠️ Erreur', `HTTP ${response.status}: ${response.statusText}`);
       }
@@ -146,14 +152,20 @@ export default function SettingsScreen({ navigation }: any) {
   };
 
   /**
-   * Charge la liste réelle des agents exposés par ce serveur Omniroute
-   * (endpoint OpenAI-compatible GET /models) et ouvre le sélecteur à cocher,
-   * pour éviter de devoir taper à la main les 1000+ noms de modèles.
+   * Charge la liste des agents RÉELLEMENT utilisables maintenant (endpoint
+   * OpenAI-compatible GET /models, filtré par execution_status=ready côté
+   * FreeLLMAPI) et ouvre le sélecteur à cocher, pour éviter de devoir taper à
+   * la main les 1000+ noms de modèles — et surtout pour ne jamais proposer un
+   * modèle dont la clé provider manque ou dont le quota est épuisé : avant ce
+   * filtre, le picker affichait tout le catalogue sans distinction, et des
+   * modèles cochés échouaient en boucle avec "circuit breaker open" dès le
+   * premier tour réel, invisibles tant qu'on ne lisait pas le diagnostic du
+   * scan en détail.
    */
   const handleOpenModelPicker = async () => {
     setLoadingModels(true);
     try {
-      const response = await fetch(`${omniroute.endpoint}/models`, {
+      const response = await fetch(`${omniroute.endpoint}/models?execution_status=ready`, {
         headers: omniroute.apiKey ? { 'Authorization': `Bearer ${omniroute.apiKey}` } : {},
         timeout: 15000
       } as any);
@@ -173,7 +185,12 @@ export default function SettingsScreen({ navigation }: any) {
         .sort();
 
       if (ids.length === 0) {
-        Alert.alert('⚠️ Liste vide', "Omniroute n'a renvoyé aucun modèle utilisable (hors Claude/Anthropic, exclu). Vérifie l'endpoint et la clé API.");
+        Alert.alert(
+          '⚠️ Aucun modèle prêt',
+          "Omniroute n'a renvoyé aucun modèle RÉELLEMENT utilisable maintenant (hors Claude/Anthropic, exclu) — " +
+            "soit aucune clé fournisseur n'est configurée côté serveur, soit tous les quotas gratuits sont épuisés. " +
+            'Vérifie les clés fournisseurs dans le dashboard du serveur.'
+        );
         return;
       }
 
