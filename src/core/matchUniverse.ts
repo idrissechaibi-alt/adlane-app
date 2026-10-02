@@ -11,7 +11,19 @@ import { fetchWithTimeout } from './httpTimeout';
 
 const UNIVERSE_KEY_PREFIX = '@match_universe_';
 const MAX_UNIVERSE_SIZE = 500;
-const MAX_PAGES = 3; // plafond dur de requêtes pour la construction quotidienne
+// Plafond dur de requêtes pour la construction quotidienne. /fixtures?date=
+// sans filtre de ligue renvoie TOUT le calendrier mondial du jour (des
+// milliers de rencontres, toutes compétitions confondues), paginé à un
+// nombre d'éléments par page non documenté précisément par API-Football —
+// avec seulement 3 pages, les ligues de TARGET_COUNTRIES (Angleterre,
+// Espagne, France...) peuvent n'apparaître sur aucune des pages lues selon
+// l'ordre de tri renvoyé, laissant l'univers vide malgré un calendrier
+// mondial bien rempli. Relevé : "Univers du jour (API) : 0 match(s) suivis"
+// alors que le relevé live (même clé, même jour) trouve des dizaines de
+// matchs. Porté à 10 : le quota API-Football a largement la marge (quelques
+// dizaines de requêtes/jour non utilisées) pour ce coût, une fois par jour
+// seulement (idempotent, voir ensureDailyUniverse).
+const MAX_PAGES = 10;
 
 /**
  * Pays suivis (libellés exactement tels qu'API-Football les renvoie).
