@@ -23,6 +23,7 @@ import { MarketCalibration, Lesson, Bet, DailyReport } from '../types';
 import { useIsFocused } from '@react-navigation/native';
 import { runAutoLearnTick, AutoLearnTickDiagnostics, getNativeBackgroundTickStats, NativeBackgroundTickStats } from '../core/backgroundTasks';
 import { sendTelegramMessage } from '../core/telegram';
+import { getAgentLearningDigest } from '../core/autoLearn';
 
 export default function EvolutionScreen() {
   const isFocused = useIsFocused();
@@ -255,6 +256,33 @@ export default function EvolutionScreen() {
         await sendTelegramMessage(message);
       })
       .finally(() => setForcingScan(false));
+  };
+
+  /**
+   * Ce que le modèle a VRAIMENT appris jusqu'ici (taux de base, marqueurs les
+   * plus informatifs, fiabilité mesurée des paris papier, facteur de
+   * recalibrage, fiabilité passée par marché) — déjà calculé en continu par
+   * autoLearn.ts et écrit dans un fichier markdown interne (injecté aux
+   * agents IA à chaque analyse), mais jamais montré tel quel dans l'app.
+   * Envoyé sur Telegram plutôt qu'affiché dans une Alert (souvent trop long
+   * pour tenir dans une boîte de dialogue).
+   */
+  const handleShowLearningDigest = async () => {
+    const digest = getAgentLearningDigest();
+    if (!digest) {
+      Alert.alert(
+        'Pas encore de leçons',
+        "Le corpus d'observations est encore trop jeune pour qu'aucun marqueur ne dépasse le seuil d'échantillon. Réessaie plus tard."
+      );
+      return;
+    }
+    const sent = await sendTelegramMessage(digest);
+    Alert.alert(
+      sent ? '✅ Envoyé' : '⚠️ Telegram indisponible',
+      sent
+        ? "Vérifie ton chat Telegram : le détail de ce que le modèle a appris vient d'y arriver."
+        : "Le message n'est pas parti (Telegram non configuré ou injoignable). Vérifie Paramètres → Telegram."
+    );
   };
 
   const loadData = async () => {
@@ -547,6 +575,13 @@ export default function EvolutionScreen() {
           </View>
         )}
 
+        <TouchableOpacity style={styles.learningDigestButton} onPress={handleShowLearningDigest}>
+          <Ionicons name="bulb" size={16} color="#a78bfa" />
+          <Text style={styles.learningDigestButtonText}>
+            Voir ce que le modèle a vraiment appris (détail sur Telegram)
+          </Text>
+        </TouchableOpacity>
+
         <View style={styles.curvesIntro}>
           <Text style={styles.curvesIntroTitle}>Évolution de l'IA, marché par marché</Text>
           <Text style={styles.curvesIntroText}>
@@ -708,6 +743,23 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(167, 139, 250, 0.3)',
     padding: 12,
     marginBottom: 12,
+  },
+  learningDigestButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(167, 139, 250, 0.12)',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(167, 139, 250, 0.35)',
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
+  learningDigestButtonText: {
+    color: '#ddd6fe',
+    fontSize: 12,
+    fontWeight: '600',
   },
   paperBetsText: {
     flex: 1,

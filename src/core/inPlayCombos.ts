@@ -887,7 +887,7 @@ async function processRealSlotCheckpoint(
  * (aucun identifiant commun entre ces sources et le planning). */
 function matchConfirmedBy(
   matches: Array<{ homeTeam: string; awayTeam: string }>,
-  scheduled: ScheduledMatch
+  scheduled: { homeTeam: string; awayTeam: string }
 ): boolean {
   return matches.some((m) =>
     namesLikelyMatch(normalizeTeamName(m.homeTeam), normalizeTeamName(scheduled.homeTeam)) &&
@@ -1115,10 +1115,19 @@ export async function runInPlayComboTick(liveFixtures: LiveFixture[]): Promise<I
     // consommés, fenêtre de surveillance, cadence des relevés). Sépare le tri
     // (rapide) de la vérification (lente) pour pouvoir paralléliser cette
     // dernière à l'étape suivante.
-    const candidates: FictionalMatch[] = [];
+    //
+    // Priorité aux matchs CONFIRMÉS en direct par le relevé live déjà
+    // partagé (API-Football en priorité, repli Omniroute sinon — voir
+    // fetchSharedLiveFixtures) : un candidat confirmé a de bien meilleures
+    // chances de donner un relevé exploitable qu'un candidat simplement
+    // "dans la fenêtre horaire" (coup d'envoi retardé, report, erreur de
+    // planning) — les appels Omniroute/FreeLLMAPI du tour, en nombre
+    // plafonné, vont donc d'abord aux candidats les plus sûrs. Jamais un
+    // filtre bloquant : un candidat non confirmé garde sa place si le
+    // plafond du tour n'est pas atteint (le relevé live mondial ne couvre
+    // pas forcément les divisions obscures/jeunes que balaie le pipe fictif).
+    const eligible: Array<{ scheduled: FictionalMatch; confirmedLive: boolean }> = [];
     for (const scheduled of program) {
-      if (candidates.length >= MAX_FICTIONAL_CHECKS_PER_TICK) break;
-
       const kickoff = Date.parse(scheduled.kickoff_utc);
       if (!Number.isFinite(kickoff)) continue;
       const elapsedMinutes = (Date.now() - kickoff) / 60_000;
@@ -1147,8 +1156,14 @@ export async function runInPlayComboTick(liveFixtures: LiveFixture[]): Promise<I
         : Infinity;
       if (minutesSinceLastSample < MIN_MINUTES_BETWEEN_SAMPLES) continue;
 
-      candidates.push(scheduled);
+      eligible.push({ scheduled, confirmedLive: matchConfirmedBy(liveFixtures, scheduled) });
     }
+
+    // Tri stable : confirmés d'abord, à l'intérieur de chaque groupe l'ordre
+    // de découverte (déjà équitable entre pays, voir selectBalanced) est
+    // conservé.
+    eligible.sort((a, b) => Number(b.confirmedLive) - Number(a.confirmedLive));
+    const candidates = eligible.slice(0, MAX_FICTIONAL_CHECKS_PER_TICK).map((e) => e.scheduled);
 
     // Phase 2 — les vérifications sont INDÉPENDANTES les unes des autres :
     // interrogées en parallèle (bornées à FICTIONAL_CHECK_CONCURRENCY à la
