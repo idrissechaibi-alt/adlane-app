@@ -120,16 +120,6 @@ export default function EvolutionScreen() {
     }
   }, [isFocused]);
 
-  /** Heure locale du coup d'envoi + délai restant : "dans 6h12 (14:00)". */
-  const formatKickoff = (kickoffUtc: string) => {
-    const kickoff = Date.parse(kickoffUtc);
-    if (!Number.isFinite(kickoff)) return kickoffUtc;
-    const minutes = Math.max(0, Math.round((kickoff - Date.now()) / 60_000));
-    const delay = minutes >= 60 ? `dans ${Math.floor(minutes / 60)}h${String(minutes % 60).padStart(2, '0')}` : `dans ${minutes} min`;
-    const local = new Date(kickoff).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    return `${delay} (${local})`;
-  };
-
   /**
    * Résume en une phrase ce qui a bloqué le dernier pays interrogé, plutôt que
    * d'empiler une ligne par agent : ce qui compte, c'est de savoir S'IL FAUT
@@ -163,69 +153,56 @@ export default function EvolutionScreen() {
     return `Dernier pays (${country}) : ${attempts[attempts.length - 1].model} → ${attempts[attempts.length - 1].outcome}.`;
   };
 
-  const LIVE_FIXTURES_SOURCE_LABEL: Record<string, string> = {
-    api_football: 'API-Football',
-    omniroute: 'Omniroute (découverte autonome)',
-    aucune_omniroute_non_configure: 'aucun — Omniroute non configuré (Paramètres)',
-    aucune_echec_omniroute: 'aucun — repli Omniroute en échec',
-  };
+  /**
+   * Même texte pour l'alerte à l'écran ET pour l'envoi Telegram (voir
+   * handleForceScan) — un seul format à tenir à jour.
+   *
+   * Volontairement COURT (demande explicite : le message empilait un
+   * diagnostic par sous-système et devenait illisible) — seulement les 3
+   * chiffres qui comptent vraiment (en direct maintenant / à venir
+   * aujourd'hui / déjà joués aujourd'hui) + le résultat du bilan de minuit.
+   * Le détail technique (Omniroute, Sportmonks, tâche de fond...) ne
+   * ressort QUE s'il y a un vrai problème à signaler.
+   */
+  const formatScanDiagnostics = (diag: AutoLearnTickDiagnostics, nativeTickStats: NativeBackgroundTickStats): string => {
+    const playedToday = Math.max(0, diag.fictionalProgramSize - diag.fictionalMatchesAhead);
 
-  /** "il y a 3h12" à partir d'un horodatage passé — pendant du delay positif
-   * de formatKickoff (à venir), mais pour du passé. */
-  const formatElapsedSince = (isoTimestamp: string) => {
-    const ts = Date.parse(isoTimestamp);
-    if (!Number.isFinite(ts)) return isoTimestamp;
-    const minutes = Math.max(0, Math.round((Date.now() - ts) / 60_000));
-    if (minutes < 60) return `il y a ${minutes} min`;
-    const hours = Math.floor(minutes / 60);
-    return `il y a ${hours}h${String(minutes % 60).padStart(2, '0')}`;
-  };
+    const lines = [
+      '🔍 Scan terminé',
+      `📡 En direct maintenant : ${diag.liveFixturesFound} match(s)`,
+      `🕐 À venir aujourd'hui : ${diag.fictionalMatchesAhead} match(s)`,
+      `✅ Déjà joués aujourd'hui : ${playedToday} match(s)`,
+      `📈 Bilan : ${diag.nightlyReviewPointsCreated ?? 0} point(s) de courbe mis à jour ce tour`,
+    ];
 
-  /** Même texte pour l'alerte à l'écran ET pour l'envoi Telegram (voir
-   * handleForceScan) — un seul format à tenir à jour. */
-  const formatScanDiagnostics = (diag: AutoLearnTickDiagnostics, nativeTickStats: NativeBackgroundTickStats): string =>
-    `🔍 Scan forcé terminé\n` +
-    `Tâche de fond native (Android) : ` +
-    (nativeTickStats.lastTickAt
-      ? `dernier réveil ${formatElapsedSince(nativeTickStats.lastTickAt)} (${nativeTickStats.ticksLast24h} fois sur les dernières 24h — visée : ~96/jour).\n`
-      : "jamais réveillée depuis l'installation ou la dernière réinitialisation — vérifie Paramètres Android → Batterie → cette app → 'Sans restriction' (l'optimisation de batterie par défaut la bloque sur beaucoup de téléphones).\n") +
-    `Omniroute : ${diag.omnirouteConfigured ? 'configuré' : 'NON CONFIGURÉ (Paramètres → endpoint + agents)'}.\n` +
-    `Planning du jour : ${diag.fictionalProgramSize} match(s) — ` +
-    (diag.fictionalProgramFromFeed
-      ? 'liste transmise.\n'
-      : `${diag.fictionalSportmonksMatches} via Sportmonks, ${diag.fictionalOmnirouteMatches} via balayage Omniroute ` +
-        `(dernier recours, ${diag.fictionalCountriesTried}/${diag.fictionalCountriesTotal} pays interrogés).\n`) +
-    (diag.fictionalSportmonksError ? `Sportmonks (programme du jour) : ${diag.fictionalSportmonksError}.\n` : '') +
-    (diag.fictionalNextKickoffUtc
-      ? `Prochain match suivi : ${formatKickoff(diag.fictionalNextKickoffUtc)} (${diag.fictionalMatchesAhead} encore à venir aujourd'hui).\n`
-      : diag.fictionalProgramSize > 0
-        ? "Tous les matchs du programme ont déjà eu lieu aujourd'hui.\n"
-        : '') +
-    (diag.fictionalLastTrace ? `${summarizeTrace(diag.fictionalLastTrace)}\n` : '') +
-    `Univers du jour (API) : ${diag.universeSize} match(s) suivis.\n` +
-    `Relevé live : ${diag.liveFixturesFound} match(s) en direct — source : ${LIVE_FIXTURES_SOURCE_LABEL[diag.liveFixturesSource] ?? diag.liveFixturesSource}.\n` +
-    (diag.apiFootballError ? `API-Football (relevé live) : ${diag.apiFootballError}.\n` : '') +
-    `Marqueurs : ${diag.liveMarkerObserved} observé(s), ${diag.liveMarkerClosed} clôturé(s).\n` +
-    `Scan 20e/60e minute : ${diag.freshInPlayProposals} nouvelle(s) proposition(s).\n` +
-    (diag.intlBreak
-      ? diag.intlBreak.withinWindow
-        ? `Trêve internationale : ${diag.intlBreak.matchesScheduledToday} match(s) aujourd'hui, ` +
-          `${diag.intlBreak.matchesWithExpectedGoals} estimé(s) (Omniroute), ` +
-          `${diag.intlBreak.matchesLiveFound} en direct ce tour, ` +
-          `${diag.intlBreak.matchesInCheckpointWindow} au checkpoint pile à ce tour.`
-        : 'Trêve internationale : hors fenêtre (calendrier inactif aujourd\'hui).'
-      : 'Trêve internationale : diagnostic indisponible (le scan en direct a échoué avant de l\'atteindre).') +
-    (diag.sportmonksConfirmedMatches != null
-      ? `\nSportmonks : ${diag.sportmonksConfirmedMatches} match(s) confirmé(s) en direct dans le monde ce tour.`
-      : `\nSportmonks : ${diag.sportmonksError ?? 'injoignable ce tour'} (repli Omniroute à l\'aveugle comme avant).`) +
-    (diag.sofaScoreConfirmedMatches != null
-      ? `\nSofaScore : ${diag.sofaScoreConfirmedMatches} match(s) confirmé(s) en direct dans le monde ce tour.`
-      : '\nSofaScore : injoignable ce tour (bloqué par leur protection anti-bot selon le réseau — repli Omniroute à l\'aveugle comme avant).') +
-    (diag.nightlyReviewError
-      ? `\nBilan de minuit : ÉCHOUÉ — ${diag.nightlyReviewError}`
-      : diag.nightlyReviewPointsCreated != null
-        ? `\nBilan de minuit : OK, ${diag.nightlyReviewPointsCreated} point(s) de courbe mis à jour ce tour.`
-        : '\nBilan de minuit : pas encore tenté ce tour.');
+    const problems: string[] = [];
+    if (!diag.omnirouteConfigured) {
+      problems.push('Omniroute non configuré (Paramètres → endpoint + agents).');
+    }
+    if (diag.apiFootballError) {
+      problems.push(`API-Football (relevé live) : ${diag.apiFootballError}.`);
+    }
+    if (diag.fictionalSportmonksError) {
+      problems.push(`Sportmonks (programme du jour) : ${diag.fictionalSportmonksError}.`);
+    }
+    if (diag.nightlyReviewError) {
+      problems.push(`Bilan de minuit ÉCHOUÉ : ${diag.nightlyReviewError}.`);
+    }
+    if (!nativeTickStats.lastTickAt) {
+      problems.push(
+        "Tâche de fond native jamais réveillée — vérifie Paramètres Android → Batterie → cette app → 'Sans restriction'."
+      );
+    }
+    if (diag.fictionalProgramSize === 0 && diag.fictionalLastTrace) {
+      problems.push(summarizeTrace(diag.fictionalLastTrace));
+    }
+
+    if (problems.length > 0) {
+      lines.push('', '⚠️ ' + problems.join(' '));
+    }
+
+    return lines.join('\n');
+  };
 
   /**
    * Lance le tour complet (univers du jour, relevé live + étiquetage,
