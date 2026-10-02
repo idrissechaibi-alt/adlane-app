@@ -22,6 +22,7 @@ import { settlePlacedBets, settleProposedBets } from './betSettlement';
 import { fetchWithTimeout } from './httpTimeout';
 import { generateDailyReport } from './reporter';
 import { getAllBets, saveDailyReport, getDailyReports } from '../database/storage';
+import { mapWithConcurrency } from './concurrency';
 import {
   InPlayProposal,
   MarketDayPoint,
@@ -140,14 +141,28 @@ async function fetchFinalResults(
  * malgré le "réussi" affiché en calibrage. Un appel par match (pas de
  * requête groupée possible sans identifiant commun), mais gratuit et sans
  * quota — un par jour et par match suffit largement.
+ *
+ * Appels PARALLÉLISÉS (bornés) plutôt qu'un par un : chaque appel Omniroute/
+ * FreeLLMAPI peut prendre plusieurs secondes (voire jusqu'à 20s en cas de
+ * ronde sur plusieurs modèles), et les matchs non réglés par API-Football
+ * (tout le programme fictif, dont les fixtureId synthétiques ne sont connus
+ * d'aucune autre source) peuvent se compter par dizaines un jour donné — en
+ * séquentiel, ça pouvait faire dépasser plusieurs minutes, voire le temps
+ * d'exécution qu'Android accorde à une tâche de fond avant de la tuer. Sans
+ * jamais d'erreur ni de log visible dans ce cas : le bilan était simplement
+ * interrompu en cours de route, AVANT d'écrire quoi que ce soit (l'écriture
+ * n'intervient qu'à la toute fin de runNightlyReviewIfDue) — cohérent avec
+ * "Aucun bilan encore effectué" qui persistait malgré des jours d'activité.
  */
+const OMNIROUTE_FINAL_RESULT_CONCURRENCY = 6;
+
 async function fetchFinalResultsViaOmniroute(
   omnirouteConfig: OmnirouteConfig,
   matches: Array<{ fixtureId: number; homeTeam: string; awayTeam: string }>
 ): Promise<Map<number, FinalResult>> {
   const results = new Map<number, FinalResult>();
 
-  for (const { fixtureId, homeTeam, awayTeam } of matches) {
+  await mapWithConcurrency(matches, OMNIROUTE_FINAL_RESULT_CONCURRENCY, async ({ fixtureId, homeTeam, awayTeam }) => {
     // Ronde jusqu'à une réponse exploitable : un agent sans outil de recherche
     // répondrait "pas trouvé" et, s'il était en tête de ronde, empêcherait
     // tous les autres de régler le match.
@@ -190,7 +205,7 @@ async function fetchFinalResultsViaOmniroute(
     });
 
     if (result) results.set(fixtureId, result.value);
-  }
+  });
 
   return results;
 }

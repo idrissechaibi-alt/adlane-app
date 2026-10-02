@@ -184,6 +184,13 @@ export interface AutoLearnTickDiagnostics {
   /** Raison précise d'un sportmonksConfirmedMatches null (clé absente, ou
    * message d'erreur exact) — remplace un "injoignable" générique. */
   sportmonksError?: string;
+  /** Points de courbe créés/mis à jour par le bilan de minuit ce tour (0 si
+   * ce n'était pas encore l'heure, undefined si le bilan a échoué). */
+  nightlyReviewPointsCreated?: number;
+  /** Message d'erreur exact si le bilan de minuit a échoué — sans ça,
+   * "Aucun bilan encore effectué" dans les courbes ne permettait pas de
+   * savoir si c'était juste pas encore l'heure, ou un échec systématique. */
+  nightlyReviewError?: string;
 }
 
 /**
@@ -338,9 +345,16 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
   }
 
   // Bilan de la journée écoulée : se déclenche au premier tour après minuit.
+  // Erreur capturée et remontée au diagnostic (plutôt qu'un simple
+  // console.warn invisible) : "Aucun bilan encore effectué" dans les courbes
+  // était indiscernable entre "pas encore l'heure" et "échoue à chaque
+  // tentative depuis toujours" sans ça.
+  let nightlyReviewPointsCreated: number | undefined;
+  let nightlyReviewError: string | undefined;
   try {
-    await runNightlyReviewIfDue();
+    nightlyReviewPointsCreated = await runNightlyReviewIfDue();
   } catch (error: any) {
+    nightlyReviewError = error?.message || 'erreur inconnue';
     console.warn('[Tâche de fond] Bilan de minuit échoué:', error.message);
   }
 
@@ -367,6 +381,8 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
     sportmonksConfirmedMatches,
     sofaScoreConfirmedMatches,
     sportmonksError,
+    nightlyReviewPointsCreated,
+    nightlyReviewError,
   };
 }
 
