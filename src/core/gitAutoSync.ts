@@ -5,6 +5,7 @@ import { Directory, EncodingType, File, Paths } from 'expo-file-system';
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getAllBets, getAllCalibrations, getAllLessons, getDailyReports, restoreSnapshot } from '../database/storage';
+import { fetchWithTimeout } from './httpTimeout';
 
 const SYNC_CONFIG_KEY = '@github_data_sync_config';
 const LAST_SYNC_KEY = '@last_github_data_sync';
@@ -169,7 +170,7 @@ export async function fetchRepoJson<T>(repositoryPath: string): Promise<T | null
     const token = await getGitHubToken();
     if (!token) return null;
 
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       `https://api.github.com/repos/${encodeURIComponent(config.repoOwner)}/${encodeURIComponent(config.repoName)}` +
         `/contents/${repositoryPath}?ref=${encodeURIComponent(config.branch)}&t=${Date.now()}`,
       { headers: { ...githubHeaders(token), Accept: 'application/vnd.github.v3.raw', 'Cache-Control': 'no-cache' } }
@@ -219,7 +220,7 @@ async function getRemoteFileSha(
   // Ajout d'un paramètre timestamp pour éviter le cache de l'API GitHub
   const url = `https://api.github.com/repos/${encodeURIComponent(config.repoOwner)}/${encodeURIComponent(config.repoName)}/contents/${repositoryPath}?ref=${encodeURIComponent(config.branch)}&t=${Date.now()}`;
 
-  const response = await fetch(url, {
+  const response = await fetchWithTimeout(url, {
     headers: {
       ...githubHeaders(token),
       'Cache-Control': 'no-cache'
@@ -239,7 +240,7 @@ async function getRemoteFileSha(
 }
 
 async function verifyGitHubAccess(config: GitHubDataSyncConfig, token: string): Promise<string | null> {
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `https://api.github.com/repos/${encodeURIComponent(config.repoOwner)}/${encodeURIComponent(config.repoName)}`,
     { headers: githubHeaders(token) }
   );
@@ -328,7 +329,7 @@ export async function syncDataToGitHub(
       body.sha = remoteFile.sha;
     }
 
-    const uploadResponse = await fetch(
+    const uploadResponse = await fetchWithTimeout(
       `https://api.github.com/repos/${encodeURIComponent(config.repoOwner)}/${encodeURIComponent(config.repoName)}/contents/${repositoryPath}`,
       {
         method: 'PUT',
@@ -389,7 +390,7 @@ export async function syncDataFromGitHub(): Promise<{
     const repositoryPath = `${normalizeFolderPath(config.dataFolderPath)}/app-adlane-data.json`;
     logs.push(`🔄 Recherche de la sauvegarde sur GitHub...`);
 
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       `https://api.github.com/repos/${encodeURIComponent(config.repoOwner)}/${encodeURIComponent(config.repoName)}/contents/${repositoryPath}?ref=${encodeURIComponent(config.branch)}`,
       {
         headers: {

@@ -9,6 +9,7 @@
 // est fait, jamais vers un autre service.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { fetchWithTimeout } from './httpTimeout';
 
 const TELEGRAM_CONFIG_KEY = '@telegram_config';
 
@@ -45,7 +46,12 @@ export async function sendTelegramMessage(text: string): Promise<boolean> {
   if (!config) return false;
 
   try {
-    const response = await fetch(`https://api.telegram.org/bot${config.botToken}/sendMessage`, {
+    // fetchWithTimeout, pas fetch() brut : un envoi qui reste accroché sans
+    // jamais répondre ni erreur (déjà vu sur mobile) bloquait indéfiniment
+    // tout ce qui l'attendait — le tick de fond entier, et depuis le passage
+    // de "Forcer le scan" en tâche de fond, le bouton restait figé "en cours"
+    // pour toujours sans jamais rien recevoir sur Telegram.
+    const response = await fetchWithTimeout(`https://api.telegram.org/bot${config.botToken}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ chat_id: config.chatId, text }),
