@@ -1,9 +1,13 @@
 // Courbe d'évolution du taux de réussite d'un marché, jour par jour.
 //
-// Une seule série par graphique (pas de légende nécessaire : le titre nomme la
-// série), trait fin de 2px, points discrets, et une ligne de référence en
-// pointillés au seuil d'acceptation. Seul le dernier point est étiqueté —
-// un nombre sur chaque point rendrait la courbe illisible.
+// DEUX séries possibles sur le même graphique — réel et fictif — pour
+// comparer visuellement la progression du pipeline réel face à la boucle
+// d'auto-apprentissage (paris fictifs), qui accumule beaucoup plus
+// d'échantillons et progresse donc plus vite à lire. Axe X construit sur
+// l'UNION des dates des deux séries (jamais interpolé : un jour sans point
+// pour une série reste un vrai trou, pas une valeur devinée), trait fin de
+// 2px, points discrets, et une ligne de référence en pointillés au seuil
+// d'acceptation. Seul le dernier point de chaque série est étiqueté.
 
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -16,22 +20,76 @@ const PADDING_BOTTOM = 16;
 const PADDING_LEFT = 6;
 const PADDING_RIGHT = 34; // place pour l'étiquette du dernier point
 
-const SERIES_COLOR = '#60a5fa';
+const REAL_COLOR = '#60a5fa';
+const FICTIONAL_COLOR = '#a78bfa';
 const GRID_COLOR = '#334155';
 const THRESHOLD_COLOR = '#64748b';
 
 interface Props {
   label: string;
+  /** Série réelle (5 grands championnats + trêve internationale). */
   points: MarketDayPoint[];
+  /** Série fictive (boucle d'auto-apprentissage) — omise si non fournie, le
+   * graphique redevient une courbe unique comme avant. */
+  fictionalPoints?: MarketDayPoint[];
   /** Seuil d'acceptation affiché en pointillés (0 à 1). */
   threshold?: number;
   width: number;
 }
 
-export default function MarketTrendChart({ label, points, threshold = 0.6, width }: Props) {
-  const totalPredictions = points.reduce((sum, p) => sum + p.predictions, 0);
+function renderSeries(
+  points: MarketDayPoint[],
+  allDates: string[],
+  color: string,
+  toX: (dateIndex: number) => number,
+  toY: (rate: number) => number,
+  width: number
+) {
+  if (points.length === 0) return null;
 
-  if (points.length === 0) {
+  const byDate = new Map(points.map((p) => [p.date, p]));
+  const presentDates = allDates.filter((d) => byDate.has(d));
+
+  const path = presentDates
+    .map((date, i) => {
+      const point = byDate.get(date)!;
+      const x = toX(allDates.indexOf(date));
+      return `${i === 0 ? 'M' : 'L'} ${x} ${toY(point.hitRate)}`;
+    })
+    .join(' ');
+
+  const last = byDate.get(presentDates[presentDates.length - 1])!;
+  const lastX = toX(allDates.indexOf(last.date));
+  const lastY = toY(last.hitRate);
+
+  return (
+    <React.Fragment>
+      <Path d={path} stroke={color} strokeWidth={2} fill="none" />
+      {presentDates.map((date) => {
+        const point = byDate.get(date)!;
+        return (
+          <Circle
+            key={date}
+            cx={toX(allDates.indexOf(date))}
+            cy={toY(point.hitRate)}
+            r={2.5}
+            fill={color}
+          />
+        );
+      })}
+      <Circle cx={lastX} cy={lastY} r={4} fill={color} />
+      <SvgText x={Math.min(lastX + 7, width - 2)} y={lastY + 4} fill={color} fontSize={11} fontWeight="bold">
+        {`${Math.round(last.hitRate * 100)}%`}
+      </SvgText>
+    </React.Fragment>
+  );
+}
+
+export default function MarketTrendChart({ label, points, fictionalPoints = [], threshold = 0.6, width }: Props) {
+  const totalPredictions = points.reduce((sum, p) => sum + p.predictions, 0);
+  const totalFictionalPredictions = fictionalPoints.reduce((sum, p) => sum + p.predictions, 0);
+
+  if (points.length === 0 && fictionalPoints.length === 0) {
     return (
       <View style={styles.card}>
         <Text style={styles.title}>{label}</Text>
@@ -40,6 +98,8 @@ export default function MarketTrendChart({ label, points, threshold = 0.6, width
     );
   }
 
+  const allDates = Array.from(new Set([...points.map((p) => p.date), ...fictionalPoints.map((p) => p.date)])).sort();
+
   const plotWidth = Math.max(1, width - PADDING_LEFT - PADDING_RIGHT);
   const plotHeight = CHART_HEIGHT - PADDING_TOP - PADDING_BOTTOM;
 
@@ -47,23 +107,30 @@ export default function MarketTrendChart({ label, points, threshold = 0.6, width
   // même échelle (une échelle auto-ajustée exagérerait des écarts minuscules).
   const toY = (rate: number) => PADDING_TOP + (1 - rate) * plotHeight;
   const toX = (index: number) =>
-    PADDING_LEFT + (points.length === 1 ? plotWidth / 2 : (index / (points.length - 1)) * plotWidth);
-
-  const path = points
-    .map((point, index) => `${index === 0 ? 'M' : 'L'} ${toX(index)} ${toY(point.hitRate)}`)
-    .join(' ');
-
-  const last = points[points.length - 1];
-  const lastX = toX(points.length - 1);
-  const lastY = toY(last.hitRate);
+    PADDING_LEFT + (allDates.length === 1 ? plotWidth / 2 : (index / (allDates.length - 1)) * plotWidth);
 
   return (
     <View style={styles.card}>
       <View style={styles.header}>
         <Text style={styles.title}>{label}</Text>
-        <Text style={styles.subtitle}>
-          {totalPredictions} prédiction{totalPredictions > 1 ? 's' : ''} réglée{totalPredictions > 1 ? 's' : ''}
-        </Text>
+        <View style={styles.legendRow}>
+          {points.length > 0 && (
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: REAL_COLOR }]} />
+              <Text style={styles.subtitle}>
+                Réel ({totalPredictions})
+              </Text>
+            </View>
+          )}
+          {fictionalPoints.length > 0 && (
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: FICTIONAL_COLOR }]} />
+              <Text style={styles.subtitle}>
+                Fictif ({totalFictionalPredictions})
+              </Text>
+            </View>
+          )}
+        </View>
       </View>
 
       <Svg width={width} height={CHART_HEIGHT}>
@@ -99,38 +166,13 @@ export default function MarketTrendChart({ label, points, threshold = 0.6, width
           {`${Math.round(threshold * 100)}%`}
         </SvgText>
 
-        <Path d={path} stroke={SERIES_COLOR} strokeWidth={2} fill="none" />
-
-        {points.map((point, index) => (
-          <Circle
-            key={point.date}
-            cx={toX(index)}
-            cy={toY(point.hitRate)}
-            r={2.5}
-            fill={SERIES_COLOR}
-          />
-        ))}
-
-        {/* Étiquette du dernier point uniquement */}
-        <Circle cx={lastX} cy={lastY} r={4} fill={SERIES_COLOR} />
-        <SvgText
-          x={Math.min(lastX + 7, width - 2)}
-          y={lastY + 4}
-          fill="#e2e8f0"
-          fontSize={11}
-          fontWeight="bold"
-        >
-          {`${Math.round(last.hitRate * 100)}%`}
-        </SvgText>
+        {renderSeries(fictionalPoints, allDates, FICTIONAL_COLOR, toX, toY, width)}
+        {renderSeries(points, allDates, REAL_COLOR, toX, toY, width)}
       </Svg>
 
       <View style={styles.footer}>
         <Text style={styles.footerText}>
-          {points[0].date.slice(5)} → {last.date.slice(5)}
-        </Text>
-        <Text style={styles.footerText}>
-          Annoncé {Math.round(last.meanPredicted * 100)}% · réalisé {Math.round(last.hitRate * 100)}%
-          {' '}({last.correct}/{last.predictions})
+          {allDates[0].slice(5)} → {allDates[allDates.length - 1].slice(5)}
         </Text>
       </View>
     </View>
@@ -160,6 +202,20 @@ const styles = StyleSheet.create({
   subtitle: {
     color: '#64748b',
     fontSize: 11,
+  },
+  legendRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  legendDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
   },
   empty: {
     color: '#64748b',

@@ -30,8 +30,12 @@ import {
   appendPredictionOutcomes,
   readInPlayProposals,
   readMarketSeries,
+  readMarketSeriesReal,
+  readMarketSeriesFictional,
   writeInPlayProposals,
   writeMarketSeries,
+  writeMarketSeriesReal,
+  writeMarketSeriesFictional,
 } from './learnStore';
 import { loadOmnirouteConfig } from './focusEnrichment';
 import { askOmnirouteUsable } from './omniroute';
@@ -252,6 +256,16 @@ function buildDayPoints(date: string, proposals: InPlayProposal[]): MarketDayPoi
   return points;
 }
 
+/** Fusionne les points d'une journée dans une série existante — une journée
+ * déjà présente (même date + marché) est remplacée, jamais dupliquée. */
+function mergeDayPoints(series: MarketDayPoint[], points: MarketDayPoint[]): void {
+  for (const point of points) {
+    const existingIndex = series.findIndex((p) => p.date === point.date && p.market === point.market);
+    if (existingIndex >= 0) series[existingIndex] = point;
+    else series.push(point);
+  }
+}
+
 /**
  * Clôture toutes les journées écoulées depuis le dernier bilan.
  * Idempotent : une journée déjà traitée n'est jamais recomptée.
@@ -331,6 +345,10 @@ export async function runNightlyReviewIfDue(): Promise<number> {
   const apiConfig = await getAPIConfig();
 
   const series = readMarketSeries();
+  // Séries séparées, pour l'écran uniquement (voir le commentaire dans
+  // learnStore.ts) — jamais consultées par autoLearn.
+  const seriesReal = readMarketSeriesReal();
+  const seriesFictional = readMarketSeriesFictional();
   let created = 0;
   const telegramDigests: string[] = [];
 
@@ -411,17 +429,20 @@ export async function runNightlyReviewIfDue(): Promise<number> {
     const digestMessage = formatFictionalDigestMessage(day, buildFictionalMarketStats(dayProposals), series);
     if (digestMessage) telegramDigests.push(digestMessage);
 
-    // Une journée déjà présente dans la série est remplacée, jamais dupliquée.
-    for (const point of points) {
-      const existingIndex = series.findIndex((p) => p.date === point.date && p.market === point.market);
-      if (existingIndex >= 0) series[existingIndex] = point;
-      else series.push(point);
-      created += 1;
-    }
+    mergeDayPoints(series, points);
+    created += points.length;
+
+    // Séries séparées (affichage uniquement, voir learnStore.ts) : mêmes
+    // points que ci-dessus mais calculés sur un sous-ensemble réel ou fictif
+    // de dayProposals, pour comparer visuellement les deux pipelines.
+    mergeDayPoints(seriesReal, buildDayPoints(day, dayProposals.filter((p) => p.real !== false)));
+    mergeDayPoints(seriesFictional, buildDayPoints(day, dayProposals.filter((p) => p.real === false)));
   }
 
   writeInPlayProposals(allProposals);
   writeMarketSeries(series.sort((a, b) => a.date.localeCompare(b.date)));
+  writeMarketSeriesReal(seriesReal.sort((a, b) => a.date.localeCompare(b.date)));
+  writeMarketSeriesFictional(seriesFictional.sort((a, b) => a.date.localeCompare(b.date)));
   await AsyncStorage.setItem(LAST_REVIEW_KEY, yesterday);
 
   for (const digest of telegramDigests) {

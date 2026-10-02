@@ -15,7 +15,7 @@ import {
 import { Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import MarketTrendChart from '../components/MarketTrendChart';
-import { MarketDayPoint, TRACKED_MARKETS, TrackedMarket, marketLabel, readInPlayProposals, readMarketSeries, readPaperBets, readPredictionOutcomes } from '../core/learnStore';
+import { MarketDayPoint, TRACKED_MARKETS, TrackedMarket, marketLabel, readInPlayProposals, readMarketSeries, readMarketSeriesReal, readMarketSeriesFictional, readPaperBets, readPredictionOutcomes } from '../core/learnStore';
 import { getAllBets, getAllLessons, getAllCalibrations, getDailyReports } from '../database/storage';
 import { computeMarketCalibrations } from '../core/calibration';
 import { generateImprovementReport } from '../core/reporter';
@@ -32,6 +32,11 @@ export default function EvolutionScreen() {
   const [loading, setLoading] = useState(true);
   const [selectedTab, setSelectedTab] = useState<'courbes' | 'calibration' | 'lessons' | 'report'>('courbes');
   const [marketSeries, setMarketSeries] = useState<MarketDayPoint[]>([]);
+  /** Séries séparées réel/fictif — comparaison visuelle des deux pipelines
+   * (voir learnStore.ts) ; marketSeries (combiné) reste utilisé uniquement
+   * pour dater le dernier bilan effectué. */
+  const [marketSeriesReal, setMarketSeriesReal] = useState<MarketDayPoint[]>([]);
+  const [marketSeriesFictional, setMarketSeriesFictional] = useState<MarketDayPoint[]>([]);
   const [paperBetsSummary, setPaperBetsSummary] = useState<{ total: number; settled: number; matches: number } | null>(null);
   const [dailyReports, setDailyReports] = useState<DailyReport[]>([]);
   /** Batterie de paris fictifs du scan 20e/60e minute (inPlayCombos.ts, real:false) — distincte de paperBetsSummary (règles apprises d'autoLearn.ts). */
@@ -96,6 +101,8 @@ export default function EvolutionScreen() {
       void loadData();
       try {
         setMarketSeries(readMarketSeries());
+        setMarketSeriesReal(readMarketSeriesReal());
+        setMarketSeriesFictional(readMarketSeriesFictional());
       } catch (error) {
         console.warn('Série des marchés indisponible:', error);
       }
@@ -533,8 +540,9 @@ export default function EvolutionScreen() {
           <Text style={styles.curvesIntroTitle}>Évolution de l'IA, marché par marché</Text>
           <Text style={styles.curvesIntroText}>
             Taux de réussite des prédictions réglées, mis à jour au bilan de minuit sur la journée
-            écoulée. Le pointillé marque le seuil de 60%. Chaque point compte uniquement les
-            prédictions dont le résultat réel est connu.
+            écoulée. Bleu = paris réels, violet = boucle d'auto-apprentissage (paris fictifs) — deux
+            courbes séparées pour comparer leur progression. Le pointillé marque le seuil de 60%.
+            Chaque point compte uniquement les prédictions dont le résultat réel est connu.
             {lastUpdate ? ` Dernier bilan : ${lastUpdate}.` : ' Aucun bilan encore effectué.'}
           </Text>
         </View>
@@ -544,7 +552,8 @@ export default function EvolutionScreen() {
             key={market.key}
             label={market.label}
             width={chartWidth}
-            points={marketSeries.filter((p) => p.market === market.key)}
+            points={marketSeriesReal.filter((p) => p.market === market.key)}
+            fictionalPoints={marketSeriesFictional.filter((p) => p.market === market.key)}
           />
         ))}
       </View>

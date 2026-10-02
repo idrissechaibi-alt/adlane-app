@@ -474,6 +474,43 @@ export function writeMarketSeries(points: MarketDayPoint[]): void {
   writeText(fileIn('market-series.json'), JSON.stringify(points.slice(-400)));
 }
 
+// Séries SÉPARÉES réel/fictif — uniquement pour l'affichage comparatif
+// (EvolutionScreen) : measurer "à l'œil" l'évolution de la boucle
+// d'auto-apprentissage face au pipeline réel. N'alimente jamais autoLearn ni
+// applyMarketExpertise, qui continuent de consulter market-series.json
+// (réel + fictif combinés, par conception, pour plus d'échantillon — voir
+// dailyDigest.ts). Deux fichiers séparés plutôt qu'un champ `real` sur
+// MarketDayPoint : ça aurait changé la forme lue par le code de calibrage
+// existant pour un besoin qui ne concerne que l'écran.
+
+export function readMarketSeriesReal(): MarketDayPoint[] {
+  const content = readTextSafe(fileIn('market-series-real.json'));
+  if (!content) return [];
+  try {
+    return JSON.parse(content);
+  } catch {
+    return [];
+  }
+}
+
+export function writeMarketSeriesReal(points: MarketDayPoint[]): void {
+  writeText(fileIn('market-series-real.json'), JSON.stringify(points.slice(-400)));
+}
+
+export function readMarketSeriesFictional(): MarketDayPoint[] {
+  const content = readTextSafe(fileIn('market-series-fictional.json'));
+  if (!content) return [];
+  try {
+    return JSON.parse(content);
+  } catch {
+    return [];
+  }
+}
+
+export function writeMarketSeriesFictional(points: MarketDayPoint[]): void {
+  writeText(fileIn('market-series-fictional.json'), JSON.stringify(points.slice(-400)));
+}
+
 export function readInPlayProposals(): InPlayProposal[] {
   const content = readTextSafe(fileIn('inplay-proposals.json'));
   if (!content) return [];
