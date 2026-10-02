@@ -46,8 +46,13 @@ import { buildFictionalMarketStats, formatFictionalDigestMessage } from './daily
 
 const LAST_REVIEW_KEY = '@last_daily_review';
 const LAST_ELO_SYNC_KEY = '@last_elo_sync';
+const LAST_TODAY_ATTEMPT_KEY = '@last_today_review_attempt';
 /** Nombre maximum de journées rattrapées d'un coup (app restée fermée). */
 const MAX_CATCHUP_DAYS = 7;
+/** Fréquence de retraitement de la journée EN COURS (voir plus bas) — pas
+ * plus souvent, pour ne pas multiplier les appels API-Football/Omniroute sur
+ * des matchs encore en cours, qui échoueraient de toute façon à chaque essai. */
+const TODAY_RETRY_INTERVAL_MS = 60 * 60_000;
 
 function dayKey(date: Date): string {
   return date.toISOString().split('T')[0];
@@ -351,10 +356,26 @@ export async function runNightlyReviewIfDue(): Promise<number> {
   // d'hier soit bien traitée (partir d'hier la ferait sauter définitivement).
   const storedLastReviewed = await AsyncStorage.getItem(LAST_REVIEW_KEY);
   const lastReviewed = storedLastReviewed ?? dayKey(new Date(Date.now() - 2 * 86_400_000));
-  if (lastReviewed >= yesterday) return 0; // déjà à jour
+  const closedPendingDays = lastReviewed >= yesterday ? [] : daysBetween(lastReviewed, yesterday);
 
-  const pendingDays = daysBetween(lastReviewed, yesterday);
+  // La journée EN COURS est volontairement retraitée elle aussi (pas
+  // seulement "hier") : avec l'ancienne logique, un match qui se terminait
+  // à 14h attendait le bilan du LENDEMAIN pour apparaître dans les courbes —
+  // et si le tout premier bilan réussi n'arrivait que des jours plus tard
+  // (bug désormais corrigé), ses propositions "d'hier" pouvaient déjà avoir
+  // été purgées par la fenêtre de 48h sur inplay-proposals.json, donnant
+  // "0 point" alors même que la fonction tournait enfin sans erreur.
+  // Retraiter aujourd'hui à chaque passage comblerait ce retard — mais
+  // coûterait un appel API-Football/Omniroute par match encore en cours à
+  // CHAQUE tour (~toutes les 15-20 min), pour rien tant qu'il n'est pas
+  // terminé : throttlé à une fois par heure via sa propre clé.
+  const lastTodayAttemptRaw = await AsyncStorage.getItem(LAST_TODAY_ATTEMPT_KEY);
+  const lastTodayAttempt = lastTodayAttemptRaw ? Number(lastTodayAttemptRaw) : 0;
+  const todayDue = Date.now() - lastTodayAttempt >= TODAY_RETRY_INTERVAL_MS;
+
+  const pendingDays = todayDue ? [...closedPendingDays, today] : closedPendingDays;
   if (pendingDays.length === 0) return 0;
+  if (todayDue) await AsyncStorage.setItem(LAST_TODAY_ATTEMPT_KEY, String(Date.now()));
 
   const allProposals = readInPlayProposals();
   const apiConfig = await getAPIConfig();
@@ -368,10 +389,14 @@ export async function runNightlyReviewIfDue(): Promise<number> {
   const telegramDigests: string[] = [];
 
   for (const day of pendingDays) {
-    const dayProposals = allProposals.filter(
+    // Seules celles pas encore réglées : "today" peut repasser ici plusieurs
+    // fois dans la même journée (voir plus haut) — pas la peine de refaire la
+    // moindre requête pour une proposition déjà réglée lors d'un passage
+    // précédent.
+    const unreviewedDayProposals = allProposals.filter(
       (p) => p.createdAt.startsWith(day) && !p.reviewed
     );
-    if (dayProposals.length === 0) continue;
+    if (unreviewedDayProposals.length === 0) continue;
 
     // Scans 20e/60e minute (et l'ancien combo mi-temps, pour les
     // enregistrements encore non réglés) : chaque jambe porte son propre
@@ -381,7 +406,7 @@ export async function runNightlyReviewIfDue(): Promise<number> {
     // final disponible ; sinon on retente au prochain bilan.
     const allLegs = Array.from(
       new Map(
-        dayProposals.flatMap((p) => p.legs.map((l) => [l.fixtureId, l] as const))
+        unreviewedDayProposals.flatMap((p) => p.legs.map((l) => [l.fixtureId, l] as const))
       ).values()
     );
     const finals = apiConfig.apiFootball
@@ -408,7 +433,7 @@ export async function runNightlyReviewIfDue(): Promise<number> {
     // écriture, un match qui se termine n'apprend rien à l'app.
     const settledOutcomes: PredictionOutcome[] = [];
 
-    for (const proposal of dayProposals) {
+    for (const proposal of unreviewedDayProposals) {
       const allResolved = proposal.legs.every((leg) => finals.has(leg.fixtureId));
       if (!allResolved) continue; // au moins un match du combo n'a pas encore de score final
 
@@ -436,29 +461,49 @@ export async function runNightlyReviewIfDue(): Promise<number> {
 
     if (settledOutcomes.length > 0) appendPredictionOutcomes(settledOutcomes);
 
-    const points = buildDayPoints(day, dayProposals);
-
+    // Le digest Telegram ne porte que sur ce qui vient d'être réglé À CET
+    // APPEL (pas tout le règlement cumulé du jour) : "today" peut repasser
+    // ici plusieurs fois dans la même journée, et resservir le même bilan à
+    // chaque heure serait un spam. `unreviewedDayProposals` n'inclut déjà
+    // plus rien de réglé lors d'un passage précédent.
+    //
     // Capturé AVANT la fusion des points du jour dans `series` juste
     // dessous : `cumulativeHitRateBefore` doit comparer contre l'historique
     // STRICTEMENT antérieur à `day`, jamais contre lui-même.
-    const digestMessage = formatFictionalDigestMessage(day, buildFictionalMarketStats(dayProposals), series);
+    const digestMessage = formatFictionalDigestMessage(
+      day,
+      buildFictionalMarketStats(unreviewedDayProposals),
+      series
+    );
     if (digestMessage) telegramDigests.push(digestMessage);
 
+    // Pour la COURBE en revanche, on recalcule sur TOUTES les propositions du
+    // jour (réglées à cet appel OU lors d'un appel précédent) : mergeDayPoints
+    // REMPLACE le point existant plutôt que de l'additionner, donc repartir
+    // seulement de `unreviewedDayProposals` effacerait le travail déjà acquis
+    // les passages précédents sur "today".
+    const allDayProposals = allProposals.filter((p) => p.createdAt.startsWith(day));
+    const points = buildDayPoints(day, allDayProposals);
     mergeDayPoints(series, points);
     created += points.length;
 
     // Séries séparées (affichage uniquement, voir learnStore.ts) : mêmes
     // points que ci-dessus mais calculés sur un sous-ensemble réel ou fictif
-    // de dayProposals, pour comparer visuellement les deux pipelines.
-    mergeDayPoints(seriesReal, buildDayPoints(day, dayProposals.filter((p) => p.real !== false)));
-    mergeDayPoints(seriesFictional, buildDayPoints(day, dayProposals.filter((p) => p.real === false)));
+    // de allDayProposals, pour comparer visuellement les deux pipelines.
+    mergeDayPoints(seriesReal, buildDayPoints(day, allDayProposals.filter((p) => p.real !== false)));
+    mergeDayPoints(seriesFictional, buildDayPoints(day, allDayProposals.filter((p) => p.real === false)));
   }
 
   writeInPlayProposals(allProposals);
   writeMarketSeries(series.sort((a, b) => a.date.localeCompare(b.date)));
   writeMarketSeriesReal(seriesReal.sort((a, b) => a.date.localeCompare(b.date)));
   writeMarketSeriesFictional(seriesFictional.sort((a, b) => a.date.localeCompare(b.date)));
-  await AsyncStorage.setItem(LAST_REVIEW_KEY, yesterday);
+  // N'avance que si une journée CLOSE a été rattrapée — "today" seul ne doit
+  // jamais marquer le rattrapage quotidien comme à jour, sinon la vraie
+  // journée d'hier pourrait être sautée si elle restait à traiter.
+  if (closedPendingDays.length > 0) {
+    await AsyncStorage.setItem(LAST_REVIEW_KEY, yesterday);
+  }
 
   for (const digest of telegramDigests) {
     await sendTelegramMessage(digest);
