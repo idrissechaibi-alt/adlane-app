@@ -88,6 +88,9 @@ function renderSeries(
 export default function MarketTrendChart({ label, points, fictionalPoints = [], threshold = 0.6, width }: Props) {
   const totalPredictions = points.reduce((sum, p) => sum + p.predictions, 0);
   const totalFictionalPredictions = fictionalPoints.reduce((sum, p) => sum + p.predictions, 0);
+  const totalFictionalCorrect = fictionalPoints.reduce((sum, p) => sum + p.correct, 0);
+  const fictionalHitRatePercent =
+    totalFictionalPredictions > 0 ? Math.round((totalFictionalCorrect / totalFictionalPredictions) * 100) : null;
 
   if (points.length === 0 && fictionalPoints.length === 0) {
     return (
@@ -132,6 +135,16 @@ export default function MarketTrendChart({ label, points, fictionalPoints = [], 
           )}
         </View>
       </View>
+
+      {fictionalHitRatePercent != null && (
+        <Text style={styles.fictionalStats}>
+          Fictif : <Text style={styles.fictionalStatsNumber}>{totalFictionalPredictions}</Text> traité
+          {totalFictionalPredictions > 1 ? 's' : ''} ·{' '}
+          <Text style={styles.fictionalStatsNumber}>{totalFictionalCorrect}</Text> réussi
+          {totalFictionalCorrect > 1 ? 's' : ''} ·{' '}
+          <Text style={styles.fictionalStatsNumber}>{fictionalHitRatePercent}%</Text>
+        </Text>
+      )}
 
       <Svg width={width} height={CHART_HEIGHT}>
         {/* Repères horizontaux discrets : 0%, 50%, 100% */}
@@ -216,6 +229,15 @@ const styles = StyleSheet.create({
     width: 7,
     height: 7,
     borderRadius: 4,
+  },
+  fictionalStats: {
+    color: '#c4b5fd',
+    fontSize: 12,
+    marginBottom: 8,
+  },
+  fictionalStatsNumber: {
+    fontWeight: 'bold',
+    color: FICTIONAL_COLOR,
   },
   empty: {
     color: '#64748b',
