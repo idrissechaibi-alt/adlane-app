@@ -771,3 +771,210 @@ export function getAgentLearningDigest(): string | null {
   if (!model || model.markerRules.length === 0) return null;
   return readAgentDigest();
 }
+
+/** En dessous, un écart annoncé/réalisé sur un marché est du hasard, pas une leçon. */
+const REPORT_MIN_SAMPLES = 10;
+/** Écart annoncé/réalisé (en part de 1) à partir duquel on parle d'erreur de jugement. */
+const REPORT_GAP = 0.1;
+/** Même seuil que le recalibrage global dans consolidateLearning. */
+const GLOBAL_RECALIBRATION_MIN_SETTLED = 20;
+
+function pct(rate: number): string {
+  return `${Math.round(rate * 100)}%`;
+}
+
+function targetLabel(targetKey: string): string {
+  return LEARNING_TARGETS.find((t) => t.key === targetKey)?.label ?? targetKey;
+}
+
+function describeRule(rule: MarkerRule): string {
+  const [name, threshold] = rule.marker.split('>=');
+  const condition =
+    name === 'minute'
+      ? `à partir de la ${threshold}e minute`
+      : `quand ${MARKER_CANDIDATES.find((c) => c.name === name)?.label ?? name} ≥ ${threshold}`;
+  return (
+    `${condition}, il y a ${targetLabel(rule.target)} dans les ${rule.horizon} minutes suivantes ` +
+    `dans ${pct(rule.hitRate)} des cas, contre ${pct(rule.baseline)} en temps normal ` +
+    `(${rule.samples} observations)`
+  );
+}
+
+interface BetGroupStats {
+  n: number;
+  won: number;
+  meanPredicted: number;
+  hitRate: number;
+}
+
+function groupBets(bets: PaperBet[], keyOf: (bet: PaperBet) => string): Map<string, BetGroupStats> {
+  const raw = new Map<string, { n: number; won: number; predictedSum: number }>();
+  for (const bet of bets) {
+    const key = keyOf(bet);
+    const entry = raw.get(key) ?? { n: 0, won: 0, predictedSum: 0 };
+    entry.n += 1;
+    entry.predictedSum += bet.modelProb;
+    if (bet.won) entry.won += 1;
+    raw.set(key, entry);
+  }
+  const stats = new Map<string, BetGroupStats>();
+  for (const [key, e] of raw) {
+    stats.set(key, { n: e.n, won: e.won, meanPredicted: e.predictedSum / e.n, hitRate: e.won / e.n });
+  }
+  return stats;
+}
+
+/**
+ * Rapport RÉDIGÉ de ce que la boucle fictive a appris et corrigé, construit
+ * uniquement à partir des données réellement mesurées (aucun texte généré
+ * par IA, rien d'inventé) : bilan, leçons tirées des paris ratés, corrections
+ * effectivement appliquées aux prochaines probabilités, règles surveillées.
+ */
+export function buildLearningReport(): string | null {
+  const model = readLearnedModel();
+  const bets = readPaperBets().filter((b) => b.settled && b.won != null);
+  if (!model && bets.length === 0) return null;
+
+  const lines: string[] = ["📝 Rapport écrit — ce que l'app a appris de ses paris fictifs", ''];
+
+  lines.push('1) Bilan');
+  if (bets.length === 0) {
+    lines.push("Aucun pari fictif réglé pour l'instant : rien à analyser encore.");
+  } else {
+    const won = bets.filter((b) => b.won).length;
+    lines.push(
+      `${bets.length} paris fictifs réglés : ${won} réussis, ${bets.length - won} ratés ` +
+        `(${pct(won / bets.length)} de réussite).`
+    );
+    const evolution = getAccuracyTrend()?.evolutionVsYesterdayPoints;
+    if (evolution != null) {
+      lines.push(
+        Math.abs(evolution) < 0.5
+          ? 'Stable par rapport à hier.'
+          : evolution > 0
+            ? `En progrès de ${evolution.toFixed(1)} points par rapport à hier.`
+            : `En recul de ${Math.abs(evolution).toFixed(1)} points par rapport à hier.`
+      );
+    }
+  }
+
+  lines.push('', '2) Leçons tirées des ratés');
+  if (bets.length === 0) {
+    lines.push('Rien à analyser tant que des paris ne sont pas réglés.');
+  } else {
+    const byMarket = [...groupBets(bets, (b) => marketForTarget(b.target)).entries()].sort(
+      (a, b) => b[1].n - a[1].n
+    );
+    for (const [market, s] of byMarket) {
+      const label = marketLabel(market as TrackedMarket);
+      if (s.n < REPORT_MIN_SAMPLES) {
+        lines.push(`• ${label} : ${s.n} paris seulement, trop tôt pour en tirer une leçon.`);
+      } else if (s.meanPredicted - s.hitRate >= REPORT_GAP) {
+        lines.push(
+          `• ${label} : j'annonçais ${pct(s.meanPredicted)} en moyenne, il n'en est passé que ` +
+            `${pct(s.hitRate)} (${s.n - s.won} ratés sur ${s.n}). J'étais trop optimiste sur ce marché.`
+        );
+      } else if (s.hitRate - s.meanPredicted >= REPORT_GAP) {
+        lines.push(
+          `• ${label} : j'annonçais ${pct(s.meanPredicted)}, il en est passé ${pct(s.hitRate)} ` +
+            `(${s.won}/${s.n}). J'étais trop prudent : je sous-estimais ce marché.`
+        );
+      } else {
+        lines.push(
+          `• ${label} : annonces fiables, ${pct(s.meanPredicted)} annoncés pour ${pct(s.hitRate)} ` +
+            `réalisés (${s.won}/${s.n}).`
+        );
+      }
+    }
+
+    const byPattern = [...groupBets(bets, (b) => `${b.target}@${b.horizon}`).entries()].filter(
+      ([, s]) => s.n >= 5
+    );
+    const worst = byPattern
+      .filter(([, s]) => s.meanPredicted - s.hitRate >= REPORT_GAP)
+      .sort((a, b) => b[1].meanPredicted - b[1].hitRate - (a[1].meanPredicted - a[1].hitRate))[0];
+    if (worst) {
+      const [target, horizon] = worst[0].split('@');
+      lines.push(
+        `Le pari qui rate le plus : « ${targetLabel(target)} dans les ${horizon} minutes » — ` +
+          `${worst[1].n - worst[1].won} ratés sur ${worst[1].n} alors que j'annonçais ${pct(worst[1].meanPredicted)}.`
+      );
+    }
+    const best = byPattern.sort((a, b) => b[1].hitRate - a[1].hitRate)[0];
+    if (best) {
+      const [target, horizon] = best[0].split('@');
+      lines.push(
+        `Le plus fiable : « ${targetLabel(target)} dans les ${horizon} minutes » — ` +
+          `${best[1].won}/${best[1].n} réussis.`
+      );
+    }
+  }
+
+  lines.push('', '3) Corrections appliquées aux prochaines prédictions');
+  if (!model) {
+    lines.push("Le modèle n'a pas encore été consolidé : aucune correction possible pour l'instant.");
+  } else {
+    const { settled, calibrationFactor: factor } = model.paperBets;
+    if (settled < GLOBAL_RECALIBRATION_MIN_SETTLED) {
+      lines.push(
+        `Recalibrage global pas encore actif : il faut au moins ${GLOBAL_RECALIBRATION_MIN_SETTLED} paris ` +
+          `réglés pour corriger sans réagir au hasard (${settled} actuellement).`
+      );
+    } else if (Math.abs(factor - 1) < 0.01) {
+      lines.push(
+        'Aucune correction globale nécessaire : mes probabilités annoncées correspondent à ce qui se réalise.'
+      );
+    } else if (factor < 1) {
+      lines.push(
+        `Toutes les probabilités tirées des marqueurs en direct sont désormais multipliées par ` +
+          `×${factor.toFixed(2)} (${Math.round((1 - factor) * 100)}% de moins), parce que j'annonçais ` +
+          'en moyenne plus que ce qui se réalisait.'
+      );
+    } else {
+      lines.push(
+        `Toutes les probabilités tirées des marqueurs en direct sont désormais multipliées par ` +
+          `×${factor.toFixed(2)} (+${Math.round((factor - 1) * 100)}%), parce que j'étais trop prudent.`
+      );
+    }
+
+    const expertise = model.marketExpertise ?? [];
+    const active = expertise.filter(
+      (e) => e.samples >= MIN_OUTCOMES_PER_MARKET && Math.abs(e.calibrationFactor - 1) >= 0.01
+    );
+    if (active.length > 0) {
+      for (const e of active) {
+        lines.push(
+          `• ${marketLabel(e.market)} : chaque nouvelle prédiction est corrigée ×${e.calibrationFactor.toFixed(2)} ` +
+            `(${pct(e.meanPredicted)} annoncés pour ${pct(e.hitRate)} réalisés sur ${e.samples} résultats vérifiés).`
+        );
+      }
+    } else {
+      const mostAdvanced = [...expertise].sort((a, b) => b.samples - a.samples)[0];
+      lines.push(
+        `Correction marché par marché (1X2, total de buts, BTTS…) : pas encore active, il faut ` +
+          `${MIN_OUTCOMES_PER_MARKET} résultats de match vérifiés par marché` +
+          (mostAdvanced
+            ? ` (le plus avancé : ${marketLabel(mostAdvanced.market)}, ${mostAdvanced.samples}/${MIN_OUTCOMES_PER_MARKET}).`
+            : '.')
+      );
+    }
+  }
+
+  lines.push('', '4) Ce que je surveille désormais en match');
+  if (!model || model.markerRules.length === 0) {
+    lines.push(
+      `Aucune règle fiable encore : il faut au moins ${MIN_SAMPLES_PER_RULE} observations d'une même situation.`
+    );
+  } else {
+    for (const rule of model.markerRules.slice(0, 5)) {
+      const text = describeRule(rule);
+      lines.push(`• ${text.charAt(0).toUpperCase()}${text.slice(1)}.`);
+    }
+    lines.push(
+      "Ces règles sont recalculées à chaque tour sur les 14 derniers jours : une règle qui cesse de se " +
+        "vérifier disparaît d'elle-même."
+    );
+  }
+
+  return lines.join('\n');
+}

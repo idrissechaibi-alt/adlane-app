@@ -45,6 +45,38 @@ export async function sendTelegramMessage(text: string): Promise<boolean> {
   const config = await loadTelegramConfig();
   if (!config) return false;
 
+  // Telegram refuse (HTTP 400) tout message de plus de 4096 caractères : un
+  // rapport long part en plusieurs messages plutôt que de ne pas partir du tout.
+  for (const chunk of splitForTelegram(text)) {
+    if (!(await postTelegramMessage(config, chunk))) return false;
+  }
+  return true;
+}
+
+const TELEGRAM_MAX_LENGTH = 4000;
+
+function splitForTelegram(text: string): string[] {
+  if (text.length <= TELEGRAM_MAX_LENGTH) return [text];
+
+  const chunks: string[] = [];
+  let current = '';
+  for (const line of text.split('\n')) {
+    if (current && current.length + line.length + 1 > TELEGRAM_MAX_LENGTH) {
+      chunks.push(current);
+      current = '';
+    }
+    let rest = line;
+    while (rest.length > TELEGRAM_MAX_LENGTH) {
+      chunks.push(rest.slice(0, TELEGRAM_MAX_LENGTH));
+      rest = rest.slice(TELEGRAM_MAX_LENGTH);
+    }
+    current = current ? `${current}\n${rest}` : rest;
+  }
+  if (current) chunks.push(current);
+  return chunks;
+}
+
+async function postTelegramMessage(config: TelegramConfig, text: string): Promise<boolean> {
   try {
     // fetchWithTimeout, pas fetch() brut : un envoi qui reste accroché sans
     // jamais répondre ni erreur (déjà vu sur mobile) bloquait indéfiniment

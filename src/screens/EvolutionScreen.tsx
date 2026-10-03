@@ -23,7 +23,7 @@ import { MarketCalibration, Lesson, Bet, DailyReport } from '../types';
 import { useIsFocused } from '@react-navigation/native';
 import { runAutoLearnTick, AutoLearnTickDiagnostics, getNativeBackgroundTickStats, NativeBackgroundTickStats } from '../core/backgroundTasks';
 import { sendTelegramMessage } from '../core/telegram';
-import { getAgentLearningDigest, getAccuracyTrend, AccuracyTrend, buildMarketDayPointsFromPaperBets } from '../core/autoLearn';
+import { getAgentLearningDigest, getAccuracyTrend, AccuracyTrend, buildMarketDayPointsFromPaperBets, buildLearningReport } from '../core/autoLearn';
 
 export default function EvolutionScreen() {
   const isFocused = useIsFocused();
@@ -258,28 +258,28 @@ export default function EvolutionScreen() {
   };
 
   /**
-   * Ce que le modèle a VRAIMENT appris jusqu'ici (taux de base, marqueurs les
-   * plus informatifs, fiabilité mesurée des paris papier, facteur de
-   * recalibrage, fiabilité passée par marché) — déjà calculé en continu par
-   * autoLearn.ts et écrit dans un fichier markdown interne (injecté aux
-   * agents IA à chaque analyse), mais jamais montré tel quel dans l'app.
-   * Envoyé sur Telegram plutôt qu'affiché dans une Alert (souvent trop long
-   * pour tenir dans une boîte de dialogue).
+   * Envoie sur Telegram le rapport RÉDIGÉ (leçons tirées des ratés,
+   * corrections appliquées) puis le détail chiffré (taux de base, marqueurs,
+   * facteurs de recalibrage). Telegram plutôt qu'une Alert : trop long pour
+   * tenir dans une boîte de dialogue.
    */
   const handleShowLearningDigest = async () => {
+    const report = buildLearningReport();
     const digest = getAgentLearningDigest();
-    if (!digest) {
+    if (!report && !digest) {
       Alert.alert(
         'Pas encore de leçons',
-        "Le corpus d'observations est encore trop jeune pour qu'aucun marqueur ne dépasse le seuil d'échantillon. Réessaie plus tard."
+        "Aucun pari fictif réglé ni règle apprise pour l'instant. Réessaie après quelques tours de fond."
       );
       return;
     }
-    const sent = await sendTelegramMessage(digest);
+    let sent = true;
+    if (report) sent = await sendTelegramMessage(report);
+    if (sent && digest) sent = await sendTelegramMessage(`📊 Détail chiffré\n\n${digest}`);
     Alert.alert(
       sent ? '✅ Envoyé' : '⚠️ Telegram indisponible',
       sent
-        ? "Vérifie ton chat Telegram : le détail de ce que le modèle a appris vient d'y arriver."
+        ? "Vérifie ton chat Telegram : le rapport écrit des leçons et corrections, puis le détail chiffré, viennent d'y arriver."
         : "Le message n'est pas parti (Telegram non configuré ou injoignable). Vérifie Paramètres → Telegram."
     );
   };
@@ -630,7 +630,7 @@ export default function EvolutionScreen() {
         <TouchableOpacity style={styles.learningDigestButton} onPress={handleShowLearningDigest}>
           <Ionicons name="bulb" size={16} color="#a78bfa" />
           <Text style={styles.learningDigestButtonText}>
-            Voir ce que le modèle a vraiment appris (détail sur Telegram)
+            Rapport des leçons apprises et corrections (sur Telegram)
           </Text>
         </TouchableOpacity>
 
