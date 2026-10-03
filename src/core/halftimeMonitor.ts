@@ -182,7 +182,14 @@ export async function fetchOmnirouteAllLiveFixtures(config: OmnirouteConfig): Pr
   return result?.value ?? [];
 }
 
-const OMNIROUTE_MATCH_STATUS_MAP: Record<string, string> = { '1H': '1H', HT: 'HT', '2H': '2H' };
+// 'finished' manquait ici : un match terminé (score inclus dans la réponse
+// de l'agent) se retrouvait réduit à `{ fixture: null }` juste en dessous,
+// exactement comme un match "not_started" — la donnée était DEMANDÉE à
+// l'agent puis jetée. C'était le verrou qui empêchait tout règlement fiable
+// des paris fictifs (dailyReview.ts) : leur fixtureId est synthétique
+// (jamais connu d'API-Football), donc ce relevé Omniroute est leur SEULE
+// source de score final.
+const OMNIROUTE_MATCH_STATUS_MAP: Record<string, string> = { '1H': '1H', HT: 'HT', '2H': '2H', finished: 'FT' };
 
 /** Relevé complet d'un match : son état ET ses statistiques de déroulement,
  * ramenés par UNE seule requête Omniroute (les tirs cadrés servent ensuite à

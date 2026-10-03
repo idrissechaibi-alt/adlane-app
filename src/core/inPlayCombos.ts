@@ -118,6 +118,21 @@ const MIN_MINUTES_FOR_PACE_PROJECTION = 15;
  * la boucle de premier plan repasse toutes les 3 minutes, inutile de
  * réinterroger un agent aussi souvent pour le même match. */
 const MIN_MINUTES_BETWEEN_SAMPLES = 6;
+/** Statuts considérés comme match terminé (API-Football) — utilisés pour
+ * savoir quand arrêter la surveillance de fin de match ET, côté bilan de
+ * minuit (dailyReview.ts), pour extraire un score final directement du
+ * relevé déjà enregistré ici, sans la moindre recherche Omniroute. */
+const FINISHED_STATUSES = new Set(['FT', 'AET', 'PEN', 'AWD', 'WO']);
+/** Borne (minutes écoulées depuis le coup d'envoi) jusqu'à laquelle on
+ * continue de surveiller un match APRÈS ses deux checkpoints, dans le seul
+ * but d'y capter un relevé "terminé" : couvre la mi-temps, les arrêts de jeu
+ * et une éventuelle prolongation. Sans cette troisième fenêtre, le suivi
+ * s'arrêtait net à 92 min écoulées (voir inSecondWatch) — bien avant la fin
+ * de la plupart des matchs — et le bilan de minuit n'avait alors plus AUCUN
+ * moyen fiable de régler un pari fictif (fixtureId synthétique, jamais connu
+ * d'API-Football ; le repli par recherche Omniroute est lui peu fiable sur
+ * des divisions obscures/jeunes). */
+const FINISH_WATCH_MAX_MINUTE = 160;
 /** Durée minimale entre deux relevés pour qu'un rythme en soit déduit : sur
  * trois minutes, un corner de plus ou de moins fausse tout. */
 const MIN_MINUTES_FOR_RATE = 8;
@@ -1134,22 +1149,32 @@ export async function runInPlayComboTick(liveFixtures: LiveFixture[]): Promise<I
 
       const checkpoint20Done = checked.has(`${scheduled.fixtureId}-minute20`);
       const checkpoint60Done = checked.has(`${scheduled.fixtureId}-minute60`);
-      if (checkpoint20Done && checkpoint60Done) continue; // match déjà traité de bout en bout
+      const timeline = timelines[scheduled.fixtureId] ?? [];
+      const hasFinishedSample = timeline.some((s) => FINISHED_STATUSES.has(s.statusShort));
+      if (checkpoint20Done && checkpoint60Done && hasFinishedSample) continue; // plus rien à en tirer
 
-      // Deux fenêtres de SURVEILLANCE, en temps réel (pas en minutes de jeu) :
-      // du coup d'envoi jusqu'à la 20e minute, puis de la mi-temps jusqu'à la
-      // 60e. On relève le match régulièrement pendant toute la fenêtre, et le
-      // pronostic n'est émis qu'au checkpoint — à partir de l'ÉVOLUTION
-      // observée depuis le début, pas d'une photo isolée. Bornes larges à
-      // dessein (coup d'envoi retardé, arrêts de jeu) : la minute de jeu
-      // exacte est ensuite confirmée par le relevé lui-même.
+      // Trois fenêtres de SURVEILLANCE, en temps réel (pas en minutes de
+      // jeu) : du coup d'envoi jusqu'à la 20e minute, puis de la mi-temps
+      // jusqu'à la 60e — à chaque fois, le pronostic n'est émis qu'au
+      // checkpoint, à partir de l'ÉVOLUTION observée depuis le début, pas
+      // d'une photo isolée. Bornes larges à dessein (coup d'envoi retardé,
+      // arrêts de jeu) : la minute de jeu exacte est ensuite confirmée par le
+      // relevé lui-même.
+      //
+      // Troisième fenêtre, après les deux checkpoints : uniquement pour
+      // capter un relevé "terminé" (score final), sans lequel le bilan de
+      // minuit n'a aucun moyen fiable de régler ce pari (fixtureId
+      // synthétique, jamais connu d'API-Football). Bornée à
+      // FINISH_WATCH_MAX_MINUTE pour ne pas interroger indéfiniment un match
+      // dont le suivi aurait décroché (report, erreur de planning).
       const inFirstWatch = !checkpoint20Done && elapsedMinutes >= 0 && elapsedMinutes <= 35;
       const inSecondWatch = !checkpoint60Done && elapsedMinutes >= 50 && elapsedMinutes <= 92;
-      if (!inFirstWatch && !inSecondWatch) continue;
+      const inFinishWatch =
+        !hasFinishedSample && elapsedMinutes >= 75 && elapsedMinutes <= FINISH_WATCH_MAX_MINUTE;
+      if (!inFirstWatch && !inSecondWatch && !inFinishWatch) continue;
 
       // Cadence de surveillance : la boucle de premier plan repasse toutes les
       // 3 minutes, inutile de réinterroger le même match aussi souvent.
-      const timeline = timelines[scheduled.fixtureId] ?? [];
       const lastSample = timeline[timeline.length - 1];
       const minutesSinceLastSample = lastSample
         ? (Date.now() - Date.parse(lastSample.ts)) / 60_000

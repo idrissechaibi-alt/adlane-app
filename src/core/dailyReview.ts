@@ -43,6 +43,7 @@ import { askOmnirouteUsable } from './omniroute';
 import { OmnirouteConfig } from '../types';
 import { sendTelegramMessage } from './telegram';
 import { buildFictionalMarketStats, formatFictionalDigestMessage } from './dailyDigest';
+import { readMatchTimelines, MatchSample } from './fictionalProgram';
 
 const LAST_REVIEW_KEY = '@last_daily_review';
 const LAST_ELO_SYNC_KEY = '@last_elo_sync';
@@ -160,6 +161,35 @@ async function fetchFinalResults(
  * "Aucun bilan encore effectué" qui persistait malgré des jours d'activité.
  */
 const OMNIROUTE_FINAL_RESULT_CONCURRENCY = 6;
+
+/** Statuts considérés comme match terminé (API-Football) — même liste que
+ * FINISHED_STATUSES dans inPlayCombos.ts (pas exportée de là pour éviter un
+ * import croisé avec un module qui dépend lui-même d'autres choses). */
+const TIMELINE_FINISHED_STATUSES = new Set(['FT', 'AET', 'PEN', 'AWD', 'WO']);
+
+/**
+ * Score final extrait du relevé en direct DÉJÀ enregistré pendant le suivi
+ * du match (inPlayCombos.ts), sans la moindre requête supplémentaire — bien
+ * plus fiable qu'une recherche Omniroute après coup : la source est le même
+ * flux qui a servi à émettre les pronostics eux-mêmes, pas une recherche web
+ * rétroactive sur un match de division obscure/jeune, souvent introuvable.
+ * Score de mi-temps approximé par le dernier relevé de la 1ère mi-temps
+ * (aucun score HT explicite dans MatchSample) — suffisant pour les marchés
+ * concernés (settleReprojectedLeg).
+ */
+function extractFinalResultFromTimeline(timeline: MatchSample[]): FinalResult | null {
+  const finished = [...timeline].reverse().find((s) => TIMELINE_FINISHED_STATUSES.has(s.statusShort));
+  if (!finished) return null;
+
+  const lastFirstHalf = [...timeline].reverse().find((s) => s.statusShort === '1H');
+
+  return {
+    goalsHome: finished.homeGoals,
+    goalsAway: finished.awayGoals,
+    htHome: lastFirstHalf?.homeGoals ?? 0,
+    htAway: lastFirstHalf?.awayGoals ?? 0,
+  };
+}
 
 async function fetchFinalResultsViaOmniroute(
   omnirouteConfig: OmnirouteConfig,
@@ -413,11 +443,25 @@ export async function runNightlyReviewIfDue(): Promise<number> {
       ? await fetchFinalResults(apiConfig.apiFootball, allLegs.map((l) => l.fixtureId))
       : new Map<number, FinalResult>();
 
-    // Repli Omniroute : matchs découverts par Omniroute (fixtureId
-    // synthétique, jamais connu d'API-Football) — sans ce repli, ils
-    // restaient non réglés pour toujours, quelle que soit l'ancienneté de la
-    // proposition. Uniquement pour ce qu'API-Football n'a pas su régler,
-    // jamais un doublon d'appel pour un match déjà résolu.
+    // Repli GRATUIT, et plus fiable qu'une recherche : le score déjà capté
+    // pendant le suivi en direct du match lui-même (inPlayCombos.ts). C'est
+    // la SEULE source pour les matchs fictifs (fixtureId synthétique, jamais
+    // connu d'API-Football) — sans lui, ils ne pouvaient être réglés que par
+    // une recherche web Omniroute rétroactive, peu fiable sur des divisions
+    // obscures/jeunes. Un seul accès au stockage local pour toute la
+    // journée, avant toute requête réseau supplémentaire.
+    const timelines = await readMatchTimelines(day);
+    for (const leg of allLegs) {
+      if (finals.has(leg.fixtureId)) continue;
+      const result = extractFinalResultFromTimeline(timelines[leg.fixtureId] ?? []);
+      if (result) finals.set(leg.fixtureId, result);
+    }
+
+    // Repli Omniroute (recherche web rétroactive) : seulement pour ce qui
+    // reste non réglé après le relevé en direct ci-dessus — par exemple un
+    // match dont le suivi aurait décroché avant la fin (coup d'envoi mal
+    // renseigné, app restée fermée pendant toute la fenêtre de fin de
+    // match...). Jamais un doublon d'appel pour un match déjà résolu.
     const unresolvedLegs = allLegs.filter((l) => !finals.has(l.fixtureId));
     if (unresolvedLegs.length > 0) {
       const omnirouteConfig = await loadOmnirouteConfig();
