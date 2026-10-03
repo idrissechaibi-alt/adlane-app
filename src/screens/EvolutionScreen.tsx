@@ -23,7 +23,7 @@ import { MarketCalibration, Lesson, Bet, DailyReport } from '../types';
 import { useIsFocused } from '@react-navigation/native';
 import { runAutoLearnTick, AutoLearnTickDiagnostics, getNativeBackgroundTickStats, NativeBackgroundTickStats } from '../core/backgroundTasks';
 import { sendTelegramMessage } from '../core/telegram';
-import { getAgentLearningDigest, getAccuracyTrend, AccuracyTrend } from '../core/autoLearn';
+import { getAgentLearningDigest, getAccuracyTrend, AccuracyTrend, buildMarketDayPointsFromPaperBets } from '../core/autoLearn';
 
 export default function EvolutionScreen() {
   const isFocused = useIsFocused();
@@ -42,6 +42,13 @@ export default function EvolutionScreen() {
    * règlement des scores finaux et peuvent rester vides plus longtemps). */
   const [accuracyTrend, setAccuracyTrend] = useState<AccuracyTrend | null>(null);
   const [marketSeriesFictional, setMarketSeriesFictional] = useState<MarketDayPoint[]>([]);
+  /** Dérivée des paris papier déjà réglés (voir autoLearn.ts) — comble les
+   * courbes (buts 1ère mi-temps/corners/cartons/fautes) avec un échantillon
+   * déjà conséquent et fiable, sans attendre le système à checkpoints
+   * (marketSeriesFictional) qui reste jeune après sa remise en état. Ne
+   * remplace jamais un point déjà présent côté checkpoints, ne fait que
+   * combler les dates manquantes (voir fictionalPointsFor plus bas). */
+  const [paperBetDayPoints, setPaperBetDayPoints] = useState<MarketDayPoint[]>([]);
   const [paperBetsSummary, setPaperBetsSummary] = useState<{ total: number; settled: number; matches: number } | null>(null);
   const [dailyReports, setDailyReports] = useState<DailyReport[]>([]);
   /** Batterie de paris fictifs du scan 20e/60e minute (inPlayCombos.ts, real:false) — distincte de paperBetsSummary (règles apprises d'autoLearn.ts). */
@@ -63,6 +70,7 @@ export default function EvolutionScreen() {
         settled: bets.filter((b) => b.settled).length,
         matches: new Set(bets.map((b) => b.fixtureId)).size,
       });
+      setPaperBetDayPoints(buildMarketDayPointsFromPaperBets(bets));
     } catch (error) {
       console.warn('Paris fictifs indisponibles:', error);
     }
@@ -546,6 +554,23 @@ export default function EvolutionScreen() {
     );
   };
 
+  /**
+   * Série fictive affichée pour un marché : les points à checkpoints
+   * (marketSeriesFictional, voir dailyReview.ts) en priorité, comblés par les
+   * points dérivés des paris papier déjà réglés (buts 1ère mi-temps/corners/
+   * cartons/fautes uniquement, voir buildMarketDayPointsFromPaperBets) sur
+   * les dates où les checkpoints n'ont encore rien à montrer. Ne masque
+   * jamais un point à checkpoints déjà présent : une fois ce système de
+   * nouveau alimenté (voir le correctif du suivi en direct), c'est lui qui
+   * prime, les paris papier ne servant plus qu'à combler les trous restants.
+   */
+  const fictionalPointsFor = (market: TrackedMarket): MarketDayPoint[] => {
+    const checkpointPoints = marketSeriesFictional.filter((p) => p.market === market);
+    const coveredDates = new Set(checkpointPoints.map((p) => p.date));
+    const paperPoints = paperBetDayPoints.filter((p) => p.market === market && !coveredDates.has(p.date));
+    return [...checkpointPoints, ...paperPoints].sort((a, b) => a.date.localeCompare(b.date));
+  };
+
   const renderCurvesView = () => {
     const chartWidth = Dimensions.get('window').width - 32 - 24; // marges écran + carte
     const lastUpdate = marketSeries.length > 0
@@ -597,7 +622,7 @@ export default function EvolutionScreen() {
               <Text style={styles.paperBetsNumber}>{paperBetsSummary.total}</Text> paris fictifs traités en arrière-plan
               {' '}(<Text style={styles.paperBetsNumber}>{paperBetsSummary.settled}</Text> réglés) sur{' '}
               <Text style={styles.paperBetsNumber}>{paperBetsSummary.matches}</Text> match{paperBetsSummary.matches > 1 ? 's' : ''} —
-              les courbes ci-dessous n'affichent que ce qui est déjà réglé, ce chiffre monte plus vite.
+              ce qui est réglé alimente déjà les courbes buts 1ère mi-temps/corners/cartons/fautes ci-dessous.
             </Text>
           </View>
         )}
@@ -612,10 +637,12 @@ export default function EvolutionScreen() {
         <View style={styles.curvesIntro}>
           <Text style={styles.curvesIntroTitle}>Évolution de l'IA, marché par marché</Text>
           <Text style={styles.curvesIntroText}>
-            Taux de réussite des prédictions réglées, mis à jour au bilan de minuit sur la journée
-            écoulée. Bleu = paris réels, violet = boucle d'auto-apprentissage (paris fictifs) — deux
-            courbes séparées pour comparer leur progression. Le pointillé marque le seuil de 60%.
-            Chaque point compte uniquement les prédictions dont le résultat réel est connu.
+            Taux de réussite des prédictions réglées. Bleu = paris réels (bilan de minuit), violet =
+            boucle d'auto-apprentissage (paris fictifs) — deux courbes séparées pour comparer leur
+            progression. Le pointillé marque le seuil de 60%. Pour buts 1ère mi-temps/corners/cartons/
+            fautes, la courbe violette inclut les paris papier réglés en direct (pas besoin d'attendre
+            le bilan) ; pour 1X2/total de buts/BTTS, seul le bilan de minuit peut régler un point (score
+            final requis). Chaque point compte uniquement les prédictions dont le résultat est connu.
             {lastUpdate ? ` Dernier bilan : ${lastUpdate}.` : ' Aucun bilan encore effectué.'}
           </Text>
         </View>
@@ -626,7 +653,7 @@ export default function EvolutionScreen() {
             label={market.label}
             width={chartWidth}
             points={marketSeriesReal.filter((p) => p.market === market.key)}
-            fictionalPoints={marketSeriesFictional.filter((p) => p.market === market.key)}
+            fictionalPoints={fictionalPointsFor(market.key)}
           />
         ))}
       </View>

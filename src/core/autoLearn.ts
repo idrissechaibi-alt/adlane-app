@@ -20,6 +20,7 @@ import {
   LearnedModel,
   MarkerRule,
   MarkerSnapshot,
+  MarketDayPoint,
   MarketExpertise,
   PaperBet,
   PredictionOutcome,
@@ -163,6 +164,48 @@ const LEARNING_TARGETS: LearningTarget[] = [
 /** Marché suivi correspondant à une cible apprise. */
 export function marketForTarget(targetKey: string): TrackedMarket {
   return LEARNING_TARGETS.find((t) => t.key === targetKey)?.market ?? 'buts_1ere_mt';
+}
+
+/**
+ * Convertit les paris papier déjà réglés en points de courbe par marché —
+ * pour l'écran Courbes UNIQUEMENT (jamais consultée par autoLearn, qui
+ * continue à lire paperBets directement). Intérêt : ce système se règle avec
+ * les seules données observées EN DIRECT pendant le match (pas besoin du
+ * score final), donc déjà fiable avec un échantillon conséquent (~90+ paris)
+ * alors même que le système à checkpoints (dailyReview.ts, qui alimente
+ * marketSeriesFictional) reste encore jeune après sa remise en état.
+ *
+ * Ne couvre que les marchés que les marqueurs en direct savent trancher —
+ * buts 1ère mi-temps, corners, cartons, fautes (voir LEARNING_TARGETS) :
+ * 1X2/total de buts/BTTS ont besoin du résultat complet du match et restent
+ * entièrement dépendants du système à checkpoints.
+ */
+export function buildMarketDayPointsFromPaperBets(bets: PaperBet[]): MarketDayPoint[] {
+  const byKey = new Map<
+    string,
+    { date: string; market: TrackedMarket; correct: number; total: number; predictedSum: number }
+  >();
+
+  for (const bet of bets) {
+    if (!bet.settled || bet.won == null || !bet.settledAt) continue;
+    const date = bet.settledAt.slice(0, 10);
+    const market = marketForTarget(bet.target);
+    const key = `${date}|${market}`;
+    const entry = byKey.get(key) ?? { date, market, correct: 0, total: 0, predictedSum: 0 };
+    entry.total += 1;
+    entry.predictedSum += bet.modelProb;
+    if (bet.won) entry.correct += 1;
+    byKey.set(key, entry);
+  }
+
+  return Array.from(byKey.values()).map((e) => ({
+    date: e.date,
+    market: e.market,
+    predictions: e.total,
+    correct: e.correct,
+    hitRate: e.total > 0 ? e.correct / e.total : 0,
+    meanPredicted: e.total > 0 ? e.predictedSum / e.total : 0,
+  }));
 }
 
 function sumDefined(a?: number, b?: number): number | undefined {
