@@ -395,7 +395,12 @@ export function maybePlacePaperBets(snapshots: MarkerSnapshot[], model: LearnedM
   for (const snapshot of eligibleSnapshots) {
     for (const horizon of LEARNING_HORIZONS) {
       for (const scored of scoreAllTargets(snapshot, model, horizon)) {
-        if (scored.prob < PAPER_BET_PROB_THRESHOLD) continue;
+        // Seuil comparé au taux BRUT de la règle, pas à la probabilité
+        // recalibrée : sinon, dès que le recalibrage rabote (×0,75 observé),
+        // plus aucune règle ne franchit le seuil, plus aucun pari n'est placé,
+        // et le modèle ne peut plus mesurer s'il s'améliore (paris arrêtés
+        // depuis le 6 octobre). La probabilité enregistrée reste recalibrée.
+        if (scored.rule.hitRate < PAPER_BET_PROB_THRESHOLD) continue;
 
         const key = `${snapshot.fixtureId}-${snapshot.minute}-${scored.target}-${horizon}`;
         if (known.has(key)) continue;

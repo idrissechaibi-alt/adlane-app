@@ -51,7 +51,7 @@
 
 import { getDailyPlan, todayLocalDateString } from './scheduler';
 import { buildScheduledMatches, ScheduledMatch } from './dailyWorkflow';
-import { LiveFixture, fetchOmnirouteMatchStatus } from './halftimeMonitor';
+import { LiveFixture, fetchOmnirouteMatchStatus, isSyntheticFixtureId } from './halftimeMonitor';
 import { getHistoricalPriors } from './footballDataCoUk';
 import {
   FictionalMatch,
@@ -133,6 +133,20 @@ const FINISHED_STATUSES = new Set(['FT', 'AET', 'PEN', 'AWD', 'WO']);
  * d'API-Football ; le repli par recherche Omniroute est lui peu fiable sur
  * des divisions obscures/jeunes). */
 const FINISH_WATCH_MAX_MINUTE = 160;
+/** Pipe fictif sur les vrais matchs en direct (B0) : fenêtres plus larges que
+ * les checkpoints réels — la tâche de fond ne passe qu'environ toutes les
+ * 30-40 min, une fenêtre de 6 min serait presque toujours manquée. Les jambes
+ * se projettent depuis la minute réelle, quelle qu'elle soit. */
+const LIVE_FICTIONAL_20_MIN = 15;
+const LIVE_FICTIONAL_20_MAX = 30;
+const LIVE_FICTIONAL_60_MIN = 55;
+const LIVE_FICTIONAL_60_MAX = 70;
+/** Matchs traités par tour (une estimation IA de buts attendus chacun). */
+const LIVE_FICTIONAL_MAX_PER_TICK = 15;
+/** Buts attendus moyens d'un match de football (domicile/extérieur), utilisés
+ * seulement si l'IA ne fournit aucune estimation : la projection repose alors
+ * sur le score et la minute réels, sans a priori propre aux équipes. */
+const NEUTRAL_EXPECTED_GOALS = { home: 1.45, away: 1.15 };
 /** Durée minimale entre deux relevés pour qu'un rythme en soit déduit : sur
  * trois minutes, un corner de plus ou de moins fausse tout. */
 const MIN_MINUTES_FOR_RATE = 8;
@@ -1098,6 +1112,64 @@ export async function runInPlayComboTick(liveFixtures: LiveFixture[]): Promise<I
     matchesLiveFound: intlLiveFound,
     matchesInCheckpointWindow: intlInCheckpointWindow,
   };
+
+  // B0) Paris FICTIFS sur les VRAIS matchs en direct du monde entier, tels
+  // que relevés à chaque tour par API-Football (liveFixtures, déjà payé par
+  // le relevé partagé). Le pipe historique ci-dessous demande à l'IA le
+  // statut de chaque match — impossible pour des modèles sans accès web, d'où
+  // 0 proposition. Ici, statut, minute et score viennent d'une source
+  // structurée, et le vrai fixtureId permet au bilan de minuit de régler ces
+  // paris directement via API-Football, sans recherche IA.
+  const liveFictionalCandidates: Array<{ live: LiveFixture; kind: 'minute20' | 'minute60' }> = [];
+  for (const live of liveFixtures) {
+    if (isSyntheticFixtureId(live.fixtureId)) continue; // repli Omniroute : pas de vérité terrain
+    const kind: 'minute20' | 'minute60' | null =
+      live.statusShort === '1H' && live.minute >= LIVE_FICTIONAL_20_MIN && live.minute <= LIVE_FICTIONAL_20_MAX
+        ? 'minute20'
+        : live.statusShort === '2H' && live.minute >= LIVE_FICTIONAL_60_MIN && live.minute <= LIVE_FICTIONAL_60_MAX
+          ? 'minute60'
+          : null;
+    if (!kind) continue;
+    if (alreadyProposed.has(`${live.fixtureId}-${kind}`)) continue; // déjà un pari réel sur ce match
+    if ([...alreadyProposed].some((key) => key.startsWith(`${live.fixtureId}-${kind}-`))) continue;
+    liveFictionalCandidates.push({ live, kind });
+  }
+
+  await mapWithConcurrency(
+    liveFictionalCandidates.slice(0, LIVE_FICTIONAL_MAX_PER_TICK),
+    FICTIONAL_CHECK_CONCURRENCY,
+    async ({ live, kind }) => {
+      try {
+        const match: MatchRef = {
+          homeTeam: live.homeTeam,
+          awayTeam: live.awayTeam,
+          league: live.league ?? 'Compétition inconnue',
+          leagueId: '',
+        };
+        const expectedGoals =
+          (omnirouteConfig
+            ? await estimateExpectedGoalsViaOmniroute(omnirouteConfig, match.homeTeam, match.awayTeam, match.league).catch(() => null)
+            : null) ?? NEUTRAL_EXPECTED_GOALS;
+
+        const rawLegs = kind === 'minute20'
+          ? await buildLegs20(match, live.fixtureId, live, expectedGoals)
+          : buildLegs60(live, expectedGoals);
+        const window = kind === 'minute20' ? '20e → pause + match complet' : '60e → fin de match';
+
+        for (const leg of rawLegs.filter((l) => l.prob >= MIN_LEG_PROB)) {
+          const dedupKey = `${live.fixtureId}-${kind}-${leg.market}`;
+          if (alreadyProposed.has(dedupKey)) continue;
+          const proposal = buildProposalFromItems(kind, [{ leg, fixtureId: live.fixtureId, match, live }], window, false);
+          if (proposal) {
+            fresh.push(proposal);
+            alreadyProposed.add(dedupKey);
+          }
+        }
+      } catch (error: any) {
+        console.warn(`[Scan en direct] Pari fictif sur ${live.homeTeam} vs ${live.awayTeam} échoué:`, error?.message);
+      }
+    }
+  );
 
   // B) Paris FICTIFS (boucle d'auto-apprentissage) — 100 % Omniroute, aucune
   // API, aucune cote, aucune donnée payante. AUCUN combo : une batterie de
