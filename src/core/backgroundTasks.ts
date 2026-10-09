@@ -213,19 +213,49 @@ export async function runAutoLearnTick(): Promise<AutoLearnTickDiagnostics> {
   // même match/checkpoint (constaté : 3 notifications Telegram quasi
   // identiques pour le même match en moins d'une minute). Un tour déjà en
   // vol est simplement réutilisé — jamais de double exécution simultanée.
-  if (inFlightTick) return inFlightTick;
+  // Un tour resté accroché (requête qui ne rend jamais la main) ne doit pas
+  // bloquer tous les suivants : au-delà de STALE_TICK_MS, on en relance un.
+  if (inFlightTick && Date.now() - inFlightStartedAt < STALE_TICK_MS) return inFlightTick;
 
-  inFlightTick = runAutoLearnTickLocked().finally(() => {
-    inFlightTick = null;
-  });
-  return inFlightTick;
+  const tick = runAutoLearnTickLocked();
+  inFlightTick = tick;
+  inFlightStartedAt = Date.now();
+  tick.finally(() => {
+    if (inFlightTick === tick) inFlightTick = null;
+  }).catch(() => {});
+  return tick;
 }
 
 let inFlightTick: Promise<AutoLearnTickDiagnostics> | null = null;
+let inFlightStartedAt = 0;
+const STALE_TICK_MS = 12 * 60_000;
+
+const TICK_PROGRESS_KEY = '@autolearn_tick_progress';
+let currentTickStartedAt = '';
+
+/** Étape en cours du tour, persistée : si Android coupe le tour, le rapport
+ * d'état (appHealth.ts) montre exactement où il s'est arrêté. */
+async function markTickStep(step: string): Promise<void> {
+  try {
+    await AsyncStorage.setItem(
+      TICK_PROGRESS_KEY,
+      JSON.stringify({ startedAt: currentTickStartedAt, step, at: new Date().toISOString() })
+    );
+  } catch {
+    // diagnostic best-effort
+  }
+}
+
+export async function readTickProgress(): Promise<{ startedAt: string; step: string; at: string } | null> {
+  const raw = await AsyncStorage.getItem(TICK_PROGRESS_KEY);
+  return raw ? JSON.parse(raw) : null;
+}
 
 async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
   // Scan matinal automatique (7h locales) : voir runMorningScanIfDue pour le
   // principe de déclenchement (premier tour après l'heure cible, idempotent).
+  currentTickStartedAt = new Date().toISOString();
+  await markTickStep('scan matinal');
   try {
     await runMorningScanIfDue();
   } catch (error: any) {
@@ -236,6 +266,7 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
   // avant-match ne sont plus jugées rentables (demande explicite). L'univers
   // du jour ci-dessous reste construit — c'est la base des scans en direct
   // (20e/60e minute), pas seulement du Planning du Jour.
+  await markTickStep('univers du jour');
   let universeSize = 0;
   try {
     const model = readLearnedModel();
@@ -253,6 +284,7 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
   // Ne dépend PLUS d'Omniroute pour fonctionner : Sportmonks (ou le planning
   // transmis) suffit désormais, Omniroute ne comble que ce qu'ils n'ont pas
   // couvert.
+  await markTickStep('programme fictif');
   let fictionalProgramSize = 0;
   let omnirouteConfigured = false;
   let fictionalProgramFromFeed = false;
@@ -285,15 +317,18 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
 
   // Compositions confirmées à T-90 (recherche Google/Omniroute, gratuit) :
   // débloque le placement direct des paris du Planning dès que l'info est là.
+  await markTickStep('compositions T-90');
   try {
     await refreshDueLineups();
   } catch (error: any) {
     console.warn('[Tâche de fond] Rafraîchissement compositions T-90 échoué:', error.message);
   }
 
+  await markTickStep('relevé live partagé');
   const shared = await fetchSharedLiveFixtures();
   const liveFixtures = shared.fixtures;
 
+  await markTickStep('marqueurs live');
   let liveMarkerObserved = 0;
   let liveMarkerClosed = 0;
   try {
@@ -307,18 +342,21 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
   // Confronte les analyses Scouting IA de la veille (et plus anciennes) au
   // score final réel, AVANT de consolider le digest : la fiabilité mesurée
   // doit être à jour pour la prochaine analyse.
+  await markTickStep('bilan Scouting');
   try {
     await reconcileScoutingAnalyses();
   } catch (error: any) {
     console.warn('[Tâche de fond] Bilan Scouting vs réalité échoué:', error.message);
   }
 
+  await markTickStep('consolidation apprentissage');
   try {
     await consolidateLearning();
   } catch (error: any) {
     console.warn('[Tâche de fond] Consolidation échouée:', error.message);
   }
 
+  await markTickStep('enrichissement matchs suivis');
   try {
     await enrichFocusMatches();
   } catch (error: any) {
@@ -328,6 +366,7 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
   // Scan en direct 20e minute (buts/corners/cartons 1ère MT + BTTS/total du
   // match) et 60e minute (reste du match) — remplace l'ancien combo 20e
   // minute (règles apprises seules) et le moniteur mi-temps.
+  await markTickStep('scan en direct 20e/60e');
   let freshInPlayProposals = 0;
   let intlBreak: InternationalBreakTickDiagnostics | undefined;
   let sportmonksConfirmedMatches: number | null | undefined;
@@ -349,6 +388,7 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
   // console.warn invisible) : "Aucun bilan encore effectué" dans les courbes
   // était indiscernable entre "pas encore l'heure" et "échoue à chaque
   // tentative depuis toujours" sans ça.
+  await markTickStep('bilan de minuit');
   let nightlyReviewPointsCreated: number | undefined;
   let nightlyReviewError: string | undefined;
   try {
@@ -384,6 +424,7 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
     nightlyReviewPointsCreated,
     nightlyReviewError,
   };
+  await markTickStep('terminé');
   await saveLastTickDiagnostics(diagnostics);
   return diagnostics;
 }

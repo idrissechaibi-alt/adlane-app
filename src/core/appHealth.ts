@@ -5,7 +5,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getAPIConfig } from '../api/multiAPIManager';
-import { getNativeBackgroundTickStats, readLastTickDiagnostics } from './backgroundTasks';
+import { getNativeBackgroundTickStats, readLastTickDiagnostics, readTickProgress } from './backgroundTasks';
 import { loadOmnirouteConfig } from './focusEnrichment';
 import { checkAllProviders, getRouteLeaderboard } from './llmRouter';
 import { loadTelegramConfig } from './telegram';
@@ -45,6 +45,7 @@ export async function buildAppHealth(): Promise<Record<string, unknown>> {
 
   return {
     nativeBackgroundTicks: await section(getNativeBackgroundTickStats),
+    tickProgress: await section(readTickProgress),
     lastTick: await section(readLastTickDiagnostics),
     paperBets: await section(() => {
       const bets = readPaperBets();

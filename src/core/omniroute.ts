@@ -207,9 +207,15 @@ function mergeMarkets(results: RawAgentResult[]): AIAnalysisOutput['markets'] {
 export async function askOmnirouteLight(
   systemPrompt: string,
   userPrompt: string,
-  config: OmnirouteConfig
+  config: OmnirouteConfig,
+  options: { requiresWeb?: boolean; maxAttempts?: number } = {}
 ): Promise<{ text: string; model: string } | null> {
-  const routes = await orderRoutes(await buildRoutes(config));
+  const all = await buildRoutes(config);
+  if (options.requiresWeb && !all.some(isSearchCapable)) return null;
+  const routes = (await orderRoutes(options.requiresWeb ? all.filter(isSearchCapable) : all)).slice(
+    0,
+    options.maxAttempts ?? LIGHT_MAX_ATTEMPTS
+  );
 
   for (const route of routes) {
     try {
@@ -265,6 +271,20 @@ const SEARCH_CAPABLE_PATTERN =
  * résultat" — ne pas confondre les deux évite de conclure "pas de match ce
  * jour-là" quand c'est l'infrastructure qui est tombée.
  */
+function isSearchCapable(route: LlmRoute): boolean {
+  return SEARCH_CAPABLE_PATTERN.test(route.model);
+}
+
+/**
+ * Plafond de routes essayées par question. Sans lui, une question à laquelle
+ * AUCUN modèle ne sait répondre parcourait les 25 modèles configurés (jusqu'à
+ * 20 s chacun, ~8 min) : le tour de fond dépassait le temps accordé par
+ * Android et était coupé avant l'apprentissage. La rotation (llmRouter) met
+ * de toute façon les routes les plus fiables en tête.
+ */
+const USABLE_MAX_ATTEMPTS = 4;
+const LIGHT_MAX_ATTEMPTS = 3;
+
 export function attemptsAllFailed(attempts: OmnirouteAttempt[]): boolean {
   return attempts.length > 0 && attempts.every((a) => a.outcome === 'erreur');
 }
@@ -275,12 +295,24 @@ export async function askOmnirouteUsable<T>(
   config: OmnirouteConfig,
   extract: (text: string) => T | null,
   trace?: OmnirouteAttempt[],
-  preferSearchCapable: boolean = false
+  preferSearchCapable: boolean = false,
+  maxAttempts: number = USABLE_MAX_ATTEMPTS
 ): Promise<{ value: T; model: string } | null> {
-  const routes = await orderRoutes(
-    await buildRoutes(config),
-    preferSearchCapable ? (route) => SEARCH_CAPABLE_PATTERN.test(route.model) : undefined
-  );
+  const all = await buildRoutes(config);
+
+  // Question sur des faits du jour (score en direct, calendrier, résultat) :
+  // un modèle sans accès web ne peut que répondre à côté — ou pire, inventer
+  // un score plausible. Sans aucun agent capable de chercher, on ne la pose pas.
+  if (preferSearchCapable && !all.some(isSearchCapable)) {
+    trace?.push({
+      model: '(aucun)',
+      outcome: 'erreur',
+      detail: "Aucun modèle avec accès web configuré : question sur des faits du jour non posée (la réponse serait inventée).",
+    });
+    return null;
+  }
+
+  const routes = (await orderRoutes(preferSearchCapable ? all.filter(isSearchCapable) : all)).slice(0, maxAttempts);
 
   if (routes.length === 0) {
     trace?.push({ model: '(aucun)', outcome: 'erreur', detail: 'Aucun fournisseur IA configuré dans Paramètres.' });

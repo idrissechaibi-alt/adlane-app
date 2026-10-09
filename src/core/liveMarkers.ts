@@ -138,7 +138,8 @@ async function fetchOmnirouteMarkers(
         'Réponds avec ce JSON exact, sans rien autour :\n' +
         '{"corners_home": number|null, "corners_away": number|null, "cards_home": number|null, "cards_away": number|null}\n' +
         'cards_home/away = total cumulé cartons jaunes + rouges pour cette équipe à cet instant.',
-      config
+      config,
+      { requiresWeb: true }
     );
   } catch (error: any) {
     console.warn('[Marqueurs live] Omniroute indisponible:', error.message);
