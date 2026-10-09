@@ -52,13 +52,29 @@ export async function remainingBudget(source: string): Promise<number> {
 }
 
 /**
- * Consomme une unité de budget si elle est disponible.
+ * Réserves API-Football (sur 70 requêtes/jour pour l'auto-apprentissage) :
+ * chaque usage "confort" s'arrête quand il ne reste plus que sa réserve, pour
+ * que le règlement des paris (scores finaux, corners/cartons 1ère MT), sans
+ * lequel rien n'est appris, ait toujours de quoi passer. Avant, le relevé en
+ * direct et les statistiques épuisaient le quota en une vingtaine de minutes
+ * d'app ouverte, et plus aucun pari n'était réglé.
+ */
+export const API_FOOTBALL_RESERVE = {
+  liveFixtures: 20,
+  universe: 15,
+  realLiveStats: 15,
+  liveMarkerStats: 25,
+} as const;
+
+/**
+ * Consomme une unité de budget si elle est disponible, en laissant intacte
+ * la réserve indiquée (0 = peut tout consommer, réservé au règlement).
  * Renvoie false quand le quota du jour est atteint — l'appelant doit alors
  * s'abstenir d'appeler l'API (et surtout pas réessayer en boucle).
  */
-export async function spendBudget(source: string, units: number = 1): Promise<boolean> {
+export async function spendBudget(source: string, units: number = 1, reserve: number = 0): Promise<boolean> {
   const remaining = await remainingBudget(source);
-  if (remaining < units) return false;
+  if (remaining - reserve < units) return false;
 
   for (let i = 0; i < units; i++) {
     await incrementRequestCount(source);

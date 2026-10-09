@@ -4,7 +4,10 @@
 // booléens de présence : aucune clé API, aucun jeton, aucune adresse.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getAPIConfig } from '../api/multiAPIManager';
+import { getAPIConfig, getRequestCount } from '../api/multiAPIManager';
+import { getDailyPlan } from './scheduler';
+import { remainingBudget } from './requestBudget';
+import { estimateExpectedGoalsFromMarket } from './poisson';
 import { getNativeBackgroundTickStats, readLastTickDiagnostics, readTickProgress } from './backgroundTasks';
 import { loadOmnirouteConfig } from './focusEnrichment';
 import { checkAllProviders, getRouteLeaderboard } from './llmRouter';
@@ -125,6 +128,27 @@ export async function buildAppHealth(): Promise<Record<string, unknown>> {
         leaderboard: (await getRouteLeaderboard(config)).slice(0, 10),
       };
     }),
+    dailyPlan: await section(async () => {
+      const plan = await getDailyPlan();
+      if (!plan) return null;
+      return {
+        date: plan.date,
+        generatedAt: plan.generatedAt,
+        matches: plan.slots.flatMap((slot) =>
+          (slot.matches as any[]).map((m) => ({
+            match: `${m.homeTeam} - ${m.awayTeam}`,
+            league: m.leagueName,
+            kickoff: m.kickoff_utc,
+            hasOdds: Boolean(estimateExpectedGoalsFromMarket(m.odds)),
+          }))
+        ),
+      };
+    }),
+    apiFootballBudget: await section(async () => ({
+      usedToday: await getRequestCount('apiFootball'),
+      autolearnUsedToday: await getRequestCount('apiFootball-autolearn'),
+      autolearnRemaining: await remainingBudget('apiFootball'),
+    })),
     configured: await section(async () => {
       const api = await getAPIConfig();
       return {
@@ -132,6 +156,7 @@ export async function buildAppHealth(): Promise<Record<string, unknown>> {
         telegram: Boolean(await loadTelegramConfig()),
         apiFootball: Boolean(api.apiFootball?.trim()),
         sportmonks: Boolean(api.sportmonks?.trim()),
+        theOddsApi: Boolean(api.theOddsApi?.trim()),
       };
     }),
   };

@@ -15,7 +15,7 @@
 // lesquelles l'utilisateur joue vraiment.
 
 import { getAPIConfig } from '../api/multiAPIManager';
-import { spendBudget } from './requestBudget';
+import { API_FOOTBALL_RESERVE, spendBudget } from './requestBudget';
 import { getStoredUniverse, UniverseMatch } from './matchUniverse';
 import { fetchWithTimeout } from './httpTimeout';
 import { LiveFixture, isSyntheticFixtureId } from './halftimeMonitor';
@@ -38,7 +38,7 @@ import { askOmnirouteLight } from './omniroute';
 import { OmnirouteConfig } from '../types';
 
 /** Nombre maximum de matchs enrichis en statistiques détaillées par tour (API-Football, quota limité). */
-const MAX_DETAILED_STATS_PER_TICK = 10;
+const MAX_DETAILED_STATS_PER_TICK = 3;
 /**
  * Matchs supplémentaires couverts par Omniroute (scraping, pas soumis au
  * même quota) au-delà de ce que API-Football peut fournir dans le tour —
@@ -285,7 +285,7 @@ export async function runLiveMarkerTick(liveFixtures: LiveFixture[]): Promise<{ 
   const topApiFootball = eligibleForApiFootball.slice(0, MAX_DETAILED_STATS_PER_TICK);
   const markersByFixture = new Map<number, MarkerSet>();
   for (const l of topApiFootball) {
-    if (!(await spendBudget('apiFootball'))) break;
+    if (!(await spendBudget('apiFootball', 1, API_FOOTBALL_RESERVE.liveMarkerStats))) break;
     markersByFixture.set(l.fixtureId, await fetchMarkers(config.apiFootball!, l.fixtureId));
   }
 

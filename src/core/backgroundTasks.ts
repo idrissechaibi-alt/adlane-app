@@ -10,7 +10,7 @@ import * as BackgroundTask from 'expo-background-task';
 import * as TaskManager from 'expo-task-manager';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getAPIConfig } from '../api/multiAPIManager';
-import { spendBudget } from './requestBudget';
+import { API_FOOTBALL_RESERVE, spendBudget } from './requestBudget';
 import { ensureDailyUniverse } from './matchUniverse';
 import { ensureFictionalDailyProgram, getFictionalProgramStatus } from './fictionalProgram';
 import { runLiveMarkerTick } from './liveMarkers';
@@ -59,13 +59,55 @@ interface SharedLiveFixturesResult {
  * jamais pu se construire faute de budget — exactement le blocage que ce
  * repli est censé lever.
  */
+const LIVE_FIXTURES_CACHE_KEY = '@shared_live_fixtures_cache';
+/** Durée de réutilisation du relevé en direct API-Football. */
+const LIVE_FIXTURES_CACHE_MS = 15 * 60_000;
+let liveFixturesCache: { at: number; fixtures: LiveFixture[] } | null = null;
+
+async function readCachedLiveFixtures(): Promise<LiveFixture[] | null> {
+  try {
+    if (!liveFixturesCache) {
+      const raw = await AsyncStorage.getItem(LIVE_FIXTURES_CACHE_KEY);
+      liveFixturesCache = raw ? JSON.parse(raw) : null;
+    }
+  } catch {
+    liveFixturesCache = null;
+  }
+  if (!liveFixturesCache) return null;
+  const elapsedMinutes = Math.floor((Date.now() - liveFixturesCache.at) / 60_000);
+  if (elapsedMinutes * 60_000 >= LIVE_FIXTURES_CACHE_MS) return null;
+
+  // Minute avancée du temps écoulé ; un match qui aurait pu changer de
+  // période entre-temps (fin de 1ère mi-temps, fin de match) est écarté
+  // plutôt que présenté avec un statut périmé.
+  return liveFixturesCache.fixtures
+    .map((f) => ({ ...f, minute: f.minute + elapsedMinutes }))
+    .filter((f) => (f.statusShort === '1H' ? f.minute <= 45 : f.statusShort === '2H' ? f.minute <= 90 : false));
+}
+
+async function writeCachedLiveFixtures(fixtures: LiveFixture[]): Promise<void> {
+  liveFixturesCache = { at: Date.now(), fixtures };
+  try {
+    await AsyncStorage.setItem(LIVE_FIXTURES_CACHE_KEY, JSON.stringify(liveFixturesCache));
+  } catch {
+    // cache best-effort
+  }
+}
+
 async function fetchSharedLiveFixtures(): Promise<SharedLiveFixturesResult> {
   const apiConfig = await getAPIConfig();
   let apiFootballError: string | undefined;
 
-  if (apiConfig.apiFootball && (await spendBudget('apiFootball'))) {
+  // Relevé récent réutilisé (minutes avancées du temps écoulé) : la boucle de
+  // premier plan repasse toutes les 3 min, et une requête par passage
+  // épuisait le quota du jour en une vingtaine de minutes d'app ouverte.
+  const cached = await readCachedLiveFixtures();
+  if (cached) return { fixtures: cached, source: 'api_football' };
+
+  if (apiConfig.apiFootball && (await spendBudget('apiFootball', 1, API_FOOTBALL_RESERVE.liveFixtures))) {
     try {
       const fixtures = await fetchLiveFixtures(apiConfig.apiFootball);
+      await writeCachedLiveFixtures(fixtures);
       return { fixtures, source: 'api_football' };
     } catch (error: any) {
       apiFootballError = error?.message || 'erreur inconnue';

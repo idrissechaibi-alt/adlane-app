@@ -92,7 +92,7 @@ interface FinalResult {
 }
 
 /** Nombre de requêtes de statistiques de 1ère mi-temps par passage du bilan. */
-const FIRST_HALF_STATS_MAX_PER_PASS = 30;
+const FIRST_HALF_STATS_MAX_PER_PASS = 12;
 
 function statValue(stats: any[] | undefined, type: string): number | null {
   const entry = (stats ?? []).find((s) => s?.type === type);

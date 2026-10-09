@@ -6,7 +6,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getAPIConfig } from '../api/multiAPIManager';
-import { spendBudget } from './requestBudget';
+import { API_FOOTBALL_RESERVE, spendBudget } from './requestBudget';
 import { fetchWithTimeout } from './httpTimeout';
 
 const UNIVERSE_KEY_PREFIX = '@match_universe_';
@@ -110,7 +110,7 @@ export async function ensureDailyUniverse(focusLeagues: string[] = []): Promise<
   const collected: UniverseMatch[] = [];
 
   for (let page = 1; page <= MAX_PAGES; page++) {
-    if (!(await spendBudget('apiFootball'))) break; // quota du jour épuisé
+    if (!(await spendBudget('apiFootball', 1, API_FOOTBALL_RESERVE.universe))) break; // quota du jour épuisé
 
     let payload: any;
     try {

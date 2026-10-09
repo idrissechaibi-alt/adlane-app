@@ -75,7 +75,7 @@ import { applyMarketExpertise, getAgentLearningDigest, scoreAllTargets } from '.
 import { getFocusNoteByTeams, renderFocusNote, loadOmnirouteConfig } from './focusEnrichment';
 import { askOmnirouteLight, askOmnirouteUsable } from './omniroute';
 import { fetchMarkers } from './liveMarkers';
-import { spendBudget } from './requestBudget';
+import { API_FOOTBALL_RESERVE, spendBudget } from './requestBudget';
 import { getAPIConfig, incrementRequestCount } from '../api/multiAPIManager';
 import {
   InPlayProposal,
@@ -333,7 +333,7 @@ async function estimateExpectedGoalsViaOmniroute(
 async function fetchRealLiveStats(fixtureId: number): Promise<LiveMatchStats | undefined> {
   const apiConfig = await getAPIConfig();
   if (!apiConfig.apiFootball) return undefined;
-  if (!(await spendBudget('apiFootball'))) return undefined;
+  if (!(await spendBudget('apiFootball', 1, API_FOOTBALL_RESERVE.realLiveStats))) return undefined;
 
   try {
     const markers = await fetchMarkers(apiConfig.apiFootball, fixtureId);
