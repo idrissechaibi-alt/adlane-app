@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-10-09T17:32:35.419Z",
+  "exportedAt": "2026-10-09T21:06:11.150Z",
   "formatVersion": 1,
   "source": "APP adlane",
   "data": {
@@ -4824,37 +4824,79 @@
   },
   "health": {
     "nativeBackgroundTicks": {
-      "lastTickAt": "2026-10-09T17:07:42.251Z",
-      "ticksLast24h": 36
+      "lastTickAt": "2026-10-09T21:06:08.045Z",
+      "ticksLast24h": 26
     },
-    "lastTick": null,
+    "tickProgress": {
+      "startedAt": "2026-10-09T21:06:08.036Z",
+      "step": "compositions T-90",
+      "at": "2026-10-09T21:06:09.435Z"
+    },
+    "lastTick": {
+      "finishedAt": "2026-10-09T20:50:40.915Z",
+      "universeSize": 0,
+      "omnirouteConfigured": true,
+      "fictionalProgramSize": 38,
+      "fictionalProgramFromFeed": false,
+      "fictionalMatchesAhead": 1,
+      "fictionalNextKickoffUtc": "2026-10-09T21:00:00Z",
+      "fictionalCountriesTried": 1,
+      "fictionalCountriesTotal": 60,
+      "fictionalLastTrace": {
+        "country": "Portugal",
+        "attempts": [
+          {
+            "model": "(aucun)",
+            "outcome": "erreur",
+            "detail": "Aucun modèle avec accès web configuré : question sur des faits du jour non posée (la réponse serait inventée)."
+          }
+        ]
+      },
+      "fictionalSportmonksMatches": 1,
+      "fictionalOmnirouteMatches": 37,
+      "liveFixturesFound": 0,
+      "liveFixturesSource": "omniroute",
+      "liveMarkerObserved": 0,
+      "liveMarkerClosed": 0,
+      "freshInPlayProposals": 0,
+      "intlBreak": {
+        "withinWindow": false,
+        "matchesScheduledToday": 0,
+        "matchesWithExpectedGoals": 0,
+        "matchesLiveFound": 0,
+        "matchesInCheckpointWindow": 0
+      },
+      "sportmonksConfirmedMatches": 0,
+      "sofaScoreConfirmedMatches": null,
+      "nightlyReviewPointsCreated": 0
+    },
     "paperBets": {
-      "total": 95,
-      "settled": 91,
-      "won": 29,
-      "lastPlacedAt": "2026-10-06T02:22:48.315Z",
-      "lastSettledAt": "2026-10-06T03:22:07.591Z",
-      "placedLast24h": 0,
-      "settledLast24h": 0
+      "total": 102,
+      "settled": 92,
+      "won": 30,
+      "lastPlacedAt": "2026-10-09T19:05:51.234Z",
+      "lastSettledAt": "2026-10-09T19:05:51.370Z",
+      "placedLast24h": 7,
+      "settledLast24h": 1
     },
     "trainingRows": {
-      "last14Days": 873,
-      "lastClosedAt": "2026-10-09T10:41:09.916Z",
+      "last14Days": 1068,
+      "lastClosedAt": "2026-10-09T19:05:51.230Z",
       "bySource": {
-        "api_football": 588,
-        "omniroute": 285
+        "api_football": 775,
+        "omniroute": 293
       }
     },
     "model": {
-      "updatedAt": "2026-10-09T10:41:10.814Z",
-      "totalRows": 873,
+      "updatedAt": "2026-10-09T20:50:38.831Z",
+      "totalRows": 1068,
       "markerRules": 40,
       "paperBets": {
-        "total": 95,
-        "settled": 91,
-        "won": 29,
-        "hitRate": 0.31868131868131866,
-        "calibrationFactor": 0.7503349833884004
+        "total": 102,
+        "settled": 92,
+        "won": 30,
+        "hitRate": 0.32608695652173914,
+        "calibrationFactor": 0.7703172991976789
       },
       "omnirouteTrust": {
         "samples": 72,
@@ -4864,12 +4906,12 @@
       "marketExpertise": []
     },
     "inPlayProposals": {
-      "real": 0,
-      "fictional": 0,
+      "real": 1,
+      "fictional": 58,
       "fictionalReviewed": 0,
       "fictionalSettledLegs": 0,
-      "lastCreatedAt": null,
-      "createdLast24h": 0
+      "lastCreatedAt": "2026-10-09T19:06:01.501Z",
+      "createdLast24h": 59
     },
     "predictionOutcomes30d": 0,
     "marketSeries": {
@@ -4917,94 +4959,93 @@
       },
       {
         "date": "2026-10-09",
-        "hitRate": 0.31868131868131866,
-        "total": 91,
-        "won": 29
+        "hitRate": 0.32608695652173914,
+        "total": 92,
+        "won": 30
       }
     ],
-    "lastNightlyReview": "2026-10-07",
+    "lastNightlyReview": "2026-10-08",
     "aiProviders": {
       "configured": true,
       "checks": [
         {
           "name": "Principal",
-          "ok": false,
-          "latencyMs": 24795,
-          "readyModels": null,
-          "configuredReady": null,
-          "configuredTotal": 25,
-          "error": "fetch failed: Fetch request has been canceled"
+          "ok": true,
+          "latencyMs": 114,
+          "readyModels": 28,
+          "configuredReady": 25,
+          "configuredTotal": 25
         }
       ],
       "leaderboard": [
         {
-          "label": "Principal · qwen3.8-27b",
-          "ok": 5,
+          "label": "Principal · riva-translate-4b-instruct-v2",
+          "ok": 27,
           "fail": 0,
-          "avgMs": 377,
-          "coolingDown": false
-        },
-        {
-          "label": "Principal · gpt-oss-safeguard-20b",
-          "ok": 4,
-          "fail": 6,
-          "avgMs": 1467,
+          "avgMs": 2418,
           "coolingDown": false
         },
         {
           "label": "Principal · allam-2-7b",
-          "ok": 12,
-          "fail": 1,
-          "avgMs": 4136,
+          "ok": 39,
+          "fail": 12,
+          "avgMs": 1692,
           "coolingDown": false
         },
         {
           "label": "Principal · auto",
-          "ok": 10,
+          "ok": 48,
           "fail": 0,
-          "avgMs": 4562,
+          "avgMs": 2628,
           "coolingDown": false
         },
         {
           "label": "Principal · gpt-oss-120b",
-          "ok": 5,
-          "fail": 5,
-          "avgMs": 3349,
+          "ok": 10,
+          "fail": 9,
+          "avgMs": 2239,
           "coolingDown": false
         },
         {
-          "label": "Principal · riva-translate-4b-instruct-v2",
-          "ok": 5,
+          "label": "Principal · qwen3.8-27b",
+          "ok": 12,
+          "fail": 12,
+          "avgMs": 2239,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · diffusiongemma-26b-a4b-it",
+          "ok": 17,
           "fail": 0,
-          "avgMs": 10775,
+          "avgMs": 13792,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · gpt-oss-safeguard-20b",
+          "ok": 5,
+          "fail": 10,
+          "avgMs": 8576,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · nemotron-3.5-content-safety",
+          "ok": 5,
+          "fail": 2,
+          "avgMs": 26922,
           "coolingDown": false
         },
         {
           "label": "Principal · nemotron-3-nano-omni-30b-a3b-reasoning",
           "ok": 1,
-          "fail": 4,
+          "fail": 8,
           "avgMs": 8503,
           "coolingDown": false
         },
         {
-          "label": "Principal · poolside-laguna-xs-2.1",
-          "ok": 5,
-          "fail": 0,
-          "avgMs": 31098,
-          "coolingDown": false
-        },
-        {
-          "label": "Principal · llama-3.2-11b-vision-instruct",
-          "ok": 0,
-          "fail": 5,
-          "avgMs": null,
-          "coolingDown": false
-        },
-        {
-          "label": "Principal · riva-translate-4b-instruct-v1.1",
-          "ok": 0,
-          "fail": 5,
-          "avgMs": null,
+          "label": "Principal · llama-3.1-nemotron-safety-guard-8b-v3",
+          "ok": 3,
+          "fail": 9,
+          "avgMs": 15676,
           "coolingDown": false
         }
       ]
