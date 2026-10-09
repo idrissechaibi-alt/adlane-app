@@ -7,7 +7,8 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
 import * as Updates from 'expo-updates';
 import { initDatabase, seedDatabaseIfEmpty } from './src/database/storage';
-import { startAutoSync } from './src/core/gitAutoSync';
+import { setSnapshotHealthProvider, startAutoSync } from './src/core/gitAutoSync';
+import { buildAppHealth } from './src/core/appHealth';
 import { ensureNotificationPermissions } from './src/core/notifications';
 import { registerBackgroundAutoLearn, runAutoLearnTick } from './src/core/backgroundTasks';
 import DashboardScreen from './src/screens/DashboardScreen';
@@ -66,6 +67,7 @@ export default function App() {
         await applyPendingUpdate();
         await initDatabase();
         await seedDatabaseIfEmpty();
+        setSnapshotHealthProvider(buildAppHealth);
         await startAutoSync();
         await ensureNotificationPermissions();
         await registerBackgroundAutoLearn();

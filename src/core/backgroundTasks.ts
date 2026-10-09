@@ -358,7 +358,7 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
     console.warn('[Tâche de fond] Bilan de minuit échoué:', error.message);
   }
 
-  return {
+  const diagnostics: AutoLearnTickDiagnostics = {
     universeSize,
     omnirouteConfigured,
     fictionalProgramSize,
@@ -384,6 +384,30 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
     nightlyReviewPointsCreated,
     nightlyReviewError,
   };
+  await saveLastTickDiagnostics(diagnostics);
+  return diagnostics;
+}
+
+const LAST_TICK_DIAGNOSTICS_KEY = '@last_autolearn_tick_diagnostics';
+
+/** Dernier tour terminé, quel qu'en soit le déclencheur — relu par
+ * appHealth.ts pour la sauvegarde GitHub. Best-effort, jamais bloquant. */
+async function saveLastTickDiagnostics(diagnostics: AutoLearnTickDiagnostics): Promise<void> {
+  try {
+    await AsyncStorage.setItem(
+      LAST_TICK_DIAGNOSTICS_KEY,
+      JSON.stringify({ finishedAt: new Date().toISOString(), ...diagnostics })
+    );
+  } catch (error: any) {
+    console.warn('[Tâche de fond] Enregistrement du diagnostic échoué:', error?.message);
+  }
+}
+
+export async function readLastTickDiagnostics(): Promise<
+  (AutoLearnTickDiagnostics & { finishedAt: string }) | null
+> {
+  const raw = await AsyncStorage.getItem(LAST_TICK_DIAGNOSTICS_KEY);
+  return raw ? JSON.parse(raw) : null;
 }
 
 // La définition doit se faire au chargement du module, hors de tout composant :

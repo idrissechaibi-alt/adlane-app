@@ -48,6 +48,17 @@ interface SyncPayload {
     dailyReports: Awaited<ReturnType<typeof getDailyReports>>;
     lessons: Awaited<ReturnType<typeof getAllLessons>>;
   };
+  /** État de la boucle d'apprentissage (appHealth.ts) — diagnostic seulement,
+   * jamais relu par la restauration. */
+  health?: unknown;
+}
+
+// Fourni par App.tsx plutôt qu'importé ici : appHealth dépend de modules qui
+// importent eux-mêmes ce fichier, l'injection évite le cycle d'imports.
+let healthProvider: (() => Promise<unknown>) | null = null;
+
+export function setSnapshotHealthProvider(provider: () => Promise<unknown>): void {
+  healthProvider = provider;
 }
 
 const DEFAULT_GITHUB_SYNC_CONFIG: GitHubDataSyncConfig = {
@@ -191,11 +202,21 @@ async function createSnapshot(): Promise<SyncPayload> {
     getDailyReports(365),
   ]);
 
+  let health: unknown;
+  if (healthProvider) {
+    try {
+      health = await healthProvider();
+    } catch (error) {
+      health = { error: safeErrorMessage(error) };
+    }
+  }
+
   return {
     exportedAt: new Date().toISOString(),
     formatVersion: 1,
     source: 'APP adlane',
     data: { bets, calibrations, dailyReports, lessons },
+    health,
   };
 }
 
