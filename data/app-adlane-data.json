@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-10-09T17:32:35.419Z",
+  "exportedAt": "2026-10-09T18:37:07.550Z",
   "formatVersion": 1,
   "source": "APP adlane",
   "data": {
@@ -4824,8 +4824,8 @@
   },
   "health": {
     "nativeBackgroundTicks": {
-      "lastTickAt": "2026-10-09T17:07:42.251Z",
-      "ticksLast24h": 36
+      "lastTickAt": "2026-10-09T18:13:13.899Z",
+      "ticksLast24h": 32
     },
     "lastTick": null,
     "paperBets": {
@@ -4838,16 +4838,16 @@
       "settledLast24h": 0
     },
     "trainingRows": {
-      "last14Days": 873,
-      "lastClosedAt": "2026-10-09T10:41:09.916Z",
+      "last14Days": 894,
+      "lastClosedAt": "2026-10-09T18:18:30.759Z",
       "bySource": {
-        "api_football": 588,
-        "omniroute": 285
+        "api_football": 604,
+        "omniroute": 290
       }
     },
     "model": {
-      "updatedAt": "2026-10-09T10:41:10.814Z",
-      "totalRows": 873,
+      "updatedAt": "2026-10-09T18:18:31.615Z",
+      "totalRows": 894,
       "markerRules": 40,
       "paperBets": {
         "total": 95,
@@ -4928,83 +4928,82 @@
       "checks": [
         {
           "name": "Principal",
-          "ok": false,
-          "latencyMs": 24795,
-          "readyModels": null,
-          "configuredReady": null,
-          "configuredTotal": 25,
-          "error": "fetch failed: Fetch request has been canceled"
+          "ok": true,
+          "latencyMs": 48,
+          "readyModels": 28,
+          "configuredReady": 25,
+          "configuredTotal": 25
         }
       ],
       "leaderboard": [
         {
           "label": "Principal · qwen3.8-27b",
-          "ok": 5,
-          "fail": 0,
-          "avgMs": 377,
-          "coolingDown": false
-        },
-        {
-          "label": "Principal · gpt-oss-safeguard-20b",
-          "ok": 4,
-          "fail": 6,
-          "avgMs": 1467,
+          "ok": 12,
+          "fail": 3,
+          "avgMs": 2239,
           "coolingDown": false
         },
         {
           "label": "Principal · allam-2-7b",
-          "ok": 12,
-          "fail": 1,
-          "avgMs": 4136,
+          "ok": 19,
+          "fail": 4,
+          "avgMs": 3569,
           "coolingDown": false
         },
         {
           "label": "Principal · auto",
-          "ok": 10,
+          "ok": 20,
           "fail": 0,
-          "avgMs": 4562,
+          "avgMs": 4831,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · riva-translate-4b-instruct-v2",
+          "ok": 9,
+          "fail": 0,
+          "avgMs": 7095,
           "coolingDown": false
         },
         {
           "label": "Principal · gpt-oss-120b",
           "ok": 5,
-          "fail": 5,
+          "fail": 9,
           "avgMs": 3349,
           "coolingDown": false
         },
         {
-          "label": "Principal · riva-translate-4b-instruct-v2",
-          "ok": 5,
+          "label": "Principal · diffusiongemma-26b-a4b-it",
+          "ok": 15,
           "fail": 0,
-          "avgMs": 10775,
+          "avgMs": 12545,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · gpt-oss-safeguard-20b",
+          "ok": 5,
+          "fail": 10,
+          "avgMs": 8576,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · nemotron-3.5-content-safety",
+          "ok": 5,
+          "fail": 2,
+          "avgMs": 26922,
           "coolingDown": false
         },
         {
           "label": "Principal · nemotron-3-nano-omni-30b-a3b-reasoning",
           "ok": 1,
-          "fail": 4,
+          "fail": 8,
           "avgMs": 8503,
           "coolingDown": false
         },
         {
           "label": "Principal · poolside-laguna-xs-2.1",
-          "ok": 5,
-          "fail": 0,
-          "avgMs": 31098,
-          "coolingDown": false
-        },
-        {
-          "label": "Principal · llama-3.2-11b-vision-instruct",
-          "ok": 0,
-          "fail": 5,
-          "avgMs": null,
-          "coolingDown": false
-        },
-        {
-          "label": "Principal · riva-translate-4b-instruct-v1.1",
-          "ok": 0,
-          "fail": 5,
-          "avgMs": null,
+          "ok": 8,
+          "fail": 1,
+          "avgMs": 48417,
           "coolingDown": false
         }
       ]
