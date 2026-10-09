@@ -19,7 +19,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { getAPIConfig, saveAPIConfig, APIConfig, incrementRequestCount } from '../api/multiAPIManager';
 import { DEFAULT_OMNIROUTE_CONFIG } from '../core/omniroute';
-import { checkAllProviders, checkProvider, getRouteLeaderboard, ProviderCheck } from '../core/llmRouter';
+import { checkAllProviders, checkProvider, getModelStatsForEndpoint, getRouteLeaderboard, ProviderCheck } from '../core/llmRouter';
 import { LlmProvider } from '../types';
 import { TelegramConfig, sendTelegramMessage } from '../core/telegram';
 import { sendInternationalBreakCalendarNow } from '../core/internationalBreakNotify';
@@ -87,6 +87,9 @@ export default function SettingsScreen({ navigation }: any) {
   const [pendingSelection, setPendingSelection] = useState<Set<string>>(new Set());
   const [scrapingFilterActive, setScrapingFilterActive] = useState(false);
   const [testingAllProviders, setTestingAllProviders] = useState(false);
+  /** Fournisseur dont on choisit les modèles : 'primary' ou l'id d'un fournisseur supplémentaire. */
+  const [pickerTarget, setPickerTarget] = useState<string>('primary');
+  const [pickerStats, setPickerStats] = useState<Record<string, { ok: number; fail: number; avgMs: number | null }>>({});
   const [testingProviderId, setTestingProviderId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -199,7 +202,20 @@ export default function SettingsScreen({ navigation }: any) {
             )
           : ['Aucun modèle configuré.']),
       ];
-      Alert.alert('Fournisseurs IA', lines.join('\n'));
+      // Après le test, choix direct des modèles d'un fournisseur qui répond
+      // (Android affiche au plus 3 boutons dans une alerte).
+      const providerIds = [
+        ...(omniroute.endpoint?.trim() ? [{ id: 'primary', name: 'Principal' }] : []),
+        ...(omniroute.extraProviders ?? []).filter((p) => p.enabled).map((p) => ({ id: p.id, name: p.name })),
+      ];
+      const responding = providerIds.filter((p) => checks.some((c) => c.name === p.name && c.ok)).slice(0, 2);
+      Alert.alert('Fournisseurs IA', lines.join('\n'), [
+        ...responding.map((p) => ({
+          text: `Modèles : ${p.name}`,
+          onPress: () => { void handleOpenModelPicker(p.id); },
+        })),
+        { text: 'Fermer', style: 'cancel' as const },
+      ]);
     } finally {
       setTestingAllProviders(false);
     }
@@ -243,16 +259,27 @@ export default function SettingsScreen({ navigation }: any) {
    * premier tour réel, invisibles tant qu'on ne lisait pas le diagnostic du
    * scan en détail.
    */
-  const handleOpenModelPicker = async () => {
+  const handleOpenModelPicker = async (target: string = 'primary') => {
+    const extra = (omniroute.extraProviders ?? []).find((p) => p.id === target);
+    const endpoint = (extra ? extra.endpoint : omniroute.endpoint).trim().replace(/\/+$/, '');
+    const apiKey = extra ? extra.apiKey : omniroute.apiKey;
+    const currentModels = extra ? extra.models : omniroute.selectedModel;
+    const providerName = extra ? extra.name : 'Fournisseur principal';
+
+    if (!endpoint) {
+      Alert.alert('Endpoint manquant', `Renseigne d'abord l'endpoint de ${providerName}.`);
+      return;
+    }
+
     setLoadingModels(true);
     try {
-      const response = await fetch(`${omniroute.endpoint}/models?execution_status=ready`, {
-        headers: omniroute.apiKey ? { 'Authorization': `Bearer ${omniroute.apiKey}` } : {},
+      const response = await fetch(`${endpoint}/models?execution_status=ready`, {
+        headers: apiKey ? { 'Authorization': `Bearer ${apiKey}` } : {},
         timeout: 15000
       } as any);
 
       if (!response.ok) {
-        Alert.alert('⚠️ Erreur', `HTTP ${response.status}: ${response.statusText}`);
+        Alert.alert('⚠️ Erreur', `${providerName} : HTTP ${response.status} ${response.statusText}`);
         return;
       }
 
@@ -261,28 +288,27 @@ export default function SettingsScreen({ navigation }: any) {
         .map((m: any) => (typeof m === 'string' ? m : m.id || m.name))
         .filter(Boolean)
         // Claude/Anthropic jamais proposé : consommerait les crédits Anthropic
-        // de l'utilisateur au lieu des autres providers déjà payés sur Omniroute.
+        // personnels de l'utilisateur.
         .filter((id: string) => !/claude|anthropic/i.test(id))
         .sort();
 
       if (ids.length === 0) {
         Alert.alert(
           '⚠️ Aucun modèle prêt',
-          "Omniroute n'a renvoyé aucun modèle RÉELLEMENT utilisable maintenant (hors Claude/Anthropic, exclu) — " +
-            "soit aucune clé fournisseur n'est configurée côté serveur, soit tous les quotas gratuits sont épuisés. " +
-            'Vérifie les clés fournisseurs dans le dashboard du serveur.'
+          `${providerName} n'a renvoyé aucun modèle utilisable maintenant (hors Claude/Anthropic, exclu) : ` +
+            'aucune clé fournisseur configurée côté serveur, ou quotas gratuits épuisés.'
         );
         return;
       }
 
+      setPickerStats(await getModelStatsForEndpoint(endpoint));
+      setPickerTarget(target);
       setAvailableModels(ids);
-      setPendingSelection(new Set(
-        omniroute.selectedModel.split(/[,\n]/).map((m) => m.trim()).filter(Boolean)
-      ));
+      setPendingSelection(new Set(currentModels.split(/[,\n]/).map((m) => m.trim()).filter(Boolean)));
       setModelSearch('');
       setModelPickerVisible(true);
     } catch (error: any) {
-      Alert.alert('❌ Échec', error.message || 'Impossible de charger la liste des modèles Omniroute');
+      Alert.alert('❌ Échec', `${providerName} : ${error.message || 'impossible de charger la liste des modèles'}`);
     } finally {
       setLoadingModels(false);
     }
@@ -307,7 +333,16 @@ export default function SettingsScreen({ navigation }: any) {
    * l'écran, qui pourrait ne jamais être pressé après avoir quitté le picker.
    */
   const handleApplyModelSelection = async () => {
-    const updated = { ...omniroute, selectedModel: Array.from(pendingSelection).join(', ') };
+    const models = Array.from(pendingSelection).join(', ');
+    const updated =
+      pickerTarget === 'primary'
+        ? { ...omniroute, selectedModel: models }
+        : {
+            ...omniroute,
+            extraProviders: (omniroute.extraProviders ?? []).map((p) =>
+              p.id === pickerTarget ? { ...p, models } : p
+            ),
+          };
     setOmniroute(updated);
     setModelPickerVisible(false);
     try {
@@ -517,7 +552,7 @@ export default function SettingsScreen({ navigation }: any) {
 
           <TouchableOpacity
             style={[styles.testButton, styles.testButtonPurple, loadingModels && styles.testButtonDisabled]}
-            onPress={handleOpenModelPicker}
+            onPress={() => handleOpenModelPicker('primary')}
             disabled={loadingModels}
           >
             {loadingModels ? (
@@ -619,6 +654,14 @@ export default function SettingsScreen({ navigation }: any) {
                 autoCorrect={false}
                 multiline
               />
+              <TouchableOpacity
+                style={[styles.testButton, styles.testButtonPurple, styles.providerActionButton, loadingModels && styles.testButtonDisabled]}
+                onPress={() => handleOpenModelPicker(provider.id)}
+                disabled={loadingModels}
+              >
+                <Ionicons name="list" size={18} color="#ffffff" />
+                <Text style={styles.testButtonText}>Choisir les modèles dans la liste</Text>
+              </TouchableOpacity>
               <View style={styles.providerActions}>
                 <TouchableOpacity
                   style={[styles.testButton, styles.providerActionButton]}
@@ -915,7 +958,7 @@ export default function SettingsScreen({ navigation }: any) {
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>
-              Agents Omniroute ({pendingSelection.size} sélectionné{pendingSelection.size > 1 ? 's' : ''} / {availableModels.length})
+              Modèles — {pickerTarget === 'primary' ? 'Principal' : (omniroute.extraProviders ?? []).find((p) => p.id === pickerTarget)?.name ?? 'Fournisseur'} ({pendingSelection.size} sélectionné{pendingSelection.size > 1 ? 's' : ''} / {availableModels.length})
             </Text>
             <TouchableOpacity onPress={() => setModelPickerVisible(false)}>
               <Ionicons name="close" size={26} color="#f8fafc" />
@@ -958,7 +1001,15 @@ export default function SettingsScreen({ navigation }: any) {
                     size={22}
                     color={checked ? '#3b82f6' : '#64748b'}
                   />
-                  <Text style={styles.modelRowText}>{item}</Text>
+                  <View style={styles.modelRowBody}>
+                    <Text style={styles.modelRowText}>{item}</Text>
+                    {pickerStats[item] && (
+                      <Text style={styles.modelRowStats}>
+                        {pickerStats[item].ok} ok / {pickerStats[item].fail} échec(s)
+                        {pickerStats[item].avgMs != null ? ` · ${(pickerStats[item].avgMs! / 1000).toFixed(1)} s` : ''}
+                      </Text>
+                    )}
+                  </View>
                 </TouchableOpacity>
               );
             }}
@@ -1133,6 +1184,14 @@ const styles = StyleSheet.create({
   },
   testButtonPurple: {
     backgroundColor: '#7c3aed',
+  },
+  modelRowBody: {
+    flex: 1,
+  },
+  modelRowStats: {
+    color: '#94a3b8',
+    fontSize: 11,
+    marginTop: 2,
   },
   providerCard: {
     borderWidth: 1,

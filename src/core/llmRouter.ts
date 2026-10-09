@@ -373,3 +373,21 @@ export async function getRouteLeaderboard(
       coolingDown: isCoolingDown(entry, now),
     }));
 }
+
+/** Mesures par modèle pour un endpoint donné (affichées dans le sélecteur de modèles). */
+export async function getModelStatsForEndpoint(
+  endpoint: string
+): Promise<Record<string, { ok: number; fail: number; avgMs: number | null }>> {
+  const all = await loadStats();
+  const prefix = `${trimEndpoint(endpoint)}|`;
+  const result: Record<string, { ok: number; fail: number; avgMs: number | null }> = {};
+  for (const [key, entry] of Object.entries(all)) {
+    if (!key.startsWith(prefix)) continue;
+    result[key.slice(prefix.length)] = {
+      ok: entry.ok,
+      fail: entry.fail,
+      avgMs: entry.avgMs != null ? Math.round(entry.avgMs) : null,
+    };
+  }
+  return result;
+}
