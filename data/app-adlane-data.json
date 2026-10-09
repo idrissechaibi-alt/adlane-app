@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-10-09T16:31:33.202Z",
+  "exportedAt": "2026-10-09T16:42:29.135Z",
   "formatVersion": 1,
   "source": "APP adlane",
   "data": {
@@ -4821,5 +4821,198 @@
       }
     ],
     "lessons": []
+  },
+  "health": {
+    "nativeBackgroundTicks": {
+      "lastTickAt": "2026-10-09T16:40:20.928Z",
+      "ticksLast24h": 35
+    },
+    "lastTick": null,
+    "paperBets": {
+      "total": 95,
+      "settled": 91,
+      "won": 29,
+      "lastPlacedAt": "2026-10-06T02:22:48.315Z",
+      "lastSettledAt": "2026-10-06T03:22:07.591Z",
+      "placedLast24h": 0,
+      "settledLast24h": 0
+    },
+    "trainingRows": {
+      "last14Days": 873,
+      "lastClosedAt": "2026-10-09T10:41:09.916Z",
+      "bySource": {
+        "api_football": 588,
+        "omniroute": 285
+      }
+    },
+    "model": {
+      "updatedAt": "2026-10-09T10:41:10.814Z",
+      "totalRows": 873,
+      "markerRules": 40,
+      "paperBets": {
+        "total": 95,
+        "settled": 91,
+        "won": 29,
+        "hitRate": 0.31868131868131866,
+        "calibrationFactor": 0.7503349833884004
+      },
+      "omnirouteTrust": {
+        "samples": 72,
+        "agreeRate": 0.5555555555555556,
+        "trusted": false
+      },
+      "marketExpertise": []
+    },
+    "inPlayProposals": {
+      "real": 0,
+      "fictional": 0,
+      "fictionalReviewed": 0,
+      "fictionalSettledLegs": 0,
+      "lastCreatedAt": null,
+      "createdLast24h": 0
+    },
+    "predictionOutcomes30d": 0,
+    "marketSeries": {
+      "combined": 0,
+      "real": 0,
+      "fictional": 0,
+      "lastDate": null
+    },
+    "accuracySnapshots": [
+      {
+        "date": "2026-10-03",
+        "hitRate": 0.32954545454545453,
+        "total": 88,
+        "won": 29
+      },
+      {
+        "date": "2026-10-04",
+        "hitRate": 0.32954545454545453,
+        "total": 88,
+        "won": 29
+      },
+      {
+        "date": "2026-10-05",
+        "hitRate": 0.32222222222222224,
+        "total": 90,
+        "won": 29
+      },
+      {
+        "date": "2026-10-06",
+        "hitRate": 0.31868131868131866,
+        "total": 91,
+        "won": 29
+      },
+      {
+        "date": "2026-10-07",
+        "hitRate": 0.31868131868131866,
+        "total": 91,
+        "won": 29
+      },
+      {
+        "date": "2026-10-08",
+        "hitRate": 0.31868131868131866,
+        "total": 91,
+        "won": 29
+      },
+      {
+        "date": "2026-10-09",
+        "hitRate": 0.31868131868131866,
+        "total": 91,
+        "won": 29
+      }
+    ],
+    "lastNightlyReview": "2026-10-07",
+    "aiProviders": {
+      "configured": true,
+      "checks": [
+        {
+          "name": "Principal",
+          "ok": true,
+          "latencyMs": 1312,
+          "readyModels": 28,
+          "configuredReady": 25,
+          "configuredTotal": 25
+        }
+      ],
+      "leaderboard": [
+        {
+          "label": "Principal · allam-2-7b",
+          "ok": 2,
+          "fail": 0,
+          "avgMs": 1284,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · auto",
+          "ok": 0,
+          "fail": 0,
+          "avgMs": null,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · diffusiongemma-26b-a4b-it",
+          "ok": 0,
+          "fail": 0,
+          "avgMs": null,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · fusion",
+          "ok": 0,
+          "fail": 0,
+          "avgMs": null,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · gpt-oss-120b",
+          "ok": 0,
+          "fail": 0,
+          "avgMs": null,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · gpt-oss-20b",
+          "ok": 0,
+          "fail": 0,
+          "avgMs": null,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · gpt-oss-safeguard-20b",
+          "ok": 0,
+          "fail": 0,
+          "avgMs": null,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · ising-calibration-1.5-31b",
+          "ok": 0,
+          "fail": 0,
+          "avgMs": null,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · llama-3.1-nemoguard-8b-content-safety",
+          "ok": 0,
+          "fail": 0,
+          "avgMs": null,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · llama-3.1-nemoguard-8b-topic-control",
+          "ok": 0,
+          "fail": 0,
+          "avgMs": null,
+          "coolingDown": false
+        }
+      ]
+    },
+    "configured": {
+      "omniroute": true,
+      "telegram": true,
+      "apiFootball": true,
+      "sportmonks": true
+    }
   }
 }
