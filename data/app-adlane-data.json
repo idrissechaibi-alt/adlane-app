@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-10-09T21:06:11.150Z",
+  "exportedAt": "2026-10-09T21:45:22.293Z",
   "formatVersion": 1,
   "source": "APP adlane",
   "data": {
@@ -4824,22 +4824,21 @@
   },
   "health": {
     "nativeBackgroundTicks": {
-      "lastTickAt": "2026-10-09T21:06:08.045Z",
-      "ticksLast24h": 26
+      "lastTickAt": "2026-10-09T21:37:34.884Z",
+      "ticksLast24h": 27
     },
     "tickProgress": {
-      "startedAt": "2026-10-09T21:06:08.036Z",
-      "step": "compositions T-90",
-      "at": "2026-10-09T21:06:09.435Z"
+      "startedAt": "2026-10-09T21:45:19.387Z",
+      "step": "scan en direct 20e/60e",
+      "at": "2026-10-09T21:45:20.310Z"
     },
     "lastTick": {
-      "finishedAt": "2026-10-09T20:50:40.915Z",
+      "finishedAt": "2026-10-09T21:45:06.780Z",
       "universeSize": 0,
       "omnirouteConfigured": true,
       "fictionalProgramSize": 38,
       "fictionalProgramFromFeed": false,
-      "fictionalMatchesAhead": 1,
-      "fictionalNextKickoffUtc": "2026-10-09T21:00:00Z",
+      "fictionalMatchesAhead": 0,
       "fictionalCountriesTried": 1,
       "fictionalCountriesTotal": 60,
       "fictionalLastTrace": {
@@ -4888,7 +4887,7 @@
       }
     },
     "model": {
-      "updatedAt": "2026-10-09T20:50:38.831Z",
+      "updatedAt": "2026-10-09T21:45:20.291Z",
       "totalRows": 1068,
       "markerRules": 40,
       "paperBets": {
@@ -4971,81 +4970,89 @@
         {
           "name": "Principal",
           "ok": true,
-          "latencyMs": 114,
+          "latencyMs": 218,
           "readyModels": 28,
-          "configuredReady": 25,
-          "configuredTotal": 25
+          "configuredReady": 10,
+          "configuredTotal": 10
+        },
+        {
+          "name": "Omniroute",
+          "ok": true,
+          "latencyMs": 1757,
+          "readyModels": 942,
+          "configuredReady": 1,
+          "configuredTotal": 1
         }
       ],
       "leaderboard": [
         {
-          "label": "Principal · riva-translate-4b-instruct-v2",
-          "ok": 27,
+          "label": "Principal · auto",
+          "ok": 49,
           "fail": 0,
-          "avgMs": 2418,
+          "avgMs": 2241,
           "coolingDown": false
         },
         {
           "label": "Principal · allam-2-7b",
-          "ok": 39,
+          "ok": 40,
           "fail": 12,
-          "avgMs": 1692,
-          "coolingDown": false
-        },
-        {
-          "label": "Principal · auto",
-          "ok": 48,
-          "fail": 0,
-          "avgMs": 2628,
+          "avgMs": 1547,
           "coolingDown": false
         },
         {
           "label": "Principal · gpt-oss-120b",
-          "ok": 10,
+          "ok": 11,
           "fail": 9,
-          "avgMs": 2239,
+          "avgMs": 1962,
           "coolingDown": false
         },
         {
-          "label": "Principal · qwen3.8-27b",
-          "ok": 12,
-          "fail": 12,
-          "avgMs": 2239,
-          "coolingDown": false
-        },
-        {
-          "label": "Principal · diffusiongemma-26b-a4b-it",
-          "ok": 17,
+          "label": "Principal · riva-translate-4b-instruct-v2",
+          "ok": 28,
           "fail": 0,
-          "avgMs": 13792,
+          "avgMs": 4519,
           "coolingDown": false
         },
         {
-          "label": "Principal · gpt-oss-safeguard-20b",
-          "ok": 5,
-          "fail": 10,
-          "avgMs": 8576,
-          "coolingDown": false
-        },
-        {
-          "label": "Principal · nemotron-3.5-content-safety",
-          "ok": 5,
-          "fail": 2,
-          "avgMs": 26922,
-          "coolingDown": false
-        },
-        {
-          "label": "Principal · nemotron-3-nano-omni-30b-a3b-reasoning",
+          "label": "Omniroute · Maximus appus",
           "ok": 1,
-          "fail": 8,
-          "avgMs": 8503,
+          "fail": 0,
+          "avgMs": 4561,
           "coolingDown": false
         },
         {
-          "label": "Principal · llama-3.1-nemotron-safety-guard-8b-v3",
+          "label": "Principal · gpt-oss-20b",
           "ok": 3,
-          "fail": 9,
-          "avgMs": 15676,
+          "fail": 6,
+          "avgMs": 82006,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · fusion",
+          "ok": 8,
+          "fail": 3,
+          "avgMs": 314091,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · nemotron-3-super-120b",
+          "ok": 6,
+          "fail": 0,
+          "avgMs": 454191,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · ising-calibration-1.5-31b",
+          "ok": 9,
+          "fail": 4,
+          "avgMs": 399410,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · nemotron-3-ultra-550b",
+          "ok": 4,
+          "fail": 2,
+          "avgMs": 479153,
           "coolingDown": false
         }
       ]
