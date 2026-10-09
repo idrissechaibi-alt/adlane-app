@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-10-09T16:42:35.242Z",
+  "exportedAt": "2026-10-09T17:32:35.419Z",
   "formatVersion": 1,
   "source": "APP adlane",
   "data": {
@@ -4824,8 +4824,8 @@
   },
   "health": {
     "nativeBackgroundTicks": {
-      "lastTickAt": "2026-10-09T16:40:20.928Z",
-      "ticksLast24h": 35
+      "lastTickAt": "2026-10-09T17:07:42.251Z",
+      "ticksLast24h": 36
     },
     "lastTick": null,
     "paperBets": {
@@ -4928,81 +4928,82 @@
       "checks": [
         {
           "name": "Principal",
-          "ok": true,
-          "latencyMs": 49,
-          "readyModels": 28,
-          "configuredReady": 25,
-          "configuredTotal": 25
+          "ok": false,
+          "latencyMs": 24795,
+          "readyModels": null,
+          "configuredReady": null,
+          "configuredTotal": 25,
+          "error": "fetch failed: Fetch request has been canceled"
         }
       ],
       "leaderboard": [
         {
-          "label": "Principal · allam-2-7b",
-          "ok": 1,
+          "label": "Principal · qwen3.8-27b",
+          "ok": 5,
           "fail": 0,
-          "avgMs": 1209,
-          "coolingDown": false
-        },
-        {
-          "label": "Principal · auto",
-          "ok": 0,
-          "fail": 0,
-          "avgMs": null,
-          "coolingDown": false
-        },
-        {
-          "label": "Principal · diffusiongemma-26b-a4b-it",
-          "ok": 0,
-          "fail": 0,
-          "avgMs": null,
-          "coolingDown": false
-        },
-        {
-          "label": "Principal · fusion",
-          "ok": 0,
-          "fail": 0,
-          "avgMs": null,
-          "coolingDown": false
-        },
-        {
-          "label": "Principal · gpt-oss-120b",
-          "ok": 0,
-          "fail": 0,
-          "avgMs": null,
-          "coolingDown": false
-        },
-        {
-          "label": "Principal · gpt-oss-20b",
-          "ok": 0,
-          "fail": 0,
-          "avgMs": null,
+          "avgMs": 377,
           "coolingDown": false
         },
         {
           "label": "Principal · gpt-oss-safeguard-20b",
-          "ok": 0,
+          "ok": 4,
+          "fail": 6,
+          "avgMs": 1467,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · allam-2-7b",
+          "ok": 12,
+          "fail": 1,
+          "avgMs": 4136,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · auto",
+          "ok": 10,
           "fail": 0,
+          "avgMs": 4562,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · gpt-oss-120b",
+          "ok": 5,
+          "fail": 5,
+          "avgMs": 3349,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · riva-translate-4b-instruct-v2",
+          "ok": 5,
+          "fail": 0,
+          "avgMs": 10775,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · nemotron-3-nano-omni-30b-a3b-reasoning",
+          "ok": 1,
+          "fail": 4,
+          "avgMs": 8503,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · poolside-laguna-xs-2.1",
+          "ok": 5,
+          "fail": 0,
+          "avgMs": 31098,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · llama-3.2-11b-vision-instruct",
+          "ok": 0,
+          "fail": 5,
           "avgMs": null,
           "coolingDown": false
         },
         {
-          "label": "Principal · ising-calibration-1.5-31b",
+          "label": "Principal · riva-translate-4b-instruct-v1.1",
           "ok": 0,
-          "fail": 0,
-          "avgMs": null,
-          "coolingDown": false
-        },
-        {
-          "label": "Principal · llama-3.1-nemoguard-8b-content-safety",
-          "ok": 0,
-          "fail": 0,
-          "avgMs": null,
-          "coolingDown": false
-        },
-        {
-          "label": "Principal · llama-3.1-nemoguard-8b-topic-control",
-          "ok": 0,
-          "fail": 0,
+          "fail": 5,
           "avgMs": null,
           "coolingDown": false
         }
