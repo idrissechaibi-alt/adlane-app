@@ -51,6 +51,7 @@
 
 import { getDailyPlan, todayLocalDateString } from './scheduler';
 import { buildScheduledMatches, ScheduledMatch } from './dailyWorkflow';
+import { ScheduledMatchDetail } from '../types/database';
 import { LiveFixture, fetchOmnirouteMatchStatus, isSyntheticFixtureId } from './halftimeMonitor';
 import { getHistoricalPriors } from './footballDataCoUk';
 import {
@@ -97,10 +98,14 @@ import { sendInternationalBreakCalendarNow } from './internationalBreakNotify';
 import { fetchSportmonksInPlayMatches, SportmonksInPlayMatch } from '../api/footballDataAPIs/sportmonks';
 import { getInPlayMatches as fetchSofaScoreInPlayMatches, SofaScoreInPlayMatch } from '../api/footballDataAPIs/sofaScore';
 
-const CHECKPOINT20_MIN_MINUTE = 18;
-const CHECKPOINT20_MAX_MINUTE = 24;
-const CHECKPOINT60_MIN_MINUTE = 58;
-const CHECKPOINT60_MAX_MINUTE = 64;
+// Fenêtres larges : la tâche de fond n'est réveillée par Android qu'environ
+// toutes les 30-40 min ; avec 6 minutes de fenêtre, la plupart des matchs
+// passaient le checkpoint sans jamais être vus (aucune prédiction à la 60e).
+// Les jambes se projettent depuis la minute réelle, quelle qu'elle soit.
+const CHECKPOINT20_MIN_MINUTE = 15;
+const CHECKPOINT20_MAX_MINUTE = 30;
+const CHECKPOINT60_MIN_MINUTE = 55;
+const CHECKPOINT60_MAX_MINUTE = 70;
 
 /** Matchs fictifs interrogés par tour : chaque vérification est une requête
  * Omniroute de quelques secondes, et un tour doit rester court (la boucle de
@@ -142,7 +147,7 @@ const LIVE_FICTIONAL_20_MAX = 30;
 const LIVE_FICTIONAL_60_MIN = 55;
 const LIVE_FICTIONAL_60_MAX = 70;
 /** Matchs traités par tour (une estimation IA de buts attendus chacun). */
-const LIVE_FICTIONAL_MAX_PER_TICK = 15;
+const LIVE_FICTIONAL_MAX_PER_TICK = 40;
 /** Buts attendus moyens d'un match de football (domicile/extérieur), utilisés
  * seulement si l'IA ne fournit aucune estimation : la projection repose alors
  * sur le score et la minute réels, sans a priori propre aux équipes. */
@@ -402,6 +407,23 @@ function observedFromTimeline(timeline: MatchSample[]): ObservedLiveCounts {
  * moyennes de saison Football-Data.co.uk quand elles existent, plus solides
  * qu'un rythme mesuré sur 20 minutes.
  */
+/** Rythmes moyens d'un match (environ 10 corners et 4 cartons sur 90 min). */
+const TYPICAL_CORNERS_PER_MINUTE = 10 / 90;
+const TYPICAL_CARDS_PER_MINUTE = 4 / 90;
+/** Poids, en minutes de jeu, du rythme moyen face au rythme observé. */
+const PACE_PRIOR_MINUTES = 20;
+
+/**
+ * Rythme projeté : rythme observé mêlé au rythme moyen d'un match. Seul, le
+ * rythme observé sur 20 minutes est très bruité (1 corner à la 20e donnait
+ * 0,05/min et une projection de 1,3 corner d'ici la pause, pour 6-7 réels) ;
+ * le poids du rythme moyen s'efface à mesure que le match avance.
+ */
+function blendPace(observedPerMinute: number, elapsedMinutes: number, typicalPerMinute: number): number {
+  const observedEvents = observedPerMinute * elapsedMinutes;
+  return (observedEvents + typicalPerMinute * PACE_PRIOR_MINUTES) / (elapsedMinutes + PACE_PRIOR_MINUTES);
+}
+
 async function buildLegs20(
   match: MatchRef,
   fixtureId: number,
@@ -464,8 +486,9 @@ async function buildLegs20(
     const remainingMinutes = Math.max(0, 45 - elapsedMinutes);
 
     if (observedCorners != null) {
-      const perMinute = observedLive?.cornersPerMinute ?? observedCorners / elapsedMinutes;
-      const source = observedLive?.cornersPerMinute != null ? 'rythme suivi en direct' : 'moyenne depuis le coup d\'envoi';
+      const observedPace = observedLive?.cornersPerMinute ?? observedCorners / elapsedMinutes;
+      const perMinute = blendPace(observedPace, elapsedMinutes, TYPICAL_CORNERS_PER_MINUTE);
+      const source = `${observedLive?.cornersPerMinute != null ? 'rythme suivi en direct' : 'moyenne depuis le coup d\'envoi'} mêlé au rythme moyen d'un match`;
       const lambda = perMinute * remainingMinutes;
       const line = pickHighestConfidentOverLine(lambda, LINE_PICK_THRESHOLD, observedCorners);
       if (line) {
@@ -479,8 +502,9 @@ async function buildLegs20(
     }
 
     if (observedCards != null) {
-      const perMinute = observedLive?.cardsPerMinute ?? observedCards / elapsedMinutes;
-      const source = observedLive?.cardsPerMinute != null ? 'rythme suivi en direct' : 'moyenne depuis le coup d\'envoi';
+      const observedPace = observedLive?.cardsPerMinute ?? observedCards / elapsedMinutes;
+      const perMinute = blendPace(observedPace, elapsedMinutes, TYPICAL_CARDS_PER_MINUTE);
+      const source = `${observedLive?.cardsPerMinute != null ? 'rythme suivi en direct' : 'moyenne depuis le coup d\'envoi'} mêlé au rythme moyen d'un match`;
       const lambda = perMinute * remainingMinutes;
       const line = pickHighestConfidentOverLine(lambda, LINE_PICK_THRESHOLD, observedCards);
       if (line) {
@@ -1037,6 +1061,47 @@ export interface InPlayComboTickResult {
   sportmonksError?: string;
 }
 
+const REAL_XG_FALLBACK_CACHE_KEY = '@real_xg_fallback_cache';
+
+/**
+ * Matchs du planning réel sans cotes exploitables : au lieu de les écarter
+ * (un seul marché proposé sur toute la journée, rien à la 60e), buts
+ * attendus estimés par l'IA (une fois par match et par jour, mis en cache),
+ * à défaut moyenne neutre d'un match. La projection repose ensuite sur le
+ * score, la minute et les tirs réels du match.
+ */
+async function withFallbackExpectedGoals(
+  skipped: ScheduledMatchDetail[],
+  omnirouteConfig: OmnirouteConfig | null
+): Promise<ScheduledMatch[]> {
+  if (skipped.length === 0) return [];
+  const today = todayLocalDateString();
+  const raw = await AsyncStorage.getItem(REAL_XG_FALLBACK_CACHE_KEY);
+  const stored: { date: string; xg: Record<string, { home: number; away: number }> } = raw
+    ? JSON.parse(raw)
+    : { date: today, xg: {} };
+  const cache = stored.date === today ? stored.xg : {};
+  let touched = false;
+
+  const result: ScheduledMatch[] = [];
+  for (const m of skipped) {
+    let xg = cache[m.id];
+    if (!xg && omnirouteConfig) {
+      const estimated = await estimateExpectedGoalsViaOmniroute(omnirouteConfig, m.homeTeam, m.awayTeam, m.leagueName).catch(() => null);
+      if (estimated) {
+        xg = estimated;
+        cache[m.id] = estimated;
+        touched = true;
+      }
+    }
+    const goals = xg ?? NEUTRAL_EXPECTED_GOALS;
+    result.push({ ...m, expectedHomeGoals: goals.home, expectedAwayGoals: goals.away });
+  }
+
+  if (touched) await AsyncStorage.setItem(REAL_XG_FALLBACK_CACHE_KEY, JSON.stringify({ date: today, xg: cache }));
+  return result;
+}
+
 export async function runInPlayComboTick(liveFixtures: LiveFixture[]): Promise<InPlayComboTickResult> {
   const existing = readInPlayProposals();
   // Réel : une jambe proposée bloque TOUT le match pour ce checkpoint (peu
@@ -1078,7 +1143,8 @@ export async function runInPlayComboTick(liveFixtures: LiveFixture[]): Promise<I
   const plan = await getDailyPlan();
   if (plan) {
     for (const slot of plan.slots) {
-      const { matches: slotMatches } = buildScheduledMatches([slot]);
+      const { matches: withOdds, skipped } = buildScheduledMatches([slot]);
+      const slotMatches = [...withOdds, ...(await withFallbackExpectedGoals(skipped, omnirouteConfig))];
       await processRealSlot(slotMatches, liveFixtures, omnirouteConfig, alreadyProposed, fresh, sportmonksInPlay, sofaScoreInPlay);
     }
   }

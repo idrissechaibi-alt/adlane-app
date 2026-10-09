@@ -65,22 +65,27 @@ export interface DaySlot {
  * générer et persister les mêmes propositions sans dépendre de l'écran) —
  * une seule implémentation, jamais deux qui pourraient diverger.
  */
-export function buildScheduledMatches(slots: DailyScheduleSlot[]): { matches: ScheduledMatch[]; skippedNoOdds: number } {
+export function buildScheduledMatches(slots: DailyScheduleSlot[]): {
+  matches: ScheduledMatch[];
+  skippedNoOdds: number;
+  /** Matchs écartés faute de cotes, pour un éventuel repli (buts attendus estimés autrement). */
+  skipped: ScheduledMatchDetail[];
+} {
   const matches: ScheduledMatch[] = [];
-  let skippedNoOdds = 0;
+  const skipped: ScheduledMatchDetail[] = [];
 
   for (const slot of slots) {
     for (const m of slot.matches as ScheduledMatchDetail[]) {
       const estimated = estimateExpectedGoalsFromMarket(m.odds);
       if (!estimated) {
-        skippedNoOdds++;
+        skipped.push(m);
         continue;
       }
       matches.push({ ...m, expectedHomeGoals: estimated.home, expectedAwayGoals: estimated.away });
     }
   }
 
-  return { matches, skippedNoOdds };
+  return { matches, skippedNoOdds: skipped.length, skipped };
 }
 
 export interface ProposedSlip {

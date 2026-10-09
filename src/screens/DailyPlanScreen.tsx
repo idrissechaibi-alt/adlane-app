@@ -21,6 +21,8 @@ import { InPlayProposal, readInPlayProposals } from '../core/learnStore';
 import { getLineupRefresh, isT90Reached, LineupRefresh } from '../core/lineupRefresh';
 import { getAllBets, saveBet } from '../database/storage';
 import { DailyScheduleSlot } from '../types/database';
+import { Bet, Market } from '../types';
+import { TrackedMarket } from '../core/learnStore';
 
 export default function DailyPlanScreen() {
   const [loading, setLoading] = useState(false);
@@ -146,6 +148,83 @@ export default function DailyPlanScreen() {
       if (!isT90Reached(leg.kickoff_utc)) return false;
       return Boolean(lineupRefreshes[leg.matchId]);
     });
+  };
+
+  /** Marché d'une jambe en direct, dans le vocabulaire des paris enregistrés. */
+  const LIVE_MARKET_TO_BET_MARKET: Record<TrackedMarket, Market> = {
+    '1X2': '1X2',
+    total_buts: 'OU_2_5',
+    btts: 'BTTS',
+    buts_1ere_mt: '1ere_mi_temps',
+    corners: 'corners',
+    cartons: 'cards',
+    fautes: 'fouls',
+  };
+
+  /**
+   * Enregistre un combo en direct comme pari réellement joué (cote du
+   * bookmaker + mise). Identifiant `live-<proposition>` : le bilan
+   * (dailyReview.ts) le règle en même temps que la proposition elle-même,
+   * avec les mêmes résultats vérifiés (score final, corners/cartons à la 45e).
+   */
+  const handleConfirmPlaceLiveBet = async (proposal: InPlayProposal) => {
+    const stake = Number(stakeInput.replace(',', '.'));
+    if (!Number.isFinite(stake) || stake <= 0) {
+      Alert.alert('Mise invalide', 'Entre un montant de mise valide avant de confirmer.');
+      return;
+    }
+    const odds = Number(oddsInput.replace(',', '.'));
+    if (!Number.isFinite(odds) || odds <= 1) {
+      Alert.alert('Cote invalide', 'Entre la cote réelle donnée par ton bookmaker avant de confirmer.');
+      return;
+    }
+
+    setPlacing(true);
+    try {
+      const now = new Date().toISOString();
+      const bet: Bet = {
+        id: `live-${proposal.id}`,
+        version: 1,
+        date: proposal.createdAt.slice(0, 10),
+        creneau_utc: proposal.createdAt,
+        creneau_display: new Date(proposal.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        league: proposal.legs.length === 1 ? proposal.legs[0].league : 'Combo en direct',
+        legs: proposal.legs.map((leg, index) => ({
+          id: `live-${proposal.id}-${index}`,
+          match: `${leg.homeTeam} - ${leg.awayTeam}`,
+          kickoff_utc: proposal.createdAt,
+          league: leg.league,
+          market: LIVE_MARKET_TO_BET_MARKET[leg.market],
+          selection: leg.selection,
+          odds: null,
+          oddsSource: 'estimated',
+          estimated_prob: leg.prob,
+          is_void: false,
+          result: 'pending',
+        })),
+        odds,
+        stake,
+        excluded_from_pnl: false,
+        status: 'pending',
+        played: true,
+        confiance: Math.round(proposal.combinedProb * 100),
+        confidence_level: proposal.combinedProb >= 0.7 ? 'Élevé' : proposal.combinedProb >= 0.55 ? 'Moyen' : 'Faible',
+        analysis: `${proposal.window} — ${proposal.legs.map((l) => `${l.selection} (${Math.round(l.prob * 100)}%)`).join(' + ')}`,
+        validation_flags: [],
+        createdAt: now,
+        updatedAt: now,
+      };
+      await saveBet(bet);
+      setPlacedBetIds((prev) => new Set(prev).add(bet.id));
+      setPlacingId(null);
+      setStakeInput('');
+      setOddsInput('');
+      Alert.alert('Pari placé', `Enregistré dans le Bilan P&L : cote ${odds}, mise ${stake}. Réglé automatiquement à la fin du match.`);
+    } catch (error: any) {
+      Alert.alert('Erreur', `Impossible d'enregistrer le pari : ${error.message}`);
+    } finally {
+      setPlacing(false);
+    }
   };
 
   const handleConfirmPlaceBet = async (proposal: ProposedSlip) => {
@@ -451,6 +530,50 @@ export default function DailyPlanScreen() {
                     • {leg.homeTeam} {leg.scoreLabel} {leg.awayTeam} — {leg.selection} ({(leg.prob * 100).toFixed(0)}%) — {leg.evidence}
                   </Text>
                 ))}
+                {placedBetIds.has(`live-${proposal.id}`) ? (
+                  <Text style={styles.placeLockedText}>✅ Pari placé — visible dans le Bilan P&L.</Text>
+                ) : placingId === `live-${proposal.id}` ? (
+                  <View style={styles.placeStakeRow}>
+                    <TextInput
+                      style={styles.stakeInput}
+                      value={oddsInput}
+                      onChangeText={setOddsInput}
+                      placeholder="Cote réelle"
+                      placeholderTextColor="#64748b"
+                      keyboardType="decimal-pad"
+                      autoFocus
+                    />
+                    <TextInput
+                      style={styles.stakeInput}
+                      value={stakeInput}
+                      onChangeText={setStakeInput}
+                      placeholder="Mise (ex: 10)"
+                      placeholderTextColor="#64748b"
+                      keyboardType="decimal-pad"
+                    />
+                    <TouchableOpacity
+                      style={styles.confirmStakeButton}
+                      disabled={placing}
+                      onPress={() => handleConfirmPlaceLiveBet(proposal)}
+                    >
+                      {placing ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.confirmStakeText}>OK</Text>}
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.cancelStakeButton} onPress={() => { setPlacingId(null); setStakeInput(''); setOddsInput(''); }}>
+                      <Ionicons name="close" size={16} color="#94a3b8" />
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.placeBetButton}
+                    onPress={() => {
+                      setOddsInput('');
+                      setPlacingId(`live-${proposal.id}`);
+                    }}
+                  >
+                    <Ionicons name="checkmark-circle-outline" size={16} color="#ffffff" />
+                    <Text style={styles.placeBetButtonText}>Placer ce pari (cote + mise)</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             ))}
           </View>
@@ -468,9 +591,9 @@ export default function DailyPlanScreen() {
           <View style={styles.oddsWarningBox}>
             <Ionicons name="information-circle" size={20} color="#f59e0b" />
             <Text style={styles.oddsWarningText}>
-              {matchesMissingOdds} match{matchesMissingOdds > 1 ? 's' : ''} sans cotes exploitables (1X2 + Over/Under) —
-              aucune proposition ne peut être calculée pour {matchesMissingOdds > 1 ? 'eux' : 'lui'}. Configurez TheOddsAPI
-              ou API-Football dans Paramètres → Gestion des API pour des cotes réelles.
+              {matchesMissingOdds} match{matchesMissingOdds > 1 ? 's' : ''} sans cotes bookmaker (ni TheOddsAPI ni API-Football) —
+              analysé{matchesMissingOdds > 1 ? 's' : ''} quand même en direct, avec des buts attendus estimés par l'IA à la
+              place des cotes (moins précis). Relance le Scan Matinal pour retenter les cotes.
             </Text>
           </View>
         )}

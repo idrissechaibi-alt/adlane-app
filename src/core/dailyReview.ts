@@ -21,7 +21,7 @@ import { syncEloForAllCoveredLeagues } from './eloRatings';
 import { settlePlacedBets, settleProposedBets } from './betSettlement';
 import { fetchWithTimeout } from './httpTimeout';
 import { generateDailyReport } from './reporter';
-import { getAllBets, saveDailyReport, getDailyReports } from '../database/storage';
+import { getAllBets, saveBet, saveDailyReport, getDailyReports } from '../database/storage';
 import { mapWithConcurrency } from './concurrency';
 import {
   InPlayProposal,
@@ -44,6 +44,7 @@ import { OmnirouteConfig } from '../types';
 import { sendTelegramMessage } from './telegram';
 import { buildFictionalMarketStats, formatFictionalDigestMessage } from './dailyDigest';
 import { readMatchTimelines, MatchSample } from './fictionalProgram';
+import { isSyntheticFixtureId } from './halftimeMonitor';
 
 const LAST_REVIEW_KEY = '@last_daily_review';
 const LAST_ELO_SYNC_KEY = '@last_elo_sync';
@@ -84,6 +85,59 @@ interface FinalResult {
   goalsAway: number;
   htHome: number;
   htAway: number;
+  /** Corners et cartons (jaunes + rouges) de la 1ère mi-temps, quand
+   * API-Football les fournit (fixtures/statistics avec half=true). */
+  corners1H?: number;
+  cards1H?: number;
+}
+
+/** Nombre de requêtes de statistiques de 1ère mi-temps par passage du bilan. */
+const FIRST_HALF_STATS_MAX_PER_PASS = 30;
+
+function statValue(stats: any[] | undefined, type: string): number | null {
+  const entry = (stats ?? []).find((s) => s?.type === type);
+  if (!entry) return null;
+  const value = typeof entry.value === 'number' ? entry.value : entry.value == null ? 0 : Number(entry.value);
+  return Number.isFinite(value) ? value : null;
+}
+
+/**
+ * Corners et cartons de la 1ère mi-temps d'un match terminé. Sans ces
+ * chiffres, un pari "Plus de X corners en 1ère mi-temps" n'était jamais
+ * vérifié à la 45e et la calibration n'en apprenait rien. Renvoie null si
+ * API-Football ne fournit pas le détail par mi-temps pour ce match : le pari
+ * reste alors non réglé plutôt que deviné.
+ */
+async function fetchFirstHalfStats(
+  apiKey: string,
+  fixtureId: number
+): Promise<{ corners: number; cards: number } | null> {
+  try {
+    const response = await fetchWithTimeout(
+      `https://v3.football.api-sports.io/fixtures/statistics?fixture=${fixtureId}&half=true`,
+      { headers: buildHeaders(apiKey) }
+    );
+    if (!response.ok) return null;
+    const data = await response.json();
+    const teams: any[] = data.response ?? [];
+    if (teams.length !== 2) return null;
+
+    let corners = 0;
+    let cards = 0;
+    for (const team of teams) {
+      const firstHalf = team.statistics_1h;
+      if (!Array.isArray(firstHalf)) return null;
+      const teamCorners = statValue(firstHalf, 'Corner Kicks');
+      const yellow = statValue(firstHalf, 'Yellow Cards');
+      const red = statValue(firstHalf, 'Red Cards');
+      if (teamCorners == null || yellow == null || red == null) return null;
+      corners += teamCorners;
+      cards += yellow + red;
+    }
+    return { corners, cards };
+  } catch {
+    return null;
+  }
 }
 
 /** Scores finaux de plusieurs matchs en une seule requête. */
@@ -269,11 +323,24 @@ function settleReprojectedLeg(
     return null;
   }
 
-  if (market === 'total_buts') return totalGoals > 2.5;
-  if (market === 'btts') return result.goalsHome > 0 && result.goalsAway > 0;
+  // Le côté joué compte : un pari "Moins de 2.5" ou "BTTS Non" était réglé
+  // comme son contraire, ce qui faussait la calibration de ces marchés.
+  if (market === 'total_buts') return /moins/i.test(selection) ? totalGoals < 2.5 : totalGoals > 2.5;
+  if (market === 'btts') {
+    const bothScored = result.goalsHome > 0 && result.goalsAway > 0;
+    return /\(non\)|ne marquent pas/i.test(selection) ? !bothScored : bothScored;
+  }
   if (market === 'buts_1ere_mt') return htGoals >= 1;
 
-  return null; // corners / cartons / fautes : pas de source structurée par mi-temps
+  if (market === 'corners' || market === 'cartons') {
+    const line = selection.match(/plus de\s+(\d+(?:[.,]\d+)?)/i);
+    if (!line || !/1[èe]re mi-temps/i.test(selection)) return null;
+    const value = market === 'corners' ? result.corners1H : result.cards1H;
+    if (value == null) return null;
+    return value > Number(line[1].replace(',', '.'));
+  }
+
+  return null; // fautes : pas de source structurée par mi-temps
 }
 
 /** Agrège les jambes réglées d'une journée en un point de courbe par marché. */
@@ -313,6 +380,39 @@ function mergeDayPoints(series: MarketDayPoint[], points: MarketDayPoint[]): voi
     const existingIndex = series.findIndex((p) => p.date === point.date && p.market === point.market);
     if (existingIndex >= 0) series[existingIndex] = point;
     else series.push(point);
+  }
+}
+
+/**
+ * Paris en direct réellement joués (bouton "Placer ce pari", id
+ * `live-<proposition>`) : réglés avec le résultat déjà vérifié de chaque
+ * jambe de leur proposition. Une jambe sans résultat vérifiable laisse le
+ * pari en attente, jamais un statut deviné.
+ */
+async function settlePlacedLiveBets(proposals: InPlayProposal[]): Promise<void> {
+  const byId = new Map(proposals.map((p) => [`live-${p.id}`, p]));
+  for (const bet of await getAllBets()) {
+    if (!bet.played || bet.status !== 'pending' || !bet.id.startsWith('live-')) continue;
+    const proposal = byId.get(bet.id);
+    if (!proposal) continue;
+
+    const anyLost = proposal.legs.some((leg) => leg.settled && leg.won === false);
+    const allWon = proposal.legs.every((leg) => leg.settled && leg.won === true);
+    if (!anyLost && !allWon) continue;
+
+    const stake = bet.stake ?? 0;
+    const payout = allWon ? stake * (bet.odds ?? 0) : 0;
+    await saveBet({
+      ...bet,
+      status: allWon ? 'won' : 'lost',
+      payout,
+      net_pnl: payout - stake,
+      legs: bet.legs.map((leg, index) => {
+        const source = proposal.legs[index];
+        return source?.settled ? { ...leg, result: source.won ? 'won' : 'lost' } : leg;
+      }),
+      updatedAt: new Date().toISOString(),
+    });
   }
 }
 
@@ -462,6 +562,28 @@ export async function runNightlyReviewIfDue(): Promise<number> {
     // match dont le suivi aurait décroché avant la fin (coup d'envoi mal
     // renseigné, app restée fermée pendant toute la fenêtre de fin de
     // match...). Jamais un doublon d'appel pour un match déjà résolu.
+    // Corners/cartons de 1ère mi-temps : une requête de statistiques par
+    // match terminé concerné (vrais identifiants API-Football uniquement).
+    if (apiConfig.apiFootball) {
+      const needStats = Array.from(
+        new Set(
+          allLegs
+            .filter((l) => (l.market === 'corners' || l.market === 'cartons') && finals.has(l.fixtureId))
+            .filter((l) => finals.get(l.fixtureId)!.corners1H == null && !isSyntheticFixtureId(l.fixtureId))
+            .map((l) => l.fixtureId)
+        )
+      ).slice(0, FIRST_HALF_STATS_MAX_PER_PASS);
+      for (const fixtureId of needStats) {
+        if (!(await spendBudget('apiFootball'))) break;
+        const stats = await fetchFirstHalfStats(apiConfig.apiFootball, fixtureId);
+        if (stats) {
+          const final = finals.get(fixtureId)!;
+          final.corners1H = stats.corners;
+          final.cards1H = stats.cards;
+        }
+      }
+    }
+
     const unresolvedLegs = allLegs.filter((l) => !finals.has(l.fixtureId));
     if (unresolvedLegs.length > 0) {
       const omnirouteConfig = await loadOmnirouteConfig();
@@ -536,6 +658,12 @@ export async function runNightlyReviewIfDue(): Promise<number> {
     // de allDayProposals, pour comparer visuellement les deux pipelines.
     mergeDayPoints(seriesReal, buildDayPoints(day, allDayProposals.filter((p) => p.real !== false)));
     mergeDayPoints(seriesFictional, buildDayPoints(day, allDayProposals.filter((p) => p.real === false)));
+  }
+
+  try {
+    await settlePlacedLiveBets(allProposals);
+  } catch (error: any) {
+    console.warn('[Bilan] Règlement des paris en direct placés échoué:', error.message);
   }
 
   writeInPlayProposals(allProposals);

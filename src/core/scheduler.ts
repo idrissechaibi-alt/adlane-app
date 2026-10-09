@@ -9,6 +9,7 @@ import { fetchCompetitionOdds, FOOTBALL_DATA_TO_ODDS_SPORT_KEY, SimpleMatchOdds 
 import { normalizeTeamName, namesLikelyMatch } from './teamNameMatch';
 import { fetchWithTimeout } from './httpTimeout';
 import { sendTelegramMessage } from './telegram';
+import { ensureDailyUniverse } from './matchUniverse';
 
 const DAILY_SCHEDULE_KEY = '@daily_schedule_json';
 const FOOTBALL_DATA_KEY = 'app-adlane.football-data-api-key';
@@ -110,6 +111,80 @@ async function enrichWithRealOdds(
   }
 }
 
+function hasCoreOdds(odds: ScheduledMatchDetail['odds']): boolean {
+  return [odds.home, odds.draw, odds.away, odds.over_2_5, odds.under_2_5].every((o) => o > 1);
+}
+
+const API_FOOTBALL_ODDS_MAX_MATCHES = 20;
+
+/** Première cote trouvée pour (pari, valeur), tous bookmakers confondus. */
+function findOdd(bookmakers: any[], betName: string, value: string): number | null {
+  for (const bookmaker of bookmakers) {
+    const bet = (bookmaker.bets ?? []).find((b: any) => b.name === betName);
+    const entry = bet?.values?.find((v: any) => String(v.value) === value);
+    const odd = entry ? Number(entry.odd) : NaN;
+    if (Number.isFinite(odd) && odd > 1) return odd;
+  }
+  return null;
+}
+
+/**
+ * Repli quand TheOddsAPI ne fournit rien (clé absente ou match non couvert) :
+ * cotes réelles d'avant-match via API-Football (/odds?fixture=), le match
+ * étant retrouvé dans l'univers du jour par nom d'équipe. Sans ce repli, tout
+ * match sans cote était écarté du scan en direct (un seul marché proposé,
+ * rien à la 60e).
+ */
+async function enrichWithApiFootballOdds(matches: ScheduledMatchDetail[]): Promise<void> {
+  const missing = matches.filter((m) => !hasCoreOdds(m.odds));
+  if (missing.length === 0) return;
+
+  const apiConfig = await getAPIConfig();
+  if (!apiConfig.apiFootball) return;
+
+  const universe = await ensureDailyUniverse().catch(() => []);
+  if (universe.length === 0) return;
+
+  for (const match of missing.slice(0, API_FOOTBALL_ODDS_MAX_MATCHES)) {
+    const home = normalizeTeamName(match.homeTeam);
+    const away = normalizeTeamName(match.awayTeam);
+    const fixture = universe.find(
+      (u) => namesLikelyMatch(home, normalizeTeamName(u.homeTeam)) && namesLikelyMatch(away, normalizeTeamName(u.awayTeam))
+    );
+    if (!fixture) continue;
+
+    try {
+      await incrementRequestCount('apiFootball');
+      const response = await fetchWithTimeout(`https://v3.football.api-sports.io/odds?fixture=${fixture.fixtureId}`, {
+        headers: {
+          'x-rapidapi-key': apiConfig.apiFootball,
+          'x-rapidapi-host': 'v3.football.api-sports.io',
+          'x-apisports-key': apiConfig.apiFootball,
+        },
+      });
+      if (!response.ok) continue;
+      const data = await response.json();
+      const bookmakers: any[] = data.response?.[0]?.bookmakers ?? [];
+      if (bookmakers.length === 0) continue;
+
+      const assign = (key: keyof ScheduledMatchDetail['odds'], betName: string, value: string) => {
+        if (match.odds[key] > 1) return;
+        const odd = findOdd(bookmakers, betName, value);
+        if (odd) match.odds[key] = odd;
+      };
+      assign('home', 'Match Winner', 'Home');
+      assign('draw', 'Match Winner', 'Draw');
+      assign('away', 'Match Winner', 'Away');
+      assign('over_2_5', 'Goals Over/Under', 'Over 2.5');
+      assign('under_2_5', 'Goals Over/Under', 'Under 2.5');
+      assign('btts_yes', 'Both Teams Score', 'Yes');
+      assign('btts_no', 'Both Teams Score', 'No');
+    } catch (error: any) {
+      console.warn(`[Scan Matinal] Cotes API-Football indisponibles pour ${match.homeTeam} vs ${match.awayTeam}:`, error.message);
+    }
+  }
+}
+
 export interface DailyPlan {
   date: string;
   generatedAt: string;
@@ -185,6 +260,7 @@ export async function executeMorningScan(): Promise<DailyPlan> {
     }));
 
     await enrichWithRealOdds(mappedMatches);
+    await enrichWithApiFootballOdds(mappedMatches);
 
     const slots = groupMatchesIntoSlots(mappedMatches);
     const plan: DailyPlan = {
