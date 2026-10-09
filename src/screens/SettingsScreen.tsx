@@ -19,7 +19,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { getAPIConfig, saveAPIConfig, APIConfig, incrementRequestCount } from '../api/multiAPIManager';
 import { DEFAULT_OMNIROUTE_CONFIG } from '../core/omniroute';
-import { checkAllProviders, checkProvider, getModelStatsForEndpoint, getRouteLeaderboard, ProviderCheck } from '../core/llmRouter';
+import { checkAllProviders, checkProvider, getModelStatsForEndpoint, getRouteLeaderboard, probeModels, PROBE_MAX_MODELS, ProviderCheck } from '../core/llmRouter';
 import { LlmProvider } from '../types';
 import { TelegramConfig, sendTelegramMessage } from '../core/telegram';
 import { sendInternationalBreakCalendarNow } from '../core/internationalBreakNotify';
@@ -89,6 +89,9 @@ export default function SettingsScreen({ navigation }: any) {
   const [testingAllProviders, setTestingAllProviders] = useState(false);
   /** Fournisseur dont on choisit les modèles : 'primary' ou l'id d'un fournisseur supplémentaire. */
   const [pickerTarget, setPickerTarget] = useState<string>('primary');
+  /** Avancement du test réel des modèles avant l'ouverture de la liste. */
+  const [probeProgress, setProbeProgress] = useState<{ target: string; done: number; total: number } | null>(null);
+  const [pickerLatency, setPickerLatency] = useState<Record<string, number>>({});
   const [pickerStats, setPickerStats] = useState<Record<string, { ok: number; fail: number; avgMs: number | null }>>({});
   const [testingProviderId, setTestingProviderId] = useState<string | null>(null);
 
@@ -301,16 +304,47 @@ export default function SettingsScreen({ navigation }: any) {
         return;
       }
 
+      // Test réel de chaque modèle : seuls ceux qui répondent sont proposés.
+      // Les déjà sélectionnés et les mieux mesurés passent en premier si la
+      // liste dépasse le plafond de test.
+      const stats = await getModelStatsForEndpoint(endpoint);
+      const current = new Set(currentModels.split(/[,\n]/).map((m) => m.trim()).filter(Boolean));
+      const prioritized = [...ids].sort((a, b) => {
+        const rank = (m: string) => (current.has(m) ? 2 : 0) + ((stats[m]?.ok ?? 0) > 0 ? 1 : 0);
+        return rank(b) - rank(a);
+      });
+      setProbeProgress({ target, done: 0, total: Math.min(prioritized.length, PROBE_MAX_MODELS) });
+      const responding = await probeModels({ name: providerName, endpoint, apiKey }, prioritized, (done, total) =>
+        setProbeProgress({ target, done, total })
+      );
+
+      if (responding.length === 0) {
+        Alert.alert(
+          '⚠️ Aucun modèle ne répond',
+          `${providerName} liste ${ids.length} modèle(s), mais aucun n'a répondu au test. ` +
+            'Vérifie les clés des fournisseurs côté serveur et que le serveur tourne bien.'
+        );
+        return;
+      }
+      if (ids.length > PROBE_MAX_MODELS) {
+        Alert.alert(
+          'Liste limitée',
+          `${ids.length} modèles listés : seuls ${PROBE_MAX_MODELS} ont été testés (tes modèles actuels et les mieux mesurés d'abord).`
+        );
+      }
+
       setPickerStats(await getModelStatsForEndpoint(endpoint));
+      setPickerLatency(Object.fromEntries(responding.map((r) => [r.model, r.latencyMs])));
       setPickerTarget(target);
-      setAvailableModels(ids);
-      setPendingSelection(new Set(currentModels.split(/[,\n]/).map((m) => m.trim()).filter(Boolean)));
+      setAvailableModels(responding.map((r) => r.model));
+      setPendingSelection(new Set(responding.map((r) => r.model).filter((m) => current.has(m))));
       setModelSearch('');
       setModelPickerVisible(true);
     } catch (error: any) {
       Alert.alert('❌ Échec', `${providerName} : ${error.message || 'impossible de charger la liste des modèles'}`);
     } finally {
       setLoadingModels(false);
+      setProbeProgress(null);
     }
   };
 
@@ -555,12 +589,14 @@ export default function SettingsScreen({ navigation }: any) {
             onPress={() => handleOpenModelPicker('primary')}
             disabled={loadingModels}
           >
-            {loadingModels ? (
+            {probeProgress?.target === 'primary' ? (
+              <Text style={styles.testButtonText}>Test des modèles {probeProgress.done}/{probeProgress.total}…</Text>
+            ) : loadingModels ? (
               <ActivityIndicator color="#ffffff" size="small" />
             ) : (
               <>
                 <Ionicons name="list" size={18} color="#ffffff" />
-                <Text style={styles.testButtonText}>Choisir les agents dans la liste (1000+)</Text>
+                <Text style={styles.testButtonText}>Choisir dans la liste (modèles qui répondent)</Text>
               </>
             )}
           </TouchableOpacity>
@@ -659,8 +695,14 @@ export default function SettingsScreen({ navigation }: any) {
                 onPress={() => handleOpenModelPicker(provider.id)}
                 disabled={loadingModels}
               >
-                <Ionicons name="list" size={18} color="#ffffff" />
-                <Text style={styles.testButtonText}>Choisir les modèles dans la liste</Text>
+                {probeProgress?.target === provider.id ? (
+                  <Text style={styles.testButtonText}>Test des modèles {probeProgress.done}/{probeProgress.total}…</Text>
+                ) : (
+                  <>
+                    <Ionicons name="list" size={18} color="#ffffff" />
+                    <Text style={styles.testButtonText}>Choisir dans la liste (modèles qui répondent)</Text>
+                  </>
+                )}
               </TouchableOpacity>
               <View style={styles.providerActions}>
                 <TouchableOpacity
@@ -1003,6 +1045,11 @@ export default function SettingsScreen({ navigation }: any) {
                   />
                   <View style={styles.modelRowBody}>
                     <Text style={styles.modelRowText}>{item}</Text>
+                    {pickerLatency[item] != null && (
+                      <Text style={styles.modelRowStats}>
+                        Répond en {(pickerLatency[item] / 1000).toFixed(1)} s au test
+                      </Text>
+                    )}
                     {pickerStats[item] && (
                       <Text style={styles.modelRowStats}>
                         {pickerStats[item].ok} ok / {pickerStats[item].fail} échec(s)

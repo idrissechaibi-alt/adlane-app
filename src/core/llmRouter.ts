@@ -15,6 +15,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LlmProvider, OmnirouteConfig } from '../types';
 import { fetchWithTimeout } from './httpTimeout';
+import { mapWithConcurrency } from './concurrency';
 import { getConfiguredFreeLLMProviders } from './freeLLMProviders';
 
 export interface LlmRoute {
@@ -390,4 +391,46 @@ export async function getModelStatsForEndpoint(
     };
   }
   return result;
+}
+
+/** Au-delà, tester chaque modèle prendrait trop longtemps (certains serveurs
+ * exposent 1000+ modèles) : les déjà sélectionnés et les mieux mesurés passent
+ * en premier. */
+export const PROBE_MAX_MODELS = 120;
+const PROBE_CONCURRENCY = 8;
+const PROBE_TIMEOUT_MS = 15000;
+
+export interface ProbeResult {
+  model: string;
+  latencyMs: number;
+}
+
+/**
+ * Envoie une mini-requête réelle à chaque modèle et ne garde que ceux qui
+ * répondent : la liste "/models" d'un serveur (Omniroute notamment) inclut
+ * des modèles dont le fournisseur est coupé ou sans clé. Les résultats
+ * alimentent aussi le classement de la rotation. Triés du plus rapide au
+ * plus lent.
+ */
+export async function probeModels(
+  provider: { name: string; endpoint: string; apiKey: string },
+  models: string[],
+  onProgress?: (done: number, total: number) => void
+): Promise<ProbeResult[]> {
+  const candidates = models.filter((m) => !NEVER_USE_PATTERN.test(m)).slice(0, PROBE_MAX_MODELS);
+  let done = 0;
+  const results = await mapWithConcurrency(candidates, PROBE_CONCURRENCY, async (model) => {
+    const route: LlmRoute = { providerName: provider.name, endpoint: trimEndpoint(provider.endpoint), apiKey: provider.apiKey, model };
+    const startedAt = Date.now();
+    try {
+      await callRoute(route, 'Réponds uniquement par le mot OK.', 'Test de disponibilité : réponds OK.', PROBE_TIMEOUT_MS);
+      return { model, latencyMs: Date.now() - startedAt };
+    } catch {
+      return null;
+    } finally {
+      done += 1;
+      onProgress?.(done, candidates.length);
+    }
+  });
+  return results.filter((r): r is ProbeResult => r !== null).sort((a, b) => a.latencyMs - b.latencyMs);
 }
