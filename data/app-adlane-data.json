@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-10-09T18:38:13.456Z",
+  "exportedAt": "2026-10-09T19:02:20.248Z",
   "formatVersion": 1,
   "source": "APP adlane",
   "data": {
@@ -4825,37 +4825,74 @@
   "health": {
     "nativeBackgroundTicks": {
       "lastTickAt": "2026-10-09T18:13:13.899Z",
-      "ticksLast24h": 32
+      "ticksLast24h": 30
     },
     "tickProgress": {
-      "startedAt": "2026-10-09T18:38:12.243Z",
-      "step": "programme fictif",
-      "at": "2026-10-09T18:38:12.978Z"
+      "startedAt": "2026-10-09T19:02:19.038Z",
+      "step": "univers du jour",
+      "at": "2026-10-09T19:02:19.078Z"
     },
-    "lastTick": null,
+    "lastTick": {
+      "finishedAt": "2026-10-09T18:41:53.122Z",
+      "universeSize": 0,
+      "omnirouteConfigured": true,
+      "fictionalProgramSize": 38,
+      "fictionalProgramFromFeed": false,
+      "fictionalMatchesAhead": 20,
+      "fictionalNextKickoffUtc": "2026-10-09T19:00:00Z",
+      "fictionalCountriesTried": 1,
+      "fictionalCountriesTotal": 60,
+      "fictionalLastTrace": {
+        "country": "Portugal",
+        "attempts": [
+          {
+            "model": "(aucun)",
+            "outcome": "erreur",
+            "detail": "Aucun modèle avec accès web configuré : question sur des faits du jour non posée (la réponse serait inventée)."
+          }
+        ]
+      },
+      "fictionalSportmonksMatches": 1,
+      "fictionalOmnirouteMatches": 37,
+      "liveFixturesFound": 114,
+      "liveFixturesSource": "api_football",
+      "liveMarkerObserved": 62,
+      "liveMarkerClosed": 0,
+      "freshInPlayProposals": 4,
+      "intlBreak": {
+        "withinWindow": false,
+        "matchesScheduledToday": 0,
+        "matchesWithExpectedGoals": 0,
+        "matchesLiveFound": 0,
+        "matchesInCheckpointWindow": 0
+      },
+      "sportmonksConfirmedMatches": 1,
+      "sofaScoreConfirmedMatches": null,
+      "nightlyReviewPointsCreated": 0
+    },
     "paperBets": {
-      "total": 95,
+      "total": 97,
       "settled": 91,
       "won": 29,
-      "lastPlacedAt": "2026-10-06T02:22:48.315Z",
+      "lastPlacedAt": "2026-10-09T18:41:22.523Z",
       "lastSettledAt": "2026-10-06T03:22:07.591Z",
-      "placedLast24h": 0,
+      "placedLast24h": 2,
       "settledLast24h": 0
     },
     "trainingRows": {
-      "last14Days": 894,
-      "lastClosedAt": "2026-10-09T18:18:30.759Z",
+      "last14Days": 901,
+      "lastClosedAt": "2026-10-09T18:38:16.278Z",
       "bySource": {
-        "api_football": 604,
+        "api_football": 611,
         "omniroute": 290
       }
     },
     "model": {
-      "updatedAt": "2026-10-09T18:18:31.615Z",
-      "totalRows": 894,
+      "updatedAt": "2026-10-09T18:41:22.697Z",
+      "totalRows": 901,
       "markerRules": 40,
       "paperBets": {
-        "total": 95,
+        "total": 97,
         "settled": 91,
         "won": 29,
         "hitRate": 0.31868131868131866,
@@ -4870,11 +4907,11 @@
     },
     "inPlayProposals": {
       "real": 0,
-      "fictional": 0,
+      "fictional": 18,
       "fictionalReviewed": 0,
       "fictionalSettledLegs": 0,
-      "lastCreatedAt": null,
-      "createdLast24h": 0
+      "lastCreatedAt": "2026-10-09T18:41:51.791Z",
+      "createdLast24h": 18
     },
     "predictionOutcomes30d": 0,
     "marketSeries": {
@@ -4927,60 +4964,60 @@
         "won": 29
       }
     ],
-    "lastNightlyReview": "2026-10-07",
+    "lastNightlyReview": "2026-10-08",
     "aiProviders": {
       "configured": true,
       "checks": [
         {
           "name": "Principal",
           "ok": true,
-          "latencyMs": 120,
-          "readyModels": 25,
-          "configuredReady": 22,
+          "latencyMs": 119,
+          "readyModels": 28,
+          "configuredReady": 25,
           "configuredTotal": 25
         }
       ],
       "leaderboard": [
         {
+          "label": "Principal · auto",
+          "ok": 30,
+          "fail": 0,
+          "avgMs": 2714,
+          "coolingDown": false
+        },
+        {
           "label": "Principal · qwen3.8-27b",
           "ok": 12,
-          "fail": 4,
+          "fail": 6,
           "avgMs": 2239,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · riva-translate-4b-instruct-v2",
+          "ok": 11,
+          "fail": 0,
+          "avgMs": 4228,
           "coolingDown": false
         },
         {
           "label": "Principal · allam-2-7b",
           "ok": 19,
-          "fail": 5,
+          "fail": 9,
           "avgMs": 3569,
           "coolingDown": false
         },
         {
-          "label": "Principal · auto",
-          "ok": 21,
-          "fail": 0,
-          "avgMs": 5642,
-          "coolingDown": false
-        },
-        {
-          "label": "Principal · riva-translate-4b-instruct-v2",
-          "ok": 9,
-          "fail": 0,
-          "avgMs": 7095,
-          "coolingDown": false
-        },
-        {
           "label": "Principal · gpt-oss-120b",
-          "ok": 5,
+          "ok": 7,
           "fail": 9,
-          "avgMs": 3349,
+          "avgMs": 2214,
           "coolingDown": false
         },
         {
           "label": "Principal · diffusiongemma-26b-a4b-it",
-          "ok": 15,
+          "ok": 17,
           "fail": 0,
-          "avgMs": 12545,
+          "avgMs": 13792,
           "coolingDown": false
         },
         {
