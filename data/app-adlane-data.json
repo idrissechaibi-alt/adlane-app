@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-10-09T19:02:20.248Z",
+  "exportedAt": "2026-10-09T19:05:50.844Z",
   "formatVersion": 1,
   "source": "APP adlane",
   "data": {
@@ -4828,18 +4828,18 @@
       "ticksLast24h": 30
     },
     "tickProgress": {
-      "startedAt": "2026-10-09T19:02:19.038Z",
-      "step": "univers du jour",
-      "at": "2026-10-09T19:02:19.078Z"
+      "startedAt": "2026-10-09T19:05:49.521Z",
+      "step": "marqueurs live",
+      "at": "2026-10-09T19:05:50.730Z"
     },
     "lastTick": {
-      "finishedAt": "2026-10-09T18:41:53.122Z",
+      "finishedAt": "2026-10-09T19:02:49.968Z",
       "universeSize": 0,
       "omnirouteConfigured": true,
       "fictionalProgramSize": 38,
       "fictionalProgramFromFeed": false,
-      "fictionalMatchesAhead": 20,
-      "fictionalNextKickoffUtc": "2026-10-09T19:00:00Z",
+      "fictionalMatchesAhead": 12,
+      "fictionalNextKickoffUtc": "2026-10-09T19:30:00Z",
       "fictionalCountriesTried": 1,
       "fictionalCountriesTotal": 60,
       "fictionalLastTrace": {
@@ -4854,11 +4854,11 @@
       },
       "fictionalSportmonksMatches": 1,
       "fictionalOmnirouteMatches": 37,
-      "liveFixturesFound": 114,
+      "liveFixturesFound": 99,
       "liveFixturesSource": "api_football",
-      "liveMarkerObserved": 62,
-      "liveMarkerClosed": 0,
-      "freshInPlayProposals": 4,
+      "liveMarkerObserved": 38,
+      "liveMarkerClosed": 147,
+      "freshInPlayProposals": 27,
       "intlBreak": {
         "withinWindow": false,
         "matchesScheduledToday": 0,
@@ -4866,33 +4866,33 @@
         "matchesLiveFound": 0,
         "matchesInCheckpointWindow": 0
       },
-      "sportmonksConfirmedMatches": 1,
+      "sportmonksConfirmedMatches": 0,
       "sofaScoreConfirmedMatches": null,
       "nightlyReviewPointsCreated": 0
     },
     "paperBets": {
-      "total": 97,
+      "total": 98,
       "settled": 91,
       "won": 29,
-      "lastPlacedAt": "2026-10-09T18:41:22.523Z",
+      "lastPlacedAt": "2026-10-09T19:02:29.118Z",
       "lastSettledAt": "2026-10-06T03:22:07.591Z",
-      "placedLast24h": 2,
+      "placedLast24h": 3,
       "settledLast24h": 0
     },
     "trainingRows": {
-      "last14Days": 901,
-      "lastClosedAt": "2026-10-09T18:38:16.278Z",
+      "last14Days": 1048,
+      "lastClosedAt": "2026-10-09T19:02:29.110Z",
       "bySource": {
-        "api_football": 611,
-        "omniroute": 290
+        "api_football": 755,
+        "omniroute": 293
       }
     },
     "model": {
-      "updatedAt": "2026-10-09T18:41:22.697Z",
-      "totalRows": 901,
+      "updatedAt": "2026-10-09T19:02:29.270Z",
+      "totalRows": 1048,
       "markerRules": 40,
       "paperBets": {
-        "total": 97,
+        "total": 98,
         "settled": 91,
         "won": 29,
         "hitRate": 0.31868131868131866,
@@ -4907,11 +4907,11 @@
     },
     "inPlayProposals": {
       "real": 0,
-      "fictional": 18,
+      "fictional": 45,
       "fictionalReviewed": 0,
       "fictionalSettledLegs": 0,
-      "lastCreatedAt": "2026-10-09T18:41:51.791Z",
-      "createdLast24h": 18
+      "lastCreatedAt": "2026-10-09T19:02:48.935Z",
+      "createdLast24h": 45
     },
     "predictionOutcomes30d": 0,
     "marketSeries": {
@@ -4971,7 +4971,7 @@
         {
           "name": "Principal",
           "ok": true,
-          "latencyMs": 119,
+          "latencyMs": 31,
           "readyModels": 28,
           "configuredReady": 25,
           "configuredTotal": 25
@@ -4979,32 +4979,32 @@
       ],
       "leaderboard": [
         {
+          "label": "Principal · allam-2-7b",
+          "ok": 34,
+          "fail": 9,
+          "avgMs": 1058,
+          "coolingDown": false
+        },
+        {
           "label": "Principal · auto",
-          "ok": 30,
+          "ok": 42,
           "fail": 0,
-          "avgMs": 2714,
+          "avgMs": 1854,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · riva-translate-4b-instruct-v2",
+          "ok": 21,
+          "fail": 0,
+          "avgMs": 4488,
           "coolingDown": false
         },
         {
           "label": "Principal · qwen3.8-27b",
           "ok": 12,
-          "fail": 6,
+          "fail": 12,
           "avgMs": 2239,
-          "coolingDown": false
-        },
-        {
-          "label": "Principal · riva-translate-4b-instruct-v2",
-          "ok": 11,
-          "fail": 0,
-          "avgMs": 4228,
-          "coolingDown": false
-        },
-        {
-          "label": "Principal · allam-2-7b",
-          "ok": 19,
-          "fail": 9,
-          "avgMs": 3569,
-          "coolingDown": false
+          "coolingDown": true
         },
         {
           "label": "Principal · gpt-oss-120b",
