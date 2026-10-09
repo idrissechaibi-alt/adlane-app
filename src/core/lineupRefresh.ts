@@ -22,12 +22,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { fetchGoogleSearchContext } from './gemini';
 import { fetchMatchContext } from './perplexity';
-import { askOmnirouteLight, DEFAULT_OMNIROUTE_CONFIG } from './omniroute';
+import { askOmnirouteLight } from './omniroute';
+import { loadOmnirouteConfig } from './focusEnrichment';
 import { getDailyPlan } from './scheduler';
 import { getAPIConfig, getQuotaUsage, incrementRequestCount } from '../api/multiAPIManager';
 
 const GEMINI_KEY_STORAGE = 'app-adlane.gemini-api-key';
-const OMNIROUTE_CONFIG_KEY = '@omniroute_config';
 const REFRESH_STORE_KEY = '@t90_lineup_refresh';
 
 /** Minutes avant le coup d'envoi à partir desquelles la compo réelle est généralement connue. */
@@ -100,18 +100,12 @@ export async function ensureLineupRefresh(
 
   if (!contextText) {
     try {
-      const raw = await AsyncStorage.getItem(OMNIROUTE_CONFIG_KEY);
-      const omnirouteConfig = raw ? JSON.parse(raw) : null;
-      if (omnirouteConfig?.endpoint && omnirouteConfig.selectedModel?.trim()) {
+      const omnirouteConfig = await loadOmnirouteConfig();
+      if (omnirouteConfig) {
         const result = await askOmnirouteLight(
           'Tu cherches des informations factuelles et récentes sur un match de football, à partir de la presse et des analystes. Pas de pronostic, pas de conseil de pari.',
           `Composition probable/confirmée et dernières nouvelles (blessures, absences, changements tactiques) pour ${homeTeam} vs ${awayTeam}, à l'approche du coup d'envoi.`,
-          {
-            ...DEFAULT_OMNIROUTE_CONFIG,
-            endpoint: omnirouteConfig.endpoint,
-            apiKey: omnirouteConfig.apiKey,
-            selectedModel: omnirouteConfig.selectedModel,
-          }
+          omnirouteConfig
         );
         if (result?.text) {
           contextText = result.text;

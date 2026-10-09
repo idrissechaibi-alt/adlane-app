@@ -99,6 +99,18 @@ export interface OmnirouteConfig {
   apiKey: string;                 // Clé API
   selectedModel: string;          // Modèle actif
   availableModels: string[];      // Liste des modèles configurés
+  /** Fournisseurs compatibles OpenAI en plus du principal (voir llmRouter.ts). */
+  extraProviders?: LlmProvider[];
+}
+
+export interface LlmProvider {
+  id: string;
+  name: string;
+  endpoint: string;
+  apiKey: string;
+  /** Modèles à utiliser, séparés par des virgules. */
+  models: string;
+  enabled: boolean;
 }
 
 export interface DailyReport {

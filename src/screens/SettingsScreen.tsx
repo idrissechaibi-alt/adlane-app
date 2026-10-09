@@ -19,6 +19,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { getAPIConfig, saveAPIConfig, APIConfig, incrementRequestCount } from '../api/multiAPIManager';
 import { DEFAULT_OMNIROUTE_CONFIG } from '../core/omniroute';
+import { checkAllProviders, checkProvider, getRouteLeaderboard, ProviderCheck } from '../core/llmRouter';
+import { LlmProvider } from '../types';
 import { TelegramConfig, sendTelegramMessage } from '../core/telegram';
 import { sendInternationalBreakCalendarNow } from '../core/internationalBreakNotify';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -39,6 +41,17 @@ interface OmnirouteConfig {
   apiKey: string;
   selectedModel: string;
   enabled: boolean;
+  extraProviders?: LlmProvider[];
+}
+
+function describeCheck(check: ProviderCheck): string {
+  if (!check.ok) return `❌ ${check.name} : ${check.error ?? 'injoignable'} (${check.latencyMs} ms)`;
+  return (
+    `✅ ${check.name} : répond en ${check.latencyMs} ms, ${check.readyModels ?? 0} modèle(s) prêt(s)` +
+    (check.configuredTotal > 0
+      ? `, dont ${check.configuredReady ?? 0}/${check.configuredTotal} de tes modèles choisis`
+      : '')
+  );
 }
 
 // Mêmes valeurs par défaut que src/core/omniroute.ts (endpoint Termux local +
@@ -73,6 +86,8 @@ export default function SettingsScreen({ navigation }: any) {
   const [modelSearch, setModelSearch] = useState('');
   const [pendingSelection, setPendingSelection] = useState<Set<string>>(new Set());
   const [scrapingFilterActive, setScrapingFilterActive] = useState(false);
+  const [testingAllProviders, setTestingAllProviders] = useState(false);
+  const [testingProviderId, setTestingProviderId] = useState<string | null>(null);
 
   useEffect(() => {
     loadConfigs();
@@ -121,6 +136,72 @@ export default function SettingsScreen({ navigation }: any) {
       Alert.alert('❌ Erreur', 'Impossible de sauvegarder la configuration');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const extraProviders = omniroute.extraProviders ?? [];
+
+  const updateExtraProvider = (id: string, patch: Partial<LlmProvider>) => {
+    setOmniroute({
+      ...omniroute,
+      extraProviders: extraProviders.map((p) => (p.id === id ? { ...p, ...patch } : p)),
+    });
+  };
+
+  const handleAddProvider = () => {
+    setOmniroute({
+      ...omniroute,
+      extraProviders: [
+        ...extraProviders,
+        {
+          id: `provider-${Date.now()}`,
+          name: `Fournisseur ${extraProviders.length + 2}`,
+          endpoint: '',
+          apiKey: '',
+          models: '',
+          enabled: true,
+        },
+      ],
+    });
+  };
+
+  const handleRemoveProvider = (id: string) => {
+    setOmniroute({ ...omniroute, extraProviders: extraProviders.filter((p) => p.id !== id) });
+  };
+
+  const handleTestProvider = async (provider: LlmProvider) => {
+    setTestingProviderId(provider.id);
+    try {
+      Alert.alert(provider.name, describeCheck(await checkProvider(provider)));
+    } finally {
+      setTestingProviderId(null);
+    }
+  };
+
+  /** Teste chaque fournisseur (sans consommer de crédit) et affiche le
+   * classement de rotation mesuré sur les vrais appels. */
+  const handleTestAllProviders = async () => {
+    setTestingAllProviders(true);
+    try {
+      const config = { ...omniroute, availableModels: [] };
+      const checks = await checkAllProviders(config);
+      const leaderboard = (await getRouteLeaderboard(config)).slice(0, 8);
+      const lines = [
+        checks.length > 0 ? checks.map(describeCheck).join('\n') : 'Aucun fournisseur renseigné.',
+        '',
+        'Classement de rotation (vrais appels) :',
+        ...(leaderboard.length > 0
+          ? leaderboard.map(
+              (r, i) =>
+                `${i + 1}. ${r.label} — ${r.ok} ok / ${r.fail} échec(s)` +
+                (r.avgMs != null ? `, ${(r.avgMs / 1000).toFixed(1)} s` : ', jamais mesuré') +
+                (r.coolingDown ? ' (en pause 10 min)' : '')
+            )
+          : ['Aucun modèle configuré.']),
+      ];
+      Alert.alert('Fournisseurs IA', lines.join('\n'));
+    } finally {
+      setTestingAllProviders(false);
     }
   };
 
@@ -388,7 +469,7 @@ export default function SettingsScreen({ navigation }: any) {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Ionicons name="flask" size={24} color="#3b82f6" />
-            <Text style={styles.sectionTitle}>Configuration Omniroute</Text>
+            <Text style={styles.sectionTitle}>Fournisseur IA principal (FreeLLMAPI / Omniroute)</Text>
           </View>
 
           <View style={styles.inputGroup}>
@@ -430,7 +511,7 @@ export default function SettingsScreen({ navigation }: any) {
               multiline
             />
             <Text style={styles.fieldHint}>
-              Système de ronde : les modèles sont essayés un par un, du meilleur connu au moins bon, et le premier qui répond est utilisé (pas d'appel parallèle qui consommerait un crédit par agent). Claude/Anthropic est toujours exclu, même si sélectionné. Les noms exacts dépendent de ton serveur Omniroute : utilise le sélecteur ci-dessous plutôt que de deviner un préfixe.
+              Rotation automatique : chaque appel réel mesure la vitesse et la fiabilité de chaque modèle, tous fournisseurs confondus. Les appels tournent entre les 3 meilleurs (pour répartir les quotas gratuits), puis retombent sur les suivants. Un modèle qui échoue 3 fois d'affilée est mis en pause 10 minutes. Claude/Anthropic est toujours exclu.
             </Text>
           </View>
 
@@ -478,6 +559,111 @@ export default function SettingsScreen({ navigation }: any) {
               </>
             )}
           </TouchableOpacity>
+        </View>
+
+        {/* Fournisseurs IA supplémentaires */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="git-network" size={24} color="#a78bfa" />
+            <Text style={styles.sectionTitle}>Fournisseurs IA supplémentaires</Text>
+          </View>
+          <Text style={styles.fieldHint}>
+            Tout serveur compatible OpenAI (FreeLLMAPI, Omniroute, OpenRouter, Groq, Mistral…) : endpoint
+            terminé par /v1, clé, et modèles séparés par une virgule. Ils entrent dans la même rotation
+            que le fournisseur principal. Pense à Sauvegarder en bas de l'écran.
+          </Text>
+
+          {extraProviders.map((provider) => (
+            <View key={provider.id} style={styles.providerCard}>
+              <View style={styles.switchRow}>
+                <TextInput
+                  style={[styles.input, styles.providerNameInput]}
+                  value={provider.name}
+                  onChangeText={(text) => updateExtraProvider(provider.id, { name: text })}
+                  placeholder="Nom (ex. FreeLLMAPI 2)"
+                  placeholderTextColor="#64748b"
+                />
+                <Switch
+                  value={provider.enabled}
+                  onValueChange={(value) => updateExtraProvider(provider.id, { enabled: value })}
+                  trackColor={{ false: '#334155', true: '#a78bfa' }}
+                  thumbColor={provider.enabled ? '#ffffff' : '#94a3b8'}
+                />
+              </View>
+              <TextInput
+                style={styles.input}
+                value={provider.endpoint}
+                onChangeText={(text) => updateExtraProvider(provider.id, { endpoint: text })}
+                placeholder="http://localhost:3001/v1"
+                placeholderTextColor="#64748b"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <TextInput
+                style={styles.input}
+                value={provider.apiKey}
+                onChangeText={(text) => updateExtraProvider(provider.id, { apiKey: text })}
+                placeholder="Clé API"
+                placeholderTextColor="#64748b"
+                secureTextEntry
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <TextInput
+                style={styles.input}
+                value={provider.models}
+                onChangeText={(text) => updateExtraProvider(provider.id, { models: text })}
+                placeholder="modèle-1, modèle-2"
+                placeholderTextColor="#64748b"
+                autoCapitalize="none"
+                autoCorrect={false}
+                multiline
+              />
+              <View style={styles.providerActions}>
+                <TouchableOpacity
+                  style={[styles.testButton, styles.providerActionButton]}
+                  onPress={() => handleTestProvider(provider)}
+                  disabled={testingProviderId === provider.id}
+                >
+                  {testingProviderId === provider.id ? (
+                    <ActivityIndicator color="#ffffff" size="small" />
+                  ) : (
+                    <Text style={styles.testButtonText}>Tester</Text>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.testButton, styles.providerActionButton, styles.providerRemoveButton]}
+                  onPress={() => handleRemoveProvider(provider.id)}
+                >
+                  <Text style={styles.testButtonText}>Supprimer</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))}
+
+          <TouchableOpacity style={[styles.testButton, styles.testButtonPurple]} onPress={handleAddProvider}>
+            <Ionicons name="add-circle-outline" size={18} color="#ffffff" />
+            <Text style={styles.testButtonText}>Ajouter un fournisseur</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.testButton, testingAllProviders && styles.testButtonDisabled]}
+            onPress={handleTestAllProviders}
+            disabled={testingAllProviders}
+          >
+            {testingAllProviders ? (
+              <ActivityIndicator color="#ffffff" size="small" />
+            ) : (
+              <>
+                <Ionicons name="pulse" size={18} color="#ffffff" />
+                <Text style={styles.testButtonText}>Tester tous les fournisseurs + classement</Text>
+              </>
+            )}
+          </TouchableOpacity>
+          <Text style={styles.fieldHint}>
+            Groq, OpenRouter et Cerebras (Paramètres → Sauvegarde & IA) entrent aussi dans la rotation dès
+            qu'une clé y est renseignée.
+          </Text>
         </View>
 
         {/* Section Telegram */}
@@ -947,6 +1133,29 @@ const styles = StyleSheet.create({
   },
   testButtonPurple: {
     backgroundColor: '#7c3aed',
+  },
+  providerCard: {
+    borderWidth: 1,
+    borderColor: '#334155',
+    borderRadius: 10,
+    padding: 10,
+    marginTop: 12,
+    gap: 8,
+  },
+  providerNameInput: {
+    flex: 1,
+    marginRight: 10,
+  },
+  providerActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  providerActionButton: {
+    flex: 1,
+    marginTop: 0,
+  },
+  providerRemoveButton: {
+    backgroundColor: '#b91c1c',
   },
   testButtonBlueSky: {
     backgroundColor: '#0ea5e9',

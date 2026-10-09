@@ -3,7 +3,7 @@
 
 import { Lesson, OmnirouteConfig } from '../types';
 import { lintContent } from './validator';
-import { fetchWithTimeout } from './httpTimeout';
+import { LlmRoute, buildRoutes, callRoute, orderRoutes, routeLabel } from './llmRouter';
 
 // Aucun nom de modèle deviné par défaut : le préfixe "in-ai/" testé
 // précédemment s'est révélé faux sur le serveur réel de l'utilisateur (HTTP
@@ -126,48 +126,15 @@ interface RawAgentResult {
 }
 
 /**
- * Interroge un seul modèle/agent via l'endpoint chat-completions d'Omniroute.
+ * Interroge une route (fournisseur + modèle) via son endpoint chat-completions.
  */
 async function callSingleAgent(
-  model: string,
+  route: LlmRoute,
   systemPrompt: string,
-  userPrompt: string,
-  config: OmnirouteConfig
+  userPrompt: string
 ): Promise<RawAgentResult> {
-  const response = await fetchWithTimeout(
-    `${config.endpoint}/chat/completions`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(config.apiKey ? { 'Authorization': `Bearer ${config.apiKey}` } : {})
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ],
-        temperature: 0.2
-      })
-    },
-    20000 // endpoint tiers (auto-hébergé ou self-service) : peut être plus lent qu'une API majeure
-  );
-
-  if (!response.ok) {
-    const bodyText = await response.text().catch(() => '');
-    let detail = bodyText;
-    try {
-      const parsedError = JSON.parse(bodyText);
-      detail = parsedError.error?.message || parsedError.detail || parsedError.message || bodyText;
-    } catch {
-      // corps non-JSON : on garde le texte brut
-    }
-    throw new Error(`HTTP ${response.status}${detail ? ` : ${detail}` : ` (${response.statusText})`}`);
-  }
-
-  const data = await response.json();
-  const content = data.choices?.[0]?.message?.content || '';
+  const model = routeLabel(route);
+  const content = await callRoute(route, systemPrompt, userPrompt);
 
   const lint = lintContent(content);
   if (!lint.valid) {
@@ -231,48 +198,6 @@ function mergeMarkets(results: RawAgentResult[]): AIAnalysisOutput['markets'] {
   return merged;
 }
 
-// Modèles jamais utilisés (consomment les crédits Anthropic de l'utilisateur
-// via son propre compte relié à Omniroute, contrairement aux autres providers).
-const NEVER_USE_PATTERN = /claude|anthropic/i;
-
-// Heuristique de qualité pour prioriser les "meilleurs" modèles dans la ronde :
-// on reconnaît les familles de modèles haut de gamme connues par leur nom
-// (peu importe le préfixe/provider exact du déploiement Omniroute de
-// l'utilisateur) et on leur donne un score plus élevé. Les noms non reconnus
-// (agents custom type "Clodiko") gardent un score neutre et restent dans
-// l'ordre où l'utilisateur les a sélectionnés.
-// Séparateur toléré entre le nom du provider et son numéro de version : les
-// noms affichés par certains déploiements Omniroute utilisent un espace
-// ("Gemini 3.7 Flash Tiered") plutôt qu'un tiret ("gemini-3.7-flash") — sans
-// ça, ces modèles retombaient à tort au score neutre (50), au même rang
-// qu'un agent custom non identifié.
-const QUALITY_PATTERNS: Array<{ pattern: RegExp; score: number }> = [
-  { pattern: /gpt[ -]?5|o3|gpt[ -]?4\.5/i, score: 100 },
-  { pattern: /gemini[ -]?3|gemini[ -]?2\.5[ -]?pro/i, score: 95 },
-  { pattern: /gpt[ -]?4o|gemini[ -]?2\.5[ -]?flash|mercury[ -]?2\.5|deepseek[ -]?r1/i, score: 85 },
-  { pattern: /llama[ -]?3\.1[ -]?405b|mixtral[ -]?8x22b|qwen[ -]?2\.5[ -]?72b/i, score: 80 },
-  { pattern: /mercury[ -]?2|gemini[ -]?flash|gpt[ -]?4[ -]?turbo/i, score: 70 },
-];
-
-function scoreModel(model: string): number {
-  for (const { pattern, score } of QUALITY_PATTERNS) {
-    if (pattern.test(model)) return score;
-  }
-  return 50; // score neutre pour un agent non reconnu
-}
-
-/**
- * Trie les modèles du plus prioritaire (meilleure qualité connue) au moins
- * prioritaire, en conservant l'ordre de sélection de l'utilisateur pour les
- * égalités (tri stable).
- */
-function rankModels(models: string[]): string[] {
-  return models
-    .map((model, index) => ({ model, index, score: scoreModel(model) }))
-    .sort((a, b) => b.score - a.score || a.index - b.index)
-    .map((m) => m.model);
-}
-
 /**
  * Requête légère (texte libre) au premier agent qui répond, en suivant la même
  * ronde de priorité que l'analyse complète et la même exclusion de
@@ -284,20 +209,14 @@ export async function askOmnirouteLight(
   userPrompt: string,
   config: OmnirouteConfig
 ): Promise<{ text: string; model: string } | null> {
-  const models = rankModels(
-    config.selectedModel
-      .split(/[,\n]/)
-      .map((m) => m.trim())
-      .filter(Boolean)
-      .filter((m) => !NEVER_USE_PATTERN.test(m))
-  );
+  const routes = await orderRoutes(await buildRoutes(config));
 
-  for (const model of models) {
+  for (const route of routes) {
     try {
-      const result = await callSingleAgent(model, systemPrompt, userPrompt, config);
-      return { text: result.rawResponse, model };
+      const result = await callSingleAgent(route, systemPrompt, userPrompt);
+      return { text: result.rawResponse, model: result.model };
     } catch (error: any) {
-      console.warn(`[Omniroute] Enrichissement "${model}" a échoué:`, error?.message);
+      console.warn(`[IA] Enrichissement "${routeLabel(route)}" a échoué:`, error?.message);
     }
   }
 
@@ -358,30 +277,20 @@ export async function askOmnirouteUsable<T>(
   trace?: OmnirouteAttempt[],
   preferSearchCapable: boolean = false
 ): Promise<{ value: T; model: string } | null> {
-  const selected = config.selectedModel
-    .split(/[,\n]/)
-    .map((m) => m.trim())
-    .filter(Boolean)
-    .filter((m) => !NEVER_USE_PATTERN.test(m));
+  const routes = await orderRoutes(
+    await buildRoutes(config),
+    preferSearchCapable ? (route) => SEARCH_CAPABLE_PATTERN.test(route.model) : undefined
+  );
 
-  // Pour une question portant sur des faits du jour, les agents capables de
-  // chercher passent devant, quelle que soit la qualité du modèle : un très
-  // bon modèle sans accès au web ne peut que répondre à côté.
-  const models = preferSearchCapable
-    ? [
-        ...rankModels(selected.filter((m) => SEARCH_CAPABLE_PATTERN.test(m))),
-        ...rankModels(selected.filter((m) => !SEARCH_CAPABLE_PATTERN.test(m))),
-      ]
-    : rankModels(selected);
-
-  if (models.length === 0) {
-    trace?.push({ model: '(aucun)', outcome: 'erreur', detail: 'Aucun agent sélectionné dans Paramètres.' });
+  if (routes.length === 0) {
+    trace?.push({ model: '(aucun)', outcome: 'erreur', detail: 'Aucun fournisseur IA configuré dans Paramètres.' });
     return null;
   }
 
-  for (const model of models) {
+  for (const route of routes) {
+    const model = routeLabel(route);
     try {
-      const result = await callSingleAgent(model, systemPrompt, userPrompt, config);
+      const result = await callSingleAgent(route, systemPrompt, userPrompt);
       const value = extract(result.rawResponse);
       if (value !== null) {
         trace?.push({ model, outcome: 'exploitable', detail: result.rawResponse.slice(0, ATTEMPT_DETAIL_MAX_CHARS) });
@@ -392,10 +301,10 @@ export async function askOmnirouteUsable<T>(
         outcome: 'sans_contenu_utile',
         detail: (result.rawResponse || '(réponse vide)').slice(0, ATTEMPT_DETAIL_MAX_CHARS),
       });
-      console.warn(`[Omniroute] "${model}" a répondu sans rien d'exploitable, agent suivant.`);
+      console.warn(`[IA] "${model}" a répondu sans rien d'exploitable, route suivante.`);
     } catch (error: any) {
       trace?.push({ model, outcome: 'erreur', detail: String(error?.message ?? error).slice(0, ATTEMPT_DETAIL_MAX_CHARS) });
-      console.warn(`[Omniroute] "${model}" a échoué:`, error?.message);
+      console.warn(`[IA] "${model}" a échoué:`, error?.message);
     }
   }
 
@@ -403,13 +312,11 @@ export async function askOmnirouteUsable<T>(
 }
 
 /**
- * Envoie une requête d'analyse à Omniroute. Système de "ronde" : les modèles
- * configurés dans config.selectedModel sont essayés UN PAR UN, dans l'ordre
- * de priorité (meilleurs modèles connus en premier), en s'arrêtant au premier
- * succès — pas d'appel parallèle à tous les agents (ça coûterait un crédit
- * par agent à chaque analyse pour rien). Si un agent échoue, on passe au
- * suivant dans la ronde. Claude/Anthropic est systématiquement exclu pour ne
- * jamais consommer les crédits Anthropic de l'utilisateur.
+ * Envoie une requête d'analyse aux fournisseurs IA configurés. Les routes
+ * (fournisseur + modèle) sont essayées UNE PAR UNE dans l'ordre de llmRouter
+ * (rotation entre les plus rapides et fiables mesurées), en s'arrêtant au
+ * premier succès — jamais d'appel parallèle qui coûterait un crédit par
+ * route. Claude/Anthropic est toujours exclu.
  */
 export async function analyzeMatchWithOmniroute(
   matchInput: MatchScoutInput,
@@ -427,27 +334,18 @@ Stats disponibles :
 - Domicile (${matchInput.homeTeam}) : ${JSON.stringify(matchInput.homeStats || 'donnée indisponible')}
 - Extérieur (${matchInput.awayTeam}) : ${JSON.stringify(matchInput.awayStats || 'donnée indisponible')}`;
 
-  const allModels = config.selectedModel
-    .split(/[,\n]/)
-    .map((m) => m.trim())
-    .filter(Boolean);
-
-  const models = rankModels(allModels.filter((m) => !NEVER_USE_PATTERN.test(m)));
-  const excludedClaude = allModels.filter((m) => NEVER_USE_PATTERN.test(m));
-
-  if (models.length === 0) {
+  const routes = await orderRoutes(await buildRoutes(config));
+  if (routes.length === 0) {
     throw new Error(
-      excludedClaude.length > 0
-        ? 'Aucun modèle Omniroute utilisable : seuls des modèles Claude/Anthropic sont configurés, et ils sont exclus pour ne pas consommer tes crédits.'
-        : 'Aucun modèle Omniroute configuré.'
+      'Aucun fournisseur IA utilisable : renseigne au moins un endpoint et un modèle (hors Claude/Anthropic, exclu) dans Paramètres.'
     );
   }
 
   const failed: Array<{ model: string; error: string }> = [];
 
-  for (const model of models) {
+  for (const route of routes) {
     try {
-      const result = await callSingleAgent(model, systemPrompt, userPrompt, config);
+      const result = await callSingleAgent(route, systemPrompt, userPrompt);
       return {
         match: `${matchInput.homeTeam} - ${matchInput.awayTeam}`,
         kickoff_utc: matchInput.kickoff_utc,
@@ -459,11 +357,11 @@ Stats disponibles :
         agentsFailed: failed.length > 0 ? failed : undefined
       };
     } catch (error: any) {
-      failed.push({ model, error: error?.message || String(error) });
-      console.warn(`[Omniroute] Agent "${model}" a échoué, passage au suivant dans la ronde:`, error);
+      failed.push({ model: routeLabel(route), error: error?.message || String(error) });
+      console.warn(`[IA] "${routeLabel(route)}" a échoué, route suivante:`, error);
     }
   }
 
   const summary = failed.map((f) => `${f.model} → ${f.error}`).join(' ; ');
-  throw new Error(`Connexion Omniroute échouée (${failed.length} agent(s), ronde complète) : ${summary}`);
+  throw new Error(`Connexion IA échouée (${failed.length} route(s), ronde complète) : ${summary}`);
 }

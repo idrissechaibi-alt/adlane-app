@@ -15,13 +15,13 @@ import {
   RefreshControl
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { analyzeMatchWithOmniroute, DEFAULT_OMNIROUTE_CONFIG, AIAnalysisOutput } from '../core/omniroute';
+import { analyzeMatchWithOmniroute, AIAnalysisOutput } from '../core/omniroute';
 import { fetchGoogleSearchContext } from '../core/gemini';
 import { recordScoutingAnalysis, reconcileScoutingAnalysisNow } from '../core/scoutingReview';
 import { ScoutingRecord } from '../core/learnStore';
 import { fetchMatchContext, PerplexitySearchResult } from '../core/perplexity';
 import { getAgentLearningDigest } from '../core/autoLearn';
-import { getFocusNoteByTeams, renderFocusNote } from '../core/focusEnrichment';
+import { getFocusNoteByTeams, loadOmnirouteConfig, renderFocusNote } from '../core/focusEnrichment';
 import { getHistoricalPriors } from '../core/footballDataCoUk';
 import { getSecondOpinion } from '../core/eloRatings';
 import { fetchLiveFixtures } from '../core/halftimeMonitor';
@@ -31,24 +31,14 @@ import { HISTORICAL_LESSONS } from '../data/historical';
 import { getDailyPlan } from '../core/scheduler';
 import { ScheduledMatchDetail } from '../types/database';
 import * as SecureStore from 'expo-secure-store';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const GEMINI_KEY_STORAGE = 'app-adlane.gemini-api-key';
-// Même clé que celle utilisée par SettingsScreen pour sauvegarder la config Omniroute
-const OMNIROUTE_CONFIG_KEY = '@omniroute_config';
 // 90 min + mi-temps + arrêts de jeu, même marge que matchSettlement.ts/
 // scoutingReview.ts : en dessous, un match encore en cours (juste absent du
 // relevé live pour une raison quelconque) serait à tort traité comme terminé.
 const MATCH_FINISHED_BUFFER_MS = 150 * 60 * 1000;
 
 type Engine = 'gemini' | 'freeLLM' | 'omniroute' | 'aucun';
-
-interface PersistedOmnirouteConfig {
-  endpoint: string;
-  apiKey: string;
-  selectedModel: string;
-  enabled: boolean;
-}
 
 interface AIDiagnostic {
   engine: Engine;
@@ -312,21 +302,12 @@ export default function ScoutingScreen() {
     // reste utilisé juste au-dessus pour la recherche web factuelle (gratuite,
     // sans lien avec ce choix), mais ne sert plus jamais à produire les 10
     // marchés eux-mêmes, ni le pool IA gratuit (Groq/OpenRouter/Cerebras).
-    let omnirouteConfig: PersistedOmnirouteConfig | null = null;
-    try {
-      const raw = await AsyncStorage.getItem(OMNIROUTE_CONFIG_KEY);
-      omnirouteConfig = raw ? JSON.parse(raw) : null;
-    } catch {
-      omnirouteConfig = null;
-    }
-
-    const omnirouteAvailable = Boolean(
-      omnirouteConfig?.endpoint && omnirouteConfig.selectedModel?.trim()
-    );
+    const omnirouteConfig = await loadOmnirouteConfig();
+    const omnirouteAvailable = Boolean(omnirouteConfig);
 
     if (!omnirouteAvailable) {
       setLoading(false);
-      const message = "Omniroute non configuré. Renseigne un endpoint et au moins un agent dans Paramètres → Configuration Omniroute.";
+      const message = "Aucun fournisseur IA configuré. Renseigne au moins un endpoint et un modèle dans Paramètres → Fournisseurs IA.";
       setAnalysisError(message);
       setDiagnostic({ engine: 'aucun', status: 'error', message, timestamp: new Date().toISOString() });
       return;
@@ -334,12 +315,7 @@ export default function ScoutingScreen() {
 
     try {
       console.log('Utilisation de Omniroute...');
-      const result = await analyzeMatchWithOmniroute(matchInput, HISTORICAL_LESSONS, {
-        ...DEFAULT_OMNIROUTE_CONFIG,
-        endpoint: omnirouteConfig!.endpoint,
-        apiKey: omnirouteConfig!.apiKey,
-        selectedModel: omnirouteConfig!.selectedModel || DEFAULT_OMNIROUTE_CONFIG.selectedModel,
-      });
+      const result = await analyzeMatchWithOmniroute(matchInput, HISTORICAL_LESSONS, omnirouteConfig!);
       setAnalysisResult(result);
       recordScoutingAnalysis(match, result, `omniroute:${result.agentsUsed?.[0] || 'inconnu'}`);
       const agentsNote = result.agentsUsed && result.agentsUsed.length > 0

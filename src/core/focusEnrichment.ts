@@ -16,6 +16,7 @@ import { fetchGoogleSearchContext } from './gemini';
 import { askOmnirouteLight } from './omniroute';
 import { OmnirouteConfig } from '../types';
 import { DEFAULT_OMNIROUTE_CONFIG } from './omniroute';
+import { hasConfiguredRoutes } from './llmRouter';
 import { spendBudget } from './requestBudget';
 import { getStoredUniverse } from './matchUniverse';
 import { FocusNote, readFocusNotes, readLearnedModel, writeFocusNotes } from './learnStore';
@@ -54,9 +55,8 @@ export async function loadOmnirouteConfig(): Promise<OmnirouteConfig | null> {
   try {
     const raw = await AsyncStorage.getItem(OMNIROUTE_CONFIG_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!parsed.endpoint || !parsed.selectedModel?.trim()) return null;
-    return { ...DEFAULT_OMNIROUTE_CONFIG, ...parsed };
+    const config = { ...DEFAULT_OMNIROUTE_CONFIG, ...JSON.parse(raw) };
+    return hasConfiguredRoutes(config) ? config : null;
   } catch {
     return null;
   }

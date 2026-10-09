@@ -7,6 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getAPIConfig } from '../api/multiAPIManager';
 import { getNativeBackgroundTickStats, readLastTickDiagnostics } from './backgroundTasks';
 import { loadOmnirouteConfig } from './focusEnrichment';
+import { checkAllProviders, getRouteLeaderboard } from './llmRouter';
 import { loadTelegramConfig } from './telegram';
 import {
   readAccuracySnapshots,
@@ -113,6 +114,16 @@ export async function buildAppHealth(): Promise<Record<string, unknown>> {
     }),
     accuracySnapshots: await section(() => readAccuracySnapshots().slice(-7)),
     lastNightlyReview: await section(() => AsyncStorage.getItem('@last_daily_review')),
+    aiProviders: await section(async () => {
+      const config = await loadOmnirouteConfig();
+      if (!config) return { configured: false };
+      // Noms, latences et compteurs uniquement : jamais l'adresse ni la clé.
+      return {
+        configured: true,
+        checks: await checkAllProviders(config),
+        leaderboard: (await getRouteLeaderboard(config)).slice(0, 10),
+      };
+    }),
     configured: await section(async () => {
       const api = await getAPIConfig();
       return {
