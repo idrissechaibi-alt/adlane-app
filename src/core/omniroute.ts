@@ -3,7 +3,7 @@
 
 import { Lesson, OmnirouteConfig } from '../types';
 import { lintContent } from './validator';
-import { LlmRoute, buildRoutes, callRoute, orderRoutes, routeLabel } from './llmRouter';
+import { LlmRoute, buildRoutes, callRoute, isWebCapableRoute, orderRoutes, routeLabel } from './llmRouter';
 
 // Aucun nom de modèle deviné par défaut : le préfixe "in-ai/" testé
 // précédemment s'est révélé faux sur le serveur réel de l'utilisateur (HTTP
@@ -272,7 +272,7 @@ const SEARCH_CAPABLE_PATTERN =
  * jour-là" quand c'est l'infrastructure qui est tombée.
  */
 function isSearchCapable(route: LlmRoute): boolean {
-  return SEARCH_CAPABLE_PATTERN.test(route.model);
+  return SEARCH_CAPABLE_PATTERN.test(route.model) || isWebCapableRoute(route);
 }
 
 /**

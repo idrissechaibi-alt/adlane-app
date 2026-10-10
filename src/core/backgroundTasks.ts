@@ -20,6 +20,7 @@ import { OmnirouteAttempt } from './omniroute';
 import { enrichFocusMatches, loadOmnirouteConfig } from './focusEnrichment';
 import { runInPlayComboTick, InternationalBreakTickDiagnostics } from './inPlayCombos';
 import { runNightlyReviewIfDue } from './dailyReview';
+import { autoProbeWebCapability } from './llmRouter';
 import { runMorningScanIfDue } from './scheduler';
 import { reconcileScoutingAnalyses } from './scoutingReview';
 import { refreshDueLineups } from './lineupRefresh';
@@ -466,6 +467,15 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
     nightlyReviewPointsCreated,
     nightlyReviewError,
   };
+  // Détection quotidienne des modèles avec accès internet (voir llmRouter),
+  // après tout le reste pour ne jamais retarder le scan lui-même.
+  await markTickStep('vérification accès internet des modèles');
+  try {
+    const config = await loadOmnirouteConfig();
+    if (config) await autoProbeWebCapability(config);
+  } catch (error: any) {
+    console.warn('[Tâche de fond] Vérification accès internet échouée:', error?.message);
+  }
   await markTickStep('terminé');
   await saveLastTickDiagnostics(diagnostics);
   return diagnostics;

@@ -156,6 +156,7 @@ export function hasConfiguredRoutes(config: OmnirouteConfig | null | undefined):
 }
 
 export async function buildRoutes(config: OmnirouteConfig): Promise<LlmRoute[]> {
+  await loadWebCapable();
   const routes: LlmRoute[] = [];
   const seen = new Set<string>();
   const push = (route: LlmRoute) => {
@@ -403,34 +404,146 @@ const PROBE_TIMEOUT_MS = 15000;
 export interface ProbeResult {
   model: string;
   latencyMs: number;
+  /** Accès internet vérifié : a renvoyé l'heure UTC actuelle à 15 min près. */
+  web: boolean;
+}
+
+// ==================== ACCÈS INTERNET VÉRIFIÉ ====================
+//
+// Le nom d'un modèle ne dit pas s'il peut chercher sur le web (Omniroute et
+// FreeLLMAPI peuvent brancher des outils de recherche derrière n'importe quel
+// nom). On le VÉRIFIE : on demande l'heure UTC exacte, à lire sur internet.
+// Un modèle sans accès web ne connaît même pas la date du jour — il ne peut
+// pas tomber à 15 minutes près par hasard. Seuls les modèles ainsi vérifiés
+// reçoivent les questions sur des faits du jour (statistiques en direct,
+// scores, calendrier).
+
+const WEB_CAPABLE_KEY = '@llm_web_capable';
+const WEB_PROBE_TOLERANCE_MS = 15 * 60_000;
+const WEB_PROBE_TIMEOUT_MS = 30000;
+/** Revérification automatique d'un modèle au-delà de cette ancienneté. */
+const WEB_RECHECK_MS = 3 * 24 * 3_600_000;
+const AUTO_WEB_PROBE_MAX = 15;
+const AUTO_WEB_PROBE_DATE_KEY = '@llm_web_probe_last_date';
+
+let webCapable: Record<string, { web: boolean; at: string }> | null = null;
+
+async function loadWebCapable(): Promise<Record<string, { web: boolean; at: string }>> {
+  if (webCapable) return webCapable;
+  try {
+    const raw = await AsyncStorage.getItem(WEB_CAPABLE_KEY);
+    webCapable = raw ? JSON.parse(raw) : {};
+  } catch {
+    webCapable = {};
+  }
+  return webCapable!;
+}
+
+async function recordWebCapability(route: LlmRoute, web: boolean): Promise<void> {
+  const store = await loadWebCapable();
+  store[routeKey(route)] = { web, at: new Date().toISOString() };
+  try {
+    await AsyncStorage.setItem(WEB_CAPABLE_KEY, JSON.stringify(store));
+  } catch {
+    // best-effort
+  }
+}
+
+/** Accès web vérifié pour cette route (après buildRoutes, qui charge le registre). */
+export function isWebCapableRoute(route: LlmRoute): boolean {
+  return Boolean(webCapable?.[routeKey(route)]?.web);
+}
+
+const WEB_PROBE_SYSTEM =
+  "Tu as accès à internet. Réponds UNIQUEMENT par un JSON strict, sans texte autour. N'invente rien : " +
+  'si tu ne peux pas consulter internet, réponds {"unixtime": null}.';
+const WEB_PROBE_USER =
+  "Consulte une horloge en ligne (par exemple https://worldtimeapi.org/api/timezone/Etc/UTC ou time.is) et " +
+  "donne l'heure UTC actuelle exacte, en secondes depuis 1970 : " +
+  '{"unixtime": number, "iso": "YYYY-MM-DDTHH:MM:SSZ"}';
+
+/** true seulement si la réponse contient l'heure actuelle (±15 min). */
+function webProbePassed(content: string): boolean {
+  let parsed: any = null;
+  try {
+    const match = content.match(/\{[\s\S]*\}/);
+    parsed = JSON.parse(match ? match[0] : content);
+  } catch {
+    parsed = null;
+  }
+  const candidates: number[] = [];
+  const unix = Number(parsed?.unixtime);
+  if (Number.isFinite(unix) && unix > 0) candidates.push(unix > 1e12 ? unix : unix * 1000);
+  const iso = typeof parsed?.iso === 'string' ? Date.parse(parsed.iso) : NaN;
+  if (Number.isFinite(iso)) candidates.push(iso);
+  return candidates.some((t) => Math.abs(t - Date.now()) <= WEB_PROBE_TOLERANCE_MS);
+}
+
+async function probeOne(route: LlmRoute): Promise<ProbeResult | null> {
+  const startedAt = Date.now();
+  try {
+    const content = await callRoute(route, WEB_PROBE_SYSTEM, WEB_PROBE_USER, WEB_PROBE_TIMEOUT_MS);
+    const web = webProbePassed(content);
+    await recordWebCapability(route, web);
+    return { model: route.model, latencyMs: Date.now() - startedAt, web };
+  } catch {
+    return null;
+  }
 }
 
 /**
- * Envoie une mini-requête réelle à chaque modèle et ne garde que ceux qui
- * répondent : la liste "/models" d'un serveur (Omniroute notamment) inclut
- * des modèles dont le fournisseur est coupé ou sans clé. Les résultats
- * alimentent aussi le classement de la rotation. Triés du plus rapide au
- * plus lent.
+ * Envoie une requête réelle à chaque modèle (la question d'horloge ci-dessus,
+ * qui teste à la fois la disponibilité et l'accès internet) et ne garde que
+ * ceux qui répondent : la liste "/models" d'un serveur (Omniroute notamment)
+ * inclut des modèles dont le fournisseur est coupé ou sans clé. Les modèles
+ * avec accès internet vérifié passent devant, puis du plus rapide au plus
+ * lent. Les résultats alimentent aussi le classement de la rotation.
  */
 export async function probeModels(
   provider: { name: string; endpoint: string; apiKey: string },
   models: string[],
   onProgress?: (done: number, total: number) => void
 ): Promise<ProbeResult[]> {
+  await loadWebCapable();
   const candidates = models.filter((m) => !NEVER_USE_PATTERN.test(m)).slice(0, PROBE_MAX_MODELS);
   let done = 0;
   const results = await mapWithConcurrency(candidates, PROBE_CONCURRENCY, async (model) => {
     const route: LlmRoute = { providerName: provider.name, endpoint: trimEndpoint(provider.endpoint), apiKey: provider.apiKey, model };
-    const startedAt = Date.now();
     try {
-      await callRoute(route, 'Réponds uniquement par le mot OK.', 'Test de disponibilité : réponds OK.', PROBE_TIMEOUT_MS);
-      return { model, latencyMs: Date.now() - startedAt };
-    } catch {
-      return null;
+      return await probeOne(route);
     } finally {
       done += 1;
       onProgress?.(done, candidates.length);
     }
   });
-  return results.filter((r): r is ProbeResult => r !== null).sort((a, b) => a.latencyMs - b.latencyMs);
+  return results
+    .filter((r): r is ProbeResult => r !== null)
+    .sort((a, b) => Number(b.web) - Number(a.web) || a.latencyMs - b.latencyMs);
+}
+
+/**
+ * Vérification automatique, une fois par jour, des modèles configurés jamais
+ * testés (ou testés il y a plus de 3 jours) — pour que l'accès internet soit
+ * détecté sans que l'utilisateur ait à ouvrir le sélecteur.
+ */
+export async function autoProbeWebCapability(config: OmnirouteConfig): Promise<number> {
+  const today = new Date().toISOString().slice(0, 10);
+  if ((await AsyncStorage.getItem(AUTO_WEB_PROBE_DATE_KEY)) === today) return 0;
+  await AsyncStorage.setItem(AUTO_WEB_PROBE_DATE_KEY, today);
+
+  const store = await loadWebCapable();
+  const due = (await buildRoutes(config))
+    .filter((route) => {
+      const entry = store[routeKey(route)];
+      return !entry || Date.now() - Date.parse(entry.at) > WEB_RECHECK_MS;
+    })
+    .slice(0, AUTO_WEB_PROBE_MAX);
+  const results = await mapWithConcurrency(due, 5, probeOne);
+  return results.filter((r) => r?.web).length;
+}
+
+/** Modèles configurés dont l'accès internet est vérifié (diagnostic). */
+export async function getWebCapableRoutes(config: OmnirouteConfig): Promise<string[]> {
+  const routes = await buildRoutes(config);
+  return routes.filter(isWebCapableRoute).map(routeLabel);
 }

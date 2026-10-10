@@ -10,7 +10,7 @@ import { remainingBudget } from './requestBudget';
 import { estimateExpectedGoalsFromMarket } from './poisson';
 import { getNativeBackgroundTickStats, readLastTickDiagnostics, readTickProgress } from './backgroundTasks';
 import { loadOmnirouteConfig } from './focusEnrichment';
-import { checkAllProviders, getRouteLeaderboard } from './llmRouter';
+import { checkAllProviders, getRouteLeaderboard, getWebCapableRoutes } from './llmRouter';
 import { loadTelegramConfig } from './telegram';
 import {
   readAccuracySnapshots,
@@ -126,6 +126,7 @@ export async function buildAppHealth(): Promise<Record<string, unknown>> {
         configured: true,
         checks: await checkAllProviders(config),
         leaderboard: (await getRouteLeaderboard(config)).slice(0, 10),
+        webCapable: await getWebCapableRoutes(config),
       };
     }),
     dailyPlan: await section(async () => {

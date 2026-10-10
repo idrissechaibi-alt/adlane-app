@@ -92,6 +92,7 @@ export default function SettingsScreen({ navigation }: any) {
   /** Avancement du test réel des modèles avant l'ouverture de la liste. */
   const [probeProgress, setProbeProgress] = useState<{ target: string; done: number; total: number } | null>(null);
   const [pickerLatency, setPickerLatency] = useState<Record<string, number>>({});
+  const [pickerWeb, setPickerWeb] = useState<Record<string, boolean>>({});
   const [pickerStats, setPickerStats] = useState<Record<string, { ok: number; fail: number; avgMs: number | null }>>({});
   const [testingProviderId, setTestingProviderId] = useState<string | null>(null);
 
@@ -335,6 +336,7 @@ export default function SettingsScreen({ navigation }: any) {
 
       setPickerStats(await getModelStatsForEndpoint(endpoint));
       setPickerLatency(Object.fromEntries(responding.map((r) => [r.model, r.latencyMs])));
+      setPickerWeb(Object.fromEntries(responding.map((r) => [r.model, r.web])));
       setPickerTarget(target);
       setAvailableModels(responding.map((r) => r.model));
       setPendingSelection(new Set(responding.map((r) => r.model).filter((m) => current.has(m))));
@@ -1048,6 +1050,7 @@ export default function SettingsScreen({ navigation }: any) {
                     {pickerLatency[item] != null && (
                       <Text style={styles.modelRowStats}>
                         Répond en {(pickerLatency[item] / 1000).toFixed(1)} s au test
+                        {pickerWeb[item] ? ' · 🌐 accès internet vérifié' : ' · sans accès internet'}
                       </Text>
                     )}
                     {pickerStats[item] && (
