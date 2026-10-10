@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-10-10T04:18:50.333Z",
+  "exportedAt": "2026-10-10T04:36:12.418Z",
   "formatVersion": 1,
   "source": "APP adlane",
   "data": {
@@ -4824,13 +4824,13 @@
   },
   "health": {
     "nativeBackgroundTicks": {
-      "lastTickAt": "2026-10-10T04:18:10.898Z",
-      "ticksLast24h": 43
+      "lastTickAt": "2026-10-10T04:26:09.930Z",
+      "ticksLast24h": 44
     },
     "tickProgress": {
-      "startedAt": "2026-10-10T04:15:15.913Z",
-      "step": "bilan de minuit",
-      "at": "2026-10-10T04:17:03.639Z"
+      "startedAt": "2026-10-10T04:36:08.358Z",
+      "step": "programme fictif",
+      "at": "2026-10-10T04:36:08.575Z"
     },
     "lastTick": {
       "finishedAt": "2026-10-10T04:00:15.773Z",
@@ -4929,7 +4929,7 @@
       "lastCreatedAt": "2026-10-10T02:07:18.508Z",
       "createdLast24h": 112
     },
-    "predictionOutcomes30d": 0,
+    "predictionOutcomes30d": 31,
     "marketSeries": {
       "combined": 0,
       "real": 0,
@@ -4987,15 +4987,15 @@
         {
           "name": "Principal",
           "ok": true,
-          "latencyMs": 7912,
-          "readyModels": 27,
-          "configuredReady": 12,
+          "latencyMs": 97,
+          "readyModels": 28,
+          "configuredReady": 13,
           "configuredTotal": 13
         },
         {
           "name": "Omniroute",
           "ok": true,
-          "latencyMs": 9313,
+          "latencyMs": 2841,
           "readyModels": 954,
           "configuredReady": 2,
           "configuredTotal": 2
@@ -5004,30 +5004,37 @@
       "leaderboard": [
         {
           "label": "Principal · allam-2-7b",
-          "ok": 86,
-          "fail": 47,
-          "avgMs": 930,
-          "coolingDown": true
-        },
-        {
-          "label": "Principal · nemotron-3.5-content-safety",
-          "ok": 56,
-          "fail": 65,
-          "avgMs": 805,
-          "coolingDown": true
+          "ok": 88,
+          "fail": 50,
+          "avgMs": 941,
+          "coolingDown": false
         },
         {
           "label": "Principal · gpt-oss-120b",
-          "ok": 55,
+          "ok": 60,
           "fail": 34,
-          "avgMs": 1474,
-          "coolingDown": true
+          "avgMs": 1307,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · nemotron-3.5-content-safety",
+          "ok": 58,
+          "fail": 67,
+          "avgMs": 708,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · auto",
+          "ok": 192,
+          "fail": 7,
+          "avgMs": 3763,
+          "coolingDown": false
         },
         {
           "label": "Omniroute · Clodiko",
-          "ok": 78,
+          "ok": 140,
           "fail": 1,
-          "avgMs": 4854,
+          "avgMs": 5017,
           "coolingDown": false
         },
         {
@@ -5035,34 +5042,27 @@
           "ok": 21,
           "fail": 28,
           "avgMs": 1729,
-          "coolingDown": true
-        },
-        {
-          "label": "Principal · auto",
-          "ok": 123,
-          "fail": 6,
-          "avgMs": 22016,
-          "coolingDown": false
-        },
-        {
-          "label": "Principal · llama-3.1-nemotron-safety-guard-8b-v3",
-          "ok": 21,
-          "fail": 28,
-          "avgMs": 11437,
           "coolingDown": false
         },
         {
           "label": "Principal · gpt-oss-20b",
-          "ok": 5,
-          "fail": 6,
-          "avgMs": 46150,
+          "ok": 32,
+          "fail": 15,
+          "avgMs": 3312,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · llama-3.1-nemotron-safety-guard-8b-v3",
+          "ok": 36,
+          "fail": 42,
+          "avgMs": 7044,
           "coolingDown": false
         },
         {
           "label": "Omniroute · Maximus appus",
-          "ok": 36,
+          "ok": 42,
           "fail": 0,
-          "avgMs": 145373,
+          "avgMs": 18944,
           "coolingDown": false
         },
         {
@@ -5232,11 +5232,14 @@
       "autolearnUsedToday": 70,
       "autolearnRemaining": 0
     },
+    "sofaScore": null,
+    "liveSources": {},
     "configured": {
       "omniroute": true,
       "telegram": true,
       "apiFootball": true,
       "sportmonks": true,
+      "allSports": false,
       "theOddsApi": true
     }
   }
