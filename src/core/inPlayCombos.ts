@@ -54,6 +54,7 @@ import { buildScheduledMatches, ScheduledMatch } from './dailyWorkflow';
 import { ScheduledMatchDetail } from '../types/database';
 import { LiveFixture, LiveFixtureDetail, fetchOmnirouteMatchStatus, isSyntheticFixtureId, syntheticFixtureId } from './halftimeMonitor';
 import { getHistoricalPriors } from './footballDataCoUk';
+import { MatchTrend, TREND_WEIGHT, TrendKey, blendExpectedGoals, getMatchTrend, trendVerdict } from './teamStats';
 import {
   FictionalMatch,
   MatchSample,
@@ -590,7 +591,8 @@ function countMarketLegs(
   window: '1h' | 'ft',
   elapsedMinutes: number,
   observed: CountObserved,
-  priors: CountPriors | null
+  priors: CountPriors | null,
+  trend?: MatchTrend | null
 ): CandidateLeg[] {
   const legs: CandidateLeg[] = [];
   const end = window === '1h' ? 45 : 94; // temps additionnel moyen compris
@@ -624,16 +626,28 @@ function countMarketLegs(
       continue;
     }
     const done = spec.count ?? 0;
+    // Tendance des deux équipes (fichier de stats match par match) : ce qu'elles
+    // produisent et concèdent récemment corrige le rythme attendu du reste.
+    const trendTotal = trend?.expected[`${spec.key}_${window}` as TrendKey];
+    const trendLambda = trendTotal != null ? trendTotal * fraction : undefined;
+    let trendNote = '';
+    if (trendLambda != null) {
+      rawLambda = rawLambda * (1 - TREND_WEIGHT) + trendLambda * TREND_WEIGHT;
+      trendNote = ` Tendance des deux équipes : ${trendTotal!.toFixed(1)} ${spec.noun} par match ${window === '1h' ? 'en 1ère mi-temps' : 'en tout'} (${trend!.samples.home}/${trend!.samples.away} derniers matchs).`;
+    }
     const lambda = rawLambda * fix.factor;
     const projection: LegProjection = { unit, observed: done, expected: done + lambda, factorUsed: fix.factor };
     const evidence =
       `${done} ${spec.noun} à la ${elapsedMinutes}e minute + ${lambda.toFixed(1)} attendu(s) ${horizon} ` +
-      `(${(done + lambda).toFixed(1)} au total ; ${basis}).` + describeCorrection(fix, spec.noun);
+      `(${(done + lambda).toFixed(1)} au total ; ${basis}).` + describeCorrection(fix, spec.noun) + trendNote;
 
+    // La tendance seule contredit nettement la ligne (< 30 % pour le reste du match) : pas de pari.
+    const contradicted = (side: 'over' | 'under', line: number): boolean =>
+      trendLambda != null && trendVerdict(side, line, done, trendLambda).blocked;
     const over = pickHighestConfidentOverLine(lambda, LINE_PICK_THRESHOLD, done);
-    if (over && over.line - done >= MIN_EVENTS_STILL_NEEDED - 0.5) legs.push({ market: spec.market, selection: `Plus de ${over.line} ${spec.noun} ${where}`, prob: over.prob, evidence, projection });
+    if (over && over.line - done >= MIN_EVENTS_STILL_NEEDED - 0.5 && !contradicted('over', over.line)) legs.push({ market: spec.market, selection: `Plus de ${over.line} ${spec.noun} ${where}`, prob: over.prob, evidence, projection });
     const under = pickLowestConfidentUnderLine(lambda, LINE_PICK_THRESHOLD, done);
-    if (under) legs.push({ market: spec.market, selection: `Moins de ${under.line} ${spec.noun} ${where}`, prob: under.prob, evidence, projection });
+    if (under && !contradicted('under', under.line)) legs.push({ market: spec.market, selection: `Moins de ${under.line} ${spec.noun} ${where}`, prob: under.prob, evidence, projection });
   }
   return legs;
 }
@@ -650,6 +664,8 @@ async function buildLegs20(
   const currentScore = { home: live.homeGoals, away: live.awayGoals };
   const elapsedMinutes = live.minute;
   const snapshot = mostRecentSnapshot(fixtureId);
+  const trend = await getMatchTrend(match.homeTeam, match.awayTeam);
+  if (preMatchExpectedGoals) preMatchExpectedGoals = blendExpectedGoals(preMatchExpectedGoals, trend);
 
   // 1) But 1ère mi-temps ou pas — rien à prédire si déjà marqué (certain).
   if (preMatchExpectedGoals && currentScore.home + currentScore.away === 0) {
@@ -685,8 +701,8 @@ async function buildLegs20(
         fouls: priors.home.foulsFor + priors.away.foulsFor,
       }
     : null;
-  legs.push(...countMarketLegs('1h', elapsedMinutes, observed, seasonTotals));
-  legs.push(...countMarketLegs('ft', elapsedMinutes, observed, seasonTotals));
+  legs.push(...countMarketLegs('1h', elapsedMinutes, observed, seasonTotals, trend));
+  legs.push(...countMarketLegs('ft', elapsedMinutes, observed, seasonTotals, trend));
 
   // 4) BTTS / 5) Total du match — projection sur le match ENTIER, pas
   // seulement la 1ère MT (déjà acquis si les deux ont déjà marqué / si le
@@ -738,10 +754,12 @@ function buildLegs60(
   live: LiveFixture,
   preMatchExpectedGoals: { home: number; away: number } | null,
   currentStats?: LiveMatchStats,
-  observedLive?: ObservedLiveCounts
+  observedLive?: ObservedLiveCounts,
+  trend?: MatchTrend | null
 ): CandidateLeg[] {
+  if (preMatchExpectedGoals) preMatchExpectedGoals = blendExpectedGoals(preMatchExpectedGoals, trend);
   // Corners / cartons / fautes du match entier : indépendants des buts attendus.
-  const countLegs = countMarketLegs('ft', live.minute, observedLive ?? {}, null);
+  const countLegs = countMarketLegs('ft', live.minute, observedLive ?? {}, null, trend);
   if (!preMatchExpectedGoals) return withLearnedExpertise(countLegs);
 
   const legs: CandidateLeg[] = [...countLegs];
@@ -1051,7 +1069,7 @@ async function bestLegFor(
 
   const rawLegs = kind === 'minute20'
     ? await buildLegs20(match, live.fixtureId, live, preMatchExpectedGoals, currentStats, observedLive)
-    : buildLegs60(live, preMatchExpectedGoals, currentStats, observedLive);
+    : buildLegs60(live, preMatchExpectedGoals, currentStats, observedLive, await getMatchTrend(match.homeTeam, match.awayTeam));
 
   // Tous les marchés concourent ; les plus sûrs passent devant, un seul par
   // marché (et par fenêtre 1ère MT / match).
@@ -1712,7 +1730,7 @@ export async function runInPlayComboTick(
 
         const rawLegs = kind === 'minute20'
           ? await buildLegs20(match, live.fixtureId, live, expectedGoals, currentStats, observedLive)
-          : buildLegs60(live, expectedGoals, currentStats, observedLive);
+          : buildLegs60(live, expectedGoals, currentStats, observedLive, await getMatchTrend(match.homeTeam, match.awayTeam));
         const window = kind === 'minute20' ? '20e → pause + match complet' : '60e → fin de match';
 
         for (const leg of rawLegs.filter(worthProposing)) {
@@ -1922,7 +1940,7 @@ export async function runInPlayComboTick(
 
         const rawLegs = kind === 'minute20'
           ? await buildLegs20(match, live.fixtureId, live, preMatchExpectedGoals, currentStats, observedLive)
-          : buildLegs60(live, preMatchExpectedGoals, currentStats, observedLive);
+          : buildLegs60(live, preMatchExpectedGoals, currentStats, observedLive, await getMatchTrend(match.homeTeam, match.awayTeam));
 
         const window = kind === 'minute20' ? '20e → pause + match complet' : '60e → fin de match';
         for (const leg of rawLegs.filter(worthProposing)) {
