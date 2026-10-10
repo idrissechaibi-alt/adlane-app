@@ -24,7 +24,7 @@ import { DailyScheduleSlot } from '../types/database';
 import { Bet, Market } from '../types';
 import { TrackedMarket } from '../core/learnStore';
 import { namesLikelyMatch, normalizeTeamName } from '../core/teamNameMatch';
-import { LegStatus, checkProposalStatus } from '../core/liveBetStatus';
+import { LegStatus, checkLegStatuses, combineLegStatuses } from '../core/liveBetStatus';
 
 export default function DailyPlanScreen() {
   const [loading, setLoading] = useState(false);
@@ -41,6 +41,7 @@ export default function DailyPlanScreen() {
   const [oddsInput, setOddsInput] = useState('');
   const [placing, setPlacing] = useState(false);
   const [proposalStatus, setProposalStatus] = useState<Record<string, LegStatus>>({});
+  const [legStatuses, setLegStatuses] = useState<Record<string, LegStatus[]>>({});
 
   // État de chaque pari (en cours / réussi / perdu) revérifié à chaque
   // actualisation de la liste (toutes les 30 s).
@@ -48,9 +49,11 @@ export default function DailyPlanScreen() {
     let cancelled = false;
     (async () => {
       const entries = await Promise.all(
-        inPlayProposals.map(async (p) => [p.id, await checkProposalStatus(p).catch(() => 'pending' as LegStatus)] as const)
+        inPlayProposals.map(async (p) => [p.id, await checkLegStatuses(p).catch(() => p.legs.map(() => 'pending' as LegStatus))] as const)
       );
-      if (!cancelled) setProposalStatus(Object.fromEntries(entries));
+      if (cancelled) return;
+      setLegStatuses(Object.fromEntries(entries));
+      setProposalStatus(Object.fromEntries(entries.map(([id, statuses]) => [id, combineLegStatuses(statuses)])));
     })();
     return () => {
       cancelled = true;
@@ -297,7 +300,11 @@ export default function DailyPlanScreen() {
         {proposal.legs.length > 1 &&
           proposal.legs.map((leg, i) => (
             <Text key={i} style={styles.liveBetLeg}>
-              • {leg.homeTeam} - {leg.awayTeam} : {leg.selection} ({Math.round(leg.prob * 100)}%)
+              {(() => {
+                const st = legStatuses[proposal.id]?.[i];
+                return st === 'won' ? '✅' : st === 'lost' ? '❌' : '⏳';
+              })()}{' '}
+              {leg.homeTeam} - {leg.awayTeam} : {leg.selection} ({Math.round(leg.prob * 100)}%)
             </Text>
           ))}
         <View style={styles.liveBetStatusRow}>

@@ -75,8 +75,16 @@ export async function checkLegStatus(leg: InPlayProposalLeg, dateKey: string): P
 
 /** Combiné : perdu dès qu'une jambe l'est, réussi quand toutes le sont. */
 export async function checkProposalStatus(proposal: InPlayProposal): Promise<LegStatus> {
+  return combineLegStatuses(await checkLegStatuses(proposal));
+}
+
+/** État de chaque jambe, dans l'ordre du combiné. */
+export async function checkLegStatuses(proposal: InPlayProposal): Promise<LegStatus[]> {
   const dateKey = proposal.createdAt.slice(0, 10);
-  const statuses = await Promise.all(proposal.legs.map((l) => checkLegStatus(l, dateKey)));
+  return Promise.all(proposal.legs.map((l) => checkLegStatus(l, dateKey).catch(() => 'pending' as LegStatus)));
+}
+
+export function combineLegStatuses(statuses: LegStatus[]): LegStatus {
   if (statuses.includes('lost')) return 'lost';
-  return statuses.every((s) => s === 'won') ? 'won' : 'pending';
+  return statuses.length > 0 && statuses.every((s) => s === 'won') ? 'won' : 'pending';
 }
