@@ -83,7 +83,7 @@ function buildHeaders(apiKey: string): Record<string, string> {
   };
 }
 
-interface FinalResult {
+export interface FinalResult {
   goalsHome: number;
   goalsAway: number;
   htHome: number;
@@ -367,7 +367,7 @@ async function fetchFinalResultsViaOmniroute(
  * match l'est, sur Football-Data.co.uk) : on ne devine jamais une valeur à
  * la place, la jambe reste simplement non réglée plutôt que faussement jugée.
  */
-function settleReprojectedLeg(
+export function settleReprojectedLeg(
   market: TrackedMarket,
   selection: string,
   result: FinalResult

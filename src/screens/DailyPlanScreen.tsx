@@ -24,6 +24,7 @@ import { DailyScheduleSlot } from '../types/database';
 import { Bet, Market } from '../types';
 import { TrackedMarket } from '../core/learnStore';
 import { namesLikelyMatch, normalizeTeamName } from '../core/teamNameMatch';
+import { LegStatus, checkProposalStatus } from '../core/liveBetStatus';
 
 export default function DailyPlanScreen() {
   const [loading, setLoading] = useState(false);
@@ -39,6 +40,22 @@ export default function DailyPlanScreen() {
   const [stakeInput, setStakeInput] = useState('');
   const [oddsInput, setOddsInput] = useState('');
   const [placing, setPlacing] = useState(false);
+  const [proposalStatus, setProposalStatus] = useState<Record<string, LegStatus>>({});
+
+  // État de chaque pari (en cours / réussi / perdu) revérifié à chaque
+  // actualisation de la liste (toutes les 30 s).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const entries = await Promise.all(
+        inPlayProposals.map(async (p) => [p.id, await checkProposalStatus(p).catch(() => 'pending' as LegStatus)] as const)
+      );
+      if (!cancelled) setProposalStatus(Object.fromEntries(entries));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [inPlayProposals]);
 
   useEffect(() => {
     loadDailyPlan();
@@ -266,25 +283,48 @@ export default function DailyPlanScreen() {
   };
 
   /** Un pari en direct (simple ou combiné) avec son bouton "Placer". */
-  const renderLiveProposal = (proposal: InPlayProposal) => (
-      <View key={proposal.id} style={styles.halftimeAlertRow}>
-        <Text style={styles.halftimeAlertMatch}>
-          {proposal.kind === 'minute60' ? '⏱️' : proposal.kind === 'halftime' ? '⏸️' : '⚡'}{' '}
-          {proposal.legs.length === 1
-            ? `${proposal.legs[0].homeTeam} ${proposal.legs[0].scoreLabel} ${proposal.legs[0].awayTeam}`
-            : `Combo (${proposal.legs.length} matchs)`}
+  const renderLiveProposal = (proposal: InPlayProposal) => {
+    const played = placedBetIds.has(`live-${proposal.id}`);
+    const status = proposalStatus[proposal.id] ?? 'pending';
+    const minuteLabel = proposal.kind === 'minute60' ? '60e' : proposal.kind === 'halftime' ? 'Mi-temps' : '20e';
+    const confidence = Math.round(proposal.combinedProb * 100);
+    const first = proposal.legs[0];
+    return (
+      <View key={proposal.id} style={styles.liveBetRow}>
+        <Text style={styles.liveBetTitle}>
+          {minuteLabel} · {proposal.legs.length === 1 ? first.selection : `Combiné ${proposal.legs.length} matchs`} — {confidence}%
         </Text>
-        <Text style={styles.halftimeAlertWindow}>
-          {proposal.window} — {(proposal.combinedProb * 100).toFixed(0)}% combiné
-        </Text>
-        {proposal.legs.map((leg, legIdx) => (
-          <Text key={legIdx} style={styles.halftimeAlertSelection}>
-            • {leg.homeTeam} {leg.scoreLabel} {leg.awayTeam} — {leg.selection} ({(leg.prob * 100).toFixed(0)}%) — {leg.evidence}
+        {proposal.legs.length > 1 &&
+          proposal.legs.map((leg, i) => (
+            <Text key={i} style={styles.liveBetLeg}>
+              • {leg.homeTeam} - {leg.awayTeam} : {leg.selection} ({Math.round(leg.prob * 100)}%)
+            </Text>
+          ))}
+        <View style={styles.liveBetStatusRow}>
+          <Text style={[styles.liveBetBadge, played ? styles.badgePlayed : styles.badgeNotPlayed]}>
+            {played ? 'Joué' : 'Non joué'}
           </Text>
-        ))}
-        {placedBetIds.has(`live-${proposal.id}`) ? (
-          <Text style={styles.placeLockedText}>✅ Pari placé — visible dans le Bilan P&L.</Text>
-        ) : placingId === `live-${proposal.id}` ? (
+          <Text
+            style={[
+              styles.liveBetBadge,
+              status === 'won' ? styles.badgeWon : status === 'lost' ? styles.badgeLost : styles.badgePending,
+            ]}
+          >
+            {status === 'won' ? '✅ Réussi' : status === 'lost' ? '❌ Perdu' : '⏳ En cours'}
+          </Text>
+          {!played && status === 'pending' && placingId !== `live-${proposal.id}` && (
+            <TouchableOpacity
+              style={styles.liveBetPlaceButton}
+              onPress={() => {
+                setOddsInput('');
+                setPlacingId(`live-${proposal.id}`);
+              }}
+            >
+              <Text style={styles.placeBetButtonText}>Placer</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+        {placingId === `live-${proposal.id}` && (
           <View style={styles.placeStakeRow}>
             <TextInput
               style={styles.stakeInput}
@@ -314,20 +354,10 @@ export default function DailyPlanScreen() {
               <Ionicons name="close" size={16} color="#94a3b8" />
             </TouchableOpacity>
           </View>
-        ) : (
-          <TouchableOpacity
-            style={styles.placeBetButton}
-            onPress={() => {
-              setOddsInput('');
-              setPlacingId(`live-${proposal.id}`);
-            }}
-          >
-            <Ionicons name="checkmark-circle-outline" size={16} color="#ffffff" />
-            <Text style={styles.placeBetButtonText}>Placer ce pari (cote + mise)</Text>
-          </TouchableOpacity>
         )}
       </View>
-  );
+    );
+  };
 
   /** Paris en direct rattachés à un créneau : au moins une jambe sur un de ses matchs. */
   const liveProposalsForSlot = (slot: DailyScheduleSlot) =>
@@ -386,7 +416,14 @@ export default function DailyPlanScreen() {
         {slotLive.length > 0 && !isSelected && (
           <TouchableOpacity onPress={() => setSelectedSlot(slot.slotId)}>
             <Text style={styles.slotLiveSummary}>
-              ⚡ {slotLive.length} pari{slotLive.length > 1 ? 's' : ''} en direct — touche pour voir
+              ⚡ {slotLive.length} pari{slotLive.length > 1 ? 's' : ''} en direct
+              {(() => {
+                const won = slotLive.filter((p) => proposalStatus[p.id] === 'won').length;
+                const lost = slotLive.filter((p) => proposalStatus[p.id] === 'lost').length;
+                const pending = slotLive.length - won - lost;
+                return ` · ${won} ✅ · ${lost} ❌ · ${pending} ⏳`;
+              })()}
+              {' '}— touche pour voir
             </Text>
           </TouchableOpacity>
         )}
@@ -958,6 +995,21 @@ const styles = StyleSheet.create({
     color: '#64748b',
     marginTop: 4,
   },
+  liveBetRow: {
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(167, 139, 250, 0.2)',
+  },
+  liveBetTitle: { color: '#ede9fe', fontSize: 14, fontWeight: '600' },
+  liveBetLeg: { color: '#c4b5fd', fontSize: 12, marginTop: 2 },
+  liveBetStatusRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' },
+  liveBetBadge: { fontSize: 12, fontWeight: '600', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, overflow: 'hidden' },
+  badgePlayed: { backgroundColor: 'rgba(59,130,246,0.25)', color: '#bfdbfe' },
+  badgeNotPlayed: { backgroundColor: 'rgba(100,116,139,0.25)', color: '#cbd5e1' },
+  badgeWon: { backgroundColor: 'rgba(16,185,129,0.25)', color: '#6ee7b7' },
+  badgeLost: { backgroundColor: 'rgba(239,68,68,0.25)', color: '#fca5a5' },
+  badgePending: { backgroundColor: 'rgba(245,158,11,0.2)', color: '#fde68a' },
+  liveBetPlaceButton: { backgroundColor: '#10b981', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 8, marginLeft: 'auto' },
   slotLiveSummary: {
     color: '#c4b5fd',
     fontSize: 13,
