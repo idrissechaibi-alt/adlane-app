@@ -640,6 +640,16 @@ export async function hubStats(homeTeam: string, awayTeam: string, dateKey: stri
     result.firstHalf ??= detail.stats.firstHalf;
     if (result.all && result.firstHalf) break;
   }
+  // Sources relevées à des instants différents : le match entier ne peut pas
+  // compter moins que sa 1ère mi-temps — on garde la valeur la plus récente.
+  if (result.all && result.firstHalf) {
+    const all = { ...result.all };
+    const fh = result.firstHalf;
+    if (fh.corners > all.corners) Object.assign(all, { corners: fh.corners, cornersHome: fh.cornersHome, cornersAway: fh.cornersAway });
+    if (fh.cards > all.cards) Object.assign(all, { cards: fh.cards, cardsHome: fh.cardsHome, cardsAway: fh.cardsAway });
+    if (fh.fouls > all.fouls) Object.assign(all, { fouls: fh.fouls, foulsHome: fh.foulsHome, foulsAway: fh.foulsAway });
+    result.all = all;
+  }
   return result;
 }
 
@@ -659,6 +669,9 @@ export interface HubFinalResult {
   /** Corners / cartons du match entier. */
   cornersFT?: number;
   cardsFT?: number;
+  /** Fautes (absentes = la source ne les publie pas). */
+  fouls1H?: number;
+  foulsFT?: number;
   sources: HubProviderName[];
 }
 
@@ -709,6 +722,8 @@ export async function hubFinalResult(homeTeam: string, awayTeam: string, dateKey
     cards1H: firstHalf?.cards,
     cornersFT: all?.corners,
     cardsFT: all?.cards,
+    fouls1H: firstHalf?.fouls || undefined,
+    foulsFT: all?.fouls || undefined,
     sources: agreeing.map((m) => m.provider),
   };
 }

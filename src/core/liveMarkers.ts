@@ -340,6 +340,8 @@ export async function runLiveMarkerTick(liveFixtures: LiveFixture[]): Promise<{ 
     if (m.cardsHome != null && m.cardsAway != null) {
       await recordShadowProjection(l, projectFirstHalfCount('cards_1h', m.cardsHome + m.cardsAway, l.minute));
     }
+    const fouls = (m.foulsHome ?? 0) + (m.foulsAway ?? 0);
+    if (fouls > 0) await recordShadowProjection(l, projectFirstHalfCount('fouls_1h', fouls, l.minute));
   }
   await flushShadowProjections();
 

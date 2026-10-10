@@ -67,6 +67,8 @@ import {
   estimateRemainingMatchMarket,
   estimateRemainingFirstHalfMarket,
   remainingFirstHalfEventFraction,
+  remainingMatchEventFraction,
+  poissonOverProb,
   pickHighestConfidentOverLine,
   SecondHalfMarket,
   LiveMatchStats,
@@ -399,7 +401,7 @@ async function fetchFreeLiveStats(
       possessionHome: all.possessionHome,
       possessionAway: all.possessionHome != null ? 100 - all.possessionHome : undefined,
     },
-    observed: { corners: all.corners, cards: all.cards },
+    observed: { corners: all.corners, cards: all.cards, fouls: all.fouls || undefined },
   };
 }
 
@@ -409,6 +411,7 @@ async function fetchFreeLiveStats(
 interface ObservedLiveCounts {
   corners?: number;
   cards?: number;
+  fouls?: number;
   /** Événements par minute, mesurés entre le premier et le dernier relevé. */
   cornersPerMinute?: number;
   cardsPerMinute?: number;
@@ -483,36 +486,86 @@ function blendPace(observedPerMinute: number, elapsedMinutes: number, typicalPer
   return (observedEvents + typicalPerMinute * PACE_PRIOR_MINUTES) / (elapsedMinutes + PACE_PRIOR_MINUTES);
 }
 
+const TYPICAL_FOULS_PER_MINUTE = 24 / 90;
+
+interface CountObserved {
+  corners?: number;
+  cards?: number;
+  fouls?: number;
+  cornersPerMinute?: number;
+  cardsPerMinute?: number;
+}
+
+interface CountPriors {
+  corners: number;
+  cards: number;
+  fouls: number;
+}
+
+/** Ligne "Moins de X.5" la plus BASSE encore sûre (au moins `threshold`). */
+function pickLowestConfidentUnderLine(lambda: number, threshold: number, alreadyObserved: number): { line: number; prob: number } | null {
+  for (let i = 0; i < 20; i++) {
+    const line = alreadyObserved + 0.5 + i;
+    const prob = 1 - poissonOverProb(lambda, line - alreadyObserved);
+    if (prob >= threshold) return { line, prob };
+  }
+  return null;
+}
+
 /**
- * Corners et cartons sur le MATCH ENTIER, projetés au rythme observé (mêlé au
- * rythme moyen) sur le temps restant, corrigés de l'écart appris. Proposés à
- * la 20e comme à la 60e : tous les marchés concourent, le plus sûr gagne.
+ * Corners, cartons et fautes — 1ère mi-temps ou match entier, au-dessus ET
+ * en dessous d'une ligne. Projection : ce qui est déjà compté + le reste,
+ * estimé par les moyennes de saison quand elles existent (pipe réel), sinon
+ * au rythme observé mêlé au rythme moyen, corrigé de l'écart appris.
  */
-function fullMatchCountLegs(elapsedMinutes: number, observed?: { corners?: number; cards?: number }): CandidateLeg[] {
-  if (!observed || elapsedMinutes < MIN_MINUTES_FOR_PACE_PROJECTION) return [];
+function countMarketLegs(
+  window: '1h' | 'ft',
+  elapsedMinutes: number,
+  observed: CountObserved,
+  priors: CountPriors | null
+): CandidateLeg[] {
   const legs: CandidateLeg[] = [];
-  const remainingMinutes = Math.max(0, 94 - elapsedMinutes); // temps additionnel moyen compris
+  const end = window === '1h' ? 45 : 94; // temps additionnel moyen compris
+  if (elapsedMinutes >= end) return legs;
+  const remainingMinutes = end - elapsedMinutes;
+  const fraction = window === '1h' ? remainingFirstHalfEventFraction(elapsedMinutes) : remainingMatchEventFraction(elapsedMinutes);
+  const where = window === '1h' ? 'en 1ère mi-temps' : 'sur le match';
+  const horizon = window === '1h' ? "d'ici la pause" : "d'ici la fin du match";
+
   const specs = [
-    { unit: 'corners_ft' as const, market: 'corners' as const, count: observed.corners, typical: TYPICAL_CORNERS_PER_MINUTE, noun: 'corners' },
-    { unit: 'cards_ft' as const, market: 'cartons' as const, count: observed.cards, typical: TYPICAL_CARDS_PER_MINUTE, noun: 'cartons' },
+    { key: 'corners' as const, market: 'corners' as const, noun: 'corners', typical: TYPICAL_CORNERS_PER_MINUTE, count: observed.corners, pace: observed.cornersPerMinute },
+    { key: 'cards' as const, market: 'cartons' as const, noun: 'cartons', typical: TYPICAL_CARDS_PER_MINUTE, count: observed.cards, pace: observed.cardsPerMinute },
+    // Fautes : une source qui ne les publie pas renvoie 0 — inexploitable.
+    { key: 'fouls' as const, market: 'fautes' as const, noun: 'fautes', typical: TYPICAL_FOULS_PER_MINUTE, count: observed.fouls ? observed.fouls : undefined, pace: undefined },
   ];
   for (const spec of specs) {
+    // Jamais de pari sur un compteur inconnu (3 corners à la 25e ≠ 0).
     if (spec.count == null) continue;
-    const fix = getDeltaCorrection(spec.unit);
-    const perMinute = blendPace(spec.count / elapsedMinutes, elapsedMinutes, spec.typical);
-    const lambda = perMinute * remainingMinutes * fix.factor;
-    const line = pickHighestConfidentOverLine(lambda, LINE_PICK_THRESHOLD, spec.count);
-    if (!line) continue;
-    legs.push({
-      market: spec.market,
-      selection: `Plus de ${line.line} ${spec.noun} sur le match`,
-      prob: line.prob,
-      evidence:
-        `${spec.count} ${spec.noun} à la ${elapsedMinutes}e minute, rythme ${perMinute.toFixed(2)}/min → ` +
-        `${lambda.toFixed(1)} attendu(s) d'ici la fin (${(spec.count + lambda).toFixed(1)} au total).` +
-        describeCorrection(fix, spec.noun),
-      projection: { unit: spec.unit, observed: spec.count, expected: spec.count + lambda, factorUsed: fix.factor },
-    });
+    const unit = `${spec.key}_${window}` as DeltaUnit;
+    const fix = getDeltaCorrection(unit);
+    let rawLambda: number;
+    let basis: string;
+    if (priors) {
+      rawLambda = priors[spec.key] * fraction;
+      basis = 'moyennes de saison Football-Data.co.uk';
+    } else if (spec.count != null && elapsedMinutes >= MIN_MINUTES_FOR_PACE_PROJECTION) {
+      const perMinute = blendPace(spec.pace ?? spec.count / elapsedMinutes, elapsedMinutes, spec.typical);
+      rawLambda = perMinute * remainingMinutes;
+      basis = `rythme ${perMinute.toFixed(2)}/min ${spec.pace != null ? 'suivi en direct' : "depuis le coup d'envoi"}, mêlé au rythme moyen`;
+    } else {
+      continue;
+    }
+    const done = spec.count ?? 0;
+    const lambda = rawLambda * fix.factor;
+    const projection: LegProjection = { unit, observed: done, expected: done + lambda, factorUsed: fix.factor };
+    const evidence =
+      `${done} ${spec.noun} à la ${elapsedMinutes}e minute + ${lambda.toFixed(1)} attendu(s) ${horizon} ` +
+      `(${(done + lambda).toFixed(1)} au total ; ${basis}).` + describeCorrection(fix, spec.noun);
+
+    const over = pickHighestConfidentOverLine(lambda, LINE_PICK_THRESHOLD, done);
+    if (over) legs.push({ market: spec.market, selection: `Plus de ${over.line} ${spec.noun} ${where}`, prob: over.prob, evidence, projection });
+    const under = pickLowestConfidentUnderLine(lambda, LINE_PICK_THRESHOLD, done);
+    if (under) legs.push({ market: spec.market, selection: `Moins de ${under.line} ${spec.noun} ${where}`, prob: under.prob, evidence, projection });
   }
   return legs;
 }
@@ -536,104 +589,46 @@ async function buildLegs20(
     const est = estimateRemainingFirstHalfMarket({ preMatchExpectedGoals: correctedGoals(preMatchExpectedGoals, 'goals_1h'), elapsedMinutes, currentScore, currentStats });
     const m = est.markets[0];
     const blended = blendWithLearnedMarkers(m.estimated_prob, m.reasoning + describeCorrection(correction, 'buts'), snapshot);
-    legs.push({
-      market: 'buts_1ere_mt',
-      selection: 'Oui, un but avant la pause',
-      prob: blended.prob,
-      evidence: blended.evidence,
-      projection: { unit: 'goals_1h', observed: 0, expected: est.secondHalfExpectedGoals.home + est.secondHalfExpectedGoals.away, factorUsed: correction.factor },
-    });
+    const goalProjection: LegProjection = { unit: 'goals_1h', observed: 0, expected: est.secondHalfExpectedGoals.home + est.secondHalfExpectedGoals.away, factorUsed: correction.factor };
+    legs.push(
+      blended.prob >= 0.5
+        ? { market: 'buts_1ere_mt', selection: 'Oui, un but avant la pause', prob: blended.prob, evidence: blended.evidence, projection: goalProjection }
+        : { market: 'buts_1ere_mt', selection: '0-0 à la pause (pas de but avant la pause)', prob: 1 - blended.prob, evidence: `Probabilité inverse : ${blended.evidence}`, projection: goalProjection }
+    );
   }
 
-  // 2) Corners / 3) Cartons 1ère mi-temps — projection sur le reste de la 1ère
-  // MT + ce qui est déjà compté en direct (best-effort, jamais bloquant).
+  // 2) Corners / cartons / fautes — 1ère mi-temps et match entier, plus ET
+  // moins : tous les marchés concourent, les plus sûrs passent devant.
   const priors = match.leagueId
     ? await getHistoricalPriors(match.leagueId, match.homeTeam, match.awayTeam).catch(() => null)
     : null;
   const snapshotCounts = observedFirstHalfCounts(snapshot);
-  const observedCorners = observedLive?.corners ?? snapshotCounts.corners;
-  const observedCards = observedLive?.cards ?? snapshotCounts.cards;
-
-  if (priors) {
-    const fraction = remainingFirstHalfEventFraction(elapsedMinutes);
-
-    const cornersFix = getDeltaCorrection('corners_1h');
-    const cornersLambda = (priors.home.cornersFor + priors.away.cornersFor) * fraction * cornersFix.factor;
-    const cornersLine = pickHighestConfidentOverLine(cornersLambda, LINE_PICK_THRESHOLD, observedCorners ?? 0);
-    if (cornersLine) {
-      legs.push({
-        market: 'corners',
-        selection: `Plus de ${cornersLine.line} corners en 1ère mi-temps`,
-        prob: cornersLine.prob,
-        evidence: `${observedCorners ?? 0} corner(s) déjà compté(s) + ${cornersLambda.toFixed(1)} attendus sur le reste de la 1ère MT (moyennes de saison Football-Data.co.uk).` + describeCorrection(cornersFix, 'corners'),
-        projection: { unit: 'corners_1h', observed: observedCorners ?? 0, expected: (observedCorners ?? 0) + cornersLambda, factorUsed: cornersFix.factor },
-      });
-    }
-
-    const cardsFix = getDeltaCorrection('cards_1h');
-    const cardsLambda = (priors.home.cardsFor + priors.away.cardsFor) * fraction * cardsFix.factor;
-    const cardsLine = pickHighestConfidentOverLine(cardsLambda, LINE_PICK_THRESHOLD, observedCards ?? 0);
-    if (cardsLine) {
-      legs.push({
-        market: 'cartons',
-        selection: `Plus de ${cardsLine.line} cartons en 1ère mi-temps`,
-        prob: cardsLine.prob,
-        evidence: `${observedCards ?? 0} carton(s) déjà compté(s) + ${cardsLambda.toFixed(1)} attendus sur le reste de la 1ère MT (moyennes de saison Football-Data.co.uk).` + describeCorrection(cardsFix, 'cartons'),
-        projection: { unit: 'cards_1h', observed: observedCards ?? 0, expected: (observedCards ?? 0) + cardsLambda, factorUsed: cardsFix.factor },
-      });
-    }
-  } else if (elapsedMinutes >= MIN_MINUTES_FOR_PACE_PROJECTION) {
-    // Aucune moyenne de saison : projection au rythme observé dans CE match.
-    // Le rythme mesuré pendant la surveillance (entre deux relevés) prime sur
-    // la moyenne depuis le coup d'envoi — c'est lui qui reflète où en est le
-    // match maintenant, pas où il en était en moyenne.
-    const remainingMinutes = Math.max(0, 45 - elapsedMinutes);
-
-    if (observedCorners != null) {
-      const observedPace = observedLive?.cornersPerMinute ?? observedCorners / elapsedMinutes;
-      const perMinute = blendPace(observedPace, elapsedMinutes, TYPICAL_CORNERS_PER_MINUTE);
-      const source = `${observedLive?.cornersPerMinute != null ? 'rythme suivi en direct' : 'moyenne depuis le coup d\'envoi'} mêlé au rythme moyen d'un match`;
-      const fix = getDeltaCorrection('corners_1h');
-      const lambda = perMinute * remainingMinutes * fix.factor;
-      const line = pickHighestConfidentOverLine(lambda, LINE_PICK_THRESHOLD, observedCorners);
-      if (line) {
-        legs.push({
-          market: 'corners',
-          selection: `Plus de ${line.line} corners en 1ère mi-temps`,
-          prob: line.prob,
-          evidence: `${observedCorners} corner(s) à la ${elapsedMinutes}e minute, ${source} de ${perMinute.toFixed(2)}/min → ${lambda.toFixed(1)} attendu(s) d'ici la pause.` + describeCorrection(fix, 'corners'),
-          projection: { unit: 'corners_1h', observed: observedCorners, expected: observedCorners + lambda, factorUsed: fix.factor },
-        });
+  const observed: CountObserved = {
+    corners: observedLive?.corners ?? snapshotCounts.corners ?? undefined,
+    cards: observedLive?.cards ?? snapshotCounts.cards ?? undefined,
+    fouls: observedLive?.fouls,
+    cornersPerMinute: observedLive?.cornersPerMinute,
+    cardsPerMinute: observedLive?.cardsPerMinute,
+  };
+  const seasonTotals: CountPriors | null = priors
+    ? {
+        corners: priors.home.cornersFor + priors.away.cornersFor,
+        cards: priors.home.cardsFor + priors.away.cardsFor,
+        fouls: priors.home.foulsFor + priors.away.foulsFor,
       }
-    }
-
-    if (observedCards != null) {
-      const observedPace = observedLive?.cardsPerMinute ?? observedCards / elapsedMinutes;
-      const perMinute = blendPace(observedPace, elapsedMinutes, TYPICAL_CARDS_PER_MINUTE);
-      const source = `${observedLive?.cardsPerMinute != null ? 'rythme suivi en direct' : 'moyenne depuis le coup d\'envoi'} mêlé au rythme moyen d'un match`;
-      const fix = getDeltaCorrection('cards_1h');
-      const lambda = perMinute * remainingMinutes * fix.factor;
-      const line = pickHighestConfidentOverLine(lambda, LINE_PICK_THRESHOLD, observedCards);
-      if (line) {
-        legs.push({
-          market: 'cartons',
-          selection: `Plus de ${line.line} cartons en 1ère mi-temps`,
-          prob: line.prob,
-          evidence: `${observedCards} carton(s) à la ${elapsedMinutes}e minute, ${source} de ${perMinute.toFixed(2)}/min → ${lambda.toFixed(1)} attendu(s) d'ici la pause.` + describeCorrection(fix, 'cartons'),
-          projection: { unit: 'cards_1h', observed: observedCards, expected: observedCards + lambda, factorUsed: fix.factor },
-        });
-      }
-    }
-  }
-
-  // Corners / cartons du match entier.
-  legs.push(...fullMatchCountLegs(elapsedMinutes, { corners: observedCorners ?? undefined, cards: observedCards ?? undefined }));
+    : null;
+  legs.push(...countMarketLegs('1h', elapsedMinutes, observed, seasonTotals));
+  legs.push(...countMarketLegs('ft', elapsedMinutes, observed, seasonTotals));
 
   // 4) BTTS / 5) Total du match — projection sur le match ENTIER, pas
   // seulement la 1ère MT (déjà acquis si les deux ont déjà marqué / si le
   // total dépasse déjà la ligne : rien à prédire, on ne propose pas).
   if (preMatchExpectedGoals) {
     const fullEst = estimateRemainingMatchMarket({ preMatchExpectedGoals: correctedGoals(preMatchExpectedGoals, 'goals_ft'), elapsedMinutes, currentScore, currentStats });
+    const resultMarket = fullEst.markets.find((m) => m.market === 'FT_1X2_reprojete');
+    if (resultMarket) {
+      legs.push({ market: '1X2', selection: resultMarket.selection, prob: resultMarket.estimated_prob, evidence: resultMarket.reasoning });
+    }
     const bttsMarket = fullEst.markets.find((m) => m.market === 'FT_btts_reprojete');
     if (bttsMarket && !(currentScore.home > 0 && currentScore.away > 0)) {
       legs.push(pickBinarySide('btts', bttsMarket, 'Les deux équipes ne marquent pas toutes les deux (Non)'));
@@ -672,8 +667,8 @@ function buildLegs60(
   currentStats?: LiveMatchStats,
   observedLive?: ObservedLiveCounts
 ): CandidateLeg[] {
-  // Corners / cartons du match entier : indépendants des buts attendus.
-  const countLegs = fullMatchCountLegs(live.minute, observedLive);
+  // Corners / cartons / fautes du match entier : indépendants des buts attendus.
+  const countLegs = countMarketLegs('ft', live.minute, observedLive ?? {}, null);
   if (!preMatchExpectedGoals) return withLearnedExpertise(countLegs);
 
   const legs: CandidateLeg[] = [...countLegs];
@@ -983,7 +978,7 @@ async function bestLegFor(
   const seen = new Set<string>();
   const best: LegWithContext[] = [];
   for (const leg of eligible) {
-    const key = legDedupSuffix(leg);
+    const key = legMarketWindow(leg);
     if (seen.has(key)) continue;
     seen.add(key);
     best.push({ leg, fixtureId: live.fixtureId, match, live });
@@ -993,8 +988,13 @@ async function bestLegFor(
 }
 
 /** Marché + fenêtre d'une jambe (corners 1ère MT ≠ corners du match). */
-function legDedupSuffix(leg: CandidateLeg): string {
+function legMarketWindow(leg: CandidateLeg): string {
   return `${leg.market}${/sur le match/i.test(leg.selection) ? '-ft' : ''}`;
+}
+
+/** Marché + fenêtre + côté : le fictif apprend les deux côtés d'un marché. */
+function legDedupSuffix(leg: CandidateLeg): string {
+  return `${legMarketWindow(leg)}${/^moins de|^0-0|ne marquent pas|\(non\)/i.test(leg.selection) ? '-under' : ''}`;
 }
 
 /**
@@ -1442,6 +1442,7 @@ export async function runInPlayComboTick(
         if (live.statusShort === '2H' && observedLive) {
           if (observedLive.corners != null) await recordShadowProjection(live, projectFullMatchCount('corners_ft', observedLive.corners, live.minute));
           if (observedLive.cards != null) await recordShadowProjection(live, projectFullMatchCount('cards_ft', observedLive.cards, live.minute));
+          if (observedLive.fouls) await recordShadowProjection(live, projectFullMatchCount('fouls_ft', observedLive.fouls, live.minute));
         }
 
         const rawLegs = kind === 'minute20'

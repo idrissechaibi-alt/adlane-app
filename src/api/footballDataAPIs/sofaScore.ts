@@ -845,5 +845,13 @@ export async function fetchLiveScoreStats(eid: number): Promise<SofaStats> {
   const periods: any[] = data?.PStat ?? [];
   const homeP = periods.find((x) => Number(x?.['1']?.Tnb) === 1)?.['1'];
   const awayP = periods.find((x) => Number(x?.['1']?.Tnb) === 2)?.['1'];
-  return { all: liveScorePeriod(home, away), firstHalf: liveScorePeriod(homeP, awayP) };
+  const all = liveScorePeriod(home, away);
+  let firstHalf = liveScorePeriod(homeP, awayP);
+  // Contrôle de cohérence : la 1ère mi-temps ne peut dépasser le match entier
+  // (LiveScore publie parfois des fautes par période incohérentes).
+  if (all && firstHalf) {
+    if (firstHalf.corners > all.corners || firstHalf.cards > all.cards) firstHalf = null;
+    else if (firstHalf.fouls > all.fouls) firstHalf = { ...firstHalf, fouls: 0, foulsHome: 0, foulsAway: 0 };
+  }
+  return { all, firstHalf };
 }

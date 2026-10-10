@@ -95,6 +95,8 @@ interface FinalResult {
   /** Corners / cartons du match entier. */
   cornersFT?: number;
   cardsFT?: number;
+  fouls1H?: number;
+  foulsFT?: number;
 }
 
 /** Matchs réglés via les sources live gratuites par passage du bilan. */
@@ -257,6 +259,8 @@ async function fetchFinalResultsViaSofaScore(
         cards1H: stats?.firstHalf?.cards,
         cornersFT: stats?.all?.corners,
         cardsFT: stats?.all?.cards,
+        fouls1H: stats?.firstHalf?.fouls || undefined,
+        foulsFT: stats?.all?.fouls || undefined,
       });
     } catch {
       // match suivant : retenté au prochain passage
@@ -383,21 +387,23 @@ function settleReprojectedLeg(
     const bothScored = result.goalsHome > 0 && result.goalsAway > 0;
     return /\(non\)|ne marquent pas/i.test(selection) ? !bothScored : bothScored;
   }
-  if (market === 'buts_1ere_mt') return htGoals >= 1;
+  if (market === 'buts_1ere_mt') return /0-0 à la pause|pas de but/i.test(selection) ? htGoals === 0 : htGoals >= 1;
 
-  if (market === 'corners' || market === 'cartons') {
-    const line = selection.match(/plus de\s+(\d+(?:[.,]\d+)?)/i);
+  if (market === 'corners' || market === 'cartons' || market === 'fautes') {
+    const line = selection.match(/(plus|moins) de\s+(\d+(?:[.,]\d+)?)/i);
     if (!line) return null;
     const fullMatch = /sur le match/i.test(selection);
     if (!fullMatch && !/1[èe]re mi-temps/i.test(selection)) return null;
-    const value = fullMatch
-      ? market === 'corners' ? result.cornersFT : result.cardsFT
-      : market === 'corners' ? result.corners1H : result.cards1H;
+    const value =
+      market === 'corners' ? (fullMatch ? result.cornersFT : result.corners1H)
+      : market === 'cartons' ? (fullMatch ? result.cardsFT : result.cards1H)
+      : fullMatch ? result.foulsFT : result.fouls1H;
     if (value == null) return null;
-    return value > Number(line[1].replace(',', '.'));
+    const threshold = Number(line[2].replace(',', '.'));
+    return /moins/i.test(line[1]) ? value < threshold : value > threshold;
   }
 
-  return null; // fautes : pas de source structurée par mi-temps
+  return null;
 }
 
 /** Valeur réelle d'une fenêtre de comptage, pour mesurer l'écart avec la projection. */
@@ -406,6 +412,8 @@ function actualValueFor(unit: DeltaUnit, result: FinalResult): number | null {
   if (unit === 'cards_1h') return result.cards1H ?? null;
   if (unit === 'corners_ft') return result.cornersFT ?? null;
   if (unit === 'cards_ft') return result.cardsFT ?? null;
+  if (unit === 'fouls_1h') return result.fouls1H ?? null;
+  if (unit === 'fouls_ft') return result.foulsFT ?? null;
   if (unit === 'goals_1h') return result.htHome + result.htAway;
   return result.goalsHome + result.goalsAway;
 }
@@ -663,16 +671,25 @@ export async function runNightlyReviewIfDue(): Promise<number> {
 
     // Corners / cartons du match entier manquants (score venu d'API-Football,
     // qui ne les donne pas ici) : complétés par les sources live gratuites.
-    const needFullCounts = allLegs.filter((l) => {
+    const needCounts = allLegs.filter((l) => {
       const final = finals.get(l.fixtureId);
-      return final && /sur le match/i.test(l.selection) && (l.market === 'corners' ? final.cornersFT == null : l.market === 'cartons' && final.cardsFT == null);
+      if (!final) return false;
+      const ft = /sur le match/i.test(l.selection);
+      if (l.market === 'corners') return (ft ? final.cornersFT : final.corners1H) == null;
+      if (l.market === 'cartons') return (ft ? final.cardsFT : final.cards1H) == null;
+      if (l.market === 'fautes') return (ft ? final.foulsFT : final.fouls1H) == null;
+      return false;
     });
-    await mapWithConcurrency(needFullCounts.slice(0, HUB_FINAL_RESULT_MAX_PER_PASS), 4, async (leg) => {
+    await mapWithConcurrency(needCounts.slice(0, HUB_FINAL_RESULT_MAX_PER_PASS), 4, async (leg) => {
       const stats = await hubStats(leg.homeTeam, leg.awayTeam, day).catch(() => null);
       const final = finals.get(leg.fixtureId);
-      if (!final || !stats?.all) return;
-      final.cornersFT ??= stats.all.corners;
-      final.cardsFT ??= stats.all.cards;
+      if (!final || !stats) return;
+      final.cornersFT ??= stats.all?.corners;
+      final.cardsFT ??= stats.all?.cards;
+      final.foulsFT ??= stats.all?.fouls || undefined;
+      final.corners1H ??= stats.firstHalf?.corners;
+      final.cards1H ??= stats.firstHalf?.cards;
+      final.fouls1H ??= stats.firstHalf?.fouls || undefined;
     });
 
     // Repli Omniroute (recherche web rétroactive) : seulement pour ce qui

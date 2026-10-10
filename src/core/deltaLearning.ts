@@ -11,7 +11,7 @@ import { readInPlayProposals } from './learnStore';
 import { hubFinalResult } from '../api/footballDataAPIs/liveDataHub';
 import { mapWithConcurrency } from './concurrency';
 
-export type DeltaUnit = 'corners_1h' | 'cards_1h' | 'goals_1h' | 'goals_ft' | 'corners_ft' | 'cards_ft';
+export type DeltaUnit = 'corners_1h' | 'cards_1h' | 'fouls_1h' | 'goals_1h' | 'goals_ft' | 'corners_ft' | 'cards_ft' | 'fouls_ft';
 
 export interface LegProjection {
   unit: DeltaUnit;
@@ -107,7 +107,7 @@ export function getDeltaCorrection(unit: DeltaUnit): DeltaCorrection {
 }
 
 export function getAllDeltaCorrections(): DeltaCorrection[] {
-  return (['corners_1h', 'cards_1h', 'corners_ft', 'cards_ft', 'goals_1h', 'goals_ft'] as DeltaUnit[]).map(getDeltaCorrection);
+  return (['corners_1h', 'cards_1h', 'fouls_1h', 'corners_ft', 'cards_ft', 'fouls_ft', 'goals_1h', 'goals_ft'] as DeltaUnit[]).map(getDeltaCorrection);
 }
 
 /** Phrase d'explication ajoutée au raisonnement d'un pronostic corrigé. */
@@ -128,6 +128,8 @@ export const DELTA_LABELS: Record<DeltaUnit, string> = {
   goals_ft: 'Buts en fin de match',
   corners_ft: 'Corners sur le match',
   cards_ft: 'Cartons sur le match',
+  fouls_1h: 'Fautes 1ère mi-temps',
+  fouls_ft: 'Fautes sur le match',
 };
 
 
@@ -188,11 +190,11 @@ export async function ensureDeltaSamplesLoaded(): Promise<void> {
 }
 
 /** Rythmes moyens d'une 1ère mi-temps (≈ 10 corners / 4 cartons par match). */
-const TYPICAL_PER_MINUTE: Partial<Record<DeltaUnit, number>> = { corners_1h: 10 / 90, cards_1h: 4 / 90 };
+const TYPICAL_PER_MINUTE: Partial<Record<DeltaUnit, number>> = { corners_1h: 10 / 90, cards_1h: 4 / 90, fouls_1h: 24 / 90 };
 const PACE_PRIOR_MINUTES = 20;
 
 /** Projection à la pause au rythme observé (mêlé au rythme moyen), corrigée de l'écart appris. */
-export function projectFirstHalfCount(unit: 'corners_1h' | 'cards_1h', observed: number, minute: number): LegProjection {
+export function projectFirstHalfCount(unit: 'corners_1h' | 'cards_1h' | 'fouls_1h', observed: number, minute: number): LegProjection {
   const typical = TYPICAL_PER_MINUTE[unit]!;
   const perMinute = (observed + typical * PACE_PRIOR_MINUTES) / (Math.max(1, minute) + PACE_PRIOR_MINUTES);
   const factor = getDeltaCorrection(unit).factor;
@@ -200,8 +202,8 @@ export function projectFirstHalfCount(unit: 'corners_1h' | 'cards_1h', observed:
 }
 
 /** Projection en fin de match (corners/cartons du match entier), même formule. */
-export function projectFullMatchCount(unit: 'corners_ft' | 'cards_ft', observed: number, minute: number): LegProjection {
-  const typical = unit === 'corners_ft' ? 10 / 90 : 4 / 90;
+export function projectFullMatchCount(unit: 'corners_ft' | 'cards_ft' | 'fouls_ft', observed: number, minute: number): LegProjection {
+  const typical = unit === 'corners_ft' ? 10 / 90 : unit === 'cards_ft' ? 4 / 90 : 24 / 90;
   const perMinute = (observed + typical * PACE_PRIOR_MINUTES) / (Math.max(1, minute) + PACE_PRIOR_MINUTES);
   const factor = getDeltaCorrection(unit).factor;
   return { unit, observed, expected: observed + perMinute * Math.max(0, 94 - minute) * factor, factorUsed: factor };
@@ -212,7 +214,7 @@ export async function recordShadowProjection(
   match: { fixtureId: number; homeTeam: string; awayTeam: string; minute: number },
   projection: LegProjection
 ): Promise<void> {
-  const fullMatchCount = projection.unit === 'corners_ft' || projection.unit === 'cards_ft';
+  const fullMatchCount = projection.unit === 'corners_ft' || projection.unit === 'cards_ft' || projection.unit === 'fouls_ft';
   if (fullMatchCount ? match.minute < 50 || match.minute > 75 : match.minute < 15 || match.minute > 35) return;
   const list = await loadShadows();
   if (list.some((s) => s.fixtureId === match.fixtureId && s.unit === projection.unit)) return;
@@ -266,6 +268,8 @@ export async function settleShadowProjections(): Promise<number> {
         : s.unit === 'cards_1h' ? result.cards1H
         : s.unit === 'corners_ft' ? result.cornersFT
         : s.unit === 'cards_ft' ? result.cardsFT
+        : s.unit === 'fouls_1h' ? result.fouls1H
+        : s.unit === 'fouls_ft' ? result.foulsFT
         : s.unit === 'goals_1h' ? result.htHome + result.htAway
         : result.goalsHome + result.goalsAway;
       if (actual != null) {
