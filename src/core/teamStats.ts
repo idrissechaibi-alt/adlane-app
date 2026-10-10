@@ -68,6 +68,8 @@ export interface MatchTrend {
   /** Buts attendus par côté (mêlant buts et xG), si les deux équipes ont assez de matchs. */
   goals?: { home: number; away: number };
   samples: { home: number; away: number };
+  /** Taux par équipe (pour, contre) : pour l'affichage et les analyses. */
+  rates: { home: Partial<Record<TrendKey, [number, number]>>; away: Partial<Record<TrendKey, [number, number]>> };
 }
 
 /** Compteurs de diagnostic (appHealth) : prouvent que le fichier est chargé et réellement utilisé. */
@@ -238,9 +240,12 @@ export async function getMatchTrend(homeTeam: string, awayTeam: string): Promise
     if (!h || !a || h.n.all < MIN_MATCHES || a.n.all < MIN_MATCHES) return null;
 
     const expected: Partial<Record<TrendKey, number>> = {};
+    const rates: MatchTrend['rates'] = { home: {}, away: {} };
     for (const key of KEYS) {
       const rh = rate(h, 'home', key);
       const ra = rate(a, 'away', key);
+      if (rh) rates.home[key] = rh;
+      if (ra) rates.away[key] = ra;
       if (!rh || !ra) continue;
       // Ce que A produit croisé avec ce que B concède, et inversement.
       expected[key] = (rh[0] + ra[1]) / 2 + (ra[0] + rh[1]) / 2;
@@ -261,7 +266,7 @@ export async function getMatchTrend(homeTeam: string, awayTeam: string): Promise
     if (Object.keys(expected).length === 0 && !goals) return null;
     usage.withTrend++;
     usage.lastTrendAt = new Date().toISOString();
-    return { homeTeam: h.name, awayTeam: a.name, expected, goals, samples: { home: h.n.all, away: a.n.all } };
+    return { homeTeam: h.name, awayTeam: a.name, expected, goals, samples: { home: h.n.all, away: a.n.all }, rates };
   } catch {
     return null;
   }
@@ -324,4 +329,30 @@ export async function getTeamStatsStatus(): Promise<{
     summariesCached: Object.keys(summaries).length,
     ...usage,
   };
+}
+
+const TREND_LABELS: Array<[TrendKey, string]> = [
+  ['goals_ft', 'buts'],
+  ['xg_ft', 'xG'],
+  ['corners_ft', 'corners'],
+  ['cards_ft', 'cartons'],
+  ['fouls_ft', 'fautes'],
+  ['corners_1h', 'corners 1ère MT'],
+  ['cards_1h', 'cartons 1ère MT'],
+];
+
+function line(name: string, n: number, rates: MatchTrend['rates']['home']): string {
+  const parts = TREND_LABELS.filter(([k]) => rates[k]).map(([k, label]) => `${label} ${rates[k]![0].toFixed(1)} pour, ${rates[k]![1].toFixed(1)} contre`);
+  return `${name} (${n} derniers matchs avec stats, toutes compétitions) : ${parts.join(' ; ')}`;
+}
+
+/** Texte de tendance injecté dans les analyses (Scouting IA) : ce que le fichier de stats dit des deux équipes. */
+export function describeMatchTrend(trend: MatchTrend): string {
+  const exp = TREND_LABELS.filter(([k]) => trend.expected[k] != null).map(([k, label]) => `${label} ${trend.expected[k]!.toFixed(1)}`);
+  return (
+    `Tendances des deux équipes (fichier de stats match par match, mis à jour chaque nuit) :\n` +
+    `- ${line(trend.homeTeam, trend.samples.home, trend.rates.home)}\n` +
+    `- ${line(trend.awayTeam, trend.samples.away, trend.rates.away)}\n` +
+    `- Total attendu pour ce match d'après ces tendances : ${exp.join(', ')}.`
+  );
 }

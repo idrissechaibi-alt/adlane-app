@@ -23,6 +23,7 @@ import { fetchMatchContext, PerplexitySearchResult } from '../core/perplexity';
 import { getAgentLearningDigest } from '../core/autoLearn';
 import { getFocusNoteByTeams, loadOmnirouteConfig, renderFocusNote } from '../core/focusEnrichment';
 import { getHistoricalPriors } from '../core/footballDataCoUk';
+import { describeMatchTrend, getMatchTrend } from '../core/teamStats';
 import { getSecondOpinion } from '../core/eloRatings';
 import { fetchLiveFixtures } from '../core/halftimeMonitor';
 import { normalizeTeamName, namesLikelyMatch } from '../core/teamNameMatch';
@@ -57,6 +58,7 @@ export default function ScoutingScreen() {
   const [diagnostic, setDiagnostic] = useState<AIDiagnostic | null>(null);
   const [calibrationOutcome, setCalibrationOutcome] = useState<ScoutingRecord['outcome'] | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [trendInfo, setTrendInfo] = useState<string | null>(null);
   const [webSources, setWebSources] = useState<PerplexitySearchResult[]>([]);
 
   // Formulaire (caché mais utilisé pour l'auto-remplissage/ajustement)
@@ -101,6 +103,7 @@ export default function ScoutingScreen() {
     setAnalysisResult(null);
     setAnalysisError(null);
     setWebSources([]);
+    setTrendInfo(null);
     setCalibrationOutcome(null);
 
     // Clé Gemini lue tôt : sert à la fois à la recherche Google (basique :
@@ -206,6 +209,21 @@ export default function ScoutingScreen() {
       console.warn('Priors historiques/Elo indisponibles:', error.message);
     }
 
+    // Tendances des deux équipes (fichier de stats match par match) : ajoutées
+    // aux données fournies à l'IA, et affichées pour que tu voies ce qui a servi.
+    let trendText = '';
+    try {
+      const trend = await getMatchTrend(match.homeTeam, match.awayTeam);
+      if (trend) {
+        trendText = describeMatchTrend(trend);
+        setTrendInfo(`Tendances utilisées : ${trend.homeTeam} (${trend.samples.home} matchs) et ${trend.awayTeam} (${trend.samples.away} matchs)`);
+      } else {
+        setTrendInfo(`Tendances non utilisées : ${match.homeTeam} ou ${match.awayTeam} absent du fichier de stats (5 grands championnats et Ligue des champions seulement) ou moins de 4 matchs`);
+      }
+    } catch (error: any) {
+      console.warn('Tendances indisponibles:', error.message);
+    }
+
     // Match déjà en cours ? (règle explicite) Un seul appel qui couvre TOUS
     // les matchs en direct (fixtures?live=all), jamais un par match. En 1ère
     // mi-temps, les pronostics doivent porter sur la 1ère mi-temps
@@ -291,6 +309,7 @@ export default function ScoutingScreen() {
         match.context,
         webContext ? `Recherche web en direct :\n${webContext}` : '',
         priorsText ? `Données historiques & second avis (gratuites, indépendantes du marché) :\n${priorsText}` : '',
+        trendText,
         learningDigest ? `Mémoire d'auto-apprentissage (marqueurs observés en direct) :\n${learningDigest}` : '',
         focusContext ? `Contexte déjà collecté en fond sur ce match (ligue jouée) :\n${focusContext}` : ''
       ]
@@ -430,6 +449,12 @@ export default function ScoutingScreen() {
             ))}
           </View>
         ) : null}
+
+        {trendInfo && (
+          <View style={styles.webSourcesBox}>
+            <Text style={styles.webSourceText}>{trendInfo.startsWith('Tendances utilisées') ? '📊 ' : '⚠️ '}{trendInfo}</Text>
+          </View>
+        )}
 
         {webSources.length > 0 && (
           <View style={styles.webSourcesBox}>
