@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Collecte (incrémentale : seuls les nouveaux matchs sont téléchargés)
+      - name: Collecte incrémentale (seuls les nouveaux matchs sont téléchargés)
         run: python3 scripts/team-stats/collect.py
       - name: Publier
         run: |
