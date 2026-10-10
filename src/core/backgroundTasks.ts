@@ -234,7 +234,7 @@ async function hasRealMatchInLiveWindow(): Promise<boolean> {
 /** Relevé live du pipe RÉEL, partagé quelques dizaines de secondes entre le
  * scan rapide et le tour complet. */
 let realLiveMemo: { at: number; value: Omit<SharedLiveFixturesResult, 'fictionalFixtures'> } | null = null;
-const REAL_LIVE_MEMO_MS = 60_000;
+const REAL_LIVE_MEMO_MS = 45_000;
 
 async function fetchRealLiveFixturesShared(): Promise<Omit<SharedLiveFixturesResult, 'fictionalFixtures'>> {
   if (realLiveMemo && Date.now() - realLiveMemo.at < REAL_LIVE_MEMO_MS) return realLiveMemo.value;

@@ -12,7 +12,7 @@ import { buildAppHealth } from './src/core/appHealth';
 import { ensureNotificationPermissions } from './src/core/notifications';
 import { registerBackgroundAutoLearn, runAutoLearnTick, runRealFastTick } from './src/core/backgroundTasks';
 
-const REAL_FAST_TICK_INTERVAL_MS = 2 * 60_000;
+const REAL_FAST_TICK_INTERVAL_MS = 60_000;
 import DashboardScreen from './src/screens/DashboardScreen';
 import DailyPlanScreen from './src/screens/DailyPlanScreen';
 import ScoutingScreen from './src/screens/ScoutingScreen';
@@ -84,7 +84,7 @@ export default function App() {
     };
     runTick();
     const interval = setInterval(runTick, FOREGROUND_TICK_INTERVAL_MS);
-    // Scan réel rapide (5 grands championnats) toutes les 2 min, sans attendre
+    // Scan réel rapide (5 grands championnats) chaque minute, sans attendre
     // le tour complet : la fenêtre de la 20e minute ne doit jamais être ratée.
     const realInterval = setInterval(() => {
       runRealFastTick().catch(() => undefined);

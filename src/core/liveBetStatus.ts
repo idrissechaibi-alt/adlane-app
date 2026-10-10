@@ -44,7 +44,7 @@ function decidedEarly(leg: InPlayProposalLeg, live: { homeGoals: number; awayGoa
 }
 
 const cache = new Map<string, { at: number; status: LegStatus }>();
-const CHECK_INTERVAL_MS = 60_000;
+const CHECK_INTERVAL_MS = 50_000;
 
 export async function checkLegStatus(leg: InPlayProposalLeg, dateKey: string): Promise<LegStatus> {
   if (leg.settled && leg.won != null) return leg.won ? 'won' : 'lost';

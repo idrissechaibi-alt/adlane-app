@@ -521,7 +521,7 @@ const allSports: Provider = {
 /** Ordre de priorité : la source la plus complète d'abord. */
 const PROVIDERS: Provider[] = [liveScore, fotMob, scores365, espn, allSports, sportsDb];
 
-const LIVE_TTL_MS = 90_000;
+const LIVE_TTL_MS = 50_000;
 const TODAY_TTL_MS = 10 * 60_000;
 const PAST_TTL_MS = 6 * 3_600_000;
 const FAILURE_PAUSE_MS = 5 * 60_000;
@@ -669,7 +669,7 @@ async function findEverywhere(homeTeam: string, awayTeam: string, dateKey: strin
 }
 
 const detailCache = new Map<string, { at: number; data: HubDetail }>();
-const DETAIL_TTL_MS = 60_000;
+const DETAIL_TTL_MS = 50_000;
 
 async function detailOf(match: HubMatch): Promise<HubDetail | null> {
   const provider = PROVIDERS.find((p) => p.name === match.provider);
