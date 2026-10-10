@@ -574,17 +574,6 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
     console.warn('[Tâche de fond] Scan en direct échoué:', error.message);
   }
 
-  await markTickStep('marqueurs live');
-  let liveMarkerObserved = 0;
-  let liveMarkerClosed = 0;
-  try {
-    const result = await runLiveMarkerTick([...liveFixtures, ...shared.fictionalFixtures]);
-    liveMarkerObserved = result.observed;
-    liveMarkerClosed = result.closed;
-  } catch (error: any) {
-    console.warn('[Tâche de fond] Relevé live échoué:', error.message);
-  }
-
   // Bilan de la journée écoulée : se déclenche au premier tour après minuit.
   // Erreur capturée et remontée au diagnostic (plutôt qu'un simple
   // console.warn invisible) : "Aucun bilan encore effectué" dans les courbes
@@ -598,6 +587,17 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
   } catch (error: any) {
     nightlyReviewError = error?.message || 'erreur inconnue';
     console.warn('[Tâche de fond] Bilan de minuit échoué:', error.message);
+  }
+
+  await markTickStep('marqueurs live');
+  let liveMarkerObserved = 0;
+  let liveMarkerClosed = 0;
+  try {
+    const result = await runLiveMarkerTick([...liveFixtures, ...shared.fictionalFixtures]);
+    liveMarkerObserved = result.observed;
+    liveMarkerClosed = result.closed;
+  } catch (error: any) {
+    console.warn('[Tâche de fond] Relevé live échoué:', error.message);
   }
 
   // Programme du jour de la boucle FICTIVE : découvert par planning transmis,

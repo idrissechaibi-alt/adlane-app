@@ -372,7 +372,10 @@ export async function runLiveMarkerTick(liveFixtures: LiveFixture[]): Promise<{ 
     // l'utilisateur, sans quota gratuit externe à protéger — seul le nombre
     // de matchs par tour (MAX_OMNIROUTE_STATS_PER_TICK) le borne, pour ne
     // pas allonger le tour indéfiniment.
+    // Budget IA de l'étape : 90 s, puis le reste au tour suivant.
+    const aiDeadline = Date.now() + 90_000;
     for (const l of beyondQuota) {
+      if (Date.now() > aiDeadline) break;
       const meta = metaFor(l);
       const markers = await fetchOmnirouteMarkers(omnirouteConfig, meta.homeTeam, meta.awayTeam, meta.league, l.minute);
       if (markers) omnirouteMarkersByFixture.set(l.fixtureId, markers);
@@ -388,6 +391,7 @@ export async function runLiveMarkerTick(liveFixtures: LiveFixture[]): Promise<{ 
       .slice(0, MAX_CROSSCHECK_PER_TICK);
 
     for (const l of crossCheckCandidates) {
+      if (Date.now() > aiDeadline) break;
       const meta = metaFor(l);
       const omniMarkers = await fetchOmnirouteMarkers(omnirouteConfig, meta.homeTeam, meta.awayTeam, meta.league, l.minute);
       if (!omniMarkers) continue;

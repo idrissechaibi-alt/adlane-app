@@ -1492,7 +1492,7 @@ export async function runInPlayComboTick(
   xgNewThisTick = 0;
   // Budget du scan fictif : au-delà, plus aucun nouveau match n'est lancé
   // (les autres passent au tour suivant) — le tour doit aller jusqu'au bilan.
-  const fictionalDeadline = Date.now() + 4 * 60_000;
+  const fictionalDeadline = Date.now() + 3 * 60_000;
   await ensureDeltaSamplesLoaded();
   const existing = readInPlayProposals();
   // Réel : une jambe proposée bloque TOUT le match pour ce checkpoint (peu
