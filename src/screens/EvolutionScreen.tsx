@@ -23,6 +23,8 @@ import { MarketCalibration, Lesson, Bet, DailyReport } from '../types';
 import { useIsFocused } from '@react-navigation/native';
 import { runAutoLearnTick, AutoLearnTickDiagnostics, getNativeBackgroundTickStats, NativeBackgroundTickStats } from '../core/backgroundTasks';
 import { sendTelegramMessage } from '../core/telegram';
+import { loadOmnirouteConfig } from '../core/focusEnrichment';
+import { getWebCapableRoutes } from '../core/llmRouter';
 import { getAgentLearningDigest, getAccuracyTrend, AccuracyTrend, buildMarketDayPointsFromPaperBets, buildLearningReport } from '../core/autoLearn';
 
 export default function EvolutionScreen() {
@@ -62,7 +64,38 @@ export default function EvolutionScreen() {
 
   /** Recharge les deux compteurs de la boucle fictive, sans toucher au reste
    * de l'écran — utilisé au focus ET après un lancement manuel du scan. */
+  /** Modèles avec accès internet vérifié (llmRouter) : null = pas encore chargé. */
+  const [webCapableModels, setWebCapableModels] = useState<string[] | null>(null);
+
+  const refreshWebAccess = async () => {
+    try {
+      const config = await loadOmnirouteConfig();
+      setWebCapableModels(config ? await getWebCapableRoutes(config) : []);
+    } catch {
+      setWebCapableModels([]);
+    }
+  };
+
+  /** Voyant accès internet du pipe fictif : vert si au moins un modèle a
+   * prouvé son accès au web, rouge sinon (le pipe fictif ne peut alors ni
+   * relever les matchs en direct, ni régler ses paris). */
+  const renderWebAccessIndicator = () => {
+    if (webCapableModels == null) return null;
+    const ok = webCapableModels.length > 0;
+    return (
+      <View style={styles.webAccessRow}>
+        <View style={[styles.webAccessDot, { backgroundColor: ok ? '#22c55e' : '#ef4444' }]} />
+        <Text style={styles.webAccessText}>
+          {ok
+            ? `Accès internet : ${webCapableModels.length} modèle${webCapableModels.length > 1 ? 's' : ''} vérifié${webCapableModels.length > 1 ? 's' : ''} (${webCapableModels.slice(0, 3).map((m) => m.split(' · ').pop()).join(', ')}${webCapableModels.length > 3 ? '…' : ''})`
+            : "Pas d'accès internet : aucun modèle vérifié. Lance le test dans Paramètres → Choisir dans la liste."}
+        </Text>
+      </View>
+    );
+  };
+
   const refreshLiveCounters = () => {
+    void refreshWebAccess();
     try {
       const bets = readPaperBets();
       setPaperBetsSummary({
@@ -320,6 +353,7 @@ export default function EvolutionScreen() {
 
   const renderCalibrationView = () => (
     <View>
+      {renderWebAccessIndicator()}
       {fictionalCounter && (
         <View style={styles.liveCounterRow}>
           <Ionicons name="radio-button-on" size={10} color="#4ade80" />
@@ -616,6 +650,7 @@ export default function EvolutionScreen() {
           </View>
         )}
 
+        {renderWebAccessIndicator()}
         {paperBetsSummary && paperBetsSummary.total > 0 && (
           <View style={styles.paperBetsBox}>
             <Ionicons name="pulse" size={16} color="#a78bfa" />
@@ -832,6 +867,28 @@ const styles = StyleSheet.create({
     fontSize: 11,
     textAlign: 'center',
     paddingHorizontal: 12,
+  },
+  webAccessRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#1e293b',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#334155',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
+  webAccessDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  webAccessText: {
+    flex: 1,
+    color: '#e2e8f0',
+    fontSize: 12,
   },
   learningDigestButton: {
     flexDirection: 'row',
