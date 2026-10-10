@@ -260,10 +260,12 @@ async function fetchFinalResultsViaOmniroute(
         "sans texte autour. N'invente RIEN : si ce match n'est pas terminé, ou que tu ne trouves pas son score " +
         'sur une source fiable, réponds avec finished: false.',
       `Match : ${homeTeam} vs ${awayTeam}.\n` +
-        'Ce match est-il terminé ? Si oui, quels sont le score final ET le score à la mi-temps ?\n' +
-        'Réponds avec ce JSON exact, sans rien autour :\n' +
+        'Ce match est-il terminé ? Si oui : score final, score à la mi-temps, et nombre total de corners et de ' +
+        'cartons (jaunes + rouges, les deux équipes) en 1ère mi-temps.\n' +
+        'Réponds avec ce JSON exact, sans rien autour (null pour une valeur introuvable) :\n' +
         '{"finished": boolean, "home_goals": number|null, "away_goals": number|null, ' +
-        '"ht_home_goals": number|null, "ht_away_goals": number|null}',
+        '"ht_home_goals": number|null, "ht_away_goals": number|null, ' +
+        '"corners_1h": number|null, "cards_1h": number|null}',
       omnirouteConfig,
       (text) => {
         let parsed: any;
@@ -284,6 +286,8 @@ async function fetchFinalResultsViaOmniroute(
           goalsAway,
           htHome: typeof parsed.ht_home_goals === 'number' ? parsed.ht_home_goals : 0,
           htAway: typeof parsed.ht_away_goals === 'number' ? parsed.ht_away_goals : 0,
+          corners1H: typeof parsed.corners_1h === 'number' ? parsed.corners_1h : undefined,
+          cards1H: typeof parsed.cards_1h === 'number' ? parsed.cards_1h : undefined,
         };
       },
       undefined,
@@ -539,8 +543,13 @@ export async function runNightlyReviewIfDue(): Promise<number> {
         unreviewedDayProposals.flatMap((p) => p.legs.map((l) => [l.fixtureId, l] as const))
       ).values()
     );
+    // API-Football uniquement pour les paris RÉELS (5 grands championnats) ;
+    // les paris fictifs sont réglés par les fournisseurs IA (plus bas).
+    const realFixtureIds = new Set(
+      unreviewedDayProposals.filter((p) => p.real !== false).flatMap((p) => p.legs.map((l) => l.fixtureId))
+    );
     const finals = apiConfig.apiFootball
-      ? await fetchFinalResults(apiConfig.apiFootball, allLegs.map((l) => l.fixtureId))
+      ? await fetchFinalResults(apiConfig.apiFootball, Array.from(realFixtureIds).filter((id) => !isSyntheticFixtureId(id)))
       : new Map<number, FinalResult>();
 
     // Repli GRATUIT, et plus fiable qu'une recherche : le score déjà capté
@@ -569,6 +578,7 @@ export async function runNightlyReviewIfDue(): Promise<number> {
         new Set(
           allLegs
             .filter((l) => (l.market === 'corners' || l.market === 'cartons') && finals.has(l.fixtureId))
+            .filter((l) => realFixtureIds.has(l.fixtureId))
             .filter((l) => finals.get(l.fixtureId)!.corners1H == null && !isSyntheticFixtureId(l.fixtureId))
             .map((l) => l.fixtureId)
         )

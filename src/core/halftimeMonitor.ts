@@ -37,8 +37,17 @@ export function buildApiFootballHeaders(apiKey: string): Record<string, string> 
  * requête, filtrée ensuite côté client par nom d'équipe) — API-Football
  * n'offre pas de recherche live par équipe.
  */
+/**
+ * Compétitions pour lesquelles API-Football est utilisé (paris RÉELS
+ * uniquement, demande explicite) : les 5 grands championnats et leurs coupes,
+ * celles du scan matinal (Premier League, Liga, Serie A, Bundesliga, Ligue 1,
+ * Ligue des champions, FA Cup, Copa del Rey, DFB-Pokal, Coppa Italia, Coupe de
+ * France). Tout le reste (pipe fictif) passe par les fournisseurs IA.
+ */
+export const API_FOOTBALL_REAL_LEAGUE_IDS = [39, 140, 135, 78, 61, 2, 45, 143, 81, 137, 66];
+
 export async function fetchLiveFixtures(apiKey: string): Promise<LiveFixture[]> {
-  const response = await fetchWithTimeout('https://v3.football.api-sports.io/fixtures?live=all', {
+  const response = await fetchWithTimeout(`https://v3.football.api-sports.io/fixtures?live=${API_FOOTBALL_REAL_LEAGUE_IDS.join('-')}`, {
     headers: buildApiFootballHeaders(apiKey)
   });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);

@@ -177,7 +177,8 @@ export default function EvolutionScreen() {
 
     const lines = [
       '🔍 Scan terminé',
-      `📡 En direct maintenant : ${diag.liveFixturesFound} match(s)`,
+      `📡 En direct maintenant : ${diag.liveFixturesFound} match(s) 5 grands championnats (API-Football), ` +
+        `${diag.fictionalLiveFixturesFound ?? 0} ailleurs (fournisseurs IA)`,
       `🕐 À venir aujourd'hui : ${diag.fictionalMatchesAhead} match(s)`,
       `✅ Déjà joués aujourd'hui : ${playedToday} match(s)`,
       `📈 Bilan : ${diag.nightlyReviewPointsCreated ?? 0} point(s) de courbe mis à jour ce tour`,

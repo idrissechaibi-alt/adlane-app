@@ -8,6 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getAPIConfig } from '../api/multiAPIManager';
 import { API_FOOTBALL_RESERVE, spendBudget } from './requestBudget';
 import { fetchWithTimeout } from './httpTimeout';
+import { API_FOOTBALL_REAL_LEAGUE_IDS } from './halftimeMonitor';
 
 const UNIVERSE_KEY_PREFIX = '@match_universe_';
 const MAX_UNIVERSE_SIZE = 500;
@@ -141,6 +142,9 @@ export async function ensureDailyUniverse(focusLeagues: string[] = []): Promise<
     for (const item of payload.response || []) {
       const country = item.league?.country;
       if (!TARGET_COUNTRIES.includes(country)) continue;
+      // API-Football réservé aux 5 grands championnats et coupes (paris
+      // réels) ; le reste du monde relève des fournisseurs IA.
+      if (!API_FOOTBALL_REAL_LEAGUE_IDS.includes(item.league?.id)) continue;
 
       collected.push({
         fixtureId: item.fixture?.id,

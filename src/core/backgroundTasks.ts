@@ -25,9 +25,15 @@ import { runMorningScanIfDue } from './scheduler';
 import { reconcileScoutingAnalyses } from './scoutingReview';
 import { refreshDueLineups } from './lineupRefresh';
 import { readLearnedModel } from './learnStore';
+import { namesLikelyMatch, normalizeTeamName } from './teamNameMatch';
 
 interface SharedLiveFixturesResult {
+  /** Matchs en direct des 5 grands championnats et coupes (API-Football) :
+   * pipeline RÉEL uniquement. */
   fixtures: LiveFixture[];
+  /** Matchs en direct du reste du monde, relevés par les fournisseurs IA
+   * (modèles avec accès internet) : pipe FICTIF uniquement. */
+  fictionalFixtures: LiveFixture[];
   /** D'où viennent (ou pourquoi pas) les fixtures — sert au diagnostic du
    * bouton "forcer le scan" (EvolutionScreen) : sans ça, un relevé vide est
    * indiscernable d'un vrai calme (aucun match en ce moment) ou d'Omniroute
@@ -95,39 +101,82 @@ async function writeCachedLiveFixtures(fixtures: LiveFixture[]): Promise<void> {
   }
 }
 
+const FICTIONAL_LIVE_CACHE_KEY = '@fictional_live_fixtures_cache';
+let fictionalLiveCache: { at: number; fixtures: LiveFixture[] } | null = null;
+
+/**
+ * Relevé en direct pour le pipe fictif, par les fournisseurs IA (jamais
+ * API-Football, réservé aux paris réels). Réutilisé 15 min comme le relevé
+ * réel : chaque relevé coûte des appels IA.
+ */
+async function fetchFictionalLiveFixtures(realLive: LiveFixture[]): Promise<LiveFixture[]> {
+  try {
+    if (!fictionalLiveCache) {
+      const raw = await AsyncStorage.getItem(FICTIONAL_LIVE_CACHE_KEY);
+      fictionalLiveCache = raw ? JSON.parse(raw) : null;
+    }
+  } catch {
+    fictionalLiveCache = null;
+  }
+
+  let fixtures: LiveFixture[];
+  const elapsedMinutes = fictionalLiveCache ? Math.floor((Date.now() - fictionalLiveCache.at) / 60_000) : Infinity;
+  if (fictionalLiveCache && elapsedMinutes * 60_000 < LIVE_FIXTURES_CACHE_MS) {
+    fixtures = fictionalLiveCache.fixtures
+      .map((f) => ({ ...f, minute: f.minute + elapsedMinutes }))
+      .filter((f) => (f.statusShort === '1H' ? f.minute <= 45 : f.statusShort === '2H' ? f.minute <= 90 : false));
+  } else {
+    const omnirouteConfig = await loadOmnirouteConfig();
+    if (!omnirouteConfig) return [];
+    fixtures = await fetchOmnirouteAllLiveFixtures(omnirouteConfig).catch(() => [] as LiveFixture[]);
+    fictionalLiveCache = { at: Date.now(), fixtures };
+    try {
+      await AsyncStorage.setItem(FICTIONAL_LIVE_CACHE_KEY, JSON.stringify(fictionalLiveCache));
+    } catch {
+      // cache best-effort
+    }
+  }
+
+  // Un match des 5 grands championnats déjà relevé par API-Football relève
+  // du pipeline réel, pas du fictif.
+  return fixtures.filter(
+    (f) =>
+      !realLive.some(
+        (r) =>
+          namesLikelyMatch(normalizeTeamName(r.homeTeam), normalizeTeamName(f.homeTeam)) &&
+          namesLikelyMatch(normalizeTeamName(r.awayTeam), normalizeTeamName(f.awayTeam))
+      )
+  );
+}
+
 async function fetchSharedLiveFixtures(): Promise<SharedLiveFixturesResult> {
   const apiConfig = await getAPIConfig();
   let apiFootballError: string | undefined;
+  let fixtures: LiveFixture[] = [];
+  let source: SharedLiveFixturesResult['source'] = 'api_football';
 
   // Relevé récent réutilisé (minutes avancées du temps écoulé) : la boucle de
   // premier plan repasse toutes les 3 min, et une requête par passage
   // épuisait le quota du jour en une vingtaine de minutes d'app ouverte.
   const cached = await readCachedLiveFixtures();
-  if (cached) return { fixtures: cached, source: 'api_football' };
-
-  if (apiConfig.apiFootball && (await spendBudget('apiFootball', 1, API_FOOTBALL_RESERVE.liveFixtures))) {
+  if (cached) {
+    fixtures = cached;
+  } else if (apiConfig.apiFootball && (await spendBudget('apiFootball', 1, API_FOOTBALL_RESERVE.liveFixtures))) {
     try {
-      const fixtures = await fetchLiveFixtures(apiConfig.apiFootball);
+      fixtures = await fetchLiveFixtures(apiConfig.apiFootball);
       await writeCachedLiveFixtures(fixtures);
-      return { fixtures, source: 'api_football' };
     } catch (error: any) {
       apiFootballError = error?.message || 'erreur inconnue';
-      console.warn('[Tâche de fond] Relevé live API-Football échoué, repli Omniroute:', error.message);
+      source = 'aucune_echec_omniroute';
+      console.warn('[Tâche de fond] Relevé live API-Football échoué:', error.message);
     }
-  } else if (!apiConfig.apiFootball) {
-    apiFootballError = 'clé absente (Gestion des API)';
+  } else {
+    apiFootballError = apiConfig.apiFootball ? 'quota du jour atteint (réserve gardée pour le règlement)' : 'clé absente (Gestion des API)';
+    source = 'aucune_echec_omniroute';
   }
 
-  const omnirouteConfig = await loadOmnirouteConfig();
-  if (!omnirouteConfig) return { fixtures: [], source: 'aucune_omniroute_non_configure', apiFootballError };
-
-  try {
-    const fixtures = await fetchOmnirouteAllLiveFixtures(omnirouteConfig);
-    return { fixtures, source: 'omniroute', apiFootballError };
-  } catch (error: any) {
-    console.warn('[Tâche de fond] Repli Omniroute pour le relevé live échoué:', error.message);
-    return { fixtures: [], source: 'aucune_echec_omniroute', apiFootballError };
-  }
+  const fictionalFixtures = await fetchFictionalLiveFixtures(fixtures).catch(() => [] as LiveFixture[]);
+  return { fixtures, fictionalFixtures, source, apiFootballError };
 }
 
 export const AUTOLEARN_TASK_NAME = 'adlane-autolearn-tick';
@@ -207,6 +256,8 @@ export interface AutoLearnTickDiagnostics {
    * à agir dessus. */
   fictionalSportmonksError?: string;
   liveFixturesFound: number;
+  /** Matchs en direct relevés par les fournisseurs IA pour le pipe fictif. */
+  fictionalLiveFixturesFound: number;
   liveFixturesSource: SharedLiveFixturesResult['source'];
   /** Raison précise d'un repli sur Omniroute (clé absente, ou message
    * d'erreur exact d'API-Football) — absent quand liveFixturesSource vaut
@@ -375,7 +426,7 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
   let liveMarkerObserved = 0;
   let liveMarkerClosed = 0;
   try {
-    const result = await runLiveMarkerTick(liveFixtures);
+    const result = await runLiveMarkerTick([...liveFixtures, ...shared.fictionalFixtures]);
     liveMarkerObserved = result.observed;
     liveMarkerClosed = result.closed;
   } catch (error: any) {
@@ -416,7 +467,7 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
   let sofaScoreConfirmedMatches: number | null | undefined;
   let sportmonksError: string | undefined;
   try {
-    const result = await runInPlayComboTick(liveFixtures);
+    const result = await runInPlayComboTick(liveFixtures, shared.fictionalFixtures);
     freshInPlayProposals = result.freshProposals;
     intlBreak = result.intlBreak;
     sportmonksConfirmedMatches = result.sportmonksConfirmedMatches;
@@ -455,6 +506,7 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
     fictionalOmnirouteMatches,
     fictionalSportmonksError,
     liveFixturesFound: liveFixtures.length,
+    fictionalLiveFixturesFound: shared.fictionalFixtures.length,
     liveFixturesSource: shared.source,
     apiFootballError: shared.apiFootballError,
     liveMarkerObserved,

@@ -1102,7 +1102,10 @@ async function withFallbackExpectedGoals(
   return result;
 }
 
-export async function runInPlayComboTick(liveFixtures: LiveFixture[]): Promise<InPlayComboTickResult> {
+export async function runInPlayComboTick(
+  liveFixtures: LiveFixture[],
+  fictionalLiveFixtures: LiveFixture[] = []
+): Promise<InPlayComboTickResult> {
   const existing = readInPlayProposals();
   // Réel : une jambe proposée bloque TOUT le match pour ce checkpoint (peu
   // importe le marché). Fictif : chaque marché est une jambe indépendante
@@ -1179,16 +1182,13 @@ export async function runInPlayComboTick(liveFixtures: LiveFixture[]): Promise<I
     matchesInCheckpointWindow: intlInCheckpointWindow,
   };
 
-  // B0) Paris FICTIFS sur les VRAIS matchs en direct du monde entier, tels
-  // que relevés à chaque tour par API-Football (liveFixtures, déjà payé par
-  // le relevé partagé). Le pipe historique ci-dessous demande à l'IA le
-  // statut de chaque match — impossible pour des modèles sans accès web, d'où
-  // 0 proposition. Ici, statut, minute et score viennent d'une source
-  // structurée, et le vrai fixtureId permet au bilan de minuit de régler ces
-  // paris directement via API-Football, sans recherche IA.
+  // B0) Paris FICTIFS sur les matchs en direct du reste du monde, relevés par
+  // les fournisseurs IA (modèles avec accès internet vérifié) — jamais par
+  // API-Football, réservé aux 5 grands championnats (demande explicite).
+  // Statut, minute et score viennent de ce relevé ; le bilan règle ces paris
+  // par les mêmes fournisseurs.
   const liveFictionalCandidates: Array<{ live: LiveFixture; kind: 'minute20' | 'minute60' }> = [];
-  for (const live of liveFixtures) {
-    if (isSyntheticFixtureId(live.fixtureId)) continue; // repli Omniroute : pas de vérité terrain
+  for (const live of fictionalLiveFixtures) {
     const kind: 'minute20' | 'minute60' | null =
       live.statusShort === '1H' && live.minute >= LIVE_FICTIONAL_20_MIN && live.minute <= LIVE_FICTIONAL_20_MAX
         ? 'minute20'
