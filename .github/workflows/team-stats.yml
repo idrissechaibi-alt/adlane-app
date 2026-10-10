@@ -1,0 +1,27 @@
+name: Stats d'équipes (nuit)
+on:
+  schedule:
+    # 02:00 UTC = 03:00 en Algérie : après les derniers matchs de la veille.
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: team-stats
+  cancel-in-progress: false
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Collecte (incrémentale : seuls les nouveaux matchs sont téléchargés)
+        run: python3 scripts/team-stats/collect.py
+      - name: Publier
+        run: |
+          git config user.name "Claude"
+          git config user.email "noreply@anthropic.com"
+          git add data/team-stats
+          if git diff --cached --quiet; then echo "Rien de nouveau"; exit 0; fi
+          git commit -m "Stats d'équipes : mise à jour de nuit"
+          git pull --rebase origin main
+          git push origin HEAD:main

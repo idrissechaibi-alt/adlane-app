@@ -10,6 +10,8 @@ on:
     # en permanence "nouvelle mise à jour disponible" pour rien.
     paths-ignore:
       - 'data/app-adlane-data.json'
+      # Stats d'équipes compilées chaque nuit (team-stats.yml) : données seules.
+      - 'data/team-stats/**'
 jobs:
   update:
     name: Publish Update
