@@ -261,14 +261,22 @@ async function fetchSharedLiveFixtures(): Promise<SharedLiveFixturesResult> {
     source = 'aucune_echec_omniroute';
   }
 
-  // Secours du pipe réel : API-Football injoignable ou sans requêtes restantes
-  // → les sources live gratuites suivent les matchs du planning réel.
-  if (apiFootballError) {
-    const backup = await fetchRealLiveFromFreeSources().catch(() => [] as LiveFixture[]);
-    if (backup.length > 0) {
-      fixtures = backup;
-      source = 'sources_live_gratuites';
-    }
+  // Les sources live gratuites complètent TOUJOURS les matchs du planning réel
+  // absents de la réponse d'API-Football : panne, quota épuisé, mais aussi
+  // réponse vide sans erreur (Arsenal-Leeds le 10/10 : 0 match en direct
+  // renvoyé à la 21e minute) ou relevé mis en cache juste avant le coup d'envoi.
+  const backup = await fetchRealLiveFromFreeSources().catch(() => [] as LiveFixture[]);
+  const missing = backup.filter(
+    (b) =>
+      !fixtures.some(
+        (f) =>
+          namesLikelyMatch(normalizeTeamName(f.homeTeam), normalizeTeamName(b.homeTeam)) &&
+          namesLikelyMatch(normalizeTeamName(f.awayTeam), normalizeTeamName(b.awayTeam))
+      )
+  );
+  if (missing.length > 0) {
+    fixtures = [...fixtures, ...missing];
+    if (missing.length === fixtures.length) source = 'sources_live_gratuites';
   }
 
   const fictionalFixtures = await fetchFictionalLiveFixtures(fixtures).catch(() => [] as LiveFixture[]);

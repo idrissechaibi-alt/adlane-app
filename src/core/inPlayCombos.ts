@@ -111,7 +111,7 @@ import {
 // passaient le checkpoint sans jamais être vus (aucune prédiction à la 60e).
 // Les jambes se projettent depuis la minute réelle, quelle qu'elle soit.
 const CHECKPOINT20_MIN_MINUTE = 15;
-const CHECKPOINT20_MAX_MINUTE = 30;
+const CHECKPOINT20_MAX_MINUTE = 35;
 const CHECKPOINT60_MIN_MINUTE = 55;
 const CHECKPOINT60_MAX_MINUTE = 70;
 
