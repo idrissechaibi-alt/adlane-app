@@ -238,17 +238,33 @@ export function routeLabel(route: LlmRoute): string {
   return `${route.providerName} · ${route.model}`;
 }
 
-/** Appel chat-completions sur une route, mesuré pour le classement. */
-export async function callRoute(
+export interface ChatMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content: string;
+  tool_calls?: ToolCall[];
+  tool_call_id?: string;
+}
+
+export interface ToolCall {
+  id: string;
+  type?: string;
+  function: { name: string; arguments: string };
+}
+
+/**
+ * Appel chat-completions brut sur une route, mesuré pour le classement.
+ * Renvoie le texte ET les éventuels appels d'outils demandés par le modèle.
+ * Une réponse sans texte ni appel d'outil compte comme un échec.
+ */
+export async function chatRoute(
   route: LlmRoute,
-  systemPrompt: string,
-  userPrompt: string,
+  messages: ChatMessage[],
   timeoutMs: number = 20000,
   tools?: unknown[]
-): Promise<string> {
+): Promise<{ content: string; toolCalls: ToolCall[] }> {
   await loadStats();
   const startedAt = Date.now();
-  let content: string;
+  let result: { content: string; toolCalls: ToolCall[] };
   try {
     const response = await fetchWithTimeout(
       `${route.endpoint}/chat/completions`,
@@ -260,10 +276,7 @@ export async function callRoute(
         },
         body: JSON.stringify({
           model: route.model,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt },
-          ],
+          messages,
           temperature: 0.2,
           ...(tools && tools.length > 0 ? { tools } : {}),
         }),
@@ -284,13 +297,37 @@ export async function callRoute(
     }
 
     const data = await response.json();
-    content = data.choices?.[0]?.message?.content || '';
-    if (!content.trim()) throw new Error('réponse vide');
+    const message = data.choices?.[0]?.message ?? {};
+    const toolCalls: ToolCall[] = Array.isArray(message.tool_calls) ? message.tool_calls : [];
+    const content: string = typeof message.content === 'string' ? message.content : '';
+    if (!content.trim() && toolCalls.length === 0) throw new Error('réponse vide');
+    result = { content, toolCalls };
   } catch (error) {
     recordResult(route, false, Date.now() - startedAt);
     throw error;
   }
   recordResult(route, true, Date.now() - startedAt);
+  return result;
+}
+
+/** Appel simple (système + utilisateur) qui renvoie le texte de la réponse. */
+export async function callRoute(
+  route: LlmRoute,
+  systemPrompt: string,
+  userPrompt: string,
+  timeoutMs: number = 20000,
+  tools?: unknown[]
+): Promise<string> {
+  const { content } = await chatRoute(
+    route,
+    [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ],
+    timeoutMs,
+    tools
+  );
+  if (!content.trim()) throw new Error('réponse vide (outil demandé sans réponse)');
   return content;
 }
 

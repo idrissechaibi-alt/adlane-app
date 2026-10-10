@@ -21,7 +21,7 @@ import { enrichFocusMatches, loadOmnirouteConfig } from './focusEnrichment';
 import { runInPlayComboTick, InternationalBreakTickDiagnostics } from './inPlayCombos';
 import { runNightlyReviewIfDue } from './dailyReview';
 import { autoProbeWebCapability } from './llmRouter';
-import { getWorkingSearchProviders, probeSearchProviders } from './webSearch';
+import { getRecentSearchSource, probeAnySearch } from './webSearch';
 import { runMorningScanIfDue } from './scheduler';
 import { reconcileScoutingAnalyses } from './scoutingReview';
 import { refreshDueLineups } from './lineupRefresh';
@@ -527,7 +527,7 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
     const config = await loadOmnirouteConfig();
     if (config) {
       await autoProbeWebCapability(config);
-      if ((await getWorkingSearchProviders(config)).length === 0) await probeSearchProviders(config);
+      if (!(await getRecentSearchSource())) await probeAnySearch(config);
     }
   } catch (error: any) {
     console.warn('[Tâche de fond] Vérification accès internet échouée:', error?.message);

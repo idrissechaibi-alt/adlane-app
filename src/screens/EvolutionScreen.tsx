@@ -25,7 +25,7 @@ import { runAutoLearnTick, AutoLearnTickDiagnostics, getNativeBackgroundTickStat
 import { sendTelegramMessage } from '../core/telegram';
 import { loadOmnirouteConfig } from '../core/focusEnrichment';
 import { getWebCapableRoutes } from '../core/llmRouter';
-import { getWorkingSearchProviders, probeSearchProviders } from '../core/webSearch';
+import { getRecentSearchSource, probeAnySearch } from '../core/webSearch';
 import { getAgentLearningDigest, getAccuracyTrend, AccuracyTrend, buildMarketDayPointsFromPaperBets, buildLearningReport } from '../core/autoLearn';
 
 export default function EvolutionScreen() {
@@ -78,9 +78,8 @@ export default function EvolutionScreen() {
         setSearchProviders([]);
         return;
       }
-      let search = await getWorkingSearchProviders(config);
-      if (search.length === 0) search = await probeSearchProviders(config);
-      setSearchProviders(search);
+      const source = (await getRecentSearchSource()) ?? (await probeAnySearch(config));
+      setSearchProviders(source ? [source] : []);
       setWebCapableModels(await getWebCapableRoutes(config));
     } catch {
       setWebCapableModels([]);
@@ -94,7 +93,7 @@ export default function EvolutionScreen() {
     if (webCapableModels == null) return null;
     const ok = webCapableModels.length > 0 || searchProviders.length > 0;
     const parts = [
-      ...(searchProviders.length > 0 ? [`recherche web via ${searchProviders.join(', ')}`] : []),
+      ...(searchProviders.length > 0 ? [`tous les modèles cherchent via ${searchProviders.join(', ')}`] : []),
       ...(webCapableModels.length > 0
         ? [`${webCapableModels.length} modèle${webCapableModels.length > 1 ? 's' : ''} qui cherche${webCapableModels.length > 1 ? 'nt' : ''} lui-même (${webCapableModels.slice(0, 3).map((m) => m.split(' · ').pop()).join(', ')}${webCapableModels.length > 3 ? '…' : ''})`]
         : []),
@@ -105,7 +104,7 @@ export default function EvolutionScreen() {
         <Text style={styles.webAccessText}>
           {ok
             ? `Accès internet : ${parts.join(' + ')}`
-            : "Pas d'accès internet : ni recherche OmniRoute, ni modèle vérifié. Lance le test dans Paramètres → Choisir dans la liste."}
+            : "Pas d'accès internet : aucune source de recherche ne répond (OmniRoute, Gemini, DuckDuckGo) et aucun modèle vérifié."}
         </Text>
       </View>
     );

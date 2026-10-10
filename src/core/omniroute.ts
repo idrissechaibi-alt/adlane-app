@@ -3,8 +3,8 @@
 
 import { Lesson, OmnirouteConfig } from '../types';
 import { lintContent } from './validator';
-import { LlmRoute, buildRoutes, callRoute, isWebCapableRoute, orderRoutes, routeLabel } from './llmRouter';
-import { formatSearchContext, searchWeb } from './webSearch';
+import { ChatMessage, LlmRoute, ToolCall, buildRoutes, callRoute, chatRoute, isWebCapableRoute, orderRoutes, routeLabel } from './llmRouter';
+import { fetchPage, formatSearchContext, getRecentSearchSource, searchWeb } from './webSearch';
 
 // Aucun nom de modèle deviné par défaut : le préfixe "in-ai/" testé
 // précédemment s'est révélé faux sur le serveur réel de l'utilisateur (HTTP
@@ -129,20 +129,104 @@ interface RawAgentResult {
 /**
  * Interroge une route (fournisseur + modèle) via son endpoint chat-completions.
  */
+/** Outils web proposés à tous les modèles (exécutés par l'app, voir webSearch.ts). */
+const WEB_TOOLS = [
+  {
+    type: 'function',
+    function: {
+      name: 'web_search',
+      description: 'Recherche sur internet (résultats du jour). À utiliser pour tout fait récent : score, minute, statistiques, résultat, calendrier.',
+      parameters: {
+        type: 'object',
+        properties: { query: { type: 'string', description: 'Requête de recherche' } },
+        required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'fetch_page',
+      description: "Lit le contenu texte d'une page web (par exemple une page de match trouvée par web_search).",
+      parameters: {
+        type: 'object',
+        properties: { url: { type: 'string', description: 'Adresse de la page' } },
+        required: ['url'],
+      },
+    },
+  },
+];
+const WEB_TOOL_MAX_ROUNDS = 3;
+
+async function runWebTool(call: ToolCall, config: OmnirouteConfig): Promise<string> {
+  let args: any = {};
+  try {
+    args = JSON.parse(call.function.arguments || '{}');
+  } catch {
+    args = {};
+  }
+  if (call.function.name === 'web_search' && typeof args.query === 'string') {
+    const results = await searchWeb(config, args.query).catch(() => null);
+    return results && results.length > 0 ? formatSearchContext(args.query, results) : 'Aucun résultat.';
+  }
+  if (call.function.name === 'fetch_page' && typeof args.url === 'string') {
+    return (await fetchPage(config, args.url).catch(() => null)) ?? 'Page illisible.';
+  }
+  return 'Outil inconnu.';
+}
+
+/**
+ * Donne internet à n'importe quel modèle : il reçoit les outils web_search et
+ * fetch_page, l'app exécute ceux qu'il appelle et lui renvoie les résultats
+ * (jusqu'à 3 allers-retours). Un fournisseur qui refuse les outils, ou un
+ * modèle qui ne sait pas les utiliser, retombe sur un appel simple — la
+ * question contient déjà les résultats de la recherche préalable.
+ */
+async function callWithWebTools(
+  route: LlmRoute,
+  systemPrompt: string,
+  userPrompt: string,
+  config: OmnirouteConfig | undefined
+): Promise<string> {
+  if (!config) return callRoute(route, systemPrompt, userPrompt);
+  const messages: ChatMessage[] = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: userPrompt },
+  ];
+  for (let round = 0; round < WEB_TOOL_MAX_ROUNDS; round++) {
+    let reply: { content: string; toolCalls: ToolCall[] };
+    try {
+      reply = await chatRoute(route, messages, 30000, WEB_TOOLS);
+    } catch (error: any) {
+      if (round === 0 && /HTTP 4\d\d/.test(String(error?.message))) {
+        return callRoute(route, systemPrompt, userPrompt); // outils refusés par ce fournisseur
+      }
+      throw error;
+    }
+    if (reply.toolCalls.length === 0) return reply.content;
+    messages.push({ role: 'assistant', content: reply.content ?? '', tool_calls: reply.toolCalls });
+    for (const call of reply.toolCalls) {
+      messages.push({ role: 'tool', tool_call_id: call.id, content: await runWebTool(call, config) });
+    }
+  }
+  const { content } = await chatRoute(route, messages, 30000);
+  if (!content.trim()) throw new Error('réponse vide après les recherches');
+  return content;
+}
+
 async function callSingleAgent(
   route: LlmRoute,
   systemPrompt: string,
   userPrompt: string,
-  webTools: boolean = false
+  webTools: boolean = false,
+  webToolsConfig?: OmnirouteConfig
 ): Promise<RawAgentResult> {
   const model = routeLabel(route);
-  const content = await callRoute(
-    route,
-    systemPrompt,
-    userPrompt,
-    undefined,
-    webTools && GOOGLE_SEARCH_MODEL_PATTERN.test(route.model) ? [GOOGLE_SEARCH_TOOL] : undefined
-  );
+  const content = !webTools
+    ? await callRoute(route, systemPrompt, userPrompt)
+    : GOOGLE_SEARCH_MODEL_PATTERN.test(route.model)
+      ? await callRoute(route, systemPrompt, userPrompt, undefined, [GOOGLE_SEARCH_TOOL])
+      : await callWithWebTools(route, systemPrompt, userPrompt, webToolsConfig);
 
   const lint = lintContent(content);
   if (!lint.valid) {
@@ -231,7 +315,7 @@ export async function askOmnirouteLight(
 
   for (const route of ordered) {
     try {
-      const result = await callSingleAgent(route, systemPrompt, prompt, Boolean(options.requiresWeb));
+      const result = await callSingleAgent(route, systemPrompt, prompt, Boolean(options.requiresWeb), config);
       return { text: result.rawResponse, model: result.model };
     } catch (error: any) {
       console.warn(`[IA] Enrichissement "${routeLabel(route)}" a échoué:`, error?.message);
@@ -322,6 +406,18 @@ async function prepareWebQuestion(
       };
     }
   }
+  // Recherche préalable vide, mais une source de recherche fonctionne : tous
+  // les modèles restent interrogeables, avec les outils web_search/fetch_page
+  // pour chercher eux-mêmes autrement (callWithWebTools).
+  if (await getRecentSearchSource()) {
+    return {
+      routes: all,
+      source: 'outils de recherche',
+      userPrompt:
+        "Utilise l'outil web_search (et fetch_page si besoin) pour trouver l'information à jour avant de répondre. " +
+        `Si tu ne la trouves pas, mets null — n'invente rien.\n\n${userPrompt}`,
+    };
+  }
   const searchCapable = all.filter(isSearchCapable);
   if (searchCapable.length === 0) return null;
   return { routes: searchCapable, userPrompt, source: 'modèles avec accès web' };
@@ -382,7 +478,7 @@ export async function askOmnirouteUsable<T>(
   for (const route of routes) {
     const model = routeLabel(route);
     try {
-      const result = await callSingleAgent(route, systemPrompt, prompt, preferSearchCapable);
+      const result = await callSingleAgent(route, systemPrompt, prompt, preferSearchCapable, config);
       const value = extract(result.rawResponse);
       if (value !== null) {
         trace?.push({ model, outcome: 'exploitable', detail: result.rawResponse.slice(0, ATTEMPT_DETAIL_MAX_CHARS) });

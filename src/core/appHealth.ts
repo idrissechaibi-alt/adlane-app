@@ -11,7 +11,7 @@ import { estimateExpectedGoalsFromMarket } from './poisson';
 import { getNativeBackgroundTickStats, readLastTickDiagnostics, readTickProgress } from './backgroundTasks';
 import { loadOmnirouteConfig } from './focusEnrichment';
 import { checkAllProviders, getRouteLeaderboard, getWebCapableRoutes } from './llmRouter';
-import { getWorkingSearchProviders } from './webSearch';
+import { getRecentSearchSource, getWorkingSearchProviders } from './webSearch';
 import { loadTelegramConfig } from './telegram';
 import {
   readAccuracySnapshots,
@@ -129,6 +129,7 @@ export async function buildAppHealth(): Promise<Record<string, unknown>> {
         leaderboard: (await getRouteLeaderboard(config)).slice(0, 10),
         webCapable: await getWebCapableRoutes(config),
         searchProviders: await getWorkingSearchProviders(config),
+        lastSearchSource: await getRecentSearchSource(),
       };
     }),
     dailyPlan: await section(async () => {
