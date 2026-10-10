@@ -1102,8 +1102,8 @@ async function processRealSlotCheckpoint(
   //    (variantes de marché comprises), classés du plus sûr au moins sûr,
   //    max(4, min(n + 2, 8)) combinés dont un dernier "risqué" ;
   //  - jamais deux combinés identiques, jamais deux sélections opposées sur
-  //    un même match (ERROR_AUTO_ANNULATION), et un match dans UN SEUL
-  //    combiné du créneau.
+  //    un même match (ERROR_AUTO_ANNULATION), un match dans 2 combinés au
+  //    plus, et un MARCHÉ jamais répété d'un combiné à l'autre du créneau.
   if (slotMatchCount < 2 || liveMatches === 1) {
     for (const items of perMatchLegs) for (const item of items) await emit([item], '');
     return;
@@ -1150,16 +1150,21 @@ async function processRealSlotCheckpoint(
 
   const target = Math.max(4, Math.min(liveMatches + 2, 8));
   const exposure = new Map<number, number>();
+  const usedMarkets = new Set<string>();
   const chosenSides = new Map<string, string>(); // match|marché|fenêtre -> sélection retenue
   const compatible = (legs: LegWithContext[]) =>
     legs.every((l) => {
-      // Un match ne figure que dans UN seul combiné (demande explicite).
-      if ((exposure.get(l.fixtureId) ?? 0) >= 1) return false;
+      if ((exposure.get(l.fixtureId) ?? 0) >= 2) return false;
+      // Un marché déjà utilisé par un autre combiné du créneau ne se répète
+      // pas (demande explicite) — corners 1ère MT et corners du match
+      // comptent comme deux marchés distincts.
+      if (usedMarkets.has(legMarketWindow(l.leg))) return false;
       const key = `${l.fixtureId}|${legMarketWindow(l.leg)}`;
       const side = chosenSides.get(key);
       return side == null || side === l.leg.selection;
     });
   const take = (legs: LegWithContext[]) => {
+    for (const l of legs) usedMarkets.add(legMarketWindow(l.leg));
     for (const l of legs) {
       exposure.set(l.fixtureId, (exposure.get(l.fixtureId) ?? 0) + 1);
       chosenSides.set(`${l.fixtureId}|${legMarketWindow(l.leg)}`, l.leg.selection);
@@ -1185,7 +1190,7 @@ async function processRealSlotCheckpoint(
   for (const l of pool) {
     if (risky.length >= 3) break;
     if (risky.some((r) => r.fixtureId === l.fixtureId)) continue;
-    if ((exposure.get(l.fixtureId) ?? 0) >= 1) continue; // match déjà dans un combiné
+    if (usedMarkets.has(legMarketWindow(l.leg))) continue; // marché déjà pris par un autre combiné
     const side = chosenSides.get(`${l.fixtureId}|${legMarketWindow(l.leg)}`);
     if (side != null && side !== l.leg.selection) continue;
     risky.push(l);
