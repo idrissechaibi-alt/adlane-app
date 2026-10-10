@@ -4,7 +4,7 @@
 // booléens de présence : aucune clé API, aucun jeton, aucune adresse.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getAPIConfig, getRequestCount } from '../api/multiAPIManager';
+import { getAPIConfig, getAllRequestCounts, getQuotaUsage, getRequestCount } from '../api/multiAPIManager';
 import { getDailyPlan } from './scheduler';
 import { remainingBudget } from './requestBudget';
 import { estimateExpectedGoalsFromMarket } from './poisson';
@@ -151,6 +151,14 @@ export async function buildAppHealth(): Promise<Record<string, unknown>> {
         ),
       };
     }),
+    apiUsageToday: await section(async () => {
+      const api = await getAPIConfig();
+      return {
+        countsToday: await getAllRequestCounts(),
+        // Quota mensuel réel renvoyé par TheOddsAPI (endpoint /sports, gratuit).
+        theOddsApiMonth: await getQuotaUsage('theOddsApi', api).catch(() => null),
+      };
+    }),
     apiFootballBudget: await section(async () => ({
       usedToday: await getRequestCount('apiFootball'),
       autolearnUsedToday: await getRequestCount('apiFootball-autolearn'),
@@ -169,6 +177,7 @@ export async function buildAppHealth(): Promise<Record<string, unknown>> {
         telegram: Boolean(await loadTelegramConfig()),
         apiFootball: Boolean(api.apiFootball?.trim()),
         sportmonks: Boolean(api.sportmonks?.trim()),
+        footballData: Boolean(api.footballData?.trim()),
         allSports: Boolean(api.allSports?.trim()),
         theOddsApi: Boolean(api.theOddsApi?.trim()),
       };
