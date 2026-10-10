@@ -185,14 +185,14 @@ export function evaluateStrategies(ctx: StrategyContext): StrategyBet[] {
     const reasons = s.test(ctx);
     if (!reasons) continue;
     const bet = s.bet(ctx);
-    if (!bet || bet.prob < 0.5 || bet.prob > 0.9) continue;
+    if (!bet || bet.prob < 0.45 || bet.prob > 0.9) continue;
     const record = records.get(s.id);
     out.push({
       strategyId: s.id,
       strategyName: s.name,
       ...bet,
       evidence:
-        `Stratégie « ${s.name} » : ${reasons.join(', ')}.` +
+        `Stratégie « ${s.name} » : ${reasons.join(', ')}. Cote juste ≈ ${(1 / bet.prob).toFixed(2)} (à jouer seulement si la cote du bookmaker est au-dessus).` +
         (record && record.settled > 0
           ? ` Historique : ${record.won}/${record.settled} réussis (${Math.round(record.hitRate * 100)} %).`
           : ''),
