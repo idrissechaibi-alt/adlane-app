@@ -793,15 +793,15 @@ function liveScoreEvents(data: any): SofaEvent[] {
   return events;
 }
 
-async function fetchLiveScoreLive(): Promise<SofaEvent[]> {
+export async function fetchLiveScoreLive(): Promise<SofaEvent[]> {
   return liveScoreEvents(await liveScoreJson('/live/soccer/0?MD=1'));
 }
 
-async function fetchLiveScoreDate(dateKey: string): Promise<SofaEvent[]> {
+export async function fetchLiveScoreDate(dateKey: string): Promise<SofaEvent[]> {
   return liveScoreEvents(await liveScoreJson(`/date/soccer/${dateKey.replace(/-/g, '')}/0?MD=1`));
 }
 
-async function fetchLiveScoreEvent(eid: number): Promise<SofaEvent | null> {
+export async function fetchLiveScoreEvent(eid: number): Promise<SofaEvent | null> {
   const data = await liveScoreJson(`/scoreboard/soccer/${eid}`);
   return mapLiveScoreEvent(data, data?.Stg ?? null);
 }
@@ -837,7 +837,7 @@ function liveScorePeriod(home: any, away: any): SofaPeriodStats | null {
   };
 }
 
-async function fetchLiveScoreStats(eid: number): Promise<SofaStats> {
+export async function fetchLiveScoreStats(eid: number): Promise<SofaStats> {
   const data = await liveScoreJson(`/statistics/soccer/${eid}`);
   const stat: any[] = data?.Stat ?? [];
   const home = stat.find((x) => Number(x.Tnb) === 1);

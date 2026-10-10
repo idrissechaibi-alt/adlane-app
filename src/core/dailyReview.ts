@@ -45,7 +45,7 @@ import { sendTelegramMessage } from './telegram';
 import { buildFictionalMarketStats, formatFictionalDigestMessage } from './dailyDigest';
 import { readMatchTimelines, MatchSample } from './fictionalProgram';
 import { isSyntheticFixtureId } from './halftimeMonitor';
-import { fetchAllSportsFixtures, findAllSportsResult } from '../api/footballDataAPIs/allSports';
+import { hubFinalResult } from '../api/footballDataAPIs/liveDataHub';
 import { fetchSofaEvent, fetchSofaStats, getSofaEventId } from '../api/footballDataAPIs/sofaScore';
 
 const LAST_REVIEW_KEY = '@last_daily_review';
@@ -92,6 +92,9 @@ interface FinalResult {
   corners1H?: number;
   cards1H?: number;
 }
+
+/** Matchs réglés via les sources live gratuites par passage du bilan. */
+const HUB_FINAL_RESULT_MAX_PER_PASS = 60;
 
 /** Nombre de requêtes de statistiques de 1ère mi-temps par passage du bilan. */
 const FIRST_HALF_STATS_MAX_PER_PASS = 12;
@@ -598,23 +601,6 @@ export async function runNightlyReviewIfDue(): Promise<number> {
       ? await fetchFinalResults(apiConfig.apiFootball, Array.from(realFixtureIds).filter((id) => !isSyntheticFixtureId(id)))
       : new Map<number, FinalResult>();
 
-    // AllSportsApi : son plan ne couvre pas les 5 grands championnats, donc
-    // il règle surtout les paris fictifs (et sert de repli au réel).
-    if (apiConfig.allSports) {
-      const missingReal = allLegs.filter((l) => !finals.has(l.fixtureId));
-      if (missingReal.length > 0) {
-        try {
-          const fixtures = await fetchAllSportsFixtures(apiConfig.allSports, day);
-          for (const leg of missingReal) {
-            const r = findAllSportsResult(fixtures, leg.homeTeam, leg.awayTeam);
-            if (r) finals.set(leg.fixtureId, r);
-          }
-        } catch {
-          // repli suivant (SofaScore, relevés) ou prochain bilan
-        }
-      }
-    }
-
     // SofaScore : résultat publié directement (score, mi-temps, corners et
     // cartons de 1ère MT) pour tout match du pipe fictif qu'il connaît.
     const stillOpen = allLegs.filter((l) => !finals.has(l.fixtureId));
@@ -636,6 +622,17 @@ export async function runNightlyReviewIfDue(): Promise<number> {
       const result = extractFinalResultFromTimeline(timelines[leg.fixtureId] ?? []);
       if (result) finals.set(leg.fixtureId, result);
     }
+
+    // Sources live gratuites réunies (LiveScore, FotMob, 365Scores, ESPN,
+    // AllSportsApi, TheSportsDB) : score validé par plusieurs sources, score à
+    // la pause et stats de 1ère mi-temps prises chez la première qui les a.
+    // Vaut pour les paris fictifs ET les réels quand API-Football n'a plus de
+    // requêtes.
+    const hubPending = allLegs.filter((l) => !finals.has(l.fixtureId)).slice(0, HUB_FINAL_RESULT_MAX_PER_PASS);
+    await mapWithConcurrency(hubPending, 4, async (leg) => {
+      const result = await hubFinalResult(leg.homeTeam, leg.awayTeam, day).catch(() => null);
+      if (result) finals.set(leg.fixtureId, result);
+    });
 
     // Repli Omniroute (recherche web rétroactive) : seulement pour ce qui
     // reste non réglé après le relevé en direct ci-dessus — par exemple un

@@ -13,6 +13,7 @@ import { loadOmnirouteConfig } from './focusEnrichment';
 import { checkAllProviders, getRouteLeaderboard, getWebCapableRoutes } from './llmRouter';
 import { getRecentSearchSource, getWorkingSearchProviders } from './webSearch';
 import { getSofaStatus } from '../api/footballDataAPIs/sofaScore';
+import { getHubStatus } from '../api/footballDataAPIs/liveDataHub';
 import { loadTelegramConfig } from './telegram';
 import {
   readAccuracySnapshots,
@@ -155,6 +156,7 @@ export async function buildAppHealth(): Promise<Record<string, unknown>> {
       autolearnRemaining: await remainingBudget('apiFootball'),
     })),
     sofaScore: await section(async () => getSofaStatus()),
+    liveSources: await section(async () => getHubStatus()),
     configured: await section(async () => {
       const api = await getAPIConfig();
       return {

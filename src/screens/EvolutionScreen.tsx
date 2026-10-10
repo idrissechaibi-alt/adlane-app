@@ -25,7 +25,7 @@ import { runAutoLearnTick, AutoLearnTickDiagnostics, getNativeBackgroundTickStat
 import { sendTelegramMessage } from '../core/telegram';
 import { loadOmnirouteConfig } from '../core/focusEnrichment';
 import { getWebCapableRoutes } from '../core/llmRouter';
-import { getSofaStatus } from '../api/footballDataAPIs/sofaScore';
+import { getHubStatus } from '../api/footballDataAPIs/liveDataHub';
 import { getRecentSearchSource, probeAnySearch } from '../core/webSearch';
 import { getAgentLearningDigest, getAccuracyTrend, AccuracyTrend, buildMarketDayPointsFromPaperBets, buildLearningReport } from '../core/autoLearn';
 
@@ -71,11 +71,11 @@ export default function EvolutionScreen() {
   /** Fournisseurs dont l'API de recherche web (OmniRoute /v1/search) répond. */
   const [searchProviders, setSearchProviders] = useState<string[]>([]);
 
-  const [sofaState, setSofaState] = useState<Awaited<ReturnType<typeof getSofaStatus>> | null>(null);
+  const [liveSources, setLiveSources] = useState<Awaited<ReturnType<typeof getHubStatus>>>({});
 
   const refreshWebAccess = async () => {
     try {
-      setSofaState(await getSofaStatus());
+      setLiveSources(await getHubStatus());
     } catch {
       /* statut SofaScore indisponible */
     }
@@ -106,7 +106,9 @@ export default function EvolutionScreen() {
         ? [`${webCapableModels.length} modèle${webCapableModels.length > 1 ? 's' : ''} qui cherche${webCapableModels.length > 1 ? 'nt' : ''} lui-même (${webCapableModels.slice(0, 3).map((m) => m.split(' · ').pop()).join(', ')}${webCapableModels.length > 3 ? '…' : ''})`]
         : []),
     ];
-    const sofaOk = Boolean(sofaState && !sofaState.error && (sofaState.liveCount ?? 0) >= 0 && sofaState.at);
+    const sourceNames = Object.keys(liveSources);
+    const sourcesOk = sourceNames.filter((n) => liveSources[n].ok);
+    const liveOk = sourcesOk.length > 0;
     return (
       <View>
         <View style={styles.webAccessRow}>
@@ -118,11 +120,13 @@ export default function EvolutionScreen() {
           </Text>
         </View>
         <View style={styles.webAccessRow}>
-          <View style={[styles.webAccessDot, { backgroundColor: sofaOk ? '#22c55e' : '#ef4444' }]} />
+          <View style={[styles.webAccessDot, { backgroundColor: liveOk ? '#22c55e' : '#ef4444' }]} />
           <Text style={styles.webAccessText}>
-            {sofaOk
-              ? `Données live ${sofaState?.route === 'livescore' ? 'LiveScore' : 'SofaScore'} : ${sofaState?.liveCount ?? 0} matchs en direct`
-              : 'Données live injoignables (LiveScore et SofaScore) : le pipe fictif utilise AllSportsApi et les fournisseurs IA'}
+            {liveOk
+              ? `Données live : ${sourcesOk.length}/${sourceNames.length} sources (${sourcesOk.map((n) => `${n} ${liveSources[n].count ?? 0}`).join(', ')})`
+              : sourceNames.length === 0
+                ? 'Données live : pas encore relevées (premier scan en attente)'
+                : 'Données live injoignables : le pipe fictif utilise les fournisseurs IA'}
           </Text>
         </View>
       </View>

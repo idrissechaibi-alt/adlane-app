@@ -22,9 +22,9 @@ import { runInPlayComboTick, InternationalBreakTickDiagnostics } from './inPlayC
 import { runNightlyReviewIfDue } from './dailyReview';
 import { autoProbeWebCapability } from './llmRouter';
 import { getRecentSearchSource, probeAnySearch } from './webSearch';
-import { fetchAllSportsLive } from '../api/footballDataAPIs/allSports';
+import { hubLiveEvents } from '../api/footballDataAPIs/liveDataHub';
 import { syntheticFixtureId } from './halftimeMonitor';
-import { fetchSofaLiveEvents, registerSofaEvents } from '../api/footballDataAPIs/sofaScore';
+import { registerSofaEvents } from '../api/footballDataAPIs/sofaScore';
 import { getDailyPlan, runMorningScanIfDue } from './scheduler';
 import { reconcileScoutingAnalyses } from './scoutingReview';
 import { refreshDueLineups } from './lineupRefresh';
@@ -42,7 +42,7 @@ interface SharedLiveFixturesResult {
    * bouton "forcer le scan" (EvolutionScreen) : sans ça, un relevé vide est
    * indiscernable d'un vrai calme (aucun match en ce moment) ou d'Omniroute
    * non configuré. */
-  source: 'api_football' | 'omniroute' | 'aucune_omniroute_non_configure' | 'aucune_echec_omniroute';
+  source: 'api_football' | 'sources_live_gratuites' | 'omniroute' | 'aucune_omniroute_non_configure' | 'aucune_echec_omniroute';
   /** Raison précise d'un repli sur Omniroute côté API-Football (message
    * d'erreur exact de data.errors, ou HTTP xxx) — sans ça, "source: omniroute"
    * ne dit pas si la clé est en cause, le quota, ou (fréquent chez
@@ -128,61 +128,30 @@ async function fetchFictionalLiveFixtures(realLive: LiveFixture[]): Promise<Live
   let fixtures: LiveFixture[];
   let fromSofaScore = false;
 
-  // SofaScore d'abord : source structurée et gratuite (score, minute, période
-  // de TOUS les matchs en direct du monde en un appel), sans modèle ni
-  // recherche web. Les fournisseurs IA ne servent plus qu'en repli.
+  // Sources de données live gratuites réunies (LiveScore, FotMob, 365Scores,
+  // ESPN, AllSportsApi, TheSportsDB — voir liveDataHub.ts) : score, minute,
+  // période de tous les matchs en cours du monde, sans modèle ni recherche
+  // web. Les fournisseurs IA ne servent plus qu'en repli si toutes échouent.
   try {
-    const sofaEvents = (await fetchSofaLiveEvents()).filter((e) => ['1H', 'HT', '2H'].includes(e.statusShort));
-    if (sofaEvents.length > 0) {
-      const ids = await registerSofaEvents(sofaEvents);
-      fixtures = sofaEvents.map((e) => ({
-        statusShort: e.statusShort,
-        homeTeam: e.homeTeam,
-        awayTeam: e.awayTeam,
-        homeGoals: e.homeGoals,
-        awayGoals: e.awayGoals,
-        fixtureId: ids.get(e.eventId)!,
-        minute: e.minute,
-        league: e.league,
-        sofaEventId: e.eventId,
-      }));
-      fromSofaScore = true;
-    } else {
-      fixtures = [];
-    }
+    const hubEvents = await hubLiveEvents();
+    const liveScoreEvents = hubEvents.filter((e) => e.provider === 'LiveScore');
+    const ids = await registerSofaEvents(liveScoreEvents);
+    const dateKey = new Date().toISOString().slice(0, 10);
+    fixtures = hubEvents.map((e) => ({
+      statusShort: e.statusShort,
+      homeTeam: e.homeTeam,
+      awayTeam: e.awayTeam,
+      homeGoals: e.homeGoals,
+      awayGoals: e.awayGoals,
+      fixtureId: ids.get(e.eventId) ?? syntheticFixtureId(e.homeTeam, e.awayTeam, dateKey),
+      minute: e.minute,
+      league: e.league,
+      sofaEventId: e.provider === 'LiveScore' ? e.eventId : undefined,
+    }));
+    fromSofaScore = hubEvents.length > 0;
   } catch (error: any) {
-    console.warn('[Tâche de fond] Relevé SofaScore indisponible, repli fournisseurs IA:', error?.message);
+    console.warn('[Tâche de fond] Sources live indisponibles, repli fournisseurs IA:', error?.message);
     fixtures = [];
-  }
-
-  // AllSportsApi : ajoute les matchs de son plan que SofaScore n'a pas relevés
-  // (aucun des 5 grands championnats n'y figure : tout est fictif).
-  try {
-    const key = (await getAPIConfig()).allSports?.trim();
-    if (key) {
-      const dateKey = new Date().toISOString().slice(0, 10);
-      for (const e of await fetchAllSportsLive(key)) {
-        const dup = fixtures.some(
-          (f) =>
-            namesLikelyMatch(normalizeTeamName(f.homeTeam), normalizeTeamName(e.homeTeam)) &&
-            namesLikelyMatch(normalizeTeamName(f.awayTeam), normalizeTeamName(e.awayTeam))
-        );
-        if (dup) continue;
-        fixtures.push({
-          statusShort: e.statusShort,
-          homeTeam: e.homeTeam,
-          awayTeam: e.awayTeam,
-          homeGoals: e.homeGoals,
-          awayGoals: e.awayGoals,
-          fixtureId: syntheticFixtureId(e.homeTeam, e.awayTeam, dateKey),
-          minute: e.minute,
-          league: e.league,
-        });
-        fromSofaScore = true;
-      }
-    }
-  } catch (error: any) {
-    console.warn('[Tâche de fond] AllSportsApi indisponible:', error?.message);
   }
 
   const elapsedMinutes = fictionalLiveCache ? Math.floor((Date.now() - fictionalLiveCache.at) / 60_000) : Infinity;
@@ -214,6 +183,36 @@ async function fetchFictionalLiveFixtures(realLive: LiveFixture[]): Promise<Live
           namesLikelyMatch(normalizeTeamName(r.awayTeam), normalizeTeamName(f.awayTeam))
       )
   );
+}
+
+/** Matchs du planning réel en cours, relevés par les sources live gratuites. */
+async function fetchRealLiveFromFreeSources(): Promise<LiveFixture[]> {
+  const plan = await getDailyPlan();
+  if (!plan) return [];
+  const planned = plan.slots.flatMap((slot) => slot.matches as Array<{ homeTeam: string; awayTeam: string; leagueName?: string }>);
+  const live = await hubLiveEvents();
+  const dateKey = new Date().toISOString().slice(0, 10);
+  const out: LiveFixture[] = [];
+  for (const m of planned) {
+    const hit = live.find(
+      (e) =>
+        namesLikelyMatch(normalizeTeamName(e.homeTeam), normalizeTeamName(m.homeTeam)) &&
+        namesLikelyMatch(normalizeTeamName(e.awayTeam), normalizeTeamName(m.awayTeam))
+    );
+    if (!hit) continue;
+    out.push({
+      statusShort: hit.statusShort,
+      homeTeam: m.homeTeam,
+      awayTeam: m.awayTeam,
+      homeGoals: hit.homeGoals,
+      awayGoals: hit.awayGoals,
+      fixtureId: syntheticFixtureId(m.homeTeam, m.awayTeam, dateKey),
+      minute: hit.minute,
+      league: m.leagueName ?? hit.league,
+      sofaEventId: hit.provider === 'LiveScore' ? hit.eventId : undefined,
+    });
+  }
+  return out;
 }
 
 async function hasRealMatchInLiveWindow(): Promise<boolean> {
@@ -260,6 +259,16 @@ async function fetchSharedLiveFixtures(): Promise<SharedLiveFixturesResult> {
   } else {
     apiFootballError = apiConfig.apiFootball ? 'quota du jour atteint (réserve gardée pour le règlement)' : 'clé absente (Gestion des API)';
     source = 'aucune_echec_omniroute';
+  }
+
+  // Secours du pipe réel : API-Football injoignable ou sans requêtes restantes
+  // → les sources live gratuites suivent les matchs du planning réel.
+  if (apiFootballError) {
+    const backup = await fetchRealLiveFromFreeSources().catch(() => [] as LiveFixture[]);
+    if (backup.length > 0) {
+      fixtures = backup;
+      source = 'sources_live_gratuites';
+    }
   }
 
   const fictionalFixtures = await fetchFictionalLiveFixtures(fixtures).catch(() => [] as LiveFixture[]);

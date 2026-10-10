@@ -91,6 +91,7 @@ import { sendLocalNotification } from './notifications';
 import { normalizeTeamName, namesLikelyMatch } from './teamNameMatch';
 import { OmnirouteConfig } from '../types';
 import { mapWithConcurrency } from './concurrency';
+import { hubDateKey, hubStats } from '../api/footballDataAPIs/liveDataHub';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { matchesForDate, isWithinBreakWindow } from './internationalBreak';
 import { INTERNATIONAL_BREAK_CALENDAR } from '../data/internationalBreakCalendar';
@@ -336,18 +337,45 @@ async function estimateExpectedGoalsViaOmniroute(
  * volume et le fait que toutes les ressources sont permises pour l'argent
  * réel.
  */
-async function fetchRealLiveStats(fixtureId: number): Promise<LiveMatchStats | undefined> {
+async function fetchRealLiveStats(live: LiveFixture): Promise<LiveMatchStats | undefined> {
   const apiConfig = await getAPIConfig();
-  if (!apiConfig.apiFootball) return undefined;
-  if (!(await spendDirectBudget('apiFootball', API_FOOTBALL_RESERVE.settlement))) return undefined;
-
-  try {
-    const markers = await fetchMarkers(apiConfig.apiFootball, fixtureId);
-    if (markers.shotsOnTargetHome == null && markers.shotsOnTargetAway == null) return undefined;
-    return markers;
-  } catch {
-    return undefined;
+  if (
+    apiConfig.apiFootball &&
+    !isSyntheticFixtureId(live.fixtureId) &&
+    (await spendDirectBudget('apiFootball', API_FOOTBALL_RESERVE.settlement))
+  ) {
+    try {
+      const markers = await fetchMarkers(apiConfig.apiFootball, live.fixtureId);
+      if (markers.shotsOnTargetHome != null || markers.shotsOnTargetAway != null) return markers;
+    } catch {
+      // secours ci-dessous
+    }
   }
+  // Secours : sources live gratuites (plus de requêtes API-Football, ou
+  // statistique absente de sa réponse).
+  return (await fetchFreeLiveStats(live))?.stats;
+}
+
+/** Statistiques en direct depuis les sources gratuites (LiveScore d'abord,
+ * puis FotMob, 365Scores, ESPN, AllSportsApi pour ce qui manque). */
+async function fetchFreeLiveStats(
+  live: LiveFixture
+): Promise<{ stats: LiveMatchStats; observed: ObservedLiveCounts } | undefined> {
+  const primary = live.sofaEventId ? await fetchSofaStats(live.sofaEventId).catch(() => null) : null;
+  const merged = await hubStats(live.homeTeam, live.awayTeam, hubDateKey(), primary).catch(() => primary);
+  const all = merged?.all;
+  if (!all) return undefined;
+  return {
+    stats: {
+      shotsOnTargetHome: all.shotsOnTargetHome,
+      shotsOnTargetAway: all.shotsOnTargetAway,
+      cornersHome: all.cornersHome,
+      cornersAway: all.cornersAway,
+      possessionHome: all.possessionHome,
+      possessionAway: all.possessionHome != null ? 100 - all.possessionHome : undefined,
+    },
+    observed: { corners: all.corners, cards: all.cards },
+  };
 }
 
 /** Compte observé en direct d'événements cumulés depuis le coup d'envoi, et
@@ -859,7 +887,7 @@ async function bestLegFor(
 ): Promise<LegWithContext | null> {
   const match = matchRefOfScheduled(scheduled);
   const preMatchExpectedGoals = { home: scheduled.expectedHomeGoals, away: scheduled.expectedAwayGoals };
-  const currentStats = await fetchRealLiveStats(live.fixtureId);
+  const currentStats = await fetchRealLiveStats(live);
 
   const rawLegs = kind === 'minute20'
     ? await buildLegs20(match, live.fixtureId, live, preMatchExpectedGoals, currentStats)
@@ -1262,12 +1290,10 @@ export async function runInPlayComboTick(
         // ce qui s'est vraiment passé et non sur la seule moyenne d'un match.
         let currentStats: LiveMatchStats | undefined;
         let observedLive: ObservedLiveCounts | undefined;
-        if (live.sofaEventId) {
-          const stats = await fetchSofaStats(live.sofaEventId).catch(() => null);
-          if (stats?.all) {
-            currentStats = { shotsOnTargetHome: stats.all.shotsOnTargetHome, shotsOnTargetAway: stats.all.shotsOnTargetAway };
-            observedLive = { corners: stats.all.corners, cards: stats.all.cards };
-          }
+        const free = await fetchFreeLiveStats(live);
+        if (free) {
+          currentStats = { shotsOnTargetHome: free.stats.shotsOnTargetHome, shotsOnTargetAway: free.stats.shotsOnTargetAway };
+          observedLive = free.observed;
         }
 
         const rawLegs = kind === 'minute20'

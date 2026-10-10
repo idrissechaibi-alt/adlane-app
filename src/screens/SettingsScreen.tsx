@@ -918,7 +918,7 @@ export default function SettingsScreen({ navigation }: any) {
 
           <View style={styles.inputGroup}>
             <View style={styles.labelRow}>
-              <Text style={styles.label}>AllSportsApi (pipe réel uniquement)</Text>
+              <Text style={styles.label}>AllSportsApi (source live de secours)</Text>
             </View>
             <TextInput
               style={styles.input}

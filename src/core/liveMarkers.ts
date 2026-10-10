@@ -14,6 +14,7 @@
 // match : elles sont réservées en priorité aux matchs des ligues sur
 // lesquelles l'utilisateur joue vraiment.
 
+import { hubDateKey, hubStats } from '../api/footballDataAPIs/liveDataHub';
 import { getAPIConfig } from '../api/multiAPIManager';
 import { API_FOOTBALL_RESERVE, spendBudget } from './requestBudget';
 import { getStoredUniverse, UniverseMatch } from './matchUniverse';
@@ -300,9 +301,13 @@ export async function runLiveMarkerTick(liveFixtures: LiveFixture[]): Promise<{ 
   // lignes lues par les fournisseurs IA, qui doivent d'abord prouver leur
   // fiabilité (voir plus bas).
   const sofaCovered = new Set<number>();
-  const sofaMatches = firstHalf.filter((l) => l.sofaEventId && !markersByFixture.has(l.fixtureId)).slice(0, MAX_SOFASCORE_STATS_PER_TICK);
+  // Tous les matchs non couverts par API-Football (réels sans quota restant
+  // compris) : LiveScore, puis FotMob/365Scores/ESPN/AllSportsApi pour ce qui
+  // manque (liveDataHub.ts).
+  const sofaMatches = firstHalf.filter((l) => !markersByFixture.has(l.fixtureId)).slice(0, MAX_SOFASCORE_STATS_PER_TICK);
   await mapWithConcurrency(sofaMatches, 6, async (l) => {
-    const stats = await fetchSofaStats(l.sofaEventId!).catch(() => null);
+    const primary = l.sofaEventId ? await fetchSofaStats(l.sofaEventId).catch(() => null) : null;
+    const stats = await hubStats(l.homeTeam, l.awayTeam, hubDateKey(), primary).catch(() => primary);
     const all = stats?.all;
     if (!all) return;
     markersByFixture.set(l.fixtureId, {
