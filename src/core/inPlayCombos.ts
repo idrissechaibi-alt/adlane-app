@@ -452,7 +452,7 @@ async function fetchFreeLiveStats(
   live: LiveFixture
 ): Promise<{ stats: LiveMatchStats; observed: ObservedLiveCounts } | undefined> {
   const primary = live.sofaEventId ? await fetchSofaStats(live.sofaEventId).catch(() => null) : null;
-  const merged = await hubStats(live.homeTeam, live.awayTeam, hubDateKey(), primary).catch(() => primary);
+  const merged = await hubStats(live.homeTeam, live.awayTeam, hubDateKey(), primary, { needFirstHalf: false }).catch(() => primary);
   const all = merged?.all;
   if (!all) return undefined;
   return {

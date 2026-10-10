@@ -306,9 +306,14 @@ export async function runLiveMarkerTick(liveFixtures: LiveFixture[]): Promise<{ 
   // compris) : LiveScore, puis FotMob/365Scores/ESPN/AllSportsApi pour ce qui
   // manque (liveDataHub.ts).
   const sofaMatches = firstHalf.filter((l) => !markersByFixture.has(l.fixtureId)).slice(0, MAX_SOFASCORE_STATS_PER_TICK);
+  // Budget de l'étape : 60 s, puis le reste au tour suivant (24 min mesurées
+  // le 10/10 quand chaque match interrogeait toutes les sources une à une).
+  const statsDeadline = Date.now() + 60_000;
   await mapWithConcurrency(sofaMatches, 6, async (l) => {
+    if (Date.now() > statsDeadline) return;
     const primary = l.sofaEventId ? await fetchSofaStats(l.sofaEventId).catch(() => null) : null;
-    const stats = await hubStats(l.homeTeam, l.awayTeam, hubDateKey(), primary).catch(() => primary);
+    // Seul le match entier sert ici : inutile de chercher la 1ère MT ailleurs.
+    const stats = await hubStats(l.homeTeam, l.awayTeam, hubDateKey(), primary, { needFirstHalf: false }).catch(() => primary);
     const all = stats?.all;
     if (!all) return;
     markersByFixture.set(l.fixtureId, {

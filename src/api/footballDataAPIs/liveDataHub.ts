@@ -693,16 +693,23 @@ async function detailOf(match: HubMatch): Promise<HubDetail | null> {
  * période par période, par les autres sources jusqu'à avoir le match entier
  * ET la 1ère mi-temps.
  */
-export async function hubStats(homeTeam: string, awayTeam: string, dateKey: string, primary?: SofaStats | null): Promise<SofaStats> {
+export async function hubStats(
+  homeTeam: string,
+  awayTeam: string,
+  dateKey: string,
+  primary?: SofaStats | null,
+  options: { needFirstHalf?: boolean } = {}
+): Promise<SofaStats> {
+  const needFirstHalf = options.needFirstHalf ?? true;
   const result: SofaStats = { all: primary?.all ?? null, firstHalf: primary?.firstHalf ?? null };
-  if (result.all && result.firstHalf) return result;
+  if (result.all && (result.firstHalf || !needFirstHalf)) return result;
   const matches = await findEverywhere(homeTeam, awayTeam, dateKey, dateKey === utcDay());
   for (const m of matches) {
     const detail = await detailOf(m);
     if (!detail) continue;
     result.all ??= detail.stats.all;
     result.firstHalf ??= detail.stats.firstHalf;
-    if (result.all && result.firstHalf) break;
+    if (result.all && (result.firstHalf || !needFirstHalf)) break;
   }
   // Sources relevées à des instants différents : le match entier ne peut pas
   // compter moins que sa 1ère mi-temps — on garde la valeur la plus récente.
