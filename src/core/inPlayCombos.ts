@@ -169,14 +169,9 @@ const MIN_MINUTES_FOR_RATE = 8;
 const MIN_LEG_PROB = 0.55;
 /** Seuil interne utilisé pour choisir la ligne over/under la plus haute encore fiable (corners/cartons). */
 const LINE_PICK_THRESHOLD = 0.55;
-/** Au-delà de ce nombre de matchs dans le créneau : combos plutôt que paris simples (paris réels). */
-const SLOT_COMBO_THRESHOLD = 3;
-/** Nombre maximum de combos émis par créneau et par checkpoint (paris réels). */
-const MAX_COMBOS_PER_SLOT = 2;
-/** Paris simples réels proposés par match et par checkpoint (les plus sûrs). */
+/** Jambes qualifiées gardées par match (les plus sûres, une par marché) :
+ * paris simples ou variantes de marché des combinés. */
 const REAL_LEGS_PER_MATCH = 3;
-/** Probabilité combinée minimale pour émettre un combo réel (3 jambes à ≥55% chacune peut descendre très bas, ex. 0.55³ ≈ 17%). */
-const MIN_COMBO_PROB = 0.25;
 
 /** Identité minimale d'un match, commune aux deux pipelines. */
 interface MatchRef {
@@ -784,6 +779,11 @@ async function formulateWithOmniroute(items: LegWithContext[], checkpointLabel: 
   }
 }
 
+/** Identifiant court et stable d'une sélection (deux lignes d'un même marché ≠). */
+function selectionSlug(selection: string): string {
+  return selection.normalize('NFD').replace(/[^a-z0-9]+/gi, '').toLowerCase().slice(0, 24);
+}
+
 function buildProposalFromItems(
   kind: 'minute20' | 'minute60',
   items: LegWithContext[],
@@ -798,7 +798,7 @@ function buildProposalFromItems(
     // Inclut le marché (pas seulement le fixtureId) : le pipeline fictif crée
     // plusieurs propositions indépendantes pour le MÊME match+checkpoint (une
     // par marché qualifié) — sans ça, leurs ids entreraient en collision.
-    id: `inplay-${kind}-${items.map((i) => `${i.fixtureId}-${i.leg.market}`).join('-')}`,
+    id: `inplay-${kind}-${items.map((i) => `${i.fixtureId}-${i.leg.market}-${selectionSlug(i.leg.selection)}`).join('-')}`,
     kind,
     createdAt: new Date().toISOString(),
     minute: items[0].live.minute,
@@ -998,10 +998,8 @@ function legDedupSuffix(leg: CandidateLeg): string {
 }
 
 /**
- * Paris RÉELS d'un créneau, pour un checkpoint donné : pari simple par match
- * si le créneau a moins de SLOT_COMBO_THRESHOLD matchs (avec cotes
- * exploitables), sinon combos de 3 jambes (une par match différent),
- * jusqu'à MAX_COMBOS_PER_SLOT.
+ * Paris RÉELS d'un créneau, pour un checkpoint donné, selon les règles des
+ * combinés du planning (voir le détail dans le corps de la fonction).
  */
 async function processRealSlotCheckpoint(
   kind: 'minute20' | 'minute60',
@@ -1025,42 +1023,118 @@ async function processRealSlotCheckpoint(
       return [] as LegWithContext[];
     }
   });
-  const perMatchLegs = perMatchResults.filter((r) => r.length > 0);
-  // Meilleure jambe de chaque match : sert aux combos.
-  const perMatch: LegWithContext[] = perMatchLegs.map((r) => r[0]);
-  if (perMatch.length === 0) return;
+  // Règle BLOCK_1X2_SOUS_50 (validator.ts) : jamais de 1X2 sous 50 %.
+  const perMatchLegs = perMatchResults
+    .map((legs) => legs.filter((l) => !(l.leg.market === '1X2' && l.leg.prob < 0.5)))
+    .filter((r) => r.length > 0);
+  if (perMatchLegs.length === 0) return;
 
-  if (slotMatchCount < SLOT_COMBO_THRESHOLD) {
-    // Paris simples : les plus sûrs de chaque match, tous marchés confondus.
-    for (const items of perMatchLegs) {
-      for (const item of items) {
-        const [enriched] = await formulateWithOmniroute([item], checkpointLabel);
-        const proposal = buildProposalFromItems(kind, [enriched], window, true);
-        if (proposal) {
-          fresh.push(proposal);
-          alreadyProposed.add(`${item.fixtureId}-${kind}`);
-          await notifyProposal(proposal);
-        }
-      }
+  const emit = async (items: LegWithContext[], label: string) => {
+    const enriched = await formulateWithOmniroute(items, checkpointLabel);
+    const proposal = buildProposalFromItems(kind, enriched, label ? `${window} · ${label}` : window, true);
+    if (!proposal) return;
+    fresh.push(proposal);
+    for (const item of items) alreadyProposed.add(`${item.fixtureId}-${kind}`);
+    await notifyProposal(proposal);
+  };
+
+  const liveMatches = perMatchLegs.length;
+  // Mêmes règles que les combinés du planning (dailyWorkflow.ts) :
+  //  - créneau d'1 match en direct : paris simples (les plus sûrs) ;
+  //  - 2 matchs : UN combiné, une jambe par match, jambes ≥ 55 % ;
+  //  - 3 matchs ou plus : AUCUN pari simple, combinés de 3 matchs distincts
+  //    (variantes de marché comprises), classés du plus sûr au moins sûr,
+  //    max(4, min(n + 2, 8)) combinés dont un dernier "risqué" ;
+  //  - jamais deux combinés identiques, jamais deux sélections opposées sur
+  //    un même match (ERROR_AUTO_ANNULATION), un match dans 2 combinés au
+  //    plus (WARN_EXPOSITION_MATCH).
+  if (slotMatchCount < 2 || liveMatches === 1) {
+    for (const items of perMatchLegs) for (const item of items) await emit([item], '');
+    return;
+  }
+
+  if (slotMatchCount === 2 || liveMatches === 2) {
+    const legs = perMatchLegs.map((r) => r[0]).filter((l) => l.leg.prob >= 0.55).slice(0, 4);
+    if (legs.length >= 2) {
+      const prob = legs.reduce((acc, l) => acc * l.leg.prob, 1);
+      await emit(legs, `Combiné (${(prob * 100).toFixed(1)}%)`);
     }
     return;
   }
 
-  // Combos : jusqu'à MAX_COMBOS_PER_SLOT, 3 jambes (matchs différents)
-  // chacun, en partant des matchs les plus probables, sans jamais réutiliser
-  // un même match dans deux combos du même créneau.
-  if (perMatch.length < 3) return; // pas assez de matchs simultanément en direct pour former un combo
-
-  const sorted = [...perMatch].sort((a, b) => b.leg.prob - a.leg.prob);
-  for (let i = 0; i + 3 <= sorted.length && (i / 3) < MAX_COMBOS_PER_SLOT; i += 3) {
-    const group = sorted.slice(i, i + 3);
-    const enriched = await formulateWithOmniroute(group, checkpointLabel);
-    const proposal = buildProposalFromItems(kind, enriched, window, true);
-    if (proposal && proposal.combinedProb >= MIN_COMBO_PROB) {
-      fresh.push(proposal);
-      for (const item of group) alreadyProposed.add(`${item.fixtureId}-${kind}`);
-      await notifyProposal(proposal);
+  // 3 matchs ou plus en direct.
+  const byMatch = perMatchLegs.map((r) => [...r].sort((x, y) => y.leg.prob - x.leg.prob));
+  interface LiveComboCandidate { legs: LegWithContext[]; prob: number }
+  const combos: LiveComboCandidate[] = [];
+  const signatures = new Set<string>();
+  const signatureOf = (legs: LegWithContext[]) => legs.map((l) => `${l.fixtureId}:${l.leg.selection}`).sort().join('|');
+  const addCandidate = (legs: LegWithContext[]) => {
+    const sig = signatureOf(legs);
+    if (signatures.has(sig)) return;
+    signatures.add(sig);
+    combos.push({ legs, prob: legs.reduce((acc, l) => acc * l.leg.prob, 1) });
+  };
+  for (let i = 0; i < byMatch.length; i++) {
+    for (let j = i + 1; j < byMatch.length; j++) {
+      for (let k = j + 1; k < byMatch.length; k++) {
+        const triple = [byMatch[i], byMatch[j], byMatch[k]];
+        const base = triple.map((alts) => alts[0]);
+        addCandidate(base);
+        for (let pos = 0; pos < 3; pos++) {
+          for (let alt = 1; alt < Math.min(triple[pos].length, 3); alt++) {
+            const legs = [...base];
+            legs[pos] = triple[pos][alt];
+            addCandidate(legs);
+          }
+        }
+      }
     }
+  }
+  combos.sort((x, y) => y.prob - x.prob);
+
+  const target = Math.max(4, Math.min(liveMatches + 2, 8));
+  const exposure = new Map<number, number>();
+  const chosenSides = new Map<string, string>(); // match|marché|fenêtre -> sélection retenue
+  const compatible = (legs: LegWithContext[]) =>
+    legs.every((l) => {
+      if ((exposure.get(l.fixtureId) ?? 0) >= 2) return false;
+      const key = `${l.fixtureId}|${legMarketWindow(l.leg)}`;
+      const side = chosenSides.get(key);
+      return side == null || side === l.leg.selection;
+    });
+  const take = (legs: LegWithContext[]) => {
+    for (const l of legs) {
+      exposure.set(l.fixtureId, (exposure.get(l.fixtureId) ?? 0) + 1);
+      chosenSides.set(`${l.fixtureId}|${legMarketWindow(l.leg)}`, l.leg.selection);
+    }
+  };
+
+  let rank = 0;
+  const emitted = new Set<string>();
+  for (const cand of combos) {
+    if (rank >= target - 1) break;
+    if (!compatible(cand.legs)) continue;
+    take(cand.legs);
+    emitted.add(signatureOf(cand.legs));
+    rank++;
+    const level = cand.prob > 0.68 ? 'Élevé' : cand.prob >= 0.6 ? 'Moyen' : 'Faible';
+    await emit(cand.legs, `Combiné #${rank} (${(cand.prob * 100).toFixed(1)}%, confiance ${level})`);
+  }
+
+  // Dernier : combiné risqué (libre), sur les jambes qualifiées les moins
+  // probables, une par match, sans contredire les combinés déjà proposés.
+  const risky: LegWithContext[] = [];
+  const pool = byMatch.flat().sort((x, y) => x.leg.prob - y.leg.prob);
+  for (const l of pool) {
+    if (risky.length >= 3) break;
+    if (risky.some((r) => r.fixtureId === l.fixtureId)) continue;
+    const side = chosenSides.get(`${l.fixtureId}|${legMarketWindow(l.leg)}`);
+    if (side != null && side !== l.leg.selection) continue;
+    risky.push(l);
+  }
+  if (risky.length >= 2 && !emitted.has(signatureOf(risky))) {
+    const prob = risky.reduce((acc, l) => acc * l.leg.prob, 1);
+    await emit(risky, `Combiné #${rank + 1} 🔥 Risqué (libre, ${(prob * 100).toFixed(1)}%)`);
   }
 }
 
