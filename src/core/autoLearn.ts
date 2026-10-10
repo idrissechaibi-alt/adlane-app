@@ -78,6 +78,8 @@ const MIN_SAMPLES_PER_RULE = 30;
 const MIN_LIFT = 1.15;
 /** Seuil de déclenchement d'un pari papier. */
 const PAPER_BET_PROB_THRESHOLD = 0.35;
+/** Règles gardées par cible et par fenêtre (8 cibles × 2 fenêtres × 3 = 48 au plus). */
+const MAX_RULES_PER_TARGET = 3;
 /**
  * Seuils de promotion des marqueurs Omniroute (scrapés) au rang de source de
  * calibrage à part entière : il faut assez de recoupements avec la vérité
@@ -319,7 +321,23 @@ function buildRules(
     }
   }
 
-  return { rules: rules.sort((a, b) => b.lift - a.lift).slice(0, 40), baselines };
+  // Au plus MAX_RULES_PER_TARGET règles par cible et par fenêtre, et seules
+  // celles assez probables pour être jouées : un classement global au seul
+  // « lift » ne gardait plus que des événements rares (2 buts en 10 min,
+  // 2 cartons…), tous sous le seuil de placement — plus aucun pari papier
+  // depuis le 10/10 06:36, bloqué à 122.
+  const perKey = new Map<string, number>();
+  const kept = rules
+    .filter((r) => r.hitRate >= PAPER_BET_PROB_THRESHOLD)
+    .sort((a, b) => b.lift - a.lift)
+    .filter((r) => {
+      const key = `${r.target}|${r.horizon}`;
+      const n = perKey.get(key) ?? 0;
+      if (n >= MAX_RULES_PER_TARGET) return false;
+      perKey.set(key, n + 1);
+      return true;
+    });
+  return { rules: kept, baselines };
 }
 
 /**

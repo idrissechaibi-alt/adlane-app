@@ -54,7 +54,7 @@ export default function EvolutionScreen() {
    * remplace jamais un point déjà présent côté checkpoints, ne fait que
    * combler les dates manquantes (voir fictionalPointsFor plus bas). */
   const [paperBetDayPoints, setPaperBetDayPoints] = useState<MarketDayPoint[]>([]);
-  const [paperBetsSummary, setPaperBetsSummary] = useState<{ total: number; settled: number; matches: number } | null>(null);
+  const [paperBetsSummary, setPaperBetsSummary] = useState<{ total: number; settled: number; matches: number; won: number } | null>(null);
   const [dailyReports, setDailyReports] = useState<DailyReport[]>([]);
   /** Batterie de paris fictifs du scan 20e/60e minute (inPlayCombos.ts, real:false) — distincte de paperBetsSummary (règles apprises d'autoLearn.ts). */
   const [fictionalCounter, setFictionalCounter] = useState<{ matches: number; placed: number; won: number } | null>(null);
@@ -142,6 +142,7 @@ export default function EvolutionScreen() {
         total: bets.length,
         settled: bets.filter((b) => b.settled).length,
         matches: new Set(bets.map((b) => b.fixtureId)).size,
+        won: bets.filter((b) => b.settled && b.won).length,
       });
       setPaperBetDayPoints(buildMarketDayPointsFromPaperBets(bets));
     } catch (error) {
@@ -438,9 +439,11 @@ export default function EvolutionScreen() {
         <Text style={styles.paperBetsText}>
           {paperBetsSummary && paperBetsSummary.total > 0 ? (
             <>
-              <Text style={styles.paperBetsNumber}>{paperBetsSummary.total}</Text> paris fictifs traités en arrière-plan
-              {' '}(<Text style={styles.paperBetsNumber}>{paperBetsSummary.settled}</Text> réglés) sur{' '}
-              <Text style={styles.paperBetsNumber}>{paperBetsSummary.matches}</Text> match{paperBetsSummary.matches > 1 ? 's' : ''}.
+              <Text style={styles.paperBetsNumber}>{paperBetsSummary.total}</Text> paris du modèle à marqueurs (« au moins 1 corner
+              dans les 10 prochaines minutes »…), <Text style={styles.paperBetsNumber}>{paperBetsSummary.settled}</Text> réglés,{' '}
+              <Text style={styles.paperBetsNumber}>{paperBetsSummary.won}</Text> réussis, sur{' '}
+              <Text style={styles.paperBetsNumber}>{paperBetsSummary.matches}</Text> match{paperBetsSummary.matches > 1 ? 's' : ''} —
+              distincts des paris fictifs du scan 20e/60e comptés plus haut.
             </>
           ) : (
             "0 pari fictif pour l'instant. Cette boucle observe des matchs EN DIRECT (1ère mi-temps) et n'active une règle qu'après au moins 30 échantillons réels — jamais de valeur inventée pour combler l'attente. Ça demande du temps réel avec des matchs suivis en direct, pas juste une mise à jour de l'app."
@@ -696,8 +699,9 @@ export default function EvolutionScreen() {
           <View style={styles.paperBetsBox}>
             <Ionicons name="pulse" size={16} color="#a78bfa" />
             <Text style={styles.paperBetsText}>
-              <Text style={styles.paperBetsNumber}>{paperBetsSummary.total}</Text> paris fictifs traités en arrière-plan
-              {' '}(<Text style={styles.paperBetsNumber}>{paperBetsSummary.settled}</Text> réglés) sur{' '}
+              <Text style={styles.paperBetsNumber}>{paperBetsSummary.total}</Text> paris du modèle à marqueurs (fenêtres de 10 et 25 min)
+              {' '}(<Text style={styles.paperBetsNumber}>{paperBetsSummary.settled}</Text> réglés,{' '}
+              <Text style={styles.paperBetsNumber}>{paperBetsSummary.won}</Text> réussis) sur{' '}
               <Text style={styles.paperBetsNumber}>{paperBetsSummary.matches}</Text> match{paperBetsSummary.matches > 1 ? 's' : ''} —
               ce qui est réglé alimente déjà les courbes buts 1ère mi-temps/corners/cartons/fautes ci-dessous.
             </Text>
