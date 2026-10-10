@@ -29,13 +29,20 @@ const DEFAULT_CONFIG: APIConfig = {
   maxRetries: 2
 };
 
+/** Clé AllSportsApi (plan gratuit) fournie par l'utilisateur, utilisée tant
+ * qu'aucune autre n'est saisie dans Paramètres. */
+const DEFAULT_ALLSPORTS_KEY = '4df0eec0b4e16717738b56d6c74e141c61e898fa98b53e88ef220ad596d4a3e5';
+
 export async function getAPIConfig(): Promise<APIConfig> {
+  let config: APIConfig;
   try {
     const raw = await AsyncStorage.getItem(API_CONFIG_KEY);
-    return raw ? { ...DEFAULT_CONFIG, ...JSON.parse(raw) } : DEFAULT_CONFIG;
+    config = raw ? { ...DEFAULT_CONFIG, ...JSON.parse(raw) } : { ...DEFAULT_CONFIG };
   } catch {
-    return DEFAULT_CONFIG;
+    config = { ...DEFAULT_CONFIG };
   }
+  if (!config.allSports?.trim()) config.allSports = DEFAULT_ALLSPORTS_KEY;
+  return config;
 }
 
 export async function saveAPIConfig(config: APIConfig): Promise<void> {

@@ -484,11 +484,11 @@ async function allSportsKey(): Promise<string> {
 const allSports: Provider = {
   name: 'AllSportsApi',
   async live() {
-    const d = await getJson(`${ALLSPORTS}?met=Livescore&APIkey=${encodeURIComponent(await allSportsKey())}`);
+    const d = await getJson(`${ALLSPORTS}?met=Livescore&timezone=UTC&APIkey=${encodeURIComponent(await allSportsKey())}`);
     return (Array.isArray(d?.result) ? d.result : []).map(mapAllSports).filter((m: HubMatch | null): m is HubMatch => m !== null);
   },
   async byDate(dateKey) {
-    const d = await getJson(`${ALLSPORTS}?met=Fixtures&APIkey=${encodeURIComponent(await allSportsKey())}&from=${dateKey}&to=${dateKey}`);
+    const d = await getJson(`${ALLSPORTS}?met=Fixtures&timezone=UTC&APIkey=${encodeURIComponent(await allSportsKey())}&from=${dateKey}&to=${dateKey}`);
     return (Array.isArray(d?.result) ? d.result : []).map(mapAllSports).filter((m: HubMatch | null): m is HubMatch => m !== null);
   },
   async detail(match) {
@@ -730,7 +730,9 @@ export async function hubScheduled(dateKey: string): Promise<HubMatch[]> {
   for (const list of lists) {
     for (const m of list) {
       const slot = Math.round(m.startTimestamp / 900);
-      const nearby = [...(byKickoff.get(slot - 1) ?? []), ...(byKickoff.get(slot) ?? []), ...(byKickoff.get(slot + 1) ?? [])];
+      // ±3 h : certaines sources décalent l'heure (fuseau, horaire provisoire).
+      const nearby: HubMatch[] = [];
+      for (let k = slot - 12; k <= slot + 12; k++) nearby.push(...(byKickoff.get(k) ?? []));
       if (nearby.some((x) => sameMatch(x, m))) continue;
       merged.push(m);
       byKickoff.set(slot, [...(byKickoff.get(slot) ?? []), m]);
