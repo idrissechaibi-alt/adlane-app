@@ -97,7 +97,8 @@ import { mapWithConcurrency } from './concurrency';
 import { hubDateKey, hubKnowsMatch, hubLiveStatus, hubStats } from '../api/footballDataAPIs/liveDataHub';
 import { StrategyContext, evaluateStrategies, oddsFromExpectedGoals } from './strategies';
 import { SofaPeriodStats } from '../api/footballDataAPIs/sofaScore';
-import { DeltaUnit, LegProjection, describeCorrection, ensureDeltaSamplesLoaded, flushShadowProjections, getDeltaCorrection, projectFullMatchCount, recordShadowProjection } from './deltaLearning';
+import { DeltaUnit, LegProjection, describeCorrection, ensureDeltaSamplesLoaded, flushShadowProjections, getDeltaCorrection, projectFullMatchCount, recordShadowProjection, factorForRemaining } from './deltaLearning';
+import { atLeastProb, pickHighestOverLine, pickLowestUnderLine } from './countModel';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { matchesForDate, isWithinBreakWindow } from './internationalBreak';
 import { INTERNATIONAL_BREAK_CALENDAR } from '../data/internationalBreakCalendar';
@@ -238,9 +239,19 @@ function withGoalsProjection(
 ): CandidateLeg {
   const observed = currentScore.home + currentScore.away;
   const correction = getDeltaCorrection('goals_ft');
+  // Dispersion mesurée : un match à 6 buts pour 2,5 attendus rend les « Moins de 2.5 »
+  // moins sûrs que ne le dit Poisson. Probabilité de la ligne 2.5 recalculée en conséquence.
+  let prob = leg.prob;
+  let note = '';
+  if (correction.dispersion > 1.1 && /2\.5/.test(leg.selection)) {
+    const over = atLeastProb(remaining.home + remaining.away, correction.dispersion, 3 - observed);
+    prob = /^plus/i.test(leg.selection) ? over : 1 - over;
+    note = ` Dispersion des buts mesurée ×${correction.dispersion.toFixed(2)} : probabilité recalculée (${(leg.prob * 100).toFixed(0)} % → ${(prob * 100).toFixed(0)} %).`;
+  }
   return {
     ...leg,
-    evidence: leg.evidence + describeCorrection(correction, 'buts'),
+    prob,
+    evidence: leg.evidence + describeCorrection(correction, 'buts') + note,
     projection: { unit: 'goals_ft', observed, expected: observed + remaining.home + remaining.away, factorUsed: correction.factor },
   };
 }
@@ -635,18 +646,21 @@ function countMarketLegs(
       rawLambda = rawLambda * (1 - TREND_WEIGHT) + trendLambda * TREND_WEIGHT;
       trendNote = ` Tendance des deux équipes : ${trendTotal!.toFixed(1)} ${spec.noun} par match ${window === '1h' ? 'en 1ère mi-temps' : 'en tout'} (${trend!.samples.home}/${trend!.samples.away} derniers matchs).`;
     }
-    const lambda = rawLambda * fix.factor;
-    const projection: LegProjection = { unit, observed: done, expected: done + lambda, factorUsed: fix.factor };
+    // Facteur de la tranche (match ouvert ≠ match fermé) et dispersion mesurée.
+    const factor = factorForRemaining(fix, rawLambda);
+    const lambda = rawLambda * factor;
+    const fano = fix.dispersion;
+    const projection: LegProjection = { unit, observed: done, expected: done + lambda, factorUsed: factor };
     const evidence =
       `${done} ${spec.noun} à la ${elapsedMinutes}e minute + ${lambda.toFixed(1)} attendu(s) ${horizon} ` +
-      `(${(done + lambda).toFixed(1)} au total ; ${basis}).` + describeCorrection(fix, spec.noun) + trendNote;
+      `(${(done + lambda).toFixed(1)} au total ; ${basis}).` + describeCorrection(fix, spec.noun) + (fano > 1.1 ? ` Dispersion mesurée ×${fano.toFixed(2)} : lignes élargies.` : '') + trendNote;
 
     // La tendance seule contredit nettement la ligne (< 30 % pour le reste du match) : pas de pari.
     const contradicted = (side: 'over' | 'under', line: number): boolean =>
       trendLambda != null && trendVerdict(side, line, done, trendLambda).blocked;
-    const over = pickHighestConfidentOverLine(lambda, LINE_PICK_THRESHOLD, done);
+    const over = pickHighestOverLine(lambda, fano, LINE_PICK_THRESHOLD, done);
     if (over && over.line - done >= MIN_EVENTS_STILL_NEEDED - 0.5 && !contradicted('over', over.line)) legs.push({ market: spec.market, selection: `Plus de ${over.line} ${spec.noun} ${where}`, prob: over.prob, evidence, projection });
-    const under = pickLowestConfidentUnderLine(lambda, LINE_PICK_THRESHOLD, done);
+    const under = pickLowestUnderLine(lambda, fano, LINE_PICK_THRESHOLD, done);
     if (under && !contradicted('under', under.line)) legs.push({ market: spec.market, selection: `Moins de ${under.line} ${spec.noun} ${where}`, prob: under.prob, evidence, projection });
   }
   return legs;

@@ -33,6 +33,16 @@ export interface DeltaCorrection {
   /** Écart moyen réel − projeté (signé) et écart absolu moyen, AVANT correction. */
   meanDelta: number;
   meanAbsDelta: number;
+  /** Rapport variance / moyenne du reste à jouer (1 = Poisson ; > 1 = matchs plus extrêmes que prévu). */
+  dispersion: number;
+  /** Facteur par tranche de reste attendu : un match ouvert n'est pas sous-estimé comme un match fermé. */
+  bins: Array<{ upTo: number; factor: number; samples: number }>;
+}
+
+/** Facteur à appliquer à un reste attendu brut, selon sa tranche (global à défaut). */
+export function factorForRemaining(c: DeltaCorrection, rawRemaining: number): number {
+  for (const b of c.bins) if (rawRemaining <= b.upTo) return b.factor;
+  return c.bins.length ? c.bins[c.bins.length - 1].factor : c.factor;
 }
 
 /** Matchs pris en compte (les plus récents). */
@@ -43,6 +53,11 @@ const PRIOR_EVENTS = 4;
 const FACTOR_MIN = 0.4;
 const FACTOR_MAX = 3;
 const CACHE_MS = 5 * 60_000;
+/** Échantillons minimum pour qu'une tranche ait son propre facteur. */
+const BIN_MIN_SAMPLES = 15;
+const DISPERSION_MAX = 3.5;
+/** Poids du « Poisson pur » (en matchs) dans la dispersion mesurée. */
+const DISPERSION_PRIOR = 20;
 
 let cached: { at: number; byUnit: Map<DeltaUnit, DeltaCorrection> } | null = null;
 
@@ -84,12 +99,47 @@ function compute(): Map<DeltaUnit, DeltaCorrection> {
       absDelta += Math.abs(p.actual! - p.expected);
     }
     const factor = Math.min(FACTOR_MAX, Math.max(FACTOR_MIN, (actualRemaining + PRIOR_EVENTS) / (rawExpectedRemaining + PRIOR_EVENTS)));
+
+    // Reste attendu brut / réel de chaque match, pour les tranches et la dispersion.
+    const rows = list.map((p) => ({
+      raw: Math.max(0, p.expected - p.observed) / (p.factorUsed ?? 1),
+      act: Math.max(0, p.actual! - p.observed),
+    }));
+    // Tranches (3 terciles de reste attendu) : facteur propre quand l'échantillon suffit.
+    const sorted = [...rows].sort((a, b) => a.raw - b.raw);
+    const bins: DeltaCorrection['bins'] = [];
+    if (sorted.length >= BIN_MIN_SAMPLES * 3) {
+      const cut = [Math.floor(sorted.length / 3), Math.floor((2 * sorted.length) / 3), sorted.length];
+      let from = 0;
+      cut.forEach((to, i) => {
+        const part = sorted.slice(from, to);
+        from = to;
+        const a = part.reduce((t, r) => t + r.act, 0);
+        const e = part.reduce((t, r) => t + r.raw, 0);
+        bins.push({
+          upTo: i === cut.length - 1 ? Number.POSITIVE_INFINITY : part[part.length - 1].raw,
+          factor: Math.min(FACTOR_MAX, Math.max(FACTOR_MIN, (a + PRIOR_EVENTS) / (e + PRIOR_EVENTS))),
+          samples: part.length,
+        });
+      });
+    }
+    // Dispersion du reste APRÈS correction : variance mesurée / moyenne prévue.
+    const binned = (raw: number) => {
+      for (const b of bins) if (raw <= b.upTo) return b.factor;
+      return factor;
+    };
+    const sq = rows.reduce((t, r) => t + (r.act - r.raw * binned(r.raw)) ** 2, 0);
+    const predicted = rows.reduce((t, r) => t + r.raw * binned(r.raw), 0);
+    const measured = predicted > 0 ? sq / predicted : 1;
+    const dispersion = Math.min(DISPERSION_MAX, Math.max(1, (measured * list.length + DISPERSION_PRIOR) / (list.length + DISPERSION_PRIOR)));
     out.set(unit, {
       unit,
       factor,
       samples: list.length,
       meanDelta: list.length ? delta / list.length : 0,
       meanAbsDelta: list.length ? absDelta / list.length : 0,
+      dispersion,
+      bins,
     });
   }
   return out;
@@ -103,7 +153,7 @@ export function getDeltaCorrection(unit: DeltaUnit): DeltaCorrection {
       cached = { at: Date.now(), byUnit: new Map() };
     }
   }
-  return cached.byUnit.get(unit) ?? { unit, factor: 1, samples: 0, meanDelta: 0, meanAbsDelta: 0 };
+  return cached.byUnit.get(unit) ?? { unit, factor: 1, samples: 0, meanDelta: 0, meanAbsDelta: 0, dispersion: 1, bins: [] };
 }
 
 export function getAllDeltaCorrections(): DeltaCorrection[] {
