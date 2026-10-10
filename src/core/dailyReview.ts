@@ -16,7 +16,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getAPIConfig } from '../api/multiAPIManager';
-import { spendBudget } from './requestBudget';
+import { spendDirectBudget } from './requestBudget';
 import { syncEloForAllCoveredLeagues } from './eloRatings';
 import { settlePlacedBets, settleProposedBets } from './betSettlement';
 import { fetchWithTimeout } from './httpTimeout';
@@ -151,7 +151,9 @@ async function fetchFinalResults(
   // API-Football accepte jusqu'à 20 identifiants par appel.
   for (let i = 0; i < fixtureIds.length; i += 20) {
     const batch = fixtureIds.slice(i, i + 20);
-    if (!(await spendBudget('apiFootball'))) break;
+    // Budget direct : ces scores règlent les paris RÉELS, ils ne doivent pas
+    // dépendre de la part de l'auto-apprentissage (épuisée dès le petit matin).
+    if (!(await spendDirectBudget('apiFootball'))) break;
 
     try {
       const response = await fetchWithTimeout(
@@ -592,7 +594,7 @@ export async function runNightlyReviewIfDue(): Promise<number> {
         )
       ).slice(0, FIRST_HALF_STATS_MAX_PER_PASS);
       for (const fixtureId of needStats) {
-        if (!(await spendBudget('apiFootball'))) break;
+        if (!(await spendDirectBudget('apiFootball'))) break;
         const stats = await fetchFirstHalfStats(apiConfig.apiFootball, fixtureId);
         if (stats) {
           const final = finals.get(fixtureId)!;
