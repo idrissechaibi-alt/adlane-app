@@ -247,7 +247,23 @@ export interface StrategyRecord {
   meanPredicted: number;
   /** Suspendue : annonce nettement plus qu'elle ne réussit. */
   suspended: boolean;
+  /** Bilan des seuls paris fictifs (calibrage hors argent). */
+  fictional: { settled: number; won: number; hitRate: number; meanPredicted: number };
+  /** Pause sur le pipe réel, levée quand le fictif a calibré la stratégie. */
+  realPaused: boolean;
 }
+
+/**
+ * Stratégies mises en pause sur le pipe RÉEL (elles annonçaient nettement plus
+ * qu'elles ne réussissaient : cartons). Elles continuent sur le fictif, qui les
+ * recalibre ; la pause se lève d'elle-même quand le fictif a réglé au moins
+ * RELEASE_MIN_SAMPLES paris avec un écart annoncé/réussi sous RELEASE_GAP.
+ */
+const REAL_PAUSED_IDS = new Set(['mt-cartons-plus2', 'mt-cartons-plus3', 'mt-match-propre']);
+const RELEASE_MIN_SAMPLES = 30;
+const RELEASE_GAP = 0.08;
+/** Poids de la probabilité de départ face aux résultats observés (en nombre de paris). */
+const PRIOR_WEIGHT = 15;
 
 const SUSPEND_MIN_SAMPLES = 20;
 const SUSPEND_GAP = 0.15;
@@ -262,6 +278,15 @@ export function getStrategyRecords(proposals?: InPlayProposal[]): StrategyRecord
     const won = legs.filter((l) => l.won).length;
     const hitRate = legs.length ? won / legs.length : 0;
     const meanPredicted = legs.length ? legs.reduce((a, l) => a + l.prob, 0) / legs.length : 0;
+    const fLegs = list.filter((p) => p.strategy === s.id && p.real === false).flatMap((p) => p.legs).filter((l) => l.settled);
+    const fWon = fLegs.filter((l) => l.won).length;
+    const fictional = {
+      settled: fLegs.length,
+      won: fWon,
+      hitRate: fLegs.length ? fWon / fLegs.length : 0,
+      meanPredicted: fLegs.length ? fLegs.reduce((a, l) => a + l.prob, 0) / fLegs.length : 0,
+    };
+    const released = fictional.settled >= RELEASE_MIN_SAMPLES && fictional.meanPredicted - fictional.hitRate < RELEASE_GAP;
     return {
       id: s.id,
       name: s.name,
@@ -270,6 +295,8 @@ export function getStrategyRecords(proposals?: InPlayProposal[]): StrategyRecord
       hitRate,
       meanPredicted,
       suspended: legs.length >= SUSPEND_MIN_SAMPLES && meanPredicted - hitRate >= SUSPEND_GAP,
+      fictional,
+      realPaused: REAL_PAUSED_IDS.has(s.id) && !released,
     };
   });
   if (!proposals) recordsCache = { at: Date.now(), records };
@@ -277,16 +304,21 @@ export function getStrategyRecords(proposals?: InPlayProposal[]): StrategyRecord
 }
 
 /** Stratégies déclenchées par la situation d'un match (une par stratégie). */
-export function evaluateStrategies(ctx: StrategyContext): StrategyBet[] {
+export function evaluateStrategies(ctx: StrategyContext, real = false): StrategyBet[] {
   const records = new Map(getStrategyRecords().map((r) => [r.id, r]));
   const out: StrategyBet[] = [];
   for (const s of STRATEGIES) {
-    if (records.get(s.id)?.suspended) continue;
+    const record = records.get(s.id);
+    // Réel : pause tant que le fictif n'a pas recalibré. Fictif : une stratégie en
+    // pause réelle continue (c'est lui qui la calibre), les autres suspendues s'arrêtent.
+    if (real ? record?.suspended || record?.realPaused : record?.suspended && !REAL_PAUSED_IDS.has(s.id)) continue;
     const reasons = s.test(ctx);
     if (!reasons) continue;
-    const bet = s.bet(ctx);
-    if (!bet || bet.prob < 0.45 || bet.prob > 0.9) continue;
-    const record = records.get(s.id);
+    const raw = s.bet(ctx);
+    if (!raw) continue;
+    // Probabilité annoncée recalibrée par les résultats déjà réglés (prior de 15 paris).
+    const bet = record && record.settled > 0 ? { ...raw, prob: (raw.prob * PRIOR_WEIGHT + record.won) / (PRIOR_WEIGHT + record.settled) } : raw;
+    if (bet.prob < 0.45 || bet.prob > 0.9) continue;
     out.push({
       strategyId: s.id,
       strategyName: s.name,

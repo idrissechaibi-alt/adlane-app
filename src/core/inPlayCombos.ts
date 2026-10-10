@@ -1508,7 +1508,7 @@ function strategyProposals(
   };
   const kind: 'minute20' | 'minute60' = live.statusShort === '1H' ? 'minute20' : 'minute60';
   const out: InPlayProposal[] = [];
-  for (const bet of evaluateStrategies(ctx)) {
+  for (const bet of evaluateStrategies(ctx, real)) {
     const key = `${live.fixtureId}-strat-${bet.strategyId}`;
     if (alreadyProposed.has(key)) continue;
     const leg: CandidateLeg = { market: bet.market, selection: bet.selection, prob: bet.prob, evidence: bet.evidence };
