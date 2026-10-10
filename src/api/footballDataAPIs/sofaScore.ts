@@ -63,7 +63,9 @@ async function sofaFetch(path: string): Promise<Response> {
   if (Date.now() >= relayDownUntil) {
     try {
       const response = await fetchWithTimeout(`${RELAY_BASE}${path}`, RELAY_TIMEOUT_MS);
-      if (response.status < 500) {
+      // 403 = SofaScore refuse l'IP du moment (VPN coupé) : on tente la route
+      // directe ensuite, et le relais est réessayé au prochain appel.
+      if (response.status < 500 && response.status !== 403) {
         lastRoute = 'relais';
         return response;
       }
