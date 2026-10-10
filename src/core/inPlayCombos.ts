@@ -167,6 +167,18 @@ const MIN_MINUTES_FOR_RATE = 8;
 
 /** Probabilité minimale pour qu'une jambe soit retenue (solo, combo, ou pari fictif). */
 const MIN_LEG_PROB = 0.55;
+/** Au-delà, la cote est trop faible pour valoir le pari (≈ 1,18 et moins) :
+ * jamais proposé, quel que soit le marché. */
+const MAX_LEG_PROB = 0.85;
+/** "Plus de X" : il faut encore au moins 2 événements pour gagner. Une ligne
+ * à 1 événement près (1 corner compté → plus de 1.5, 2 buts → plus de 2.5)
+ * se paie toujours à une cote très faible. */
+const MIN_EVENTS_STILL_NEEDED = 2;
+
+/** Jambe digne d'être proposée : assez probable, mais pas déjà quasi acquise. */
+function worthProposing(leg: CandidateLeg): boolean {
+  return leg.prob >= MIN_LEG_PROB && leg.prob <= MAX_LEG_PROB;
+}
 /** Seuil interne utilisé pour choisir la ligne over/under la plus haute encore fiable (corners/cartons). */
 const LINE_PICK_THRESHOLD = 0.55;
 /** Jambes qualifiées gardées par match (les plus sûres, une par marché) :
@@ -614,7 +626,7 @@ function countMarketLegs(
       `(${(done + lambda).toFixed(1)} au total ; ${basis}).` + describeCorrection(fix, spec.noun);
 
     const over = pickHighestConfidentOverLine(lambda, LINE_PICK_THRESHOLD, done);
-    if (over) legs.push({ market: spec.market, selection: `Plus de ${over.line} ${spec.noun} ${where}`, prob: over.prob, evidence, projection });
+    if (over && over.line - done >= MIN_EVENTS_STILL_NEEDED - 0.5) legs.push({ market: spec.market, selection: `Plus de ${over.line} ${spec.noun} ${where}`, prob: over.prob, evidence, projection });
     const under = pickLowestConfidentUnderLine(lambda, LINE_PICK_THRESHOLD, done);
     if (under) legs.push({ market: spec.market, selection: `Moins de ${under.line} ${spec.noun} ${where}`, prob: under.prob, evidence, projection });
   }
@@ -686,7 +698,11 @@ async function buildLegs20(
     }
     const overMarket = fullEst.markets.find((m) => m.market === 'FT_over_2_5_reprojete');
     if (overMarket && !(currentScore.home + currentScore.away > 2.5)) {
-      legs.push(withGoalsProjection(pickBinarySide('total_buts', overMarket, 'Moins de 2.5 buts (total match)'), currentScore, fullEst.secondHalfExpectedGoals));
+      const totalLeg = pickBinarySide('total_buts', overMarket, 'Moins de 2.5 buts (total match)');
+      // "Plus de 2.5" à 2 buts déjà marqués : un seul but suffit, cote trop faible.
+      if (!(/^plus/i.test(totalLeg.selection) && currentScore.home + currentScore.away >= 2)) {
+        legs.push(withGoalsProjection(totalLeg, currentScore, fullEst.secondHalfExpectedGoals));
+      }
     }
   }
 
@@ -739,7 +755,10 @@ function buildLegs60(
   }
   const overMarket = est.markets.find((m) => m.market === 'FT_over_2_5_reprojete');
   if (overMarket && !(currentScore.home + currentScore.away > 2.5)) {
-    legs.push(withGoalsProjection(pickBinarySide('total_buts', overMarket, 'Moins de 2.5 buts (total match)'), currentScore, est.secondHalfExpectedGoals));
+    const totalLeg = pickBinarySide('total_buts', overMarket, 'Moins de 2.5 buts (total match)');
+    if (!(/^plus/i.test(totalLeg.selection) && currentScore.home + currentScore.away >= 2)) {
+      legs.push(withGoalsProjection(totalLeg, currentScore, est.secondHalfExpectedGoals));
+    }
   }
 
   return withLearnedExpertise(legs);
@@ -1030,7 +1049,7 @@ async function bestLegFor(
 
   // Tous les marchés concourent ; les plus sûrs passent devant, un seul par
   // marché (et par fenêtre 1ère MT / match).
-  const eligible = rawLegs.filter((l) => l.prob >= MIN_LEG_PROB).sort((a, b) => b.prob - a.prob);
+  const eligible = rawLegs.filter(worthProposing).sort((a, b) => b.prob - a.prob);
   const seen = new Set<string>();
   const best: LegWithContext[] = [];
   for (const leg of eligible) {
@@ -1618,7 +1637,7 @@ export async function runInPlayComboTick(
           : buildLegs60(live, expectedGoals, currentStats, observedLive);
         const window = kind === 'minute20' ? '20e → pause + match complet' : '60e → fin de match';
 
-        for (const leg of rawLegs.filter((l) => l.prob >= MIN_LEG_PROB)) {
+        for (const leg of rawLegs.filter(worthProposing)) {
           const dedupKey = `${live.fixtureId}-${kind}-${legDedupSuffix(leg)}`;
           if (alreadyProposed.has(dedupKey)) continue;
           const proposal = buildProposalFromItems(kind, [{ leg, fixtureId: live.fixtureId, match, live }], window, false);
@@ -1810,7 +1829,7 @@ export async function runInPlayComboTick(
           : buildLegs60(live, preMatchExpectedGoals, currentStats, observedLive);
 
         const window = kind === 'minute20' ? '20e → pause + match complet' : '60e → fin de match';
-        for (const leg of rawLegs.filter((l) => l.prob >= MIN_LEG_PROB)) {
+        for (const leg of rawLegs.filter(worthProposing)) {
           const dedupKey = `${live.fixtureId}-${kind}-${legDedupSuffix(leg)}`;
           if (alreadyProposed.has(dedupKey)) continue;
           const proposal = buildProposalFromItems(kind, [{ leg, fixtureId: live.fixtureId, match, live }], window, false);
