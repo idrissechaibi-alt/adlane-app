@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-10-10T04:36:12.418Z",
+  "exportedAt": "2026-10-10T05:16:24.448Z",
   "formatVersion": 1,
   "source": "APP adlane",
   "data": {
@@ -4824,56 +4824,42 @@
   },
   "health": {
     "nativeBackgroundTicks": {
-      "lastTickAt": "2026-10-10T04:26:09.930Z",
-      "ticksLast24h": 44
+      "lastTickAt": "2026-10-10T05:16:19.849Z",
+      "ticksLast24h": 45
     },
     "tickProgress": {
-      "startedAt": "2026-10-10T04:36:08.358Z",
+      "startedAt": "2026-10-10T05:16:18.590Z",
       "step": "programme fictif",
-      "at": "2026-10-10T04:36:08.575Z"
+      "at": "2026-10-10T05:16:19.892Z"
     },
     "lastTick": {
-      "finishedAt": "2026-10-10T04:00:15.773Z",
+      "finishedAt": "2026-10-10T04:36:56.271Z",
       "universeSize": 0,
       "omnirouteConfigured": true,
-      "fictionalProgramSize": 181,
+      "fictionalProgramSize": 500,
       "fictionalProgramFromFeed": false,
-      "fictionalMatchesAhead": 180,
-      "fictionalNextKickoffUtc": "2026-10-10T04:00:00Z",
-      "fictionalCountriesTried": 58,
+      "fictionalMatchesAhead": 1224,
+      "fictionalNextKickoffUtc": "2026-10-10T05:00:00.000Z",
+      "fictionalCountriesTried": 59,
       "fictionalCountriesTotal": 60,
       "fictionalLastTrace": {
-        "country": "Équateur",
+        "country": "Japon",
         "attempts": [
           {
-            "model": "Omniroute · Clodiko",
-            "outcome": "sans_contenu_utile",
-            "detail": "{\"matches\": []}"
-          },
-          {
-            "model": "Principal · nemotron-3.5-content-safety",
-            "outcome": "sans_contenu_utile",
-            "detail": "User Safety: safe"
-          },
-          {
-            "model": "Principal · llama-3.1-nemotron-safety-guard-8b-v3",
-            "outcome": "sans_contenu_utile",
-            "detail": "{\"User Safety\": \"safe\", \"Response Safety\": \"safe\"} "
-          },
-          {
-            "model": "Principal · auto",
-            "outcome": "sans_contenu_utile",
-            "detail": "{\"matches\": []}"
+            "model": "Principal · allam-2-7b",
+            "outcome": "exploitable",
+            "detail": "{\"matches\": [\n  {\"home_team\": \"Cerezo Osaka\", \"away_team\": \"Yokohama FC\", \"competition\": \"J1 League\", \"kickoff_utc\": \"2026-10-10T08:00:00Z\"},\n  {\"home_team\": \"FC Tokyo\", \"away_team\": \"Gamba Osaka\", \"c"
           }
         ]
       },
       "fictionalSportmonksMatches": 4,
-      "fictionalOmnirouteMatches": 177,
+      "fictionalSofascoreMatches": 964,
+      "fictionalOmnirouteMatches": 290,
       "liveFixturesFound": 0,
-      "fictionalLiveFixturesFound": 0,
+      "fictionalLiveFixturesFound": 3,
       "liveFixturesSource": "api_football",
-      "liveMarkerObserved": 0,
-      "liveMarkerClosed": 0,
+      "liveMarkerObserved": 1,
+      "liveMarkerClosed": 2,
       "freshInPlayProposals": 0,
       "intlBreak": {
         "withinWindow": false,
@@ -4896,16 +4882,16 @@
       "settledLast24h": 7
     },
     "trainingRows": {
-      "last14Days": 1143,
-      "lastClosedAt": "2026-10-10T04:16:16.170Z",
+      "last14Days": 1145,
+      "lastClosedAt": "2026-10-10T04:36:32.023Z",
       "bySource": {
         "api_football": 850,
-        "omniroute": 293
+        "omniroute": 295
       }
     },
     "model": {
-      "updatedAt": "2026-10-10T04:16:16.592Z",
-      "totalRows": 1143,
+      "updatedAt": "2026-10-10T04:36:32.188Z",
+      "totalRows": 1145,
       "markerRules": 40,
       "paperBets": {
         "total": 102,
@@ -4919,7 +4905,36 @@
         "agreeRate": 0.5555555555555556,
         "trusted": false
       },
-      "marketExpertise": []
+      "marketExpertise": [
+        {
+          "market": "btts",
+          "samples": 14,
+          "hitRate": 0.571,
+          "meanPredicted": 0.637,
+          "calibrationFactor": 1
+        },
+        {
+          "market": "total_buts",
+          "samples": 14,
+          "hitRate": 0.786,
+          "meanPredicted": 0.68,
+          "calibrationFactor": 1
+        },
+        {
+          "market": "corners",
+          "samples": 2,
+          "hitRate": 1,
+          "meanPredicted": 0.76,
+          "calibrationFactor": 1
+        },
+        {
+          "market": "1X2",
+          "samples": 1,
+          "hitRate": 0,
+          "meanPredicted": 0.802,
+          "calibrationFactor": 1
+        }
+      ]
     },
     "inPlayProposals": {
       "real": 1,
@@ -4987,7 +5002,7 @@
         {
           "name": "Principal",
           "ok": true,
-          "latencyMs": 97,
+          "latencyMs": 269,
           "readyModels": 28,
           "configuredReady": 13,
           "configuredTotal": 13
@@ -4995,7 +5010,7 @@
         {
           "name": "Omniroute",
           "ok": true,
-          "latencyMs": 2841,
+          "latencyMs": 1355,
           "readyModels": 954,
           "configuredReady": 2,
           "configuredTotal": 2
@@ -5004,23 +5019,23 @@
       "leaderboard": [
         {
           "label": "Principal · allam-2-7b",
-          "ok": 88,
-          "fail": 50,
-          "avgMs": 941,
+          "ok": 91,
+          "fail": 53,
+          "avgMs": 571,
           "coolingDown": false
         },
         {
           "label": "Principal · gpt-oss-120b",
-          "ok": 60,
-          "fail": 34,
-          "avgMs": 1307,
+          "ok": 61,
+          "fail": 35,
+          "avgMs": 1125,
           "coolingDown": false
         },
         {
           "label": "Principal · nemotron-3.5-content-safety",
-          "ok": 58,
-          "fail": 67,
-          "avgMs": 708,
+          "ok": 60,
+          "fail": 69,
+          "avgMs": 645,
           "coolingDown": false
         },
         {
@@ -5228,12 +5243,38 @@
       ]
     },
     "apiFootballBudget": {
-      "usedToday": 72,
+      "usedToday": 73,
       "autolearnUsedToday": 70,
       "autolearnRemaining": 0
     },
     "sofaScore": null,
-    "liveSources": {},
+    "liveSources": {
+      "TheSportsDB": {
+        "ok": true,
+        "count": 18,
+        "at": "2026-10-10T05:16:22.209Z"
+      },
+      "365Scores": {
+        "ok": true,
+        "count": 11,
+        "at": "2026-10-10T05:16:22.346Z"
+      },
+      "LiveScore": {
+        "ok": true,
+        "count": 14,
+        "at": "2026-10-10T05:16:22.347Z"
+      },
+      "ESPN": {
+        "ok": true,
+        "count": 0,
+        "at": "2026-10-10T05:16:22.503Z"
+      },
+      "FotMob": {
+        "ok": true,
+        "count": 14,
+        "at": "2026-10-10T05:16:22.796Z"
+      }
+    },
     "configured": {
       "omniroute": true,
       "telegram": true,
