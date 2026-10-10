@@ -4,6 +4,7 @@
 import { Lesson, OmnirouteConfig } from '../types';
 import { lintContent } from './validator';
 import { LlmRoute, buildRoutes, callRoute, isWebCapableRoute, orderRoutes, routeLabel } from './llmRouter';
+import { formatSearchContext, searchWeb } from './webSearch';
 
 // Aucun nom de modèle deviné par défaut : le préfixe "in-ai/" testé
 // précédemment s'est révélé faux sur le serveur réel de l'utilisateur (HTTP
@@ -131,10 +132,17 @@ interface RawAgentResult {
 async function callSingleAgent(
   route: LlmRoute,
   systemPrompt: string,
-  userPrompt: string
+  userPrompt: string,
+  webTools: boolean = false
 ): Promise<RawAgentResult> {
   const model = routeLabel(route);
-  const content = await callRoute(route, systemPrompt, userPrompt);
+  const content = await callRoute(
+    route,
+    systemPrompt,
+    userPrompt,
+    undefined,
+    webTools && GOOGLE_SEARCH_MODEL_PATTERN.test(route.model) ? [GOOGLE_SEARCH_TOOL] : undefined
+  );
 
   const lint = lintContent(content);
   if (!lint.valid) {
@@ -208,18 +216,22 @@ export async function askOmnirouteLight(
   systemPrompt: string,
   userPrompt: string,
   config: OmnirouteConfig,
-  options: { requiresWeb?: boolean; maxAttempts?: number } = {}
+  options: { requiresWeb?: boolean; maxAttempts?: number; searchQuery?: string } = {}
 ): Promise<{ text: string; model: string } | null> {
   const all = await buildRoutes(config);
-  if (options.requiresWeb && !all.some(isSearchCapable)) return null;
-  const routes = (await orderRoutes(options.requiresWeb ? all.filter(isSearchCapable) : all)).slice(
-    0,
-    options.maxAttempts ?? LIGHT_MAX_ATTEMPTS
-  );
+  let routes = all;
+  let prompt = userPrompt;
+  if (options.requiresWeb) {
+    const prepared = await prepareWebQuestion(config, all, userPrompt, options.searchQuery);
+    if (!prepared) return null;
+    routes = prepared.routes;
+    prompt = prepared.userPrompt;
+  }
+  const ordered = (await orderRoutes(routes)).slice(0, options.maxAttempts ?? LIGHT_MAX_ATTEMPTS);
 
-  for (const route of routes) {
+  for (const route of ordered) {
     try {
-      const result = await callSingleAgent(route, systemPrompt, userPrompt);
+      const result = await callSingleAgent(route, systemPrompt, prompt, Boolean(options.requiresWeb));
       return { text: result.rawResponse, model: result.model };
     } catch (error: any) {
       console.warn(`[IA] Enrichissement "${routeLabel(route)}" a échoué:`, error?.message);
@@ -271,8 +283,48 @@ const SEARCH_CAPABLE_PATTERN =
  * résultat" — ne pas confondre les deux évite de conclure "pas de match ce
  * jour-là" quand c'est l'infrastructure qui est tombée.
  */
+/** FreeLLMAPI : outil qui active la recherche Google sur les modèles Gemini. */
+const GOOGLE_SEARCH_TOOL = { type: 'function', function: { name: 'google_search', parameters: {} } };
+const GOOGLE_SEARCH_MODEL_PATTERN = /gemini/i;
+
 function isSearchCapable(route: LlmRoute): boolean {
-  return SEARCH_CAPABLE_PATTERN.test(route.model) || isWebCapableRoute(route);
+  return (
+    SEARCH_CAPABLE_PATTERN.test(route.model) ||
+    GOOGLE_SEARCH_MODEL_PATTERN.test(route.model) ||
+    isWebCapableRoute(route)
+  );
+}
+
+/**
+ * Prépare une question sur des faits du jour. Si une API de recherche est
+ * disponible (OmniRoute /v1/search), l'app cherche elle-même et transmet les
+ * résultats : tous les modèles peuvent alors répondre à partir de données
+ * réelles. Sinon, seuls les modèles qui cherchent eux-mêmes sont interrogés
+ * (accès web vérifié, Gemini avec l'outil google_search). null = aucun moyen
+ * d'accéder au web : la question n'est pas posée, la réponse serait inventée.
+ */
+async function prepareWebQuestion(
+  config: OmnirouteConfig,
+  all: LlmRoute[],
+  userPrompt: string,
+  searchQuery: string | undefined
+): Promise<{ routes: LlmRoute[]; userPrompt: string; source: string } | null> {
+  if (searchQuery) {
+    const results = await searchWeb(config, searchQuery).catch(() => null);
+    if (results && results.length > 0) {
+      return {
+        routes: all,
+        source: 'recherche web',
+        userPrompt:
+          `${formatSearchContext(searchQuery, results)}\n\n` +
+          "Appuie-toi UNIQUEMENT sur ces résultats de recherche (n'invente rien ; si l'information n'y est pas, " +
+          `mets null).\n\n${userPrompt}`,
+      };
+    }
+  }
+  const searchCapable = all.filter(isSearchCapable);
+  if (searchCapable.length === 0) return null;
+  return { routes: searchCapable, userPrompt, source: 'modèles avec accès web' };
 }
 
 /**
@@ -295,24 +347,32 @@ export async function askOmnirouteUsable<T>(
   config: OmnirouteConfig,
   extract: (text: string) => T | null,
   trace?: OmnirouteAttempt[],
-  preferSearchCapable: boolean = false,
+  /** Question sur des faits du jour : true, ou directement la requête de
+   * recherche web à lancer avant de poser la question (voir prepareWebQuestion). */
+  web: boolean | string = false,
   maxAttempts: number = USABLE_MAX_ATTEMPTS
 ): Promise<{ value: T; model: string } | null> {
   const all = await buildRoutes(config);
+  const preferSearchCapable = web !== false;
+  let prompt = userPrompt;
+  let candidates = all;
 
-  // Question sur des faits du jour (score en direct, calendrier, résultat) :
-  // un modèle sans accès web ne peut que répondre à côté — ou pire, inventer
-  // un score plausible. Sans aucun agent capable de chercher, on ne la pose pas.
-  if (preferSearchCapable && !all.some(isSearchCapable)) {
-    trace?.push({
-      model: '(aucun)',
-      outcome: 'erreur',
-      detail: "Aucun modèle avec accès web configuré : question sur des faits du jour non posée (la réponse serait inventée).",
-    });
-    return null;
+  if (preferSearchCapable) {
+    const prepared = await prepareWebQuestion(config, all, userPrompt, typeof web === 'string' ? web : undefined);
+    if (!prepared) {
+      trace?.push({
+        model: '(aucun)',
+        outcome: 'erreur',
+        detail:
+          "Aucun accès web : ni API de recherche (OmniRoute /v1/search), ni modèle qui cherche lui-même — question sur des faits du jour non posée (la réponse serait inventée).",
+      });
+      return null;
+    }
+    candidates = prepared.routes;
+    prompt = prepared.userPrompt;
   }
 
-  const routes = (await orderRoutes(preferSearchCapable ? all.filter(isSearchCapable) : all)).slice(0, maxAttempts);
+  const routes = (await orderRoutes(candidates)).slice(0, maxAttempts);
 
   if (routes.length === 0) {
     trace?.push({ model: '(aucun)', outcome: 'erreur', detail: 'Aucun fournisseur IA configuré dans Paramètres.' });
@@ -322,7 +382,7 @@ export async function askOmnirouteUsable<T>(
   for (const route of routes) {
     const model = routeLabel(route);
     try {
-      const result = await callSingleAgent(route, systemPrompt, userPrompt);
+      const result = await callSingleAgent(route, systemPrompt, prompt, preferSearchCapable);
       const value = extract(result.rawResponse);
       if (value !== null) {
         trace?.push({ model, outcome: 'exploitable', detail: result.rawResponse.slice(0, ATTEMPT_DETAIL_MAX_CHARS) });

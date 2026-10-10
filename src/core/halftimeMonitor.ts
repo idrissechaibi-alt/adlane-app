@@ -182,7 +182,7 @@ export async function fetchOmnirouteAllLiveFixtures(config: OmnirouteConfig): Pr
       return fixtures.length > 0 ? fixtures : null;
     },
     undefined,
-    true
+    'live football scores now matches in play'
   ).catch((error: any) => {
     console.warn('[Découverte live Omniroute] Échec:', error?.message);
     return null;
@@ -289,7 +289,7 @@ export async function fetchOmnirouteMatchStatus(
       };
     },
     undefined,
-    true // score en direct : réservé aux agents capables de chercher
+    `${homeTeam} ${awayTeam} live score statistics` // recherche web avant la question
   ).catch((error: any) => {
     console.warn('[Statut live Omniroute] Échec:', error?.message);
     return null;

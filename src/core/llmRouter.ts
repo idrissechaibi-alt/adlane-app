@@ -243,7 +243,8 @@ export async function callRoute(
   route: LlmRoute,
   systemPrompt: string,
   userPrompt: string,
-  timeoutMs: number = 20000
+  timeoutMs: number = 20000,
+  tools?: unknown[]
 ): Promise<string> {
   await loadStats();
   const startedAt = Date.now();
@@ -264,6 +265,7 @@ export async function callRoute(
             { role: 'user', content: userPrompt },
           ],
           temperature: 0.2,
+          ...(tools && tools.length > 0 ? { tools } : {}),
         }),
       },
       timeoutMs

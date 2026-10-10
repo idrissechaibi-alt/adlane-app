@@ -25,6 +25,7 @@ import { runAutoLearnTick, AutoLearnTickDiagnostics, getNativeBackgroundTickStat
 import { sendTelegramMessage } from '../core/telegram';
 import { loadOmnirouteConfig } from '../core/focusEnrichment';
 import { getWebCapableRoutes } from '../core/llmRouter';
+import { getWorkingSearchProviders, probeSearchProviders } from '../core/webSearch';
 import { getAgentLearningDigest, getAccuracyTrend, AccuracyTrend, buildMarketDayPointsFromPaperBets, buildLearningReport } from '../core/autoLearn';
 
 export default function EvolutionScreen() {
@@ -66,11 +67,21 @@ export default function EvolutionScreen() {
    * de l'écran — utilisé au focus ET après un lancement manuel du scan. */
   /** Modèles avec accès internet vérifié (llmRouter) : null = pas encore chargé. */
   const [webCapableModels, setWebCapableModels] = useState<string[] | null>(null);
+  /** Fournisseurs dont l'API de recherche web (OmniRoute /v1/search) répond. */
+  const [searchProviders, setSearchProviders] = useState<string[]>([]);
 
   const refreshWebAccess = async () => {
     try {
       const config = await loadOmnirouteConfig();
-      setWebCapableModels(config ? await getWebCapableRoutes(config) : []);
+      if (!config) {
+        setWebCapableModels([]);
+        setSearchProviders([]);
+        return;
+      }
+      let search = await getWorkingSearchProviders(config);
+      if (search.length === 0) search = await probeSearchProviders(config);
+      setSearchProviders(search);
+      setWebCapableModels(await getWebCapableRoutes(config));
     } catch {
       setWebCapableModels([]);
     }
@@ -81,14 +92,20 @@ export default function EvolutionScreen() {
    * relever les matchs en direct, ni régler ses paris). */
   const renderWebAccessIndicator = () => {
     if (webCapableModels == null) return null;
-    const ok = webCapableModels.length > 0;
+    const ok = webCapableModels.length > 0 || searchProviders.length > 0;
+    const parts = [
+      ...(searchProviders.length > 0 ? [`recherche web via ${searchProviders.join(', ')}`] : []),
+      ...(webCapableModels.length > 0
+        ? [`${webCapableModels.length} modèle${webCapableModels.length > 1 ? 's' : ''} qui cherche${webCapableModels.length > 1 ? 'nt' : ''} lui-même (${webCapableModels.slice(0, 3).map((m) => m.split(' · ').pop()).join(', ')}${webCapableModels.length > 3 ? '…' : ''})`]
+        : []),
+    ];
     return (
       <View style={styles.webAccessRow}>
         <View style={[styles.webAccessDot, { backgroundColor: ok ? '#22c55e' : '#ef4444' }]} />
         <Text style={styles.webAccessText}>
           {ok
-            ? `Accès internet : ${webCapableModels.length} modèle${webCapableModels.length > 1 ? 's' : ''} vérifié${webCapableModels.length > 1 ? 's' : ''} (${webCapableModels.slice(0, 3).map((m) => m.split(' · ').pop()).join(', ')}${webCapableModels.length > 3 ? '…' : ''})`
-            : "Pas d'accès internet : aucun modèle vérifié. Lance le test dans Paramètres → Choisir dans la liste."}
+            ? `Accès internet : ${parts.join(' + ')}`
+            : "Pas d'accès internet : ni recherche OmniRoute, ni modèle vérifié. Lance le test dans Paramètres → Choisir dans la liste."}
         </Text>
       </View>
     );

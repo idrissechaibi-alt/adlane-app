@@ -291,7 +291,7 @@ async function fetchFinalResultsViaOmniroute(
         };
       },
       undefined,
-      true // score final : réservé aux agents capables de chercher
+      `${homeTeam} ${awayTeam} score final résultat corners cartons` // recherche web avant la question
     ).catch((error: any) => {
       console.warn('[Bilan] Résultat final Omniroute échoué:', error?.message);
       return null;

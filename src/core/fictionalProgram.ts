@@ -457,7 +457,7 @@ async function fetchCountryFixtures(
       config,
       (text) => extractFixtures(text, country, dateKey),
       trace,
-      true // calendrier du jour : seuls les agents capables de chercher peuvent répondre
+      `matchs football ${country} ${dateKey} programme horaires` // recherche web avant la question
     );
     return result?.value ?? [];
   } catch (error: any) {

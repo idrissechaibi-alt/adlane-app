@@ -139,7 +139,7 @@ async function fetchOmnirouteMarkers(
         '{"corners_home": number|null, "corners_away": number|null, "cards_home": number|null, "cards_away": number|null}\n' +
         'cards_home/away = total cumulé cartons jaunes + rouges pour cette équipe à cet instant.',
       config,
-      { requiresWeb: true }
+      { requiresWeb: true, searchQuery: `${homeTeam} ${awayTeam} live stats corners cards` }
     );
   } catch (error: any) {
     console.warn('[Marqueurs live] Omniroute indisponible:', error.message);

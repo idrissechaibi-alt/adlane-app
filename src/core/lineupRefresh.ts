@@ -106,7 +106,7 @@ export async function ensureLineupRefresh(
           'Tu cherches des informations factuelles et récentes sur un match de football, à partir de la presse et des analystes. Pas de pronostic, pas de conseil de pari.',
           `Composition probable/confirmée et dernières nouvelles (blessures, absences, changements tactiques) pour ${homeTeam} vs ${awayTeam}, à l'approche du coup d'envoi.`,
           omnirouteConfig,
-          { requiresWeb: true }
+          { requiresWeb: true, searchQuery: `${homeTeam} ${awayTeam} compositions probables blessés` }
         );
         if (result?.text) {
           contextText = result.text;
