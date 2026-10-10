@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-10-10T03:22:57.760Z",
+  "exportedAt": "2026-10-10T03:36:22.139Z",
   "formatVersion": 1,
   "source": "APP adlane",
   "data": {
@@ -4824,36 +4824,51 @@
   },
   "health": {
     "nativeBackgroundTicks": {
-      "lastTickAt": "2026-10-10T03:10:36.504Z",
-      "ticksLast24h": 38
+      "lastTickAt": "2026-10-10T03:25:45.489Z",
+      "ticksLast24h": 39
     },
     "tickProgress": {
-      "startedAt": "2026-10-10T03:22:57.077Z",
+      "startedAt": "2026-10-10T03:36:21.444Z",
       "step": "programme fictif",
-      "at": "2026-10-10T03:22:57.349Z"
+      "at": "2026-10-10T03:36:21.697Z"
     },
     "lastTick": {
-      "finishedAt": "2026-10-10T03:22:47.080Z",
+      "finishedAt": "2026-10-10T03:26:40.577Z",
       "universeSize": 0,
       "omnirouteConfigured": true,
-      "fictionalProgramSize": 4,
+      "fictionalProgramSize": 14,
       "fictionalProgramFromFeed": false,
-      "fictionalMatchesAhead": 4,
-      "fictionalNextKickoffUtc": "2026-10-10T14:00:00Z",
-      "fictionalCountriesTried": 0,
+      "fictionalMatchesAhead": 14,
+      "fictionalNextKickoffUtc": "2026-10-10T11:30:00Z",
+      "fictionalCountriesTried": 6,
       "fictionalCountriesTotal": 60,
       "fictionalLastTrace": {
-        "country": "Portugal",
+        "country": "Irlande du Nord",
         "attempts": [
           {
-            "model": "(aucun)",
+            "model": "Principal · allam-2-7b",
             "outcome": "erreur",
-            "detail": "Aucun modèle avec accès web configuré : question sur des faits du jour non posée (la réponse serait inventée)."
+            "detail": "HTTP 429 : All models rate-limited after 1 attempt. Soonest cooldown reset ~4s. Attempt trail: groq/allam-2-7b key1: daily_quota_exhausted. Last error: Groq API error 429: Rate limit reached for model"
+          },
+          {
+            "model": "Principal · auto",
+            "outcome": "sans_contenu_utile",
+            "detail": "to=web_search<|message|><atem:function_calls>\n<atem:invoke name=\"web_search\">\n<atem:parameter name=\"query\">Irish Premiership 10 October 2026 fixtures kick off time</atem:parameter>\n</atem:invoke>\n</at"
+          },
+          {
+            "model": "Principal · gpt-oss-120b",
+            "outcome": "sans_contenu_utile",
+            "detail": "{\"matches\": []}"
+          },
+          {
+            "model": "Omniroute · Maximus appus",
+            "outcome": "sans_contenu_utile",
+            "detail": "{\"matches\": []}"
           }
         ]
       },
       "fictionalSportmonksMatches": 4,
-      "fictionalOmnirouteMatches": 0,
+      "fictionalOmnirouteMatches": 10,
       "liveFixturesFound": 0,
       "fictionalLiveFixturesFound": 0,
       "liveFixturesSource": "aucune_echec_omniroute",
@@ -4890,7 +4905,7 @@
       }
     },
     "model": {
-      "updatedAt": "2026-10-10T03:22:45.642Z",
+      "updatedAt": "2026-10-10T03:28:59.493Z",
       "totalRows": 1135,
       "markerRules": 40,
       "paperBets": {
@@ -4973,7 +4988,7 @@
         {
           "name": "Principal",
           "ok": true,
-          "latencyMs": 96,
+          "latencyMs": 33,
           "readyModels": 28,
           "configuredReady": 13,
           "configuredTotal": 13
@@ -4981,8 +4996,8 @@
         {
           "name": "Omniroute",
           "ok": true,
-          "latencyMs": 41,
-          "readyModels": 954,
+          "latencyMs": 82,
+          "readyModels": 955,
           "configuredReady": 2,
           "configuredTotal": 2
         }
@@ -4991,50 +5006,29 @@
         {
           "label": "Principal · allam-2-7b",
           "ok": 72,
-          "fail": 13,
+          "fail": 19,
           "avgMs": 978,
           "coolingDown": false
         },
         {
-          "label": "Principal · auto",
-          "ok": 62,
-          "fail": 0,
-          "avgMs": 2591,
-          "coolingDown": false
-        },
-        {
           "label": "Principal · gpt-oss-120b",
-          "ok": 33,
-          "fail": 9,
-          "avgMs": 2821,
-          "coolingDown": false
-        },
-        {
-          "label": "Omniroute · Maximus appus",
-          "ok": 4,
-          "fail": 0,
-          "avgMs": 4741,
-          "coolingDown": false
+          "ok": 43,
+          "fail": 20,
+          "avgMs": 1341,
+          "coolingDown": true
         },
         {
           "label": "Principal · riva-translate-4b-instruct-v2",
-          "ok": 30,
-          "fail": 0,
-          "avgMs": 6360,
-          "coolingDown": false
-        },
-        {
-          "label": "Omniroute · Clodiko",
-          "ok": 2,
-          "fail": 1,
-          "avgMs": 5822,
+          "ok": 39,
+          "fail": 9,
+          "avgMs": 3733,
           "coolingDown": false
         },
         {
           "label": "Principal · diffusiongemma-26b-a4b-it",
-          "ok": 18,
-          "fail": 1,
-          "avgMs": 12612,
+          "ok": 19,
+          "fail": 2,
+          "avgMs": 9090,
           "coolingDown": false
         },
         {
@@ -5042,6 +5036,13 @@
           "ok": 13,
           "fail": 13,
           "avgMs": 7963,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · auto",
+          "ok": 74,
+          "fail": 0,
+          "avgMs": 30239,
           "coolingDown": false
         },
         {
@@ -5056,6 +5057,20 @@
           "ok": 4,
           "fail": 10,
           "avgMs": 15544,
+          "coolingDown": false
+        },
+        {
+          "label": "Omniroute · Clodiko",
+          "ok": 28,
+          "fail": 1,
+          "avgMs": 61184,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · gpt-oss-20b",
+          "ok": 5,
+          "fail": 6,
+          "avgMs": 46150,
           "coolingDown": false
         }
       ],
@@ -5216,7 +5231,7 @@
       ]
     },
     "apiFootballBudget": {
-      "usedToday": 70,
+      "usedToday": 71,
       "autolearnUsedToday": 70,
       "autolearnRemaining": 0
     },
