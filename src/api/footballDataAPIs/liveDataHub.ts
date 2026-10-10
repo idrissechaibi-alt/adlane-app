@@ -717,6 +717,11 @@ export async function hubStats(homeTeam: string, awayTeam: string, dateKey: stri
   return result;
 }
 
+/** Une source de données connaît-elle ce match ce jour-là (même pas commencé) ? */
+export async function hubKnowsMatch(homeTeam: string, awayTeam: string, dateKey: string): Promise<boolean> {
+  return (await findEverywhere(homeTeam, awayTeam, dateKey, false)).length > 0;
+}
+
 /** Statut en direct d'un match (score, minute) depuis la première source qui le suit. */
 export async function hubLiveStatus(homeTeam: string, awayTeam: string): Promise<HubMatch | null> {
   const live = await hubLiveEvents();

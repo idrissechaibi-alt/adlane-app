@@ -472,7 +472,7 @@ export async function runAutoLearnTick(): Promise<AutoLearnTickDiagnostics> {
 
 let inFlightTick: Promise<AutoLearnTickDiagnostics> | null = null;
 let inFlightStartedAt = 0;
-const STALE_TICK_MS = 12 * 60_000;
+const STALE_TICK_MS = 25 * 60_000;
 
 const TICK_PROGRESS_KEY = '@autolearn_tick_progress';
 let currentTickStartedAt = '';
@@ -491,7 +491,7 @@ async function markTickStep(step: string): Promise<void> {
   try {
     await AsyncStorage.setItem(
       TICK_PROGRESS_KEY,
-      JSON.stringify({ startedAt: currentTickStartedAt, step, at: new Date().toISOString() })
+      JSON.stringify({ startedAt: currentTickStartedAt, step, at: new Date().toISOString(), stepDurationsSec: tickStepDurations })
     );
   } catch {
     // diagnostic best-effort
@@ -615,7 +615,9 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
 
   await markTickStep('enrichissement matchs suivis');
   try {
-    await enrichFocusMatches();
+    // Étape IA facultative : sautée quand le tour est déjà long, pour que le
+    // scan en direct et le bilan passent sans retard.
+    if (Date.now() - Date.parse(currentTickStartedAt) < 5 * 60_000) await enrichFocusMatches();
   } catch (error: any) {
     console.warn('[Tâche de fond] Enrichissement des matchs suivis échoué:', error.message);
   }

@@ -93,7 +93,7 @@ import { sendLocalNotification } from './notifications';
 import { normalizeTeamName, namesLikelyMatch } from './teamNameMatch';
 import { OmnirouteConfig } from '../types';
 import { mapWithConcurrency } from './concurrency';
-import { hubDateKey, hubLiveStatus, hubStats } from '../api/footballDataAPIs/liveDataHub';
+import { hubDateKey, hubKnowsMatch, hubLiveStatus, hubStats } from '../api/footballDataAPIs/liveDataHub';
 import { DeltaUnit, LegProjection, describeCorrection, ensureDeltaSamplesLoaded, flushShadowProjections, getDeltaCorrection, projectFullMatchCount, recordShadowProjection } from './deltaLearning';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { matchesForDate, isWithinBreakWindow } from './internationalBreak';
@@ -304,6 +304,62 @@ const OMNIROUTE_EXPECTED_GOALS_MAX = 4.0;
  * moindre requête payante. N'invente rien : si l'agent ne trouve pas de
  * forme/effectif fiable pour ces deux équipes, il renvoie null.
  */
+// Buts attendus estimés par les IA : une estimation par match et par jour,
+// réutilisée par les scans 20e et 60e et par tous les tours suivants. Sans ce
+// cache, chaque tour redemandait l'estimation des ~80 matchs fictifs en direct
+// (recherche web + jusqu'à 4 essais chacun) : le tour complet dépassait
+// 12 minutes et ne se terminait plus.
+const XG_CACHE_KEY = '@xg_estimates_cache';
+const XG_NULL_RETRY_MS = 2 * 3_600_000;
+/** Estimations IA nouvelles autorisées par tour ; au-delà, le match attend le tour suivant. */
+const XG_NEW_ESTIMATES_PER_TICK = 12;
+let xgCache: Record<string, { at: number; xg: { home: number; away: number } | null }> | null = null;
+let xgNewThisTick = 0;
+
+async function loadXgCache(): Promise<Record<string, { at: number; xg: { home: number; away: number } | null }>> {
+  if (xgCache) return xgCache;
+  try {
+    const raw = await AsyncStorage.getItem(XG_CACHE_KEY);
+    xgCache = raw ? JSON.parse(raw) : {};
+  } catch {
+    xgCache = {};
+  }
+  const cutoff = Date.now() - 36 * 3_600_000;
+  for (const [k, v] of Object.entries(xgCache!)) if (v.at < cutoff) delete xgCache![k];
+  return xgCache!;
+}
+
+async function saveXgCache(): Promise<void> {
+  try {
+    await AsyncStorage.setItem(XG_CACHE_KEY, JSON.stringify(xgCache ?? {}));
+  } catch {
+    // best-effort
+  }
+}
+
+/**
+ * xG du cache, sinon estimation IA si le budget du tour le permet.
+ * undefined = pas encore estimé et budget épuisé (réessayé au tour suivant) ;
+ * null = estimation impossible (les IA n'ont rien trouvé).
+ */
+async function cachedExpectedGoals(
+  config: OmnirouteConfig,
+  homeTeam: string,
+  awayTeam: string,
+  league: string
+): Promise<{ home: number; away: number } | null | undefined> {
+  const cache = await loadXgCache();
+  const key = `${new Date().toISOString().slice(0, 10)}|${normalizeTeamName(homeTeam)}|${normalizeTeamName(awayTeam)}`;
+  const hit = cache[key];
+  if (hit && (hit.xg || Date.now() - hit.at < XG_NULL_RETRY_MS)) return hit.xg;
+  if (xgNewThisTick >= XG_NEW_ESTIMATES_PER_TICK) return undefined;
+  xgNewThisTick++;
+  const xg = await estimateExpectedGoalsViaOmniroute(config, homeTeam, awayTeam, league).catch(() => null);
+  cache[key] = { at: Date.now(), xg };
+  await saveXgCache();
+  return xg;
+}
+
 async function estimateExpectedGoalsViaOmniroute(
   config: OmnirouteConfig,
   homeTeam: string,
@@ -1407,6 +1463,7 @@ export async function runInPlayComboTick(
   liveFixtures: LiveFixture[],
   fictionalLiveFixtures: LiveFixture[] = []
 ): Promise<InPlayComboTickResult> {
+  xgNewThisTick = 0;
   await ensureDeltaSamplesLoaded();
   const existing = readInPlayProposals();
   // Réel : une jambe proposée bloque TOUT le match pour ce checkpoint (peu
@@ -1508,10 +1565,11 @@ export async function runInPlayComboTick(
           league: live.league ?? 'Compétition inconnue',
           leagueId: '',
         };
-        const expectedGoals =
-          (omnirouteConfig
-            ? await estimateExpectedGoalsViaOmniroute(omnirouteConfig, match.homeTeam, match.awayTeam, match.league).catch(() => null)
-            : null) ?? NEUTRAL_EXPECTED_GOALS;
+        const estimatedXg = omnirouteConfig
+          ? await cachedExpectedGoals(omnirouteConfig, match.homeTeam, match.awayTeam, match.league)
+          : null;
+        if (estimatedXg === undefined) return; // budget IA du tour épuisé : ce match passe au tour suivant
+        const expectedGoals = estimatedXg ?? NEUTRAL_EXPECTED_GOALS;
 
         // Statistiques réelles du match (tirs cadrés, corners, cartons déjà
         // comptés) : SofaScore les publie, les jambes se projettent donc sur
@@ -1673,11 +1731,16 @@ export async function runInPlayComboTick(
         // SofaScore d'abord (statut, minute, score et statistiques publiés
         // directement) ; les fournisseurs IA seulement si ce match n'y est pas
         // connu ou si SofaScore ne répond pas.
+        // Fournisseurs IA seulement pour un match qu'AUCUNE source de données
+        // ne connaît : un match connu mais pas commencé n'a rien à demander.
+        const fromData = await fetchSofaLiveDetail(scheduled);
         const live =
-          (await fetchSofaLiveDetail(scheduled)) ??
-          (await fetchOmnirouteMatchStatus(
-            omnirouteConfig, scheduled.homeTeam, scheduled.awayTeam, scheduled.league
-          ).catch(() => null));
+          fromData ??
+          ((await hubKnowsMatch(scheduled.homeTeam, scheduled.awayTeam, hubDateKey()).catch(() => false))
+            ? null
+            : await fetchOmnirouteMatchStatus(
+                omnirouteConfig, scheduled.homeTeam, scheduled.awayTeam, scheduled.league
+              ).catch(() => null));
         if (!live) return; // pas encore commencé, introuvable : on retentera
 
         const timeline = timelines[scheduled.fixtureId] ?? [];
@@ -1725,9 +1788,9 @@ export async function runInPlayComboTick(
           league: scheduled.league,
           leagueId: '', // aucun identifiant de championnat : tout vient d'Omniroute
         };
-        const preMatchExpectedGoals = await estimateExpectedGoalsViaOmniroute(
-          omnirouteConfig, match.homeTeam, match.awayTeam, match.league
-        ).catch(() => null);
+        const cachedXg = await cachedExpectedGoals(omnirouteConfig, match.homeTeam, match.awayTeam, match.league);
+        if (cachedXg === undefined) return; // budget IA du tour épuisé : retenté au tour suivant
+        const preMatchExpectedGoals = cachedXg;
 
         const currentStats: LiveMatchStats | undefined =
           live.shotsOnTargetHome != null || live.shotsOnTargetAway != null
