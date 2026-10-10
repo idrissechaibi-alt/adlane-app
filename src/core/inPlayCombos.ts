@@ -1368,6 +1368,41 @@ async function withFallbackExpectedGoals(
   return result;
 }
 
+/** Ajoute des propositions en relisant le fichier juste avant d'écrire : le
+ * scan réel rapide et le tour complet peuvent écrire à quelques secondes
+ * d'intervalle, aucun ne doit effacer ce que l'autre vient d'ajouter. */
+function appendInPlayProposals(fresh: InPlayProposal[]): void {
+  const current = readInPlayProposals();
+  const ids = new Set(current.map((p) => p.id));
+  writeInPlayProposals([...current, ...fresh.filter((p) => !ids.has(p.id))]);
+}
+
+/**
+ * Scan RÉEL rapide (5 grands championnats) : uniquement les matchs du
+ * planning, aux checkpoints 20e et 60e. Léger (quelques matchs), il tourne
+ * toutes les 2 minutes indépendamment du tour complet.
+ */
+export async function runRealInPlayTick(liveFixtures: LiveFixture[]): Promise<number> {
+  await ensureDeltaSamplesLoaded();
+  const alreadyProposed = new Set(
+    readInPlayProposals()
+      .filter((p) => p.real !== false)
+      .flatMap((p) => p.legs.map((l) => `${l.fixtureId}-${p.kind}`))
+  );
+  const fresh: InPlayProposal[] = [];
+  const omnirouteConfig = await loadOmnirouteConfig();
+  const plan = await getDailyPlan();
+  if (plan) {
+    for (const slot of plan.slots) {
+      const { matches: withOdds, skipped } = buildScheduledMatches([slot]);
+      const slotMatches = [...withOdds, ...(await withFallbackExpectedGoals(skipped, omnirouteConfig))];
+      await processRealSlot(slotMatches, liveFixtures, omnirouteConfig, alreadyProposed, fresh, null, null);
+    }
+  }
+  if (fresh.length > 0) appendInPlayProposals(fresh);
+  return fresh.length;
+}
+
 export async function runInPlayComboTick(
   liveFixtures: LiveFixture[],
   fictionalLiveFixtures: LiveFixture[] = []
@@ -1408,16 +1443,10 @@ export async function runInPlayComboTick(
     : null;
   const sofaScoreInPlay = await fetchSofaScoreInPlayMatches().catch(() => null);
 
-  // A) Paris RÉELS — 5 grands championnats, par créneau horaire, toutes les
-  // ressources disponibles.
-  const plan = await getDailyPlan();
-  if (plan) {
-    for (const slot of plan.slots) {
-      const { matches: withOdds, skipped } = buildScheduledMatches([slot]);
-      const slotMatches = [...withOdds, ...(await withFallbackExpectedGoals(skipped, omnirouteConfig))];
-      await processRealSlot(slotMatches, liveFixtures, omnirouteConfig, alreadyProposed, fresh, sportmonksInPlay, sofaScoreInPlay);
-    }
-  }
+  // A) Paris RÉELS (5 grands championnats) : traités par runRealInPlayTick,
+  // un scan rapide à part lancé toutes les 2 minutes et en tête de chaque
+  // tour — le tour complet (500 matchs fictifs) est trop long pour tenir la
+  // fenêtre de la 20e minute (15e-35e) d'un match réel.
 
   // A2) Compétitions internationales pendant la trêve (Ligue des Nations,
   // qualifications CAN) — même traitement que A) ci-dessus (notifié, combos
@@ -1731,7 +1760,7 @@ export async function runInPlayComboTick(
     if (timelinesTouched) await writeMatchTimelines(timelines);
   }
 
-  if (fresh.length > 0) writeInPlayProposals([...existing, ...fresh]);
+  if (fresh.length > 0) appendInPlayProposals(fresh);
   return {
     freshProposals: fresh.length,
     intlBreak,

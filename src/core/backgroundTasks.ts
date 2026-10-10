@@ -18,7 +18,7 @@ import { fetchLiveFixtures, fetchOmnirouteAllLiveFixtures, LiveFixture } from '.
 import { consolidateLearning } from './autoLearn';
 import { OmnirouteAttempt } from './omniroute';
 import { enrichFocusMatches, loadOmnirouteConfig } from './focusEnrichment';
-import { runInPlayComboTick, InternationalBreakTickDiagnostics } from './inPlayCombos';
+import { runInPlayComboTick, runRealInPlayTick, InternationalBreakTickDiagnostics } from './inPlayCombos';
 import { runNightlyReviewIfDue } from './dailyReview';
 import { autoProbeWebCapability } from './llmRouter';
 import { getRecentSearchSource, probeAnySearch } from './webSearch';
@@ -231,7 +231,13 @@ async function hasRealMatchInLiveWindow(): Promise<boolean> {
   }
 }
 
-async function fetchSharedLiveFixtures(): Promise<SharedLiveFixturesResult> {
+/** Relevé live du pipe RÉEL, partagé quelques dizaines de secondes entre le
+ * scan rapide et le tour complet. */
+let realLiveMemo: { at: number; value: Omit<SharedLiveFixturesResult, 'fictionalFixtures'> } | null = null;
+const REAL_LIVE_MEMO_MS = 60_000;
+
+async function fetchRealLiveFixturesShared(): Promise<Omit<SharedLiveFixturesResult, 'fictionalFixtures'>> {
+  if (realLiveMemo && Date.now() - realLiveMemo.at < REAL_LIVE_MEMO_MS) return realLiveMemo.value;
   const apiConfig = await getAPIConfig();
   let apiFootballError: string | undefined;
   let fixtures: LiveFixture[] = [];
@@ -279,8 +285,47 @@ async function fetchSharedLiveFixtures(): Promise<SharedLiveFixturesResult> {
     if (missing.length === fixtures.length) source = 'sources_live_gratuites';
   }
 
-  const fictionalFixtures = await fetchFictionalLiveFixtures(fixtures).catch(() => [] as LiveFixture[]);
-  return { fixtures, fictionalFixtures, source, apiFootballError };
+  const value = { fixtures, source, apiFootballError };
+  realLiveMemo = { at: Date.now(), value };
+  return value;
+}
+
+async function fetchSharedLiveFixtures(): Promise<SharedLiveFixturesResult> {
+  const real = await fetchRealLiveFixturesShared();
+  const fictionalFixtures = await fetchFictionalLiveFixtures(real.fixtures).catch(() => [] as LiveFixture[]);
+  return { ...real, fictionalFixtures };
+}
+
+const REAL_FAST_TICK_KEY = '@last_real_fast_tick';
+let realFastInFlight: Promise<void> | null = null;
+
+/** Scan réel rapide (voir runRealInPlayTick) : jamais deux en même temps. */
+export function runRealFastTick(): Promise<void> {
+  if (realFastInFlight) return realFastInFlight;
+  realFastInFlight = (async () => {
+    try {
+      const real = await fetchRealLiveFixturesShared();
+      const fresh = await runRealInPlayTick(real.fixtures);
+      await AsyncStorage.setItem(
+        REAL_FAST_TICK_KEY,
+        JSON.stringify({ at: new Date().toISOString(), liveFound: real.fixtures.length, fresh, source: real.source, apiFootballError: real.apiFootballError })
+      );
+    } catch (error: any) {
+      console.warn('[Scan réel rapide] échoué:', error?.message);
+    }
+  })().finally(() => {
+    realFastInFlight = null;
+  });
+  return realFastInFlight;
+}
+
+export async function readLastRealFastTick(): Promise<unknown> {
+  try {
+    const raw = await AsyncStorage.getItem(REAL_FAST_TICK_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
 }
 
 export const AUTOLEARN_TASK_NAME = 'adlane-autolearn-tick';
@@ -462,7 +507,10 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
   // Scan matinal automatique (7h locales) : voir runMorningScanIfDue pour le
   // principe de déclenchement (premier tour après l'heure cible, idempotent).
   currentTickStartedAt = new Date().toISOString();
+  // Paris réels d'abord : quelques matchs, à ne jamais faire attendre derrière
+  // les 500 matchs fictifs.
   await markTickStep('scan matinal');
+  await runRealFastTick();
   try {
     await runMorningScanIfDue();
   } catch (error: any) {

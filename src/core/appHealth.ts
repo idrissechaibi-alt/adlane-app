@@ -8,7 +8,7 @@ import { getAPIConfig, getAllRequestCounts, getQuotaUsage, getRequestCount } fro
 import { getDailyPlan } from './scheduler';
 import { remainingBudget } from './requestBudget';
 import { estimateExpectedGoalsFromMarket } from './poisson';
-import { getNativeBackgroundTickStats, readLastTickDiagnostics, readTickProgress } from './backgroundTasks';
+import { getNativeBackgroundTickStats, readLastRealFastTick, readLastTickDiagnostics, readTickProgress } from './backgroundTasks';
 import { loadOmnirouteConfig } from './focusEnrichment';
 import { checkAllProviders, getRouteLeaderboard, getWebCapableRoutes } from './llmRouter';
 import { getRecentSearchSource, getWorkingSearchProviders } from './webSearch';
@@ -54,6 +54,7 @@ export async function buildAppHealth(): Promise<Record<string, unknown>> {
     nativeBackgroundTicks: await section(getNativeBackgroundTickStats),
     tickProgress: await section(readTickProgress),
     lastTick: await section(readLastTickDiagnostics),
+    lastRealFastTick: await section(readLastRealFastTick),
     paperBets: await section(() => {
       const bets = readPaperBets();
       const settled = bets.filter((b) => b.settled);
