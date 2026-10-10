@@ -383,7 +383,15 @@ export default function DailyPlanScreen() {
           </View>
         </TouchableOpacity>
 
-        {slotLive.length > 0 && (
+        {slotLive.length > 0 && !isSelected && (
+          <TouchableOpacity onPress={() => setSelectedSlot(slot.slotId)}>
+            <Text style={styles.slotLiveSummary}>
+              ⚡ {slotLive.length} pari{slotLive.length > 1 ? 's' : ''} en direct — touche pour voir
+            </Text>
+          </TouchableOpacity>
+        )}
+
+        {slotLive.length > 0 && isSelected && (
           <View style={[styles.halftimeAlertsBox, styles.slotLiveBox]}>
             <View style={styles.halftimeAlertsHeader}>
               <Ionicons name="flash" size={18} color="#a78bfa" />
@@ -949,6 +957,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#64748b',
     marginTop: 4,
+  },
+  slotLiveSummary: {
+    color: '#c4b5fd',
+    fontSize: 13,
+    fontWeight: '600',
+    paddingHorizontal: 16,
+    paddingBottom: 12,
   },
   slotLiveBox: {
     marginHorizontal: 12,
