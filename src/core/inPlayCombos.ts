@@ -1479,6 +1479,10 @@ function strategyProposals(
     shotsOnTargetHome: all?.shotsOnTargetHome,
     shotsOnTargetAway: all?.shotsOnTargetAway,
     redCards: all?.redCards,
+    corners: all?.corners,
+    cards: all?.cards,
+    fouls: all?.fouls || undefined,
+    possessionHome: all?.possessionHome,
     oddsHome: odds.home,
     oddsAway: odds.away,
     oddsFromMarket: Boolean(marketOdds),
@@ -1726,6 +1730,23 @@ export async function runInPlayComboTick(
     }
   );
   await flushShadowProjections();
+
+  // B1) Stratégies de mi-temps (règles tirées des données) sur les matchs
+  // fictifs à la pause : apprentissage de leur taux de réussite réel.
+  const atHalfTime = fictionalLiveFixtures
+    .filter((l) => l.statusShort === 'HT' && !alreadyProposed.has(`${l.fixtureId}-minute60`))
+    .slice(0, 40);
+  await mapWithConcurrency(atHalfTime, FICTIONAL_CHECK_CONCURRENCY, async (live) => {
+    if (Date.now() > fictionalDeadline) return;
+    try {
+      const free = await fetchFreeLiveStats(live);
+      if (!free) return;
+      const match: MatchRef = { homeTeam: live.homeTeam, awayTeam: live.awayTeam, league: live.league ?? 'Compétition inconnue', leagueId: '' };
+      fresh.push(...strategyProposals(live, match, free.all, NEUTRAL_EXPECTED_GOALS, null, false, alreadyProposed));
+    } catch {
+      // match suivant
+    }
+  });
 
   // B) Paris FICTIFS (boucle d'auto-apprentissage) — 100 % Omniroute, aucune
   // API, aucune cote, aucune donnée payante. AUCUN combo : une batterie de

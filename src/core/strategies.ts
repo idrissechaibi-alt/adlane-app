@@ -18,6 +18,10 @@ export interface StrategyContext {
   shotsOnTargetHome?: number;
   shotsOnTargetAway?: number;
   redCards?: number;
+  corners?: number;
+  cards?: number;
+  fouls?: number;
+  possessionHome?: number;
   /** Cotes 1X2 d'avant-match (bookmaker), sinon déduites des buts attendus. */
   oddsHome: number;
   oddsAway: number;
@@ -131,6 +135,102 @@ const STRATEGIES: Strategy[] = [
     },
   },
 ];
+
+/**
+ * Stratégies de MI-TEMPS tirées des données : règles trouvées en analysant
+ * 1 386 matchs réels terminés (FotMob, 21 jours jusqu'au 9/10/2026) — stats
+ * de 1ère mi-temps → ce qui s'est passé en 2e mi-temps. Chaque règle a été
+ * trouvée sur les 2/3 les plus anciens puis VÉRIFIÉE sur le tiers le plus
+ * récent ; la probabilité retenue mélange les deux (légèrement tirée vers le
+ * taux de base). Appliquées à la pause, sur le match entier.
+ */
+interface DataRule {
+  id: string;
+  name: string;
+  market: TrackedMarket;
+  /** Taux observé (toutes périodes) et taux de base du marché, pour l'explication. */
+  prob: number;
+  base: number;
+  samples: number;
+  condition: (c: StrategyContext) => boolean;
+  conditionLabel: (c: StrategyContext) => string;
+  selection: (c: StrategyContext) => string;
+}
+
+const possessionGap = (c: StrategyContext) => (c.possessionHome == null ? undefined : Math.abs(c.possessionHome - 50));
+
+const DATA_RULES: DataRule[] = [
+  {
+    id: 'mt-deux-buts-2e',
+    name: '2 buts ou plus en 2e MT (gros volume de tirs, peu de corners)',
+    market: 'total_buts',
+    prob: 0.655, base: 0.497, samples: 138,
+    condition: (c) => hasShots(c) && shots(c) >= 15 && c.corners != null && c.corners <= 4,
+    conditionLabel: (c) => `${shots(c)} tirs et ${c.corners} corners à la pause`,
+    selection: (c) => `Plus de ${c.homeGoals + c.awayGoals + 1.5} buts (total match)`,
+  },
+  {
+    id: 'mt-peu-de-buts-2e',
+    name: 'Au plus 1 but en 2e MT (peu de tirs cadrés malgré les corners)',
+    market: 'total_buts',
+    prob: 0.612, base: 0.503, samples: 196,
+    condition: (c) => c.shotsOnTargetHome != null && onTarget(c) <= 2 && c.corners != null && c.corners >= 4,
+    conditionLabel: (c) => `${onTarget(c)} tirs cadrés et ${c.corners} corners à la pause`,
+    selection: (c) => `Moins de ${c.homeGoals + c.awayGoals + 1.5} buts (total match)`,
+  },
+  {
+    id: 'mt-cartons-plus2',
+    name: '2 cartons ou plus en 2e MT (match déjà tendu)',
+    market: 'cartons',
+    prob: 0.742, base: 0.501, samples: 319,
+    condition: (c) => c.cards != null && c.cards >= 2 && c.fouls != null && c.fouls >= 9,
+    conditionLabel: (c) => `${c.cards} cartons et ${c.fouls} fautes à la pause`,
+    selection: (c) => `Plus de ${(c.cards ?? 0) + 1.5} cartons sur le match`,
+  },
+  {
+    id: 'mt-cartons-plus3',
+    name: '3 cartons ou plus en 2e MT (match très tendu)',
+    market: 'cartons',
+    prob: 0.555, base: 0.338, samples: 270,
+    condition: (c) => c.cards != null && c.cards >= 2 && c.fouls != null && c.fouls >= 11,
+    conditionLabel: (c) => `${c.cards} cartons et ${c.fouls} fautes à la pause`,
+    selection: (c) => `Plus de ${(c.cards ?? 0) + 2.5} cartons sur le match`,
+  },
+  {
+    id: 'mt-match-propre',
+    name: 'Au plus 1 carton en 2e MT (match offensif et propre)',
+    market: 'cartons',
+    prob: 0.747, base: 0.499, samples: 302,
+    condition: (c) => hasShots(c) && shots(c) >= 13 && c.cards === 0,
+    conditionLabel: (c) => `${shots(c)} tirs et aucun carton à la pause`,
+    selection: () => 'Moins de 1.5 cartons sur le match',
+  },
+  {
+    id: 'mt-corners-domination',
+    name: '5 corners ou plus en 2e MT (domination nette)',
+    market: 'corners',
+    prob: 0.662, base: 0.569, samples: 145,
+    condition: (c) => c.corners != null && c.corners >= 4 && (possessionGap(c) ?? 0) >= 17,
+    conditionLabel: (c) => `${c.corners} corners et possession ${Math.round(c.possessionHome ?? 50)} % / ${Math.round(100 - (c.possessionHome ?? 50))} % à la pause`,
+    selection: (c) => `Plus de ${(c.corners ?? 0) + 4.5} corners sur le match`,
+  },
+];
+
+for (const rule of DATA_RULES) {
+  STRATEGIES.push({
+    id: rule.id,
+    name: rule.name,
+    // À la pause seulement : les stats sont celles de la 1ère mi-temps.
+    test: (c) =>
+      c.statusShort === 'HT' && rule.condition(c)
+        ? [
+            rule.conditionLabel(c),
+            `règle vérifiée sur ${rule.samples} matchs réels : ${Math.round(rule.prob * 100)} % de réussite contre ${Math.round(rule.base * 100)} % en moyenne`,
+          ]
+        : null,
+    bet: (c) => ({ market: rule.market, selection: rule.selection(c), prob: rule.prob }),
+  });
+}
 
 /** Cotes 1X2 déduites des buts attendus quand aucune cote bookmaker n'existe. */
 export function oddsFromExpectedGoals(xg: { home: number; away: number }): { home: number; away: number } {

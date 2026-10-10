@@ -1,0 +1,424 @@
+{
+ "but_2e_mt": {
+  "base": 0.8116883116883117,
+  "rules": [
+   {
+    "rule": "tirs>=17 ET tirs_cadres<=5",
+    "train": 0.9298245614035088,
+    "n": 57,
+    "test": 0.8571428571428571,
+    "ntest": 28
+   },
+   {
+    "rule": "tirs_cadres>=6 ET desequilibre_possession<=7",
+    "train": 0.9047619047619048,
+    "n": 105,
+    "test": 0.875,
+    "ntest": 48
+   },
+   {
+    "rule": "tirs>=17 ET tirs_cadres<=6",
+    "train": 0.8961038961038961,
+    "n": 77,
+    "test": 0.8913043478260869,
+    "ntest": 46
+   }
+  ]
+ },
+ "deux_buts_2e_mt": {
+  "base": 0.4971139971139971,
+  "rules": [
+   {
+    "rule": "tirs>=15 ET corners<=4",
+    "train": 0.6875,
+    "n": 96,
+    "test": 0.6190476190476191,
+    "ntest": 42
+   },
+   {
+    "rule": "tirs>=15 ET corners<=3",
+    "train": 0.6779661016949152,
+    "n": 59,
+    "test": 0.7142857142857143,
+    "ntest": 21
+   },
+   {
+    "rule": "tirs_cadres>=6 ET corners<=5",
+    "train": 0.631578947368421,
+    "n": 133,
+    "test": 0.5675675675675675,
+    "ntest": 74
+   },
+   {
+    "rule": "tirs>=17 ET corners<=5",
+    "train": 0.6527777777777778,
+    "n": 72,
+    "test": 0.6363636363636364,
+    "ntest": 33
+   }
+  ]
+ },
+ "zero_but_2e_mt": {
+  "base": 0.18831168831168832,
+  "rules": [
+   {
+    "rule": "tirs<=9 ET corners>=5",
+    "train": 0.32,
+    "n": 75,
+    "test": 0.25806451612903225,
+    "ntest": 31
+   },
+   {
+    "rule": "tirs<=9 ET fautes>=12",
+    "train": 0.2765957446808511,
+    "n": 141,
+    "test": 0.3333333333333333,
+    "ntest": 63
+   },
+   {
+    "rule": "buts_mt<=0 ET tirs<=9",
+    "train": 0.29069767441860467,
+    "n": 86,
+    "test": 0.2222222222222222,
+    "ntest": 45
+   },
+   {
+    "rule": "tirs<=8 ET fautes>=12",
+    "train": 0.2857142857142857,
+    "n": 91,
+    "test": 0.2857142857142857,
+    "ntest": 49
+   }
+  ]
+ },
+ "btts_oui": {
+  "base": 0.5512265512265512,
+  "rules": [
+   {
+    "rule": "buts_mt>=2 ET ecart_mt<=1",
+    "train": 1.0,
+    "n": 174,
+    "test": 1.0,
+    "ntest": 75
+   },
+   {
+    "rule": "buts_mt>=2 ET ecart_mt<=0",
+    "train": 1.0,
+    "n": 110,
+    "test": 1.0,
+    "ntest": 49
+   },
+   {
+    "rule": "buts_mt>=1 ET ecart_mt<=0",
+    "train": 1.0,
+    "n": 110,
+    "test": 1.0,
+    "ntest": 49
+   },
+   {
+    "rule": "buts_mt>=2 ET tirs>=11",
+    "train": 0.8037037037037037,
+    "n": 270,
+    "test": 0.732824427480916,
+    "ntest": 131
+   }
+  ]
+ },
+ "corners_2e_mt>=5": {
+  "base": 0.5685425685425686,
+  "rules": [
+   {
+    "rule": "corners>=5 ET fautes<=8",
+    "train": 0.6732673267326733,
+    "n": 101,
+    "test": 0.6,
+    "ntest": 55
+   },
+   {
+    "rule": "corners>=7 ET cartons<=0",
+    "train": 0.6666666666666666,
+    "n": 81,
+    "test": 0.5918367346938775,
+    "ntest": 49
+   },
+   {
+    "rule": "tirs>=13 ET desequilibre_possession>=17",
+    "train": 0.6712328767123288,
+    "n": 73,
+    "test": 0.627906976744186,
+    "ntest": 43
+   },
+   {
+    "rule": "corners>=4 ET desequilibre_possession>=17",
+    "train": 0.6555555555555556,
+    "n": 90,
+    "test": 0.6909090909090909,
+    "ntest": 55
+   }
+  ]
+ },
+ "corners_2e_mt>=6": {
+  "base": 0.417027417027417,
+  "rules": [
+   {
+    "rule": "fautes<=8 ET desequilibre_possession<=4",
+    "train": 0.5555555555555556,
+    "n": 63,
+    "test": 0.52,
+    "ntest": 25
+   },
+   {
+    "rule": "ecart_mt>=1 ET cartons<=0",
+    "train": 0.5040322580645161,
+    "n": 248,
+    "test": 0.427536231884058,
+    "ntest": 138
+   },
+   {
+    "rule": "tirs_cadres>=6 ET fautes<=8",
+    "train": 0.5555555555555556,
+    "n": 54,
+    "test": 0.48148148148148145,
+    "ntest": 27
+   },
+   {
+    "rule": "fautes<=9 ET desequilibre_possession<=10",
+    "train": 0.5064935064935064,
+    "n": 154,
+    "test": 0.44047619047619047,
+    "ntest": 84
+   }
+  ]
+ },
+ "corners_2e_mt<=3": {
+  "base": 0.2619047619047619,
+  "rules": [
+   {
+    "rule": "corners<=3 ET desequilibre_possession>=7",
+    "train": 0.350253807106599,
+    "n": 197,
+    "test": 0.2903225806451613,
+    "ntest": 93
+   },
+   {
+    "rule": "corners<=3 ET desequilibre_possession>=10",
+    "train": 0.3561643835616438,
+    "n": 146,
+    "test": 0.29577464788732394,
+    "ntest": 71
+   },
+   {
+    "rule": "corners<=3 ET fautes>=12",
+    "train": 0.3465909090909091,
+    "n": 176,
+    "test": 0.275,
+    "ntest": 80
+   },
+   {
+    "rule": "tirs<=9 ET desequilibre_possession>=10",
+    "train": 0.3490566037735849,
+    "n": 106,
+    "test": 0.3191489361702128,
+    "ntest": 47
+   }
+  ]
+ },
+ "cartons_2e_mt>=3": {
+  "base": 0.33766233766233766,
+  "rules": [
+   {
+    "rule": "cartons>=2 ET fautes>=15",
+    "train": 0.6097560975609756,
+    "n": 82,
+    "test": 0.5476190476190477,
+    "ntest": 42
+   },
+   {
+    "rule": "cartons>=2 ET fautes>=11",
+    "train": 0.5573770491803278,
+    "n": 183,
+    "test": 0.5747126436781609,
+    "ntest": 87
+   },
+   {
+    "rule": "cartons>=2 ET fautes>=12",
+    "train": 0.5590062111801242,
+    "n": 161,
+    "test": 0.5466666666666666,
+    "ntest": 75
+   },
+   {
+    "rule": "cartons>=2 ET fautes>=14",
+    "train": 0.5688073394495413,
+    "n": 109,
+    "test": 0.5283018867924528,
+    "ntest": 53
+   }
+  ]
+ },
+ "cartons_2e_mt>=2": {
+  "base": 0.5007215007215007,
+  "rules": [
+   {
+    "rule": "buts_mt>=1 ET cartons>=2",
+    "train": 0.7567567567567568,
+    "n": 185,
+    "test": 0.7441860465116279,
+    "ntest": 86
+   },
+   {
+    "rule": "cartons>=2 ET fautes>=9",
+    "train": 0.746606334841629,
+    "n": 221,
+    "test": 0.7551020408163265,
+    "ntest": 98
+   },
+   {
+    "rule": "ecart_mt>=1 ET cartons>=2",
+    "train": 0.7531645569620253,
+    "n": 158,
+    "test": 0.7466666666666667,
+    "ntest": 75
+   },
+   {
+    "rule": "cartons>=2 ET desequilibre_possession<=17",
+    "train": 0.7431192660550459,
+    "n": 218,
+    "test": 0.7263157894736842,
+    "ntest": 95
+   }
+  ]
+ },
+ "cartons_2e_mt<=1": {
+  "base": 0.49927849927849927,
+  "rules": [
+   {
+    "rule": "tirs_cadres>=6 ET cartons<=0",
+    "train": 0.8163265306122449,
+    "n": 98,
+    "test": 0.8,
+    "ntest": 60
+   },
+   {
+    "rule": "corners>=4 ET cartons<=0",
+    "train": 0.7434944237918215,
+    "n": 269,
+    "test": 0.7181208053691275,
+    "ntest": 149
+   },
+   {
+    "rule": "corners>=5 ET cartons<=0",
+    "train": 0.7512953367875648,
+    "n": 193,
+    "test": 0.7256637168141593,
+    "ntest": 113
+   },
+   {
+    "rule": "tirs>=13 ET cartons<=0",
+    "train": 0.7473684210526316,
+    "n": 190,
+    "test": 0.7678571428571429,
+    "ntest": 112
+   }
+  ]
+ },
+ "fautes_2e_mt>=12": {
+  "base": 0.6356421356421357,
+  "rules": [
+   {
+    "rule": "fautes>=15 ET desequilibre_possession<=17",
+    "train": 0.8862275449101796,
+    "n": 167,
+    "test": 0.8279569892473119,
+    "ntest": 93
+   },
+   {
+    "rule": "fautes>=15 ET desequilibre_possession<=10",
+    "train": 0.8869565217391304,
+    "n": 115,
+    "test": 0.8656716417910447,
+    "ntest": 67
+   },
+   {
+    "rule": "tirs>=11 ET fautes>=15",
+    "train": 0.8878504672897196,
+    "n": 107,
+    "test": 0.873015873015873,
+    "ntest": 63
+   },
+   {
+    "rule": "fautes>=15 ET desequilibre_possession<=14",
+    "train": 0.8767123287671232,
+    "n": 146,
+    "test": 0.8414634146341463,
+    "ntest": 82
+   }
+  ]
+ },
+ "corners_2e_mt>=4": {
+  "base": 0.7380952380952381,
+  "rules": [
+   {
+    "rule": "ecart_mt>=1 ET corners>=7",
+    "train": 0.8350515463917526,
+    "n": 97,
+    "test": 0.7619047619047619,
+    "ntest": 63
+   },
+   {
+    "rule": "buts_mt<=1 ET fautes<=8",
+    "train": 0.825,
+    "n": 120,
+    "test": 0.7910447761194029,
+    "ntest": 67
+   },
+   {
+    "rule": "fautes<=8 ET desequilibre_possession<=7",
+    "train": 0.8333333333333334,
+    "n": 90,
+    "test": 0.7692307692307693,
+    "ntest": 39
+   },
+   {
+    "rule": "tirs_cadres<=2 ET fautes<=11",
+    "train": 0.8235294117647058,
+    "n": 102,
+    "test": 0.7777777777777778,
+    "ntest": 45
+   }
+  ]
+ },
+ "buts_2e_mt<=1": {
+  "base": 0.5028860028860029,
+  "rules": [
+   {
+    "rule": "tirs_cadres<=2 ET corners>=4",
+    "train": 0.6335877862595419,
+    "n": 131,
+    "test": 0.5846153846153846,
+    "ntest": 65
+   },
+   {
+    "rule": "tirs<=9 ET fautes<=15",
+    "train": 0.6137566137566137,
+    "n": 189,
+    "test": 0.5555555555555556,
+    "ntest": 90
+   },
+   {
+    "rule": "tirs<=9 ET fautes<=14",
+    "train": 0.6123595505617978,
+    "n": 178,
+    "test": 0.5421686746987951,
+    "ntest": 83
+   },
+   {
+    "rule": "tirs<=8 ET fautes<=14",
+    "train": 0.616,
+    "n": 125,
+    "test": 0.5636363636363636,
+    "ntest": 55
+   }
+  ]
+ }
+}
