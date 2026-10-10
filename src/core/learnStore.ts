@@ -157,6 +157,21 @@ export interface MarketExpertise {
   hitRate: number;
   /** hitRate / meanPredicted, borné : <1 = le modèle est trop optimiste sur ce marché. */
   calibrationFactor: number;
+  /** Calibration fine : par côté du pari, fenêtre et tranche de probabilité. */
+  cells?: CalibrationCell[];
+}
+
+/** Une case de calibration : ce qui était annoncé vs ce qui s'est passé. */
+export interface CalibrationCell {
+  /** 'oui'|'non' (côté du pari) + '|' + '1h'|'ft' (fenêtre). */
+  segment: string;
+  lo: number;
+  hi: number;
+  samples: number;
+  hits: number;
+  meanPredicted: number;
+  /** Dont paris réels (le reste : fictifs). */
+  realSamples: number;
 }
 
 export interface LearnedModel {

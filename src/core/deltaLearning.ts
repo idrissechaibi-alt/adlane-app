@@ -240,7 +240,7 @@ export async function flushShadowProjections(): Promise<void> {
 }
 
 /** Mesure la valeur réelle des matchs suivis et terminés (passage horaire). */
-const SHADOW_SETTLE_INTERVAL_MS = 30 * 60_000;
+const SHADOW_SETTLE_INTERVAL_MS = 15 * 60_000;
 let lastShadowSettle = 0;
 
 export async function settleShadowProjections(deadline = Infinity): Promise<number> {

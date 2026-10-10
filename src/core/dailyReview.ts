@@ -57,7 +57,7 @@ const MAX_CATCHUP_DAYS = 7;
 /** Fréquence de retraitement de la journée EN COURS (voir plus bas) — pas
  * plus souvent, pour ne pas multiplier les appels API-Football/Omniroute sur
  * des matchs encore en cours, qui échoueraient de toute façon à chaque essai. */
-const TODAY_RETRY_INTERVAL_MS = 60 * 60_000;
+const TODAY_RETRY_INTERVAL_MS = 15 * 60_000;
 
 function dayKey(date: Date): string {
   return date.toISOString().split('T')[0];

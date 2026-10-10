@@ -11,6 +11,7 @@
 // Rien ici n'invente : une règle sans échantillon suffisant est écartée, une
 // fenêtre tronquée (mi-temps arrivée trop tôt) n'est jamais comptée.
 
+import type { CalibrationCell } from './learnStore';
 import { getStrategyRecords } from './strategies';
 import { DELTA_LABELS, getAllDeltaCorrections, getShadowStats } from './deltaLearning';
 import { getAllBets } from '../database/storage';
@@ -466,6 +467,43 @@ const MIN_OUTCOMES_PER_MARKET = 25;
  * paris fictifs (gros volume, aucun enjeu) et appliquée ensuite aux deux
  * pipelines, y compris aux paris réels.
  */
+/** Côté et fenêtre d'un pari, d'après son intitulé. */
+export function calibrationSegment(selection: string): string {
+  const side = /^moins|0-0|ne marquent pas|\(non\)|pas de but/i.test(selection) ? 'non' : 'oui';
+  const window = /1[èe]re mi-temps|avant la pause|à la pause/i.test(selection) ? '1h' : 'ft';
+  return `${side}|${window}`;
+}
+
+const CALIBRATION_BINS: Array<[number, number]> = [[0.45, 0.55], [0.55, 0.65], [0.65, 0.75], [0.75, 0.85], [0.85, 1.01]];
+/** Poids (en paris) de la probabilité annoncée face au taux observé dans une case. */
+const CELL_PRIOR = 15;
+const CELL_MIN_SAMPLES = 15;
+
+function computeCells(list: PredictionOutcome[]): CalibrationCell[] {
+  const cells: CalibrationCell[] = [];
+  const bySegment = new Map<string, PredictionOutcome[]>();
+  for (const o of list) {
+    const key = calibrationSegment(o.selection);
+    bySegment.set(key, [...(bySegment.get(key) ?? []), o]);
+  }
+  for (const [segment, items] of bySegment) {
+    for (const [lo, hi] of CALIBRATION_BINS) {
+      const inBin = items.filter((o) => o.predictedProb >= lo && o.predictedProb < hi);
+      if (inBin.length === 0) continue;
+      cells.push({
+        segment,
+        lo,
+        hi,
+        samples: inBin.length,
+        hits: inBin.filter((o) => o.won).length,
+        meanPredicted: inBin.reduce((a, o) => a + o.predictedProb, 0) / inBin.length,
+        realSamples: inBin.filter((o) => o.real).length,
+      });
+    }
+  }
+  return cells;
+}
+
 function computeMarketExpertise(outcomes: PredictionOutcome[]): MarketExpertise[] {
   const byMarket = new Map<TrackedMarket, PredictionOutcome[]>();
   for (const outcome of outcomes) {
@@ -488,6 +526,7 @@ function computeMarketExpertise(outcomes: PredictionOutcome[]): MarketExpertise[
       meanPredicted,
       hitRate,
       calibrationFactor: Math.min(1.5, Math.max(0.5, rawFactor)),
+      cells: computeCells(list),
     });
   }
 
@@ -505,10 +544,30 @@ function computeMarketExpertise(outcomes: PredictionOutcome[]): MarketExpertise[
 export function applyMarketExpertise(
   market: TrackedMarket,
   prob: number,
-  evidence: string
+  evidence: string,
+  selection?: string
 ): { prob: number; evidence: string } {
   const model = readLearnedModel();
   const expertise = model?.marketExpertise?.find((e) => e.market === market);
+  // Calibration fine d'abord : même marché, même côté, même fenêtre, même
+  // tranche de probabilité annoncée — paris réels ET fictifs réglés.
+  const cell = selection
+    ? expertise?.cells?.find((c) => c.segment === calibrationSegment(selection) && prob >= c.lo && prob < c.hi)
+    : undefined;
+  if (cell && cell.samples >= CELL_MIN_SAMPLES) {
+    const observed = cell.hits / cell.samples;
+    const shift = (observed - cell.meanPredicted) * (cell.samples / (cell.samples + CELL_PRIOR));
+    const corrected = Math.min(0.97, Math.max(0.03, prob + shift));
+    if (Math.abs(corrected - prob) >= 0.01) {
+      return {
+        prob: corrected,
+        evidence:
+          `${evidence} Calibré ${shift >= 0 ? '+' : ''}${Math.round(shift * 100)} pts : sur ${cell.samples} paris semblables déjà vérifiés ` +
+          `(${cell.realSamples} réels, ${cell.samples - cell.realSamples} fictifs) annoncés ~${Math.round(cell.meanPredicted * 100)} %, ` +
+          `${Math.round(observed * 100)} % sont passés.`,
+      };
+    }
+  }
   if (!expertise || expertise.samples < MIN_OUTCOMES_PER_MARKET || expertise.calibrationFactor === 1) {
     return { prob, evidence };
   }

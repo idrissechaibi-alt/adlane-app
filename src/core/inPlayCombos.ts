@@ -724,7 +724,7 @@ async function buildLegs20(
  */
 function withLearnedExpertise(legs: CandidateLeg[]): CandidateLeg[] {
   return legs.map((leg) => {
-    const { prob, evidence } = applyMarketExpertise(leg.market, leg.prob, leg.evidence);
+    const { prob, evidence } = applyMarketExpertise(leg.market, leg.prob, leg.evidence, leg.selection);
     return { ...leg, prob, evidence };
   });
 }
