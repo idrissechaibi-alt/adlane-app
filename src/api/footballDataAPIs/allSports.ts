@@ -1,7 +1,7 @@
-// AllSportsApi (apiv2.allsportsapi.com) — source RÉSERVÉE au pipe réel : elle
-// sert de repli pour régler les paris réels quand API-Football ne répond pas
-// (quota épuisé). Jamais appelée par le pipe fictif. Le plan de l'utilisateur
-// ne couvre que certaines compétitions : un match absent renvoie simplement null.
+// AllSportsApi (apiv2.allsportsapi.com) — le plan de l'utilisateur ne couvre
+// aucun des 5 grands championnats : la clé alimente donc le pipe FICTIF
+// (flux en direct, règlement) ; elle reste un repli de règlement pour le réel.
+// Un match absent du plan renvoie simplement null / liste vide.
 
 import { fetchWithTimeout } from '../../core/httpTimeout';
 import { namesLikelyMatch, normalizeTeamName } from '../../core/teamNameMatch';
@@ -19,6 +19,67 @@ export interface AllSportsResult {
 function parseScore(text: unknown): [number, number] | null {
   const m = /(\d+)\s*-\s*(\d+)/.exec(String(text ?? ''));
   return m ? [Number(m[1]), Number(m[2])] : null;
+}
+
+export interface AllSportsLive {
+  eventKey: number;
+  statusShort: '1H' | 'HT' | '2H';
+  minute: number;
+  homeTeam: string;
+  awayTeam: string;
+  homeGoals: number;
+  awayGoals: number;
+  league: string;
+  corners?: number;
+  cards?: number;
+  shotsOnTarget?: [number, number];
+}
+
+function statPair(stats: any[] | undefined, type: string): [number, number] | null {
+  const row = Array.isArray(stats) ? stats.find((x) => x?.type === type) : undefined;
+  if (!row) return null;
+  return [Number(row.home) || 0, Number(row.away) || 0];
+}
+
+/** Matchs en cours couverts par le plan (1 requête). */
+export async function fetchAllSportsLive(apiKey: string): Promise<AllSportsLive[]> {
+  const response = await fetchWithTimeout(`${BASE_URL}?met=Livescore&APIkey=${encodeURIComponent(apiKey)}`);
+  if (!response.ok) throw new Error(`AllSportsApi HTTP ${response.status}`);
+  const data = await response.json();
+  const rows: any[] = Array.isArray(data?.result) ? data.result : [];
+  const live: AllSportsLive[] = [];
+  for (const x of rows) {
+    if (String(x.event_live) !== '1') continue;
+    const status = String(x.event_status ?? '');
+    const score = parseScore(x.event_final_result);
+    if (!score) continue;
+    let statusShort: AllSportsLive['statusShort'];
+    let minute: number;
+    if (/half\s*time/i.test(status)) {
+      statusShort = 'HT';
+      minute = 45;
+    } else {
+      minute = parseInt(status, 10);
+      if (!Number.isFinite(minute)) continue;
+      statusShort = /2nd/i.test(String(x.event_status_info ?? '')) || minute > 45 ? '2H' : '1H';
+    }
+    const corners = statPair(x.statistics, 'Corners');
+    const onTarget = statPair(x.statistics, 'On Target');
+    live.push({
+      eventKey: Number(x.event_key),
+      statusShort,
+      minute,
+      homeTeam: String(x.event_home_team),
+      awayTeam: String(x.event_away_team),
+      homeGoals: score[0],
+      awayGoals: score[1],
+      league: [x.league_name, x.country_name].filter(Boolean).join(' · '),
+      corners: corners ? corners[0] + corners[1] : undefined,
+      cards: Array.isArray(x.cards) ? x.cards.length : undefined,
+      shotsOnTarget: onTarget ?? undefined,
+    });
+  }
+  return live;
 }
 
 export async function fetchAllSportsFixtures(apiKey: string, dateKey: string): Promise<any[]> {

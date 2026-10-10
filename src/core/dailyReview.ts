@@ -598,12 +598,10 @@ export async function runNightlyReviewIfDue(): Promise<number> {
       ? await fetchFinalResults(apiConfig.apiFootball, Array.from(realFixtureIds).filter((id) => !isSyntheticFixtureId(id)))
       : new Map<number, FinalResult>();
 
-    // AllSportsApi (pipe réel seulement) : repli quand API-Football n'a pas
-    // pu donner le score d'un match réel (quota épuisé, réponse vide).
+    // AllSportsApi : son plan ne couvre pas les 5 grands championnats, donc
+    // il règle surtout les paris fictifs (et sert de repli au réel).
     if (apiConfig.allSports) {
-      const missingReal = allLegs.filter(
-        (l) => realFixtureIds.has(l.fixtureId) && !finals.has(l.fixtureId)
-      );
+      const missingReal = allLegs.filter((l) => !finals.has(l.fixtureId));
       if (missingReal.length > 0) {
         try {
           const fixtures = await fetchAllSportsFixtures(apiConfig.allSports, day);

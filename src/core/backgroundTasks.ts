@@ -22,6 +22,8 @@ import { runInPlayComboTick, InternationalBreakTickDiagnostics } from './inPlayC
 import { runNightlyReviewIfDue } from './dailyReview';
 import { autoProbeWebCapability } from './llmRouter';
 import { getRecentSearchSource, probeAnySearch } from './webSearch';
+import { fetchAllSportsLive } from '../api/footballDataAPIs/allSports';
+import { syntheticFixtureId } from './halftimeMonitor';
 import { fetchSofaLiveEvents, registerSofaEvents } from '../api/footballDataAPIs/sofaScore';
 import { getDailyPlan, runMorningScanIfDue } from './scheduler';
 import { reconcileScoutingAnalyses } from './scoutingReview';
@@ -151,6 +153,36 @@ async function fetchFictionalLiveFixtures(realLive: LiveFixture[]): Promise<Live
   } catch (error: any) {
     console.warn('[Tâche de fond] Relevé SofaScore indisponible, repli fournisseurs IA:', error?.message);
     fixtures = [];
+  }
+
+  // AllSportsApi : ajoute les matchs de son plan que SofaScore n'a pas relevés
+  // (aucun des 5 grands championnats n'y figure : tout est fictif).
+  try {
+    const key = (await getAPIConfig()).allSports?.trim();
+    if (key) {
+      const dateKey = new Date().toISOString().slice(0, 10);
+      for (const e of await fetchAllSportsLive(key)) {
+        const dup = fixtures.some(
+          (f) =>
+            namesLikelyMatch(normalizeTeamName(f.homeTeam), normalizeTeamName(e.homeTeam)) &&
+            namesLikelyMatch(normalizeTeamName(f.awayTeam), normalizeTeamName(e.awayTeam))
+        );
+        if (dup) continue;
+        fixtures.push({
+          statusShort: e.statusShort,
+          homeTeam: e.homeTeam,
+          awayTeam: e.awayTeam,
+          homeGoals: e.homeGoals,
+          awayGoals: e.awayGoals,
+          fixtureId: syntheticFixtureId(e.homeTeam, e.awayTeam, dateKey),
+          minute: e.minute,
+          league: e.league,
+        });
+        fromSofaScore = true;
+      }
+    }
+  } catch (error: any) {
+    console.warn('[Tâche de fond] AllSportsApi indisponible:', error?.message);
   }
 
   const elapsedMinutes = fictionalLiveCache ? Math.floor((Date.now() - fictionalLiveCache.at) / 60_000) : Infinity;
