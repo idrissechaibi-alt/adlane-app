@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-10-10T18:05:21.365Z",
+  "exportedAt": "2026-10-10T18:25:37.527Z",
   "formatVersion": 1,
   "source": "APP adlane",
   "data": {
@@ -4861,28 +4861,14 @@
   },
   "health": {
     "nativeBackgroundTicks": {
-      "lastTickAt": "2026-10-10T17:56:47.537Z",
-      "ticksLast24h": 54
+      "lastTickAt": "2026-10-10T18:12:00.961Z",
+      "ticksLast24h": 56
     },
     "tickProgress": {
-      "startedAt": "2026-10-10T17:55:48.867Z",
-      "step": "terminé",
-      "at": "2026-10-10T18:04:59.978Z",
-      "stepDurationsSec": {
-        "bilan de minuit": 195,
-        "scan matinal": 34,
-        "bilan Scouting": 0,
-        "consolidation apprentissage": 2,
-        "enrichissement matchs suivis": 0,
-        "vérification accès internet des modèles": 0,
-        "terminé": 304,
-        "marqueurs live": 195,
-        "relevé live partagé": 0,
-        "scan en direct 20e/60e": 2,
-        "programme fictif": 6,
-        "univers du jour": 0,
-        "compositions T-90": 1
-      }
+      "startedAt": "2026-10-10T18:25:31.526Z",
+      "step": "scan matinal",
+      "at": "2026-10-10T18:25:31.526Z",
+      "stepDurationsSec": {}
     },
     "lastTick": {
       "startedAt": "2026-10-10T17:55:48.867Z",
@@ -4943,9 +4929,9 @@
       "nightlyReviewPointsCreated": 9
     },
     "lastRealFastTick": {
-      "at": "2026-10-10T18:04:48.275Z",
+      "at": "2026-10-10T18:09:40.560Z",
       "liveFound": 3,
-      "fresh": 2,
+      "fresh": 0,
       "source": "sources_live_gratuites",
       "apiFootballError": "quota du jour atteint (réserve gardée pour le règlement)"
     },
@@ -5039,6 +5025,45 @@
           "programme fictif": 1,
           "univers du jour": 0
         }
+      },
+      {
+        "startedAt": "2026-10-10T18:07:28.881Z",
+        "step": "bilan de minuit",
+        "at": "2026-10-10T18:25:24.818Z",
+        "stepDurationsSec": {
+          "scan matinal": 132,
+          "relevé live partagé": 0,
+          "scan en direct 20e/60e": 944
+        }
+      }
+    ],
+    "strategies": [
+      {
+        "id": "over15-early-goal",
+        "name": "Plus de 1.5 buts — but rapide",
+        "settled": 0,
+        "won": 0,
+        "hitRate": 0,
+        "meanPredicted": 0,
+        "suspended": false
+      },
+      {
+        "id": "favori-mene",
+        "name": "Favori mené — il pousse",
+        "settled": 0,
+        "won": 0,
+        "hitRate": 0,
+        "meanPredicted": 0,
+        "suspended": false
+      },
+      {
+        "id": "but-avant-pause",
+        "name": "But avant la pause — match ouvert",
+        "settled": 0,
+        "won": 0,
+        "hitRate": 0,
+        "meanPredicted": 0,
+        "suspended": false
       }
     ],
     "paperBets": {
@@ -5114,11 +5139,11 @@
     },
     "inPlayProposals": {
       "real": 45,
-      "fictional": 981,
+      "fictional": 1061,
       "fictionalReviewed": 273,
       "fictionalSettledLegs": 214,
-      "lastCreatedAt": "2026-10-10T18:04:44.435Z",
-      "createdLast24h": 1026
+      "lastCreatedAt": "2026-10-10T18:05:02.447Z",
+      "createdLast24h": 1106
     },
     "predictionOutcomes30d": 246,
     "marketSeries": {
@@ -5178,7 +5203,7 @@
         {
           "name": "Principal",
           "ok": true,
-          "latencyMs": 399,
+          "latencyMs": 140,
           "readyModels": 27,
           "configuredReady": 12,
           "configuredTotal": 13
@@ -5186,7 +5211,7 @@
         {
           "name": "Omniroute",
           "ok": true,
-          "latencyMs": 1516,
+          "latencyMs": 2119,
           "readyModels": 941,
           "configuredReady": 2,
           "configuredTotal": 2
@@ -5195,30 +5220,30 @@
       "leaderboard": [
         {
           "label": "Principal · allam-2-7b",
-          "ok": 435,
-          "fail": 307,
-          "avgMs": 945,
+          "ok": 437,
+          "fail": 309,
+          "avgMs": 876,
           "coolingDown": false
         },
         {
           "label": "Principal · qwen3.8-27b",
           "ok": 102,
-          "fail": 108,
+          "fail": 112,
           "avgMs": 662,
           "coolingDown": false
         },
         {
           "label": "Principal · gpt-oss-120b",
-          "ok": 99,
+          "ok": 107,
           "fail": 108,
-          "avgMs": 2177,
+          "avgMs": 1406,
           "coolingDown": false
         },
         {
           "label": "Principal · gpt-oss-20b",
-          "ok": 618,
+          "ok": 619,
           "fail": 25,
-          "avgMs": 6696,
+          "avgMs": 6599,
           "coolingDown": false
         },
         {
@@ -5427,7 +5452,7 @@
         "apiFootball-autolearn": 70,
         "sportmonks-autolearn": 15,
         "sofaScore": 0,
-        "sportmonks": 59
+        "sportmonks": 60
       },
       "theOddsApiMonth": {
         "used": 500,
@@ -5443,35 +5468,35 @@
     },
     "sofaScore": null,
     "liveSources": {
-      "TheSportsDB": {
-        "ok": true,
-        "count": 76,
-        "at": "2026-10-10T18:04:45.215Z"
-      },
       "LiveScore": {
         "ok": true,
-        "count": 58,
-        "at": "2026-10-10T18:04:45.084Z"
+        "count": 56,
+        "at": "2026-10-10T18:25:31.811Z"
+      },
+      "TheSportsDB": {
+        "ok": true,
+        "count": 70,
+        "at": "2026-10-10T18:25:31.886Z"
       },
       "FotMob": {
         "ok": true,
-        "count": 57,
-        "at": "2026-10-10T18:04:47.779Z"
+        "count": 48,
+        "at": "2026-10-10T18:25:33.820Z"
       },
       "365Scores": {
         "ok": true,
-        "count": 46,
-        "at": "2026-10-10T18:04:45.431Z"
+        "count": 44,
+        "at": "2026-10-10T18:25:33.825Z"
       },
       "AllSportsApi": {
         "ok": true,
         "count": 0,
-        "at": "2026-10-10T18:04:47.782Z"
+        "at": "2026-10-10T18:25:34.210Z"
       },
       "ESPN": {
         "ok": true,
-        "count": 8,
-        "at": "2026-10-10T18:04:46.006Z"
+        "count": 7,
+        "at": "2026-10-10T18:25:34.464Z"
       }
     },
     "deltaCorrections": {
@@ -5534,7 +5559,7 @@
         }
       ],
       "samples": {
-        "pending": 409,
+        "pending": 429,
         "measured": 601
       }
     },
