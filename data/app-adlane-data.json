@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-10-10T02:59:05.383Z",
+  "exportedAt": "2026-10-10T03:22:57.760Z",
   "formatVersion": 1,
   "source": "APP adlane",
   "data": {
@@ -4824,16 +4824,16 @@
   },
   "health": {
     "nativeBackgroundTicks": {
-      "lastTickAt": "2026-10-10T02:55:38.152Z",
-      "ticksLast24h": 37
+      "lastTickAt": "2026-10-10T03:10:36.504Z",
+      "ticksLast24h": 38
     },
     "tickProgress": {
-      "startedAt": "2026-10-10T02:59:02.543Z",
-      "step": "consolidation apprentissage",
-      "at": "2026-10-10T02:59:03.345Z"
+      "startedAt": "2026-10-10T03:22:57.077Z",
+      "step": "programme fictif",
+      "at": "2026-10-10T03:22:57.349Z"
     },
     "lastTick": {
-      "finishedAt": "2026-10-10T02:58:51.624Z",
+      "finishedAt": "2026-10-10T03:22:47.080Z",
       "universeSize": 0,
       "omnirouteConfigured": true,
       "fictionalProgramSize": 4,
@@ -4855,7 +4855,9 @@
       "fictionalSportmonksMatches": 4,
       "fictionalOmnirouteMatches": 0,
       "liveFixturesFound": 0,
-      "liveFixturesSource": "omniroute",
+      "fictionalLiveFixturesFound": 0,
+      "liveFixturesSource": "aucune_echec_omniroute",
+      "apiFootballError": "quota du jour atteint (réserve gardée pour le règlement)",
       "liveMarkerObserved": 0,
       "liveMarkerClosed": 0,
       "freshInPlayProposals": 0,
@@ -4888,7 +4890,7 @@
       }
     },
     "model": {
-      "updatedAt": "2026-10-10T02:58:50.557Z",
+      "updatedAt": "2026-10-10T03:22:45.642Z",
       "totalRows": 1135,
       "markerRules": 40,
       "paperBets": {
@@ -4971,93 +4973,97 @@
         {
           "name": "Principal",
           "ok": true,
-          "latencyMs": 62,
+          "latencyMs": 96,
           "readyModels": 28,
-          "configuredReady": 10,
-          "configuredTotal": 10
+          "configuredReady": 13,
+          "configuredTotal": 13
         },
         {
           "name": "Omniroute",
           "ok": true,
-          "latencyMs": 1593,
-          "readyModels": 953,
-          "configuredReady": 1,
-          "configuredTotal": 1
+          "latencyMs": 41,
+          "readyModels": 954,
+          "configuredReady": 2,
+          "configuredTotal": 2
         }
       ],
       "leaderboard": [
         {
           "label": "Principal · allam-2-7b",
-          "ok": 70,
-          "fail": 12,
-          "avgMs": 483,
+          "ok": 72,
+          "fail": 13,
+          "avgMs": 978,
           "coolingDown": false
         },
         {
           "label": "Principal · auto",
-          "ok": 60,
+          "ok": 62,
           "fail": 0,
-          "avgMs": 1289,
+          "avgMs": 2591,
           "coolingDown": false
         },
         {
           "label": "Principal · gpt-oss-120b",
-          "ok": 31,
+          "ok": 33,
           "fail": 9,
-          "avgMs": 1074,
-          "coolingDown": false
-        },
-        {
-          "label": "Principal · riva-translate-4b-instruct-v2",
-          "ok": 28,
-          "fail": 0,
-          "avgMs": 4519,
+          "avgMs": 2821,
           "coolingDown": false
         },
         {
           "label": "Omniroute · Maximus appus",
-          "ok": 1,
-          "fail": 0,
-          "avgMs": 4561,
-          "coolingDown": false
-        },
-        {
-          "label": "Principal · gpt-oss-20b",
-          "ok": 3,
-          "fail": 6,
-          "avgMs": 82006,
-          "coolingDown": false
-        },
-        {
-          "label": "Principal · fusion",
-          "ok": 8,
-          "fail": 3,
-          "avgMs": 314091,
-          "coolingDown": false
-        },
-        {
-          "label": "Principal · nemotron-3-super-120b",
-          "ok": 6,
-          "fail": 0,
-          "avgMs": 454191,
-          "coolingDown": false
-        },
-        {
-          "label": "Principal · ising-calibration-1.5-31b",
-          "ok": 9,
-          "fail": 4,
-          "avgMs": 399410,
-          "coolingDown": false
-        },
-        {
-          "label": "Principal · nemotron-3-ultra-550b",
           "ok": 4,
-          "fail": 2,
-          "avgMs": 479153,
+          "fail": 0,
+          "avgMs": 4741,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · riva-translate-4b-instruct-v2",
+          "ok": 30,
+          "fail": 0,
+          "avgMs": 6360,
+          "coolingDown": false
+        },
+        {
+          "label": "Omniroute · Clodiko",
+          "ok": 2,
+          "fail": 1,
+          "avgMs": 5822,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · diffusiongemma-26b-a4b-it",
+          "ok": 18,
+          "fail": 1,
+          "avgMs": 12612,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · qwen3.8-27b",
+          "ok": 13,
+          "fail": 13,
+          "avgMs": 7963,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · nemotron-3.5-content-safety",
+          "ok": 6,
+          "fail": 3,
+          "avgMs": 22341,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · llama-3.1-nemotron-safety-guard-8b-v3",
+          "ok": 4,
+          "fail": 10,
+          "avgMs": 15544,
           "coolingDown": false
         }
       ],
-      "webCapable": []
+      "webCapable": [],
+      "searchProviders": [
+        "Omniroute"
+      ],
+      "lastSearchSource": "recherche Omniroute"
     },
     "dailyPlan": {
       "date": "2026-10-10",
