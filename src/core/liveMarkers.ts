@@ -43,7 +43,7 @@ import { OmnirouteConfig } from '../types';
 /** Nombre maximum de matchs enrichis en statistiques détaillées par tour (API-Football, quota limité). */
 const MAX_DETAILED_STATS_PER_TICK = 3;
 /** Matchs SofaScore (gratuit, sans quota) avec statistiques détaillées par tour. */
-const MAX_SOFASCORE_STATS_PER_TICK = 30;
+const MAX_SOFASCORE_STATS_PER_TICK = 60;
 /**
  * Matchs supplémentaires couverts par Omniroute (scraping, pas soumis au
  * même quota) au-delà de ce que API-Football peut fournir dans le tour —

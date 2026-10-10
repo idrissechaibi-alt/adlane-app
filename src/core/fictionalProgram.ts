@@ -32,7 +32,8 @@ import { syntheticFixtureId } from './halftimeMonitor';
 import { fetchRepoJson } from './gitAutoSync';
 import { mapWithConcurrency } from './concurrency';
 import { fetchSportmonksFixturesByDate } from '../api/footballDataAPIs/sportmonks';
-import { fetchSofaScheduledEvents, registerSofaEvents } from '../api/footballDataAPIs/sofaScore';
+import { registerSofaEvents } from '../api/footballDataAPIs/sofaScore';
+import { hubScheduled } from '../api/footballDataAPIs/liveDataHub';
 import { spendBudget } from './requestBudget';
 import { getAPIConfig } from '../api/multiAPIManager';
 
@@ -44,10 +45,10 @@ const TIMELINE_KEY_PREFIX = '@fictional_timeline_';
 const FEED_SOURCE_KEY = '__transmis__';
 
 /** Volume visé par jour (demande explicite). */
-export const MAX_FICTIONAL_MATCHES_PER_DAY = 250;
+export const MAX_FICTIONAL_MATCHES_PER_DAY = 500;
 /** Garde-fou par pays : au-delà, la réponse est probablement bavarde plutôt
  * que réellement exhaustive — on tronque sans bloquer. */
-const MAX_MATCHES_PER_COUNTRY = 60;
+const MAX_MATCHES_PER_COUNTRY = 100;
 /** Pays balayés par tour : chaque pays coûte une recherche web + une requête
  * IA, donc un tour doit rester court — le programme se complète sur les tours
  * suivants. 20 par tour (60 pays en 3 tours) : la tâche de fond ne passe que
@@ -668,12 +669,12 @@ export async function ensureFictionalDailyProgram(
   // prennent le relais.
   if (!stored.sofaLoadedAt || now - Date.parse(stored.sofaLoadedAt) >= SWEEP_INTERVAL_MS) {
     try {
-      const events = (await fetchSofaScheduledEvents(date)).filter((e) => e.statusShort !== 'OTHER' && e.startTimestamp > 0);
-      const ids = await registerSofaEvents(events, date);
+      const events = (await hubScheduled(date)).filter((e) => e.statusShort !== 'OTHER' && e.startTimestamp > 0);
+      const ids = await registerSofaEvents(events.filter((e) => e.provider === 'LiveScore'), date);
       for (const event of events) {
         const country = SPORTMONKS_ENGLISH_TO_FRENCH_COUNTRY.get(event.country.toLowerCase()) ?? (event.country || 'Monde');
         const match: FictionalMatch = {
-          fixtureId: ids.get(event.eventId)!,
+          fixtureId: ids.get(event.eventId) ?? syntheticFixtureId(event.homeTeam, event.awayTeam, date),
           homeTeam: event.homeTeam,
           awayTeam: event.awayTeam,
           league: event.league,
@@ -724,7 +725,14 @@ export async function ensureFictionalDailyProgram(
   // exclut déjà tout pays pour lequel Sportmonks vient de trouver un match.
   // Sans configuration Omniroute, cette étape est simplement sautée : le
   // programme reste alimenté par le planning transmis et/ou Sportmonks.
-  if (!config) {
+  // Les sources de données (LiveScore & co, Sportmonks) sont prioritaires :
+  // le balayage par les fournisseurs IA n'a lieu que si elles n'ont pas
+  // rempli la journée. Les fournisseurs IA servent d'abord au calcul des
+  // prédictions, plus à la découverte des matchs.
+  const knownFromData = Object.entries(stored.byCountry)
+    .filter(([key]) => key !== FEED_SOURCE_KEY)
+    .reduce((n, [, list]) => n + list.filter((m) => m.source === 'sofascore' || m.source === 'sportmonks').length, 0);
+  if (!config || knownFromData >= MAX_FICTIONAL_MATCHES_PER_DAY) {
     return selectFromStored(stored);
   }
 

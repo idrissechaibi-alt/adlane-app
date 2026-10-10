@@ -718,3 +718,23 @@ export async function getHubStatus(): Promise<Record<string, { ok: boolean; coun
 }
 
 export { utcDay as hubDateKey };
+
+/** Programme d'une date (UTC), toutes sources réunies sans doublon :
+ * LiveScore d'abord, complété par FotMob, 365Scores, ESPN, AllSportsApi. */
+export async function hubScheduled(dateKey: string): Promise<HubMatch[]> {
+  const lists = await Promise.all(PROVIDERS.filter((p) => p.name !== 'TheSportsDB').map((p) => cachedList(p, dateKey)));
+  const merged: HubMatch[] = [];
+  // Un même match a la même heure de coup d'envoi partout : on ne compare les
+  // noms qu'entre matchs du même quart d'heure (rapide même à 2 000 matchs).
+  const byKickoff = new Map<number, HubMatch[]>();
+  for (const list of lists) {
+    for (const m of list) {
+      const slot = Math.round(m.startTimestamp / 900);
+      const nearby = [...(byKickoff.get(slot - 1) ?? []), ...(byKickoff.get(slot) ?? []), ...(byKickoff.get(slot + 1) ?? [])];
+      if (nearby.some((x) => sameMatch(x, m))) continue;
+      merged.push(m);
+      byKickoff.set(slot, [...(byKickoff.get(slot) ?? []), m]);
+    }
+  }
+  return merged;
+}

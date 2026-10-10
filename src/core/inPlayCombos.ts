@@ -52,7 +52,7 @@
 import { getDailyPlan, todayLocalDateString } from './scheduler';
 import { buildScheduledMatches, ScheduledMatch } from './dailyWorkflow';
 import { ScheduledMatchDetail } from '../types/database';
-import { LiveFixture, LiveFixtureDetail, fetchOmnirouteMatchStatus, isSyntheticFixtureId } from './halftimeMonitor';
+import { LiveFixture, LiveFixtureDetail, fetchOmnirouteMatchStatus, isSyntheticFixtureId, syntheticFixtureId } from './halftimeMonitor';
 import { getHistoricalPriors } from './footballDataCoUk';
 import {
   FictionalMatch,
@@ -91,7 +91,7 @@ import { sendLocalNotification } from './notifications';
 import { normalizeTeamName, namesLikelyMatch } from './teamNameMatch';
 import { OmnirouteConfig } from '../types';
 import { mapWithConcurrency } from './concurrency';
-import { hubDateKey, hubStats } from '../api/footballDataAPIs/liveDataHub';
+import { hubDateKey, hubLiveStatus, hubStats } from '../api/footballDataAPIs/liveDataHub';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { matchesForDate, isWithinBreakWindow } from './internationalBreak';
 import { INTERNATIONAL_BREAK_CALENDAR } from '../data/internationalBreakCalendar';
@@ -114,10 +114,9 @@ const CHECKPOINT20_MAX_MINUTE = 30;
 const CHECKPOINT60_MIN_MINUTE = 55;
 const CHECKPOINT60_MAX_MINUTE = 70;
 
-/** Matchs fictifs interrogés par tour : chaque vérification est une requête
- * Omniroute de quelques secondes, et un tour doit rester court (la boucle de
- * premier plan repasse toutes les 3 minutes). */
-const MAX_FICTIONAL_CHECKS_PER_TICK = 25;
+/** Matchs fictifs vérifiés par tour : le statut vient d'abord des sources
+ * live gratuites (rapides, en cache), les fournisseurs IA seulement en repli. */
+const MAX_FICTIONAL_CHECKS_PER_TICK = 60;
 /** Vérifications fictives en vol simultanément pendant un tour : assez pour
  * accélérer nettement le bouton play (25 candidats à concurrence 6 ~ 4-5x plus
  * vite qu'en séquentiel), assez peu pour ne pas saturer le serveur Omniroute
@@ -154,7 +153,7 @@ const LIVE_FICTIONAL_20_MAX = 30;
 const LIVE_FICTIONAL_60_MIN = 55;
 const LIVE_FICTIONAL_60_MAX = 70;
 /** Matchs traités par tour (une estimation IA de buts attendus chacun). */
-const LIVE_FICTIONAL_MAX_PER_TICK = 40;
+const LIVE_FICTIONAL_MAX_PER_TICK = 80;
 /** Buts attendus moyens d'un match de football (domicile/extérieur), utilisés
  * seulement si l'IA ne fournit aucune estimation : la projection repose alors
  * sur le score et la minute réels, sans a priori propre aux équipes. */
@@ -1018,6 +1017,23 @@ async function processRealSlot(
     // lui demander. On ne saute l'appel que si TOUTES les sources
     // effectivement disponibles ce tour s'accordent à dire "non" — une
     // seule source manquante ou en désaccord suffit à laisser passer.
+    // Sources live gratuites avant les fournisseurs IA.
+    if (!live) {
+      const hub = await hubLiveStatus(scheduled.homeTeam, scheduled.awayTeam).catch(() => null);
+      if (hub) {
+        live = {
+          statusShort: hub.statusShort,
+          homeTeam: scheduled.homeTeam,
+          awayTeam: scheduled.awayTeam,
+          homeGoals: hub.homeGoals,
+          awayGoals: hub.awayGoals,
+          fixtureId: syntheticFixtureId(scheduled.homeTeam, scheduled.awayTeam, hubDateKey()),
+          minute: hub.minute,
+          league: scheduled.leagueName,
+          sofaEventId: hub.provider === 'LiveScore' ? hub.eventId : undefined,
+        };
+      }
+    }
     if (!live && omnirouteConfig) {
       const elapsedMs = Date.now() - Date.parse(scheduled.kickoff_utc);
       const withinKickoffWindow = Number.isFinite(elapsedMs) && elapsedMs >= 0 && elapsedMs <= 130 * 60 * 1000;
@@ -1104,11 +1120,16 @@ export interface InPlayComboTickResult {
  */
 async function fetchSofaLiveDetail(scheduled: FictionalMatch): Promise<LiveFixtureDetail | null> {
   try {
+    // Sources live gratuites d'abord (LiveScore, FotMob, 365Scores, ESPN…) :
+    // les fournisseurs IA ne sont plus qu'un dernier recours pour le statut.
     const eventId = await getSofaEventId(scheduled.fixtureId);
-    if (!eventId) return null;
-    const event = await fetchSofaEvent(eventId);
+    let event = eventId ? await fetchSofaEvent(eventId).catch(() => null) : null;
+    if (!event || event.statusShort === 'NS' || event.statusShort === 'OTHER') {
+      event = await hubLiveStatus(scheduled.homeTeam, scheduled.awayTeam).catch(() => null);
+    }
     if (!event || event.statusShort === 'NS' || event.statusShort === 'OTHER') return null;
-    const stats = await fetchSofaStats(eventId).catch(() => null);
+    const primary = eventId ? await fetchSofaStats(eventId).catch(() => null) : null;
+    const stats = await hubStats(scheduled.homeTeam, scheduled.awayTeam, hubDateKey(), primary).catch(() => primary);
     return {
       statusShort: event.statusShort,
       homeTeam: scheduled.homeTeam,
@@ -1118,7 +1139,7 @@ async function fetchSofaLiveDetail(scheduled: FictionalMatch): Promise<LiveFixtu
       fixtureId: scheduled.fixtureId,
       minute: event.minute,
       league: scheduled.league,
-      sofaEventId: eventId,
+      sofaEventId: eventId ?? undefined,
       shotsOnTargetHome: stats?.all?.shotsOnTargetHome,
       shotsOnTargetAway: stats?.all?.shotsOnTargetAway,
       cornersTotal: stats?.all?.corners,
@@ -1325,7 +1346,7 @@ export async function runInPlayComboTick(
   //
   // Piloté par le PROGRAMME DU JOUR (fictionalProgram.ts) : Omniroute balaie
   // une fois par jour le calendrier de 20 pays européens, toutes divisions et
-  // catégories jeunes comprises, et en retient 250 matchs avec leur heure de
+  // catégories jeunes comprises, et en retient 500 matchs avec leur heure de
   // coup d'envoi. Connaître le coup d'envoi suffit à savoir QUAND regarder
   // chaque match — d'où l'absence totale de relevé "tous les matchs en direct"
   // ici : on ne consulte que les matchs dont l'heure dit qu'ils approchent
