@@ -231,29 +231,32 @@ function pickBinarySide(market: TrackedMarket, projected: SecondHalfMarket, inve
   };
 }
 
-/** Ajoute à une jambe "total de buts" la projection comparée au réel au règlement. */
-function withGoalsProjection(
-  leg: CandidateLeg,
-  currentScore: { home: number; away: number },
-  remaining: { home: number; away: number }
-): CandidateLeg {
+/**
+ * Total de buts du match à LIGNE DYNAMIQUE : la ligne suit ce qui est déjà
+ * marqué. Avec 2 buts à la 15e, « Plus de 2.5 » ne vaut rien (1 but suffit,
+ * cote ≈ 1,01) : la ligne proposée est la plus haute encore probable (3.5,
+ * 4.5…), et il faut toujours au moins 2 buts de plus pour gagner. Probabilité
+ * en binomiale négative (dispersion mesurée : un match à 6 buts pour 2,5
+ * attendus rend les « Moins de » moins sûrs que Poisson).
+ */
+function goalsTotalLegs(currentScore: { home: number; away: number }, remaining: { home: number; away: number }): CandidateLeg[] {
   const observed = currentScore.home + currentScore.away;
   const correction = getDeltaCorrection('goals_ft');
-  // Dispersion mesurée : un match à 6 buts pour 2,5 attendus rend les « Moins de 2.5 »
-  // moins sûrs que ne le dit Poisson. Probabilité de la ligne 2.5 recalculée en conséquence.
-  let prob = leg.prob;
-  let note = '';
-  if (correction.dispersion > 1.1 && /2\.5/.test(leg.selection)) {
-    const over = atLeastProb(remaining.home + remaining.away, correction.dispersion, 3 - observed);
-    prob = /^plus/i.test(leg.selection) ? over : 1 - over;
-    note = ` Dispersion des buts mesurée ×${correction.dispersion.toFixed(2)} : probabilité recalculée (${(leg.prob * 100).toFixed(0)} % → ${(prob * 100).toFixed(0)} %).`;
+  const lambda = remaining.home + remaining.away;
+  const fano = correction.dispersion;
+  const projection: LegProjection = { unit: 'goals_ft', observed, expected: observed + lambda, factorUsed: correction.factor };
+  const evidence =
+    `${observed} but${observed > 1 ? 's' : ''} déjà marqué${observed > 1 ? 's' : ''} + ${lambda.toFixed(1)} attendu(s) d'ici la fin (${(observed + lambda).toFixed(1)} au total).` +
+    describeCorrection(correction, 'buts') +
+    (fano > 1.1 ? ` Dispersion des buts mesurée ×${fano.toFixed(2)} : lignes élargies.` : '');
+  const legs: CandidateLeg[] = [];
+  const over = pickHighestOverLine(lambda, fano, LINE_PICK_THRESHOLD, observed);
+  if (over && over.line - observed >= MIN_EVENTS_STILL_NEEDED - 0.5) {
+    legs.push({ market: 'total_buts', selection: `Plus de ${over.line} buts (total match)`, prob: over.prob, evidence, projection });
   }
-  return {
-    ...leg,
-    prob,
-    evidence: leg.evidence + describeCorrection(correction, 'buts') + note,
-    projection: { unit: 'goals_ft', observed, expected: observed + remaining.home + remaining.away, factorUsed: correction.factor },
-  };
+  const under = pickLowestUnderLine(lambda, fano, LINE_PICK_THRESHOLD, observed);
+  if (under) legs.push({ market: 'total_buts', selection: `Moins de ${under.line} buts (total match)`, prob: under.prob, evidence, projection });
+  return legs;
 }
 
 /** Instantané liveMarkers le plus récent pour ce match, si un existe (best-effort, jamais bloquant). */
@@ -732,14 +735,7 @@ async function buildLegs20(
     if (bttsMarket && !(currentScore.home > 0 && currentScore.away > 0)) {
       legs.push(pickBinarySide('btts', bttsMarket, 'Les deux équipes ne marquent pas toutes les deux (Non)'));
     }
-    const overMarket = fullEst.markets.find((m) => m.market === 'FT_over_2_5_reprojete');
-    if (overMarket && !(currentScore.home + currentScore.away > 2.5)) {
-      const totalLeg = pickBinarySide('total_buts', overMarket, 'Moins de 2.5 buts (total match)');
-      // "Plus de 2.5" à 2 buts déjà marqués : un seul but suffit, cote trop faible.
-      if (!(/^plus/i.test(totalLeg.selection) && currentScore.home + currentScore.away >= 2)) {
-        legs.push(withGoalsProjection(totalLeg, currentScore, fullEst.secondHalfExpectedGoals));
-      }
-    }
+    legs.push(...goalsTotalLegs(currentScore, fullEst.secondHalfExpectedGoals));
   }
 
   return withLearnedExpertise(legs);
@@ -791,13 +787,7 @@ function buildLegs60(
   if (bttsMarket && !(currentScore.home > 0 && currentScore.away > 0)) {
     legs.push(pickBinarySide('btts', bttsMarket, 'Les deux équipes ne marquent pas toutes les deux (Non)'));
   }
-  const overMarket = est.markets.find((m) => m.market === 'FT_over_2_5_reprojete');
-  if (overMarket && !(currentScore.home + currentScore.away > 2.5)) {
-    const totalLeg = pickBinarySide('total_buts', overMarket, 'Moins de 2.5 buts (total match)');
-    if (!(/^plus/i.test(totalLeg.selection) && currentScore.home + currentScore.away >= 2)) {
-      legs.push(withGoalsProjection(totalLeg, currentScore, est.secondHalfExpectedGoals));
-    }
-  }
+  legs.push(...goalsTotalLegs(currentScore, est.secondHalfExpectedGoals));
 
   return withLearnedExpertise(legs);
 }
