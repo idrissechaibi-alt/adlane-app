@@ -122,7 +122,7 @@ export default function EvolutionScreen() {
           <Text style={styles.webAccessText}>
             {sofaOk
               ? `SofaScore : ${sofaState?.liveCount ?? 0} matchs en direct (via ${sofaState?.route ?? '?'})`
-              : 'SofaScore bloqué : lance le relais Termux (scripts/sofascore-relay.js)'}
+              : 'SofaScore bloqué sur ce réseau (403) : le pipe fictif utilise AllSportsApi et les fournisseurs IA'}
           </Text>
         </View>
       </View>
