@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-10-10T19:47:59.387Z",
+  "exportedAt": "2026-10-10T19:51:08.468Z",
   "formatVersion": 1,
   "source": "APP adlane",
   "data": {
@@ -4865,27 +4865,26 @@
       "ticksLast24h": 59
     },
     "tickProgress": {
-      "startedAt": "2026-10-10T19:47:54.589Z",
+      "startedAt": "2026-10-10T19:51:05.286Z",
       "step": "scan matinal",
-      "at": "2026-10-10T19:47:54.589Z",
+      "at": "2026-10-10T19:51:05.286Z",
       "stepDurationsSec": {}
     },
     "lastTick": {
-      "startedAt": "2026-10-10T19:43:52.137Z",
-      "finishedAt": "2026-10-10T19:46:50.000Z",
-      "durationSec": 178,
+      "startedAt": "2026-10-10T19:48:03.780Z",
+      "finishedAt": "2026-10-10T19:50:58.537Z",
+      "durationSec": 175,
       "stepDurationsSec": {
-        "terminé": 112,
-        "scan matinal": 21,
+        "scan matinal": 3,
         "relevé live partagé": 0,
-        "scan en direct 20e/60e": 29,
-        "bilan de minuit": 0,
-        "marqueurs live": 124,
+        "scan en direct 20e/60e": 5,
+        "bilan de minuit": 31,
+        "marqueurs live": 134,
         "programme fictif": 1,
         "univers du jour": 0,
         "compositions T-90": 0,
         "bilan Scouting": 0,
-        "consolidation apprentissage": 1,
+        "consolidation apprentissage": 0,
         "enrichissement matchs suivis": 0,
         "vérification accès internet des modèles": 0
       },
@@ -4914,9 +4913,9 @@
       "fictionalLiveFixturesFound": 73,
       "liveFixturesSource": "sources_live_gratuites",
       "apiFootballError": "quota du jour atteint (réserve gardée pour le règlement)",
-      "liveMarkerObserved": 27,
-      "liveMarkerClosed": 1,
-      "freshInPlayProposals": 5,
+      "liveMarkerObserved": 23,
+      "liveMarkerClosed": 38,
+      "freshInPlayProposals": 30,
       "intlBreak": {
         "withinWindow": false,
         "matchesScheduledToday": 0,
@@ -4929,9 +4928,9 @@
       "nightlyReviewPointsCreated": 0
     },
     "lastRealFastTick": {
-      "at": "2026-10-10T19:47:49.593Z",
+      "at": "2026-10-10T19:50:20.556Z",
       "liveFound": 6,
-      "fresh": 0,
+      "fresh": 2,
       "source": "sources_live_gratuites",
       "apiFootballError": "quota du jour atteint (réserve gardée pour le règlement)"
     },
@@ -5053,6 +5052,23 @@
           "scan matinal": 3,
           "relevé live partagé": 0
         }
+      },
+      {
+        "startedAt": "2026-10-10T19:47:54.589Z",
+        "step": "scan en direct 20e/60e",
+        "at": "2026-10-10T19:48:00.072Z",
+        "stepDurationsSec": {
+          "scan matinal": 5,
+          "relevé live partagé": 0
+        }
+      },
+      {
+        "startedAt": "2026-10-10T19:51:03.176Z",
+        "step": "scan matinal",
+        "at": "2026-10-10T19:51:03.176Z",
+        "stepDurationsSec": {
+          "terminé": 5
+        }
       }
     ],
     "strategies": [
@@ -5148,16 +5164,16 @@
       "settledLast24h": 26
     },
     "trainingRows": {
-      "last14Days": 2180,
-      "lastClosedAt": "2026-10-10T19:46:46.815Z",
+      "last14Days": 2218,
+      "lastClosedAt": "2026-10-10T19:50:57.537Z",
       "bySource": {
-        "api_football": 1370,
-        "omniroute": 810
+        "api_football": 1403,
+        "omniroute": 815
       }
     },
     "model": {
-      "updatedAt": "2026-10-10T19:46:49.903Z",
-      "totalRows": 2180,
+      "updatedAt": "2026-10-10T19:50:58.523Z",
+      "totalRows": 2218,
       "markerRules": 40,
       "paperBets": {
         "total": 122,
@@ -5224,12 +5240,12 @@
       ]
     },
     "inPlayProposals": {
-      "real": 54,
-      "fictional": 1619,
+      "real": 56,
+      "fictional": 1649,
       "fictionalReviewed": 806,
       "fictionalSettledLegs": 689,
-      "lastCreatedAt": "2026-10-10T19:44:41.862Z",
-      "createdLast24h": 1614
+      "lastCreatedAt": "2026-10-10T19:50:19.770Z",
+      "createdLast24h": 1646
     },
     "predictionOutcomes30d": 784,
     "marketSeries": {
@@ -5289,7 +5305,7 @@
         {
           "name": "Principal",
           "ok": true,
-          "latencyMs": 602,
+          "latencyMs": 385,
           "readyModels": 27,
           "configuredReady": 12,
           "configuredTotal": 13
@@ -5297,7 +5313,7 @@
         {
           "name": "Omniroute",
           "ok": true,
-          "latencyMs": 1279,
+          "latencyMs": 1123,
           "readyModels": 941,
           "configuredReady": 2,
           "configuredTotal": 2
@@ -5306,16 +5322,16 @@
       "leaderboard": [
         {
           "label": "Principal · auto",
-          "ok": 568,
+          "ok": 570,
           "fail": 23,
-          "avgMs": 898,
+          "avgMs": 817,
           "coolingDown": false
         },
         {
           "label": "Principal · allam-2-7b",
-          "ok": 522,
-          "fail": 326,
-          "avgMs": 604,
+          "ok": 523,
+          "fail": 327,
+          "avgMs": 557,
           "coolingDown": false
         },
         {
@@ -5538,7 +5554,7 @@
         "apiFootball-autolearn": 70,
         "sportmonks-autolearn": 16,
         "sofaScore": 0,
-        "sportmonks": 72
+        "sportmonks": 74
       },
       "theOddsApiMonth": {
         "used": 500,
@@ -5557,32 +5573,32 @@
       "TheSportsDB": {
         "ok": true,
         "count": 60,
-        "at": "2026-10-10T19:47:55.528Z"
-      },
-      "FotMob": {
-        "ok": true,
-        "count": 50,
-        "at": "2026-10-10T19:47:55.704Z"
+        "at": "2026-10-10T19:51:06.127Z"
       },
       "LiveScore": {
         "ok": true,
-        "count": 50,
-        "at": "2026-10-10T19:47:56.368Z"
+        "count": 51,
+        "at": "2026-10-10T19:51:06.160Z"
       },
-      "ESPN": {
+      "FotMob": {
         "ok": true,
-        "count": 15,
-        "at": "2026-10-10T19:47:56.540Z"
+        "count": 51,
+        "at": "2026-10-10T19:51:06.217Z"
       },
       "AllSportsApi": {
         "ok": true,
         "count": 0,
-        "at": "2026-10-10T19:47:57.164Z"
+        "at": "2026-10-10T19:51:06.231Z"
       },
       "365Scores": {
         "ok": true,
-        "count": 45,
-        "at": "2026-10-10T19:47:56.573Z"
+        "count": 46,
+        "at": "2026-10-10T19:51:07.001Z"
+      },
+      "ESPN": {
+        "ok": true,
+        "count": 15,
+        "at": "2026-10-10T19:51:07.173Z"
       }
     },
     "deltaCorrections": {
@@ -5610,24 +5626,24 @@
         },
         {
           "unit": "corners_ft",
-          "factor": 0.976308481141812,
-          "samples": 87,
-          "meanDelta": 0.15694823070636507,
-          "meanAbsDelta": 1.9537418759562606
+          "factor": 0.9759459192883176,
+          "samples": 90,
+          "meanDelta": 0.15783815806415424,
+          "meanAbsDelta": 1.9314873176698288
         },
         {
           "unit": "cards_ft",
-          "factor": 1.5491841908828587,
-          "samples": 90,
-          "meanDelta": 0.6160378569447694,
-          "meanAbsDelta": 1.500533867220397
+          "factor": 1.5507144894138372,
+          "samples": 93,
+          "meanDelta": 0.604058017229753,
+          "meanAbsDelta": 1.4722730433063183
         },
         {
           "unit": "fouls_ft",
-          "factor": 1.194172626849496,
-          "samples": 59,
-          "meanDelta": 1.4781406048939751,
-          "meanAbsDelta": 3.7627674504193456
+          "factor": 1.1988007879556575,
+          "samples": 61,
+          "meanDelta": 1.4934094371572564,
+          "meanAbsDelta": 3.782414317784248
         },
         {
           "unit": "goals_1h",
@@ -5645,8 +5661,8 @@
         }
       ],
       "samples": {
-        "pending": 439,
-        "measured": 837
+        "pending": 397,
+        "measured": 850
       }
     },
     "configured": {
