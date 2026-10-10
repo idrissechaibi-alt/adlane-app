@@ -45,6 +45,10 @@ interface TeamSummary {
   all: Averages;
   home: Averages;
   away: Averages;
+  /** Constats calculés par le script de nuit (forme, timing des buts, efficacité, lignes régulières…). */
+  insights: string[];
+  /** Résumé des derniers matchs : ce qui explique chaque résultat. */
+  recent: string[];
 }
 
 interface IndexTeam {
@@ -53,6 +57,7 @@ interface IndexTeam {
   shortName: string;
   matches: number;
   lastMatch: string | null;
+  analysisVersion?: number;
 }
 
 interface TeamIndex {
@@ -68,6 +73,9 @@ export interface MatchTrend {
   /** Buts attendus par côté (mêlant buts et xG), si les deux équipes ont assez de matchs. */
   goals?: { home: number; away: number };
   samples: { home: number; away: number };
+  /** Constats d'analyse par équipe (forme, timing, efficacité, lignes régulières). */
+  insights: { home: string[]; away: string[] };
+  recent: { home: string[]; away: string[] };
   /** Taux par équipe (pour, contre) : pour l'affichage et les analyses. */
   rates: { home: Partial<Record<TrendKey, [number, number]>>; away: Partial<Record<TrendKey, [number, number]>> };
 }
@@ -186,11 +194,11 @@ function averages(matches: RawMatch[]): Averages {
 
 async function ensureSummary(team: IndexTeam): Promise<TeamSummary | null> {
   const summaries = await loadSummaries();
-  const sig = `${team.lastMatch}|${team.matches}`;
+  const sig = `${team.lastMatch}|${team.matches}|${team.analysisVersion ?? 0}`;
   const known = summaries[String(team.id)];
   if (known && known.sig === sig) return known;
 
-  const file = await fetchJson<{ matches: RawMatch[] }>(`${BASE_URL}/teams/${team.id}.json`);
+  const file = await fetchJson<{ matches: RawMatch[]; analysis?: { insights?: string[]; recent?: Array<{ date: string; opponent: string; home: boolean; note: string }> } }>(`${BASE_URL}/teams/${team.id}.json`);
   if (!file?.matches) return known ?? null;
   // Matchs avec stats détaillées uniquement, les plus récents d'abord.
   const played = file.matches.filter((m) => m.stats?.ft).sort((a, b) => (a.date < b.date ? 1 : -1));
@@ -204,6 +212,8 @@ async function ensureSummary(team: IndexTeam): Promise<TeamSummary | null> {
     all: averages(played.slice(0, LAST_N)),
     home: averages(home),
     away: averages(away),
+    insights: (file.analysis?.insights ?? []).slice(0, 12),
+    recent: (file.analysis?.recent ?? []).slice(-3).map((r) => `${r.date} ${r.home ? 'vs' : '@'} ${r.opponent} — ${r.note}`),
   };
   summaries[String(team.id)] = summary;
   AsyncStorage.setItem(SUMMARIES_KEY, JSON.stringify(summaries)).catch(() => {});
@@ -266,7 +276,7 @@ export async function getMatchTrend(homeTeam: string, awayTeam: string): Promise
     if (Object.keys(expected).length === 0 && !goals) return null;
     usage.withTrend++;
     usage.lastTrendAt = new Date().toISOString();
-    return { homeTeam: h.name, awayTeam: a.name, expected, goals, samples: { home: h.n.all, away: a.n.all }, rates };
+    return { homeTeam: h.name, awayTeam: a.name, expected, goals, samples: { home: h.n.all, away: a.n.all }, insights: { home: h.insights ?? [], away: a.insights ?? [] }, recent: { home: h.recent ?? [], away: a.recent ?? [] }, rates };
   } catch {
     return null;
   }
@@ -346,6 +356,14 @@ function line(name: string, n: number, rates: MatchTrend['rates']['home']): stri
   return `${name} (${n} derniers matchs avec stats, toutes compétitions) : ${parts.join(' ; ')}`;
 }
 
+function teamNotes(name: string, insights: string[], recent: string[]): string {
+  if (insights.length === 0 && recent.length === 0) return '';
+  return (
+    `\n- Analyse ${name} : ${insights.join(' ')}` +
+    (recent.length ? `\n  Derniers matchs : ${recent.join(' | ')}` : '')
+  );
+}
+
 /** Texte de tendance injecté dans les analyses (Scouting IA) : ce que le fichier de stats dit des deux équipes. */
 export function describeMatchTrend(trend: MatchTrend): string {
   const exp = TREND_LABELS.filter(([k]) => trend.expected[k] != null).map(([k, label]) => `${label} ${trend.expected[k]!.toFixed(1)}`);
@@ -353,6 +371,8 @@ export function describeMatchTrend(trend: MatchTrend): string {
     `Tendances des deux équipes (fichier de stats match par match, mis à jour chaque nuit) :\n` +
     `- ${line(trend.homeTeam, trend.samples.home, trend.rates.home)}\n` +
     `- ${line(trend.awayTeam, trend.samples.away, trend.rates.away)}\n` +
-    `- Total attendu pour ce match d'après ces tendances : ${exp.join(', ')}.`
+    `- Total attendu pour ce match d'après ces tendances : ${exp.join(', ')}.` +
+    teamNotes(trend.homeTeam, trend.insights.home, trend.recent.home) +
+    teamNotes(trend.awayTeam, trend.insights.away, trend.recent.away)
   );
 }
