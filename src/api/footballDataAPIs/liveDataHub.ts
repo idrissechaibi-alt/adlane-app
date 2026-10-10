@@ -565,26 +565,90 @@ async function cachedList(provider: Provider, kind: 'live' | string): Promise<Hu
   }
 }
 
+// Noms normalisés mémorisés : la normalisation (accents, regex) recalculée
+// des millions de fois par tour bloquait l'interface de l'app.
+const normCache = new Map<string, string>();
+function norm(name: string): string {
+  let n = normCache.get(name);
+  if (n === undefined) {
+    n = normalizeTeamName(name);
+    if (normCache.size > 20_000) normCache.clear();
+    normCache.set(name, n);
+  }
+  return n;
+}
+
 function sameMatch(a: { homeTeam: string; awayTeam: string }, b: { homeTeam: string; awayTeam: string }): boolean {
-  const ah = normalizeTeamName(a.homeTeam);
-  const aa = normalizeTeamName(a.awayTeam);
-  const bh = normalizeTeamName(b.homeTeam);
-  const ba = normalizeTeamName(b.awayTeam);
-  return namesLikelyMatch(ah, bh) && namesLikelyMatch(aa, ba);
+  return namesLikelyMatch(norm(a.homeTeam), norm(b.homeTeam)) && namesLikelyMatch(norm(a.awayTeam), norm(b.awayTeam));
+}
+
+/** Clés d'index d'un nom : préfixe de 4 lettres de chaque mot (« Lyon » et
+ * « Lyonnais » partagent « lyon »). */
+function nameKeys(name: string): string[] {
+  return norm(name).split(' ').filter((w) => w.length >= 3).map((w) => w.slice(0, 4));
+}
+
+/** Index par mot du nom d'équipe (domicile ET extérieur) d'une liste, pour ne
+ * comparer un match qu'aux quelques candidats qui partagent un mot avec lui. */
+const listIndex = new WeakMap<HubMatch[], Map<string, HubMatch[]>>();
+function indexOf(list: HubMatch[]): Map<string, HubMatch[]> {
+  let idx = listIndex.get(list);
+  if (idx) return idx;
+  idx = new Map();
+  for (const m of list) {
+    for (const word of new Set([...nameKeys(m.homeTeam), ...nameKeys(m.awayTeam)])) {
+      const bucket = idx.get(word);
+      if (bucket) bucket.push(m);
+      else idx.set(word, [m]);
+    }
+  }
+  listIndex.set(list, idx);
+  return idx;
+}
+
+function findInList(list: HubMatch[], target: { homeTeam: string; awayTeam: string }): HubMatch | undefined {
+  if (list.length === 0) return undefined;
+  const idx = indexOf(list);
+  const words = [...nameKeys(target.homeTeam), ...nameKeys(target.awayTeam)];
+  const seen = new Set<HubMatch>();
+  for (const word of words) {
+    for (const m of idx.get(word) ?? []) {
+      if (seen.has(m)) continue;
+      seen.add(m);
+      if (sameMatch(m, target)) return m;
+    }
+  }
+  // Noms sans mot commun (abréviations) : repli sur un parcours complet.
+  return words.length === 0 ? list.find((m) => sameMatch(m, target)) : undefined;
 }
 
 /** Tous les matchs en cours, toutes sources réunies (sans doublon, la
  * source prioritaire gardée pour chaque match). */
+let liveMergedMemo: { lists: HubMatch[][]; merged: HubMatch[] } | null = null;
+
 export async function hubLiveEvents(): Promise<HubMatch[]> {
   const lists = await Promise.all(PROVIDERS.map((p) => cachedList(p, 'live')));
   await flushStatus();
+  // Mêmes listes en cache qu'au dernier appel : fusion déjà faite.
+  if (liveMergedMemo && liveMergedMemo.lists.every((l, i) => l === lists[i])) return liveMergedMemo.merged;
   const merged: HubMatch[] = [];
+  const mergedIdx = new Map<string, HubMatch[]>();
   for (const list of lists) {
     for (const m of list) {
       if (!['1H', 'HT', '2H'].includes(m.statusShort)) continue;
-      if (!merged.some((x) => sameMatch(x, m))) merged.push(m);
+      const keys = [...new Set([...nameKeys(m.homeTeam), ...nameKeys(m.awayTeam)])];
+      const duplicate = keys.some((k) => (mergedIdx.get(k) ?? []).some((x) => sameMatch(x, m)));
+      if (!duplicate) {
+        merged.push(m);
+        for (const k of keys) {
+          const bucket = mergedIdx.get(k);
+          if (bucket) bucket.push(m);
+          else mergedIdx.set(k, [m]);
+        }
+      }
     }
   }
+  liveMergedMemo = { lists, merged };
   return merged;
 }
 
@@ -595,8 +659,8 @@ async function findEverywhere(homeTeam: string, awayTeam: string, dateKey: strin
   await Promise.all(
     PROVIDERS.map(async (p, index) => {
       const lists = await Promise.all([cachedList(p, dateKey), includeLive ? cachedList(p, 'live') : Promise.resolve([])]);
-      const live = lists[1].find((m) => sameMatch(m, target));
-      const dated = lists[0].find((m) => sameMatch(m, target));
+      const live = findInList(lists[1], target);
+      const dated = findInList(lists[0], target);
       const hit = live ?? dated;
       if (hit) found[index] = hit;
     })
@@ -656,7 +720,7 @@ export async function hubStats(homeTeam: string, awayTeam: string, dateKey: stri
 /** Statut en direct d'un match (score, minute) depuis la première source qui le suit. */
 export async function hubLiveStatus(homeTeam: string, awayTeam: string): Promise<HubMatch | null> {
   const live = await hubLiveEvents();
-  return live.find((m) => sameMatch(m, { homeTeam, awayTeam })) ?? null;
+  return findInList(live, { homeTeam, awayTeam }) ?? null;
 }
 
 export interface HubFinalResult {
@@ -746,18 +810,23 @@ export { utcDay as hubDateKey };
 export async function hubScheduled(dateKey: string): Promise<HubMatch[]> {
   const lists = await Promise.all(PROVIDERS.filter((p) => p.name !== 'TheSportsDB').map((p) => cachedList(p, dateKey)));
   const merged: HubMatch[] = [];
-  // Un même match a la même heure de coup d'envoi partout : on ne compare les
-  // noms qu'entre matchs du même quart d'heure (rapide même à 2 000 matchs).
-  const byKickoff = new Map<number, HubMatch[]>();
+  // Un même match a la même heure de coup d'envoi partout (±3 h selon les
+  // fuseaux) et partage au moins un mot de nom : on ne compare qu'à ces
+  // candidats-là (rapide même à 2 000 matchs, l'interface ne se fige pas).
+  const idx = new Map<string, HubMatch[]>();
   for (const list of lists) {
     for (const m of list) {
-      const slot = Math.round(m.startTimestamp / 900);
-      // ±3 h : certaines sources décalent l'heure (fuseau, horaire provisoire).
-      const nearby: HubMatch[] = [];
-      for (let k = slot - 12; k <= slot + 12; k++) nearby.push(...(byKickoff.get(k) ?? []));
-      if (nearby.some((x) => sameMatch(x, m))) continue;
+      const keys = [...new Set([...nameKeys(m.homeTeam), ...nameKeys(m.awayTeam)])];
+      const duplicate = keys.some((k) =>
+        (idx.get(k) ?? []).some((x) => Math.abs(x.startTimestamp - m.startTimestamp) <= 3 * 3600 && sameMatch(x, m))
+      );
+      if (duplicate) continue;
       merged.push(m);
-      byKickoff.set(slot, [...(byKickoff.get(slot) ?? []), m]);
+      for (const k of keys) {
+        const bucket = idx.get(k);
+        if (bucket) bucket.push(m);
+        else idx.set(k, [m]);
+      }
     }
   }
   return merged;
