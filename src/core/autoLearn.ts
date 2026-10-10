@@ -11,6 +11,7 @@
 // Rien ici n'invente : une règle sans échantillon suffisant est écartée, une
 // fenêtre tronquée (mi-temps arrivée trop tôt) n'est jamais comptée.
 
+import { DELTA_LABELS, getAllDeltaCorrections } from './deltaLearning';
 import { getAllBets } from '../database/storage';
 import { HISTORICAL_BETS } from '../data/historical';
 import {
@@ -979,6 +980,28 @@ export function buildLearningReport(): string | null {
       "Ces règles sont recalculées à chaque tour sur les 14 derniers jours : une règle qui cesse de se " +
         "vérifier disparaît d'elle-même."
     );
+  }
+
+  lines.push('', '5) Écarts entre mes projections et la réalité');
+  const deltas = getAllDeltaCorrections().filter((d) => d.samples > 0);
+  if (deltas.length === 0) {
+    lines.push("Pas encore de match réglé avec une projection chiffrée : l'écart sera mesuré dès les premiers résultats.");
+  } else {
+    for (const d of deltas) {
+      const sign = d.meanDelta >= 0 ? '+' : '';
+      const verdict =
+        d.samples < 5
+          ? 'trop tôt pour corriger'
+          : Math.abs(d.factor - 1) < 0.05
+            ? 'projections justes, aucune correction'
+            : d.factor > 1
+              ? `je sous-estimais : le reste à jouer est désormais multiplié par ×${d.factor.toFixed(2)}`
+              : `je surestimais : le reste à jouer est désormais multiplié par ×${d.factor.toFixed(2)}`;
+      lines.push(
+        `• ${DELTA_LABELS[d.unit]} : écart moyen réel − projeté ${sign}${d.meanDelta.toFixed(1)} ` +
+          `(écart absolu ${d.meanAbsDelta.toFixed(1)}) sur ${d.samples} matchs — ${verdict}.`
+      );
+    }
   }
 
   return lines.join('\n');

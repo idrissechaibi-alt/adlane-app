@@ -92,6 +92,7 @@ import { normalizeTeamName, namesLikelyMatch } from './teamNameMatch';
 import { OmnirouteConfig } from '../types';
 import { mapWithConcurrency } from './concurrency';
 import { hubDateKey, hubLiveStatus, hubStats } from '../api/footballDataAPIs/liveDataHub';
+import { DeltaUnit, LegProjection, describeCorrection, getDeltaCorrection } from './deltaLearning';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { matchesForDate, isWithinBreakWindow } from './internationalBreak';
 import { INTERNATIONAL_BREAK_CALENDAR } from '../data/internationalBreakCalendar';
@@ -186,6 +187,14 @@ interface CandidateLeg {
   selection: string;
   prob: number;
   evidence: string;
+  /** Valeur projetée de la fenêtre, comparée au réel au règlement. */
+  projection?: LegProjection;
+}
+
+/** Buts attendus corrigés par l'écart mesuré sur les matchs réglés. */
+function correctedGoals(xg: { home: number; away: number }, unit: DeltaUnit): { home: number; away: number } {
+  const { factor } = getDeltaCorrection(unit);
+  return { home: xg.home * factor, away: xg.away * factor };
 }
 
 /**
@@ -202,6 +211,21 @@ function pickBinarySide(market: TrackedMarket, projected: SecondHalfMarket, inve
     selection: invertedSelection,
     prob: 1 - projected.estimated_prob,
     evidence: `Probabilité inverse (${(projected.estimated_prob * 100).toFixed(0)}% pour "${projected.selection}") : ${projected.reasoning}`
+  };
+}
+
+/** Ajoute à une jambe "total de buts" la projection comparée au réel au règlement. */
+function withGoalsProjection(
+  leg: CandidateLeg,
+  currentScore: { home: number; away: number },
+  remaining: { home: number; away: number }
+): CandidateLeg {
+  const observed = currentScore.home + currentScore.away;
+  const correction = getDeltaCorrection('goals_ft');
+  return {
+    ...leg,
+    evidence: leg.evidence + describeCorrection(correction, 'buts'),
+    projection: { unit: 'goals_ft', observed, expected: observed + remaining.home + remaining.away },
   };
 }
 
@@ -472,10 +496,17 @@ async function buildLegs20(
 
   // 1) But 1ère mi-temps ou pas — rien à prédire si déjà marqué (certain).
   if (preMatchExpectedGoals && currentScore.home + currentScore.away === 0) {
-    const est = estimateRemainingFirstHalfMarket({ preMatchExpectedGoals, elapsedMinutes, currentScore, currentStats });
+    const correction = getDeltaCorrection('goals_1h');
+    const est = estimateRemainingFirstHalfMarket({ preMatchExpectedGoals: correctedGoals(preMatchExpectedGoals, 'goals_1h'), elapsedMinutes, currentScore, currentStats });
     const m = est.markets[0];
-    const blended = blendWithLearnedMarkers(m.estimated_prob, m.reasoning, snapshot);
-    legs.push({ market: 'buts_1ere_mt', selection: 'Oui, un but avant la pause', prob: blended.prob, evidence: blended.evidence });
+    const blended = blendWithLearnedMarkers(m.estimated_prob, m.reasoning + describeCorrection(correction, 'buts'), snapshot);
+    legs.push({
+      market: 'buts_1ere_mt',
+      selection: 'Oui, un but avant la pause',
+      prob: blended.prob,
+      evidence: blended.evidence,
+      projection: { unit: 'goals_1h', observed: 0, expected: est.secondHalfExpectedGoals.home + est.secondHalfExpectedGoals.away },
+    });
   }
 
   // 2) Corners / 3) Cartons 1ère mi-temps — projection sur le reste de la 1ère
@@ -490,25 +521,29 @@ async function buildLegs20(
   if (priors) {
     const fraction = remainingFirstHalfEventFraction(elapsedMinutes);
 
-    const cornersLambda = (priors.home.cornersFor + priors.away.cornersFor) * fraction;
+    const cornersFix = getDeltaCorrection('corners_1h');
+    const cornersLambda = (priors.home.cornersFor + priors.away.cornersFor) * fraction * cornersFix.factor;
     const cornersLine = pickHighestConfidentOverLine(cornersLambda, LINE_PICK_THRESHOLD, observedCorners ?? 0);
     if (cornersLine) {
       legs.push({
         market: 'corners',
         selection: `Plus de ${cornersLine.line} corners en 1ère mi-temps`,
         prob: cornersLine.prob,
-        evidence: `${observedCorners ?? 0} corner(s) déjà compté(s) + ${cornersLambda.toFixed(1)} attendus sur le reste de la 1ère MT (moyennes de saison Football-Data.co.uk).`
+        evidence: `${observedCorners ?? 0} corner(s) déjà compté(s) + ${cornersLambda.toFixed(1)} attendus sur le reste de la 1ère MT (moyennes de saison Football-Data.co.uk).` + describeCorrection(cornersFix, 'corners'),
+        projection: { unit: 'corners_1h', observed: observedCorners ?? 0, expected: (observedCorners ?? 0) + cornersLambda },
       });
     }
 
-    const cardsLambda = (priors.home.cardsFor + priors.away.cardsFor) * fraction;
+    const cardsFix = getDeltaCorrection('cards_1h');
+    const cardsLambda = (priors.home.cardsFor + priors.away.cardsFor) * fraction * cardsFix.factor;
     const cardsLine = pickHighestConfidentOverLine(cardsLambda, LINE_PICK_THRESHOLD, observedCards ?? 0);
     if (cardsLine) {
       legs.push({
         market: 'cartons',
         selection: `Plus de ${cardsLine.line} cartons en 1ère mi-temps`,
         prob: cardsLine.prob,
-        evidence: `${observedCards ?? 0} carton(s) déjà compté(s) + ${cardsLambda.toFixed(1)} attendus sur le reste de la 1ère MT (moyennes de saison Football-Data.co.uk).`
+        evidence: `${observedCards ?? 0} carton(s) déjà compté(s) + ${cardsLambda.toFixed(1)} attendus sur le reste de la 1ère MT (moyennes de saison Football-Data.co.uk).` + describeCorrection(cardsFix, 'cartons'),
+        projection: { unit: 'cards_1h', observed: observedCards ?? 0, expected: (observedCards ?? 0) + cardsLambda },
       });
     }
   } else if (elapsedMinutes >= MIN_MINUTES_FOR_PACE_PROJECTION) {
@@ -522,14 +557,16 @@ async function buildLegs20(
       const observedPace = observedLive?.cornersPerMinute ?? observedCorners / elapsedMinutes;
       const perMinute = blendPace(observedPace, elapsedMinutes, TYPICAL_CORNERS_PER_MINUTE);
       const source = `${observedLive?.cornersPerMinute != null ? 'rythme suivi en direct' : 'moyenne depuis le coup d\'envoi'} mêlé au rythme moyen d'un match`;
-      const lambda = perMinute * remainingMinutes;
+      const fix = getDeltaCorrection('corners_1h');
+      const lambda = perMinute * remainingMinutes * fix.factor;
       const line = pickHighestConfidentOverLine(lambda, LINE_PICK_THRESHOLD, observedCorners);
       if (line) {
         legs.push({
           market: 'corners',
           selection: `Plus de ${line.line} corners en 1ère mi-temps`,
           prob: line.prob,
-          evidence: `${observedCorners} corner(s) à la ${elapsedMinutes}e minute, ${source} de ${perMinute.toFixed(2)}/min → ${lambda.toFixed(1)} attendu(s) d'ici la pause.`
+          evidence: `${observedCorners} corner(s) à la ${elapsedMinutes}e minute, ${source} de ${perMinute.toFixed(2)}/min → ${lambda.toFixed(1)} attendu(s) d'ici la pause.` + describeCorrection(fix, 'corners'),
+          projection: { unit: 'corners_1h', observed: observedCorners, expected: observedCorners + lambda },
         });
       }
     }
@@ -538,14 +575,16 @@ async function buildLegs20(
       const observedPace = observedLive?.cardsPerMinute ?? observedCards / elapsedMinutes;
       const perMinute = blendPace(observedPace, elapsedMinutes, TYPICAL_CARDS_PER_MINUTE);
       const source = `${observedLive?.cardsPerMinute != null ? 'rythme suivi en direct' : 'moyenne depuis le coup d\'envoi'} mêlé au rythme moyen d'un match`;
-      const lambda = perMinute * remainingMinutes;
+      const fix = getDeltaCorrection('cards_1h');
+      const lambda = perMinute * remainingMinutes * fix.factor;
       const line = pickHighestConfidentOverLine(lambda, LINE_PICK_THRESHOLD, observedCards);
       if (line) {
         legs.push({
           market: 'cartons',
           selection: `Plus de ${line.line} cartons en 1ère mi-temps`,
           prob: line.prob,
-          evidence: `${observedCards} carton(s) à la ${elapsedMinutes}e minute, ${source} de ${perMinute.toFixed(2)}/min → ${lambda.toFixed(1)} attendu(s) d'ici la pause.`
+          evidence: `${observedCards} carton(s) à la ${elapsedMinutes}e minute, ${source} de ${perMinute.toFixed(2)}/min → ${lambda.toFixed(1)} attendu(s) d'ici la pause.` + describeCorrection(fix, 'cartons'),
+          projection: { unit: 'cards_1h', observed: observedCards, expected: observedCards + lambda },
         });
       }
     }
@@ -555,14 +594,14 @@ async function buildLegs20(
   // seulement la 1ère MT (déjà acquis si les deux ont déjà marqué / si le
   // total dépasse déjà la ligne : rien à prédire, on ne propose pas).
   if (preMatchExpectedGoals) {
-    const fullEst = estimateRemainingMatchMarket({ preMatchExpectedGoals, elapsedMinutes, currentScore, currentStats });
+    const fullEst = estimateRemainingMatchMarket({ preMatchExpectedGoals: correctedGoals(preMatchExpectedGoals, 'goals_ft'), elapsedMinutes, currentScore, currentStats });
     const bttsMarket = fullEst.markets.find((m) => m.market === 'FT_btts_reprojete');
     if (bttsMarket && !(currentScore.home > 0 && currentScore.away > 0)) {
       legs.push(pickBinarySide('btts', bttsMarket, 'Les deux équipes ne marquent pas toutes les deux (Non)'));
     }
     const overMarket = fullEst.markets.find((m) => m.market === 'FT_over_2_5_reprojete');
     if (overMarket && !(currentScore.home + currentScore.away > 2.5)) {
-      legs.push(pickBinarySide('total_buts', overMarket, 'Moins de 2.5 buts (total match)'));
+      legs.push(withGoalsProjection(pickBinarySide('total_buts', overMarket, 'Moins de 2.5 buts (total match)'), currentScore, fullEst.secondHalfExpectedGoals));
     }
   }
 
@@ -599,7 +638,7 @@ function buildLegs60(
   const currentScore = { home: live.homeGoals, away: live.awayGoals };
   const elapsedMinutes = live.minute;
 
-  const est = estimateRemainingMatchMarket({ preMatchExpectedGoals, elapsedMinutes, currentScore, currentStats });
+  const est = estimateRemainingMatchMarket({ preMatchExpectedGoals: correctedGoals(preMatchExpectedGoals, 'goals_ft'), elapsedMinutes, currentScore, currentStats });
 
   const resultMarket = est.markets.find((m) => m.market === 'FT_1X2_reprojete');
   if (resultMarket) {
@@ -612,7 +651,7 @@ function buildLegs60(
   }
   const overMarket = est.markets.find((m) => m.market === 'FT_over_2_5_reprojete');
   if (overMarket && !(currentScore.home + currentScore.away > 2.5)) {
-    legs.push(pickBinarySide('total_buts', overMarket, 'Moins de 2.5 buts (total match)'));
+    legs.push(withGoalsProjection(pickBinarySide('total_buts', overMarket, 'Moins de 2.5 buts (total match)'), currentScore, est.secondHalfExpectedGoals));
   }
 
   return withLearnedExpertise(legs);
@@ -636,6 +675,7 @@ function toProposalLeg(item: LegWithContext): InPlayProposalLeg {
     homeTeam: item.match.homeTeam,
     awayTeam: item.match.awayTeam,
     scoreLabel: `${item.live.homeGoals}-${item.live.awayGoals}`,
+    projection: item.leg.projection,
   };
 }
 

@@ -9,6 +9,7 @@
 // Le format JSONL (une ligne = un JSON) permet d'ajouter des observations en
 // continu sans relire/réécrire tout le fichier.
 
+import type { LegProjection } from './deltaLearning';
 import { Directory, EncodingType, File, Paths } from 'expo-file-system';
 
 const LEARNING_DIR_NAME = 'learning';
@@ -422,6 +423,8 @@ export interface InPlayProposalLeg {
   homeTeam: string;
   awayTeam: string;
   scoreLabel: string;
+  /** Valeur projetée vs réelle (marchés de comptage) — voir deltaLearning.ts. */
+  projection?: LegProjection;
 }
 
 export interface InPlayProposal {

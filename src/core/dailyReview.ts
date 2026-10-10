@@ -46,6 +46,7 @@ import { buildFictionalMarketStats, formatFictionalDigestMessage } from './daily
 import { readMatchTimelines, MatchSample } from './fictionalProgram';
 import { isSyntheticFixtureId } from './halftimeMonitor';
 import { hubFinalResult } from '../api/footballDataAPIs/liveDataHub';
+import { DeltaUnit, invalidateDeltaCache } from './deltaLearning';
 import { fetchSofaEvent, fetchSofaStats, getSofaEventId } from '../api/footballDataAPIs/sofaScore';
 
 const LAST_REVIEW_KEY = '@last_daily_review';
@@ -390,6 +391,14 @@ function settleReprojectedLeg(
   return null; // fautes : pas de source structurée par mi-temps
 }
 
+/** Valeur réelle d'une fenêtre de comptage, pour mesurer l'écart avec la projection. */
+function actualValueFor(unit: DeltaUnit, result: FinalResult): number | null {
+  if (unit === 'corners_1h') return result.corners1H ?? null;
+  if (unit === 'cards_1h') return result.cards1H ?? null;
+  if (unit === 'goals_1h') return result.htHome + result.htAway;
+  return result.goalsHome + result.goalsAway;
+}
+
 /** Agrège les jambes réglées d'une journée en un point de courbe par marché. */
 function buildDayPoints(date: string, proposals: InPlayProposal[]): MarketDayPoint[] {
   const byMarket = new Map<TrackedMarket, { correct: number; total: number; predictedSum: number }>();
@@ -686,6 +695,12 @@ export async function runNightlyReviewIfDue(): Promise<number> {
 
       for (const leg of proposal.legs) {
         const result = finals.get(leg.fixtureId)!;
+        // Écart projeté / réel (deltaLearning.ts) : mesuré même quand la
+        // ligne ne se règle pas, pour corriger les projections suivantes.
+        if (leg.projection && leg.projection.actual == null) {
+          const actual = actualValueFor(leg.projection.unit, result);
+          if (actual != null) leg.projection.actual = actual;
+        }
         const won = settleReprojectedLeg(leg.market, leg.selection, result);
         if (won == null) continue;
         leg.settled = true;
@@ -748,6 +763,7 @@ export async function runNightlyReviewIfDue(): Promise<number> {
   }
 
   writeInPlayProposals(allProposals);
+  invalidateDeltaCache();
   writeMarketSeries(series.sort((a, b) => a.date.localeCompare(b.date)));
   writeMarketSeriesReal(seriesReal.sort((a, b) => a.date.localeCompare(b.date)));
   writeMarketSeriesFictional(seriesFictional.sort((a, b) => a.date.localeCompare(b.date)));
