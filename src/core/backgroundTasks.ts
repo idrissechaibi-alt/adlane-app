@@ -659,7 +659,8 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
   // débloque le placement direct des paris du Planning dès que l'info est là.
   await markTickStep('compositions T-90');
   try {
-    await refreshDueLineups();
+    // Recherche web des compositions : bornée à 90 s (27 min mesurées le 10/10).
+    await Promise.race([refreshDueLineups(), new Promise((resolve) => setTimeout(resolve, 90_000))]);
   } catch (error: any) {
     console.warn('[Tâche de fond] Rafraîchissement compositions T-90 échoué:', error.message);
   }
