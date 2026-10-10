@@ -26,6 +26,7 @@ import { sendTelegramMessage } from '../core/telegram';
 import { loadOmnirouteConfig } from '../core/focusEnrichment';
 import { getWebCapableRoutes } from '../core/llmRouter';
 import { getHubStatus } from '../api/footballDataAPIs/liveDataHub';
+import { ensureDeltaSamplesLoaded } from '../core/deltaLearning';
 import { getRecentSearchSource, probeAnySearch } from '../core/webSearch';
 import { getAgentLearningDigest, getAccuracyTrend, AccuracyTrend, buildMarketDayPointsFromPaperBets, buildLearningReport } from '../core/autoLearn';
 
@@ -337,6 +338,7 @@ export default function EvolutionScreen() {
    * tenir dans une boîte de dialogue.
    */
   const handleShowLearningDigest = async () => {
+    await ensureDeltaSamplesLoaded().catch(() => undefined);
     const report = buildLearningReport();
     const digest = getAgentLearningDigest();
     if (!report && !digest) {

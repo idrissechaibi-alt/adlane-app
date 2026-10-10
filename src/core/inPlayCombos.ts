@@ -92,7 +92,7 @@ import { normalizeTeamName, namesLikelyMatch } from './teamNameMatch';
 import { OmnirouteConfig } from '../types';
 import { mapWithConcurrency } from './concurrency';
 import { hubDateKey, hubLiveStatus, hubStats } from '../api/footballDataAPIs/liveDataHub';
-import { DeltaUnit, LegProjection, describeCorrection, getDeltaCorrection } from './deltaLearning';
+import { DeltaUnit, LegProjection, describeCorrection, ensureDeltaSamplesLoaded, flushShadowProjections, getDeltaCorrection, recordShadowProjection } from './deltaLearning';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { matchesForDate, isWithinBreakWindow } from './internationalBreak';
 import { INTERNATIONAL_BREAK_CALENDAR } from '../data/internationalBreakCalendar';
@@ -225,7 +225,7 @@ function withGoalsProjection(
   return {
     ...leg,
     evidence: leg.evidence + describeCorrection(correction, 'buts'),
-    projection: { unit: 'goals_ft', observed, expected: observed + remaining.home + remaining.away },
+    projection: { unit: 'goals_ft', observed, expected: observed + remaining.home + remaining.away, factorUsed: correction.factor },
   };
 }
 
@@ -505,7 +505,7 @@ async function buildLegs20(
       selection: 'Oui, un but avant la pause',
       prob: blended.prob,
       evidence: blended.evidence,
-      projection: { unit: 'goals_1h', observed: 0, expected: est.secondHalfExpectedGoals.home + est.secondHalfExpectedGoals.away },
+      projection: { unit: 'goals_1h', observed: 0, expected: est.secondHalfExpectedGoals.home + est.secondHalfExpectedGoals.away, factorUsed: correction.factor },
     });
   }
 
@@ -530,7 +530,7 @@ async function buildLegs20(
         selection: `Plus de ${cornersLine.line} corners en 1ère mi-temps`,
         prob: cornersLine.prob,
         evidence: `${observedCorners ?? 0} corner(s) déjà compté(s) + ${cornersLambda.toFixed(1)} attendus sur le reste de la 1ère MT (moyennes de saison Football-Data.co.uk).` + describeCorrection(cornersFix, 'corners'),
-        projection: { unit: 'corners_1h', observed: observedCorners ?? 0, expected: (observedCorners ?? 0) + cornersLambda },
+        projection: { unit: 'corners_1h', observed: observedCorners ?? 0, expected: (observedCorners ?? 0) + cornersLambda, factorUsed: cornersFix.factor },
       });
     }
 
@@ -543,7 +543,7 @@ async function buildLegs20(
         selection: `Plus de ${cardsLine.line} cartons en 1ère mi-temps`,
         prob: cardsLine.prob,
         evidence: `${observedCards ?? 0} carton(s) déjà compté(s) + ${cardsLambda.toFixed(1)} attendus sur le reste de la 1ère MT (moyennes de saison Football-Data.co.uk).` + describeCorrection(cardsFix, 'cartons'),
-        projection: { unit: 'cards_1h', observed: observedCards ?? 0, expected: (observedCards ?? 0) + cardsLambda },
+        projection: { unit: 'cards_1h', observed: observedCards ?? 0, expected: (observedCards ?? 0) + cardsLambda, factorUsed: cardsFix.factor },
       });
     }
   } else if (elapsedMinutes >= MIN_MINUTES_FOR_PACE_PROJECTION) {
@@ -566,7 +566,7 @@ async function buildLegs20(
           selection: `Plus de ${line.line} corners en 1ère mi-temps`,
           prob: line.prob,
           evidence: `${observedCorners} corner(s) à la ${elapsedMinutes}e minute, ${source} de ${perMinute.toFixed(2)}/min → ${lambda.toFixed(1)} attendu(s) d'ici la pause.` + describeCorrection(fix, 'corners'),
-          projection: { unit: 'corners_1h', observed: observedCorners, expected: observedCorners + lambda },
+          projection: { unit: 'corners_1h', observed: observedCorners, expected: observedCorners + lambda, factorUsed: fix.factor },
         });
       }
     }
@@ -584,7 +584,7 @@ async function buildLegs20(
           selection: `Plus de ${line.line} cartons en 1ère mi-temps`,
           prob: line.prob,
           evidence: `${observedCards} carton(s) à la ${elapsedMinutes}e minute, ${source} de ${perMinute.toFixed(2)}/min → ${lambda.toFixed(1)} attendu(s) d'ici la pause.` + describeCorrection(fix, 'cartons'),
-          projection: { unit: 'cards_1h', observed: observedCards, expected: observedCards + lambda },
+          projection: { unit: 'cards_1h', observed: observedCards, expected: observedCards + lambda, factorUsed: fix.factor },
         });
       }
     }
@@ -1235,6 +1235,7 @@ export async function runInPlayComboTick(
   liveFixtures: LiveFixture[],
   fictionalLiveFixtures: LiveFixture[] = []
 ): Promise<InPlayComboTickResult> {
+  await ensureDeltaSamplesLoaded();
   const existing = readInPlayProposals();
   // Réel : une jambe proposée bloque TOUT le match pour ce checkpoint (peu
   // importe le marché). Fictif : chaque marché est une jambe indépendante
@@ -1357,6 +1358,24 @@ export async function runInPlayComboTick(
           observedLive = free.observed;
         }
 
+        // Écart projeté/réel sur les buts, mesuré même sans pari (deltaLearning.ts).
+        if (live.statusShort === '1H') {
+          const score = { home: live.homeGoals, away: live.awayGoals };
+          const goalsNow = score.home + score.away;
+          const fix1h = getDeltaCorrection('goals_1h');
+          const est1h = estimateRemainingFirstHalfMarket({ preMatchExpectedGoals: correctedGoals(expectedGoals, 'goals_1h'), elapsedMinutes: live.minute, currentScore: score, currentStats });
+          await recordShadowProjection(live, {
+            unit: 'goals_1h', observed: goalsNow, factorUsed: fix1h.factor,
+            expected: goalsNow + est1h.secondHalfExpectedGoals.home + est1h.secondHalfExpectedGoals.away,
+          });
+          const fixFt = getDeltaCorrection('goals_ft');
+          const estFt = estimateRemainingMatchMarket({ preMatchExpectedGoals: correctedGoals(expectedGoals, 'goals_ft'), elapsedMinutes: live.minute, currentScore: score, currentStats });
+          await recordShadowProjection(live, {
+            unit: 'goals_ft', observed: goalsNow, factorUsed: fixFt.factor,
+            expected: goalsNow + estFt.secondHalfExpectedGoals.home + estFt.secondHalfExpectedGoals.away,
+          });
+        }
+
         const rawLegs = kind === 'minute20'
           ? await buildLegs20(match, live.fixtureId, live, expectedGoals, currentStats, observedLive)
           : buildLegs60(live, expectedGoals, currentStats);
@@ -1376,6 +1395,7 @@ export async function runInPlayComboTick(
       }
     }
   );
+  await flushShadowProjections();
 
   // B) Paris FICTIFS (boucle d'auto-apprentissage) — 100 % Omniroute, aucune
   // API, aucune cote, aucune donnée payante. AUCUN combo : une batterie de

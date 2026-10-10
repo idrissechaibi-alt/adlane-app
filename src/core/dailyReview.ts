@@ -46,7 +46,7 @@ import { buildFictionalMarketStats, formatFictionalDigestMessage } from './daily
 import { readMatchTimelines, MatchSample } from './fictionalProgram';
 import { isSyntheticFixtureId } from './halftimeMonitor';
 import { hubFinalResult } from '../api/footballDataAPIs/liveDataHub';
-import { DeltaUnit, invalidateDeltaCache } from './deltaLearning';
+import { DeltaUnit, invalidateDeltaCache, settleShadowProjections } from './deltaLearning';
 import { fetchSofaEvent, fetchSofaStats, getSofaEventId } from '../api/footballDataAPIs/sofaScore';
 
 const LAST_REVIEW_KEY = '@last_daily_review';
@@ -555,6 +555,13 @@ export async function runNightlyReviewIfDue(): Promise<number> {
   // coûterait un appel API-Football/Omniroute par match encore en cours à
   // CHAQUE tour (~toutes les 15-20 min), pour rien tant qu'il n'est pas
   // terminé : throttlé à une fois par heure via sa propre clé.
+  // Valeurs réelles des matchs suivis sans pari (écarts projeté/réel).
+  try {
+    await settleShadowProjections();
+  } catch (error: any) {
+    console.warn('[Bilan] Mesure des écarts échouée:', error?.message);
+  }
+
   const lastTodayAttemptRaw = await AsyncStorage.getItem(LAST_TODAY_ATTEMPT_KEY);
   const lastTodayAttempt = lastTodayAttemptRaw ? Number(lastTodayAttemptRaw) : 0;
   const todayDue = Date.now() - lastTodayAttempt >= TODAY_RETRY_INTERVAL_MS;

@@ -11,7 +11,7 @@
 // Rien ici n'invente : une règle sans échantillon suffisant est écartée, une
 // fenêtre tronquée (mi-temps arrivée trop tôt) n'est jamais comptée.
 
-import { DELTA_LABELS, getAllDeltaCorrections } from './deltaLearning';
+import { DELTA_LABELS, getAllDeltaCorrections, getShadowStats } from './deltaLearning';
 import { getAllBets } from '../database/storage';
 import { HISTORICAL_BETS } from '../data/historical';
 import {
@@ -983,6 +983,10 @@ export function buildLearningReport(): string | null {
   }
 
   lines.push('', '5) Écarts entre mes projections et la réalité');
+  const shadow = getShadowStats();
+  lines.push(
+    `Mesurés sur tous les matchs suivis en direct, pari ou pas : ${shadow.measured} projections comparées au résultat réel, ${shadow.pending} en attente du score.`
+  );
   const deltas = getAllDeltaCorrections().filter((d) => d.samples > 0);
   if (deltas.length === 0) {
     lines.push("Pas encore de match réglé avec une projection chiffrée : l'écart sera mesuré dès les premiers résultats.");

@@ -15,6 +15,7 @@
 // lesquelles l'utilisateur joue vraiment.
 
 import { hubDateKey, hubStats } from '../api/footballDataAPIs/liveDataHub';
+import { ensureDeltaSamplesLoaded, flushShadowProjections, projectFirstHalfCount, recordShadowProjection } from './deltaLearning';
 import { getAPIConfig } from '../api/multiAPIManager';
 import { API_FOOTBALL_RESERVE, spendBudget } from './requestBudget';
 import { getStoredUniverse, UniverseMatch } from './matchUniverse';
@@ -325,6 +326,22 @@ export async function runLiveMarkerTick(liveFixtures: LiveFixture[]): Promise<{ 
     });
     sofaCovered.add(l.fixtureId);
   });
+
+  // Écarts projeté/réel mesurés sur TOUS les matchs suivis, pari ou pas
+  // (deltaLearning.ts) : projection des corners/cartons à la pause, réglée
+  // plus tard par les sources live.
+  await ensureDeltaSamplesLoaded();
+  for (const l of firstHalf) {
+    const m = markersByFixture.get(l.fixtureId);
+    if (!m) continue;
+    if (m.cornersHome != null && m.cornersAway != null) {
+      await recordShadowProjection(l, projectFirstHalfCount('corners_1h', m.cornersHome + m.cornersAway, l.minute));
+    }
+    if (m.cardsHome != null && m.cardsAway != null) {
+      await recordShadowProjection(l, projectFirstHalfCount('cards_1h', m.cardsHome + m.cardsAway, l.minute));
+    }
+  }
+  await flushShadowProjections();
 
   // Couverture supplémentaire au-delà du quota API-Football, ET tous les
   // matchs découverts directement par Omniroute (fixtureId synthétique — ces
