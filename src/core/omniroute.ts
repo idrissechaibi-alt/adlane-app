@@ -296,7 +296,16 @@ function mergeMarkets(results: RawAgentResult[]): AIAnalysisOutput['markets'] {
  * Claude/Anthropic. Sert à l'enrichissement de contexte des matchs suivis :
  * une réponse courte, pas les 10 marchés structurés.
  */
-export async function askOmnirouteLight(
+export function askOmnirouteLight(
+  systemPrompt: string,
+  userPrompt: string,
+  config: OmnirouteConfig,
+  options: { requiresWeb?: boolean; maxAttempts?: number; searchQuery?: string } = {}
+): Promise<{ text: string; model: string } | null> {
+  return withDeadline(askOmnirouteLightUnbounded(systemPrompt, userPrompt, config, options), ASK_DEADLINE_MS, null);
+}
+
+async function askOmnirouteLightUnbounded(
   systemPrompt: string,
   userPrompt: string,
   config: OmnirouteConfig,
@@ -437,7 +446,45 @@ export function attemptsAllFailed(attempts: OmnirouteAttempt[]): boolean {
   return attempts.length > 0 && attempts.every((a) => a.outcome === 'erreur');
 }
 
-export async function askOmnirouteUsable<T>(
+/** Durée maximale d'une question aux fournisseurs IA, recherche web et
+ * essais successifs compris : au-delà, réponse "rien d'exploitable". Sans
+ * cette borne, une question pouvait durer plusieurs minutes et bloquer tout
+ * le tour (scan en direct figé plus de 20 min le 10/10). */
+const ASK_DEADLINE_MS = 60_000;
+
+function withDeadline<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(fallback), ms);
+    promise.then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      () => {
+        clearTimeout(timer);
+        resolve(fallback);
+      }
+    );
+  });
+}
+
+export function askOmnirouteUsable<T>(
+  systemPrompt: string,
+  userPrompt: string,
+  config: OmnirouteConfig,
+  extract: (text: string) => T | null,
+  trace?: OmnirouteAttempt[],
+  web: boolean | string = false,
+  maxAttempts: number = USABLE_MAX_ATTEMPTS
+): Promise<{ value: T; model: string } | null> {
+  return withDeadline(
+    askOmnirouteUsableUnbounded(systemPrompt, userPrompt, config, extract, trace, web, maxAttempts),
+    ASK_DEADLINE_MS,
+    null
+  );
+}
+
+async function askOmnirouteUsableUnbounded<T>(
   systemPrompt: string,
   userPrompt: string,
   config: OmnirouteConfig,

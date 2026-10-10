@@ -1490,6 +1490,9 @@ export async function runInPlayComboTick(
   fictionalLiveFixtures: LiveFixture[] = []
 ): Promise<InPlayComboTickResult> {
   xgNewThisTick = 0;
+  // Budget du scan fictif : au-delà, plus aucun nouveau match n'est lancé
+  // (les autres passent au tour suivant) — le tour doit aller jusqu'au bilan.
+  const fictionalDeadline = Date.now() + 4 * 60_000;
   await ensureDeltaSamplesLoaded();
   const existing = readInPlayProposals();
   // Réel : une jambe proposée bloque TOUT le match pour ce checkpoint (peu
@@ -1584,6 +1587,7 @@ export async function runInPlayComboTick(
     liveFictionalCandidates.slice(0, LIVE_FICTIONAL_MAX_PER_TICK),
     FICTIONAL_CHECK_CONCURRENCY,
     async ({ live, kind }) => {
+      if (Date.now() > fictionalDeadline) return;
       try {
         const match: MatchRef = {
           homeTeam: live.homeTeam,
@@ -1753,6 +1757,7 @@ export async function runInPlayComboTick(
     // résultat d'une autre, la parallélisation ne change donc rien au fond,
     // seulement au temps d'attente.
     await mapWithConcurrency(candidates, FICTIONAL_CHECK_CONCURRENCY, async (scheduled) => {
+      if (Date.now() > fictionalDeadline) return;
       try {
         // SofaScore d'abord (statut, minute, score et statistiques publiés
         // directement) ; les fournisseurs IA seulement si ce match n'y est pas
