@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-10-10T11:56:02.991Z",
+  "exportedAt": "2026-10-10T12:28:32.493Z",
   "formatVersion": 1,
   "source": "APP adlane",
   "data": {
@@ -4824,13 +4824,13 @@
   },
   "health": {
     "nativeBackgroundTicks": {
-      "lastTickAt": "2026-10-10T11:53:25.403Z",
-      "ticksLast24h": 48
+      "lastTickAt": "2026-10-10T12:19:30.233Z",
+      "ticksLast24h": 53
     },
     "tickProgress": {
-      "startedAt": "2026-10-10T11:56:01.988Z",
+      "startedAt": "2026-10-10T12:27:27.287Z",
       "step": "programme fictif",
-      "at": "2026-10-10T11:56:02.216Z"
+      "at": "2026-10-10T12:28:23.688Z"
     },
     "lastTick": {
       "finishedAt": "2026-10-10T11:51:32.870Z",
@@ -4882,16 +4882,16 @@
       "settledLast24h": 27
     },
     "trainingRows": {
-      "last14Days": 1242,
-      "lastClosedAt": "2026-10-10T11:55:04.548Z",
+      "last14Days": 1419,
+      "lastClosedAt": "2026-10-10T12:26:42.776Z",
       "bySource": {
-        "api_football": 894,
-        "omniroute": 348
+        "api_football": 956,
+        "omniroute": 463
       }
     },
     "model": {
-      "updatedAt": "2026-10-10T11:55:05.971Z",
-      "totalRows": 1242,
+      "updatedAt": "2026-10-10T12:26:43.485Z",
+      "totalRows": 1419,
       "markerRules": 40,
       "paperBets": {
         "total": 122,
@@ -4908,17 +4908,17 @@
       "marketExpertise": [
         {
           "market": "btts",
-          "samples": 82,
-          "hitRate": 0.549,
+          "samples": 83,
+          "hitRate": 0.554,
           "meanPredicted": 0.65,
-          "calibrationFactor": 0.844
+          "calibrationFactor": 0.852
         },
         {
           "market": "total_buts",
-          "samples": 82,
-          "hitRate": 0.634,
-          "meanPredicted": 0.723,
-          "calibrationFactor": 0.878
+          "samples": 83,
+          "hitRate": 0.639,
+          "meanPredicted": 0.722,
+          "calibrationFactor": 0.885
         },
         {
           "market": "1X2",
@@ -4944,14 +4944,14 @@
       ]
     },
     "inPlayProposals": {
-      "real": 1,
-      "fictional": 408,
+      "real": 2,
+      "fictional": 467,
       "fictionalReviewed": 196,
       "fictionalSettledLegs": 165,
-      "lastCreatedAt": "2026-10-10T11:49:23.210Z",
-      "createdLast24h": 409
+      "lastCreatedAt": "2026-10-10T12:14:48.443Z",
+      "createdLast24h": 469
     },
-    "predictionOutcomes30d": 197,
+    "predictionOutcomes30d": 199,
     "marketSeries": {
       "combined": 9,
       "real": 1,
@@ -5009,7 +5009,7 @@
         {
           "name": "Principal",
           "ok": true,
-          "latencyMs": 173,
+          "latencyMs": 5827,
           "readyModels": 27,
           "configuredReady": 12,
           "configuredTotal": 13
@@ -5017,67 +5017,60 @@
         {
           "name": "Omniroute",
           "ok": true,
-          "latencyMs": 106,
-          "readyModels": 942,
+          "latencyMs": 5828,
+          "readyModels": 941,
           "configuredReady": 2,
           "configuredTotal": 2
         }
       ],
       "leaderboard": [
         {
-          "label": "Principal · allam-2-7b",
-          "ok": 188,
-          "fail": 148,
-          "avgMs": 358,
-          "coolingDown": false
-        },
-        {
           "label": "Principal · qwen3.8-27b",
           "ok": 102,
-          "fail": 66,
+          "fail": 72,
           "avgMs": 662,
           "coolingDown": true
         },
         {
-          "label": "Principal · gpt-oss-20b",
-          "ok": 273,
-          "fail": 16,
-          "avgMs": 1787,
-          "coolingDown": false
-        },
-        {
-          "label": "Omniroute · Maximus appus",
-          "ok": 404,
-          "fail": 0,
-          "avgMs": 2687,
-          "coolingDown": false
-        },
-        {
-          "label": "Omniroute · Clodiko",
-          "ok": 303,
-          "fail": 1,
-          "avgMs": 3929,
-          "coolingDown": false
-        },
-        {
           "label": "Principal · nemotron-3.5-content-safety",
-          "ok": 204,
-          "fail": 162,
-          "avgMs": 1887,
+          "ok": 237,
+          "fail": 194,
+          "avgMs": 1225,
           "coolingDown": false
         },
         {
           "label": "Principal · gpt-oss-120b",
           "ok": 68,
-          "fail": 62,
+          "fail": 73,
           "avgMs": 1732,
+          "coolingDown": true
+        },
+        {
+          "label": "Omniroute · Maximus appus",
+          "ok": 469,
+          "fail": 0,
+          "avgMs": 5107,
           "coolingDown": false
         },
         {
-          "label": "Principal · auto",
-          "ok": 290,
-          "fail": 15,
-          "avgMs": 30048,
+          "label": "Principal · allam-2-7b",
+          "ok": 230,
+          "fail": 188,
+          "avgMs": 3666,
+          "coolingDown": false
+        },
+        {
+          "label": "Omniroute · Clodiko",
+          "ok": 390,
+          "fail": 2,
+          "avgMs": 12038,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · gpt-oss-20b",
+          "ok": 342,
+          "fail": 16,
+          "avgMs": 25189,
           "coolingDown": false
         },
         {
@@ -5085,6 +5078,13 @@
           "ok": 81,
           "fail": 85,
           "avgMs": 27994,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · auto",
+          "ok": 297,
+          "fail": 15,
+          "avgMs": 94776,
           "coolingDown": false
         },
         {
@@ -5103,7 +5103,7 @@
     },
     "dailyPlan": {
       "date": "2026-10-10",
-      "generatedAt": "2026-10-10T11:55:44.812Z",
+      "generatedAt": "2026-10-10T11:57:55.237Z",
       "matches": [
         {
           "match": "Arsenal FC - Leeds United FC",
@@ -5136,12 +5136,6 @@
           "hasOdds": true
         },
         {
-          "match": "1. FC Union Berlin - SV 07 Elversberg",
-          "league": "Bundesliga",
-          "kickoff": "2026-10-10T13:30:00Z",
-          "hasOdds": true
-        },
-        {
           "match": "FC Augsburg - FC Bayern München",
           "league": "Bundesliga",
           "kickoff": "2026-10-10T13:30:00Z",
@@ -5154,9 +5148,9 @@
           "hasOdds": true
         },
         {
-          "match": "Sunderland AFC - Brighton & Hove Albion FC",
-          "league": "Premier League",
-          "kickoff": "2026-10-10T14:00:00Z",
+          "match": "1. FC Union Berlin - SV 07 Elversberg",
+          "league": "Bundesliga",
+          "kickoff": "2026-10-10T13:30:00Z",
           "hasOdds": true
         },
         {
@@ -5166,13 +5160,19 @@
           "hasOdds": true
         },
         {
-          "match": "Aston Villa FC - Brentford FC",
+          "match": "Sunderland AFC - Brighton & Hove Albion FC",
           "league": "Premier League",
           "kickoff": "2026-10-10T14:00:00Z",
           "hasOdds": true
         },
         {
           "match": "Ipswich Town FC - Fulham FC",
+          "league": "Premier League",
+          "kickoff": "2026-10-10T14:00:00Z",
+          "hasOdds": true
+        },
+        {
+          "match": "Aston Villa FC - Brentford FC",
           "league": "Premier League",
           "kickoff": "2026-10-10T14:00:00Z",
           "hasOdds": true
@@ -5214,12 +5214,6 @@
           "hasOdds": true
         },
         {
-          "match": "FC Lorient - Paris FC",
-          "league": "Ligue 1",
-          "kickoff": "2026-10-10T18:45:00Z",
-          "hasOdds": true
-        },
-        {
           "match": "AS Monaco FC - Toulouse FC",
           "league": "Ligue 1",
           "kickoff": "2026-10-10T18:45:00Z",
@@ -5232,13 +5226,19 @@
           "hasOdds": true
         },
         {
-          "match": "Stade Brestois 29 - Angers SCO",
+          "match": "FC Lorient - Paris FC",
           "league": "Ligue 1",
           "kickoff": "2026-10-10T18:45:00Z",
           "hasOdds": true
         },
         {
           "match": "Paris Saint-Germain FC - Le Mans FC",
+          "league": "Ligue 1",
+          "kickoff": "2026-10-10T18:45:00Z",
+          "hasOdds": true
+        },
+        {
+          "match": "Stade Brestois 29 - Angers SCO",
           "league": "Ligue 1",
           "kickoff": "2026-10-10T18:45:00Z",
           "hasOdds": true
@@ -5252,7 +5252,7 @@
       ]
     },
     "apiFootballBudget": {
-      "usedToday": 76,
+      "usedToday": 80,
       "autolearnUsedToday": 70,
       "autolearnRemaining": 0
     },
@@ -5260,28 +5260,28 @@
     "liveSources": {
       "TheSportsDB": {
         "ok": true,
-        "count": 106,
-        "at": "2026-10-10T11:55:07.799Z"
-      },
-      "LiveScore": {
-        "ok": true,
-        "count": 121,
-        "at": "2026-10-10T11:55:07.927Z"
+        "count": 156,
+        "at": "2026-10-10T12:28:20.365Z"
       },
       "ESPN": {
         "ok": true,
         "count": 5,
-        "at": "2026-10-10T11:55:08.220Z"
+        "at": "2026-10-10T12:28:20.497Z"
       },
       "365Scores": {
         "ok": true,
-        "count": 35,
-        "at": "2026-10-10T11:55:07.978Z"
+        "count": 54,
+        "at": "2026-10-10T12:28:20.511Z"
+      },
+      "LiveScore": {
+        "ok": true,
+        "count": 118,
+        "at": "2026-10-10T12:28:20.371Z"
       },
       "FotMob": {
         "ok": true,
-        "count": 62,
-        "at": "2026-10-10T11:55:08.120Z"
+        "count": 120,
+        "at": "2026-10-10T12:28:20.536Z"
       }
     },
     "deltaCorrections": {
@@ -5316,7 +5316,7 @@
         }
       ],
       "samples": {
-        "pending": 0,
+        "pending": 96,
         "measured": 0
       }
     },
