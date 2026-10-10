@@ -73,7 +73,7 @@ function parseMinute(text: unknown): number | null {
 function buildPeriod(p: {
   cornersHome: number; cornersAway: number; cardsHome: number; cardsAway: number;
   foulsHome?: number; foulsAway?: number; onTargetHome?: number; onTargetAway?: number;
-  shotsHome?: number; shotsAway?: number; possessionHome?: number;
+  shotsHome?: number; shotsAway?: number; possessionHome?: number; redCards?: number;
 }): SofaPeriodStats | null {
   const total = p.cornersHome + p.cornersAway + p.cardsHome + p.cardsAway + (p.foulsHome ?? 0) + (p.foulsAway ?? 0) + (p.onTargetHome ?? 0) + (p.onTargetAway ?? 0);
   if (total === 0) return null; // pas de statistiques publiées : jamais de faux zéro
@@ -92,6 +92,7 @@ function buildPeriod(p: {
     foulsHome: p.foulsHome ?? 0,
     foulsAway: p.foulsAway ?? 0,
     possessionHome: p.possessionHome,
+    redCards: p.redCards,
   };
 }
 
@@ -184,6 +185,7 @@ function fotMobPeriod(period: any): SofaPeriodStats | null {
     onTargetHome: v('ShotsOnTarget')[0], onTargetAway: v('ShotsOnTarget')[1],
     shotsHome: v('total_shots')[0], shotsAway: v('total_shots')[1],
     possessionHome: values.has('BallPossesion') ? v('BallPossesion')[0] : undefined,
+    redCards: values.has('red_cards') ? v('red_cards')[0] + v('red_cards')[1] : undefined,
   });
 }
 
@@ -294,6 +296,7 @@ const scores365: Provider = {
           onTargetHome: onTarget[0], onTargetAway: onTarget[1],
           shotsHome: shots[0], shotsAway: shots[1],
           possessionHome: possession[0] || undefined,
+          redCards: red[0] + red[1],
         }),
         firstHalf: null,
       },
@@ -377,6 +380,7 @@ const espn: Provider = {
           onTargetHome: stat(homeT, 'shotsOnTarget'), onTargetAway: stat(awayT, 'shotsOnTarget'),
           shotsHome: stat(homeT, 'totalShots'), shotsAway: stat(awayT, 'totalShots'),
           possessionHome: stat(homeT, 'possessionPct') || undefined,
+          redCards: stat(homeT, 'redCards') + stat(awayT, 'redCards'),
         }) : null,
         firstHalf: null,
       },

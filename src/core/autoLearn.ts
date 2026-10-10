@@ -11,6 +11,7 @@
 // Rien ici n'invente : une règle sans échantillon suffisant est écartée, une
 // fenêtre tronquée (mi-temps arrivée trop tôt) n'est jamais comptée.
 
+import { getStrategyRecords } from './strategies';
 import { DELTA_LABELS, getAllDeltaCorrections, getShadowStats } from './deltaLearning';
 import { getAllBets } from '../database/storage';
 import { HISTORICAL_BETS } from '../data/historical';
@@ -982,7 +983,17 @@ export function buildLearningReport(): string | null {
     );
   }
 
-  lines.push('', '5) Écarts entre mes projections et la réalité');
+  lines.push('', '5) Stratégies « SI… ALORS »');
+  for (const r of getStrategyRecords()) {
+    lines.push(
+      r.settled === 0
+        ? `• ${r.name} : pas encore de pari réglé.`
+        : `• ${r.name} : ${r.won}/${r.settled} réussis (${pct(r.hitRate)}) pour ${pct(r.meanPredicted)} annoncés` +
+            (r.suspended ? ' — SUSPENDUE (annonce nettement plus qu\'elle ne réussit).' : '.')
+    );
+  }
+
+  lines.push('', '6) Écarts entre mes projections et la réalité');
   const shadow = getShadowStats();
   lines.push(
     `Mesurés sur tous les matchs suivis en direct, pari ou pas : ${shadow.measured} projections comparées au résultat réel, ${shadow.pending} en attente du score.`

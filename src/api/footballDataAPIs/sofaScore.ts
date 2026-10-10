@@ -576,6 +576,8 @@ export interface SofaPeriodStats {
   foulsHome: number;
   foulsAway: number;
   possessionHome?: number;
+  /** Cartons rouges (absent = la source ne les distingue pas). */
+  redCards?: number;
 }
 
 export interface SofaStats {
@@ -834,6 +836,7 @@ function liveScorePeriod(home: any, away: any): SofaPeriodStats | null {
     foulsHome,
     foulsAway,
     possessionHome: home.Pss != null ? n(home.Pss) : undefined,
+    redCards: n(home.Rcs) + n(away.Rcs),
   };
 }
 

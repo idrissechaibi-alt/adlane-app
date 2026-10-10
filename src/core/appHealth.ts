@@ -14,6 +14,7 @@ import { checkAllProviders, getRouteLeaderboard, getWebCapableRoutes } from './l
 import { getRecentSearchSource, getWorkingSearchProviders } from './webSearch';
 import { getSofaStatus } from '../api/footballDataAPIs/sofaScore';
 import { getHubStatus } from '../api/footballDataAPIs/liveDataHub';
+import { getStrategyRecords } from './strategies';
 import { ensureDeltaSamplesLoaded, getAllDeltaCorrections, getShadowStats } from './deltaLearning';
 import { loadTelegramConfig } from './telegram';
 import {
@@ -56,6 +57,7 @@ export async function buildAppHealth(): Promise<Record<string, unknown>> {
     lastTick: await section(readLastTickDiagnostics),
     lastRealFastTick: await section(readLastRealFastTick),
     abortedTicks: await section(readAbortedTicks),
+    strategies: await section(() => getStrategyRecords()),
     paperBets: await section(() => {
       const bets = readPaperBets();
       const settled = bets.filter((b) => b.settled);

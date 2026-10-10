@@ -20,8 +20,9 @@ function decidedEarly(leg: InPlayProposalLeg, live: { homeGoals: number; awayGoa
   const sel = leg.selection;
   const goals = live.homeGoals + live.awayGoals;
   if (leg.market === 'total_buts') {
-    if (/moins/i.test(sel) && goals > 2.5) return 'lost';
-    if (!/moins/i.test(sel) && goals > 2.5) return 'won';
+    const line = lineOf(sel)?.line ?? 2.5;
+    if (/moins/i.test(sel) && goals > line) return 'lost';
+    if (!/moins/i.test(sel) && goals > line) return 'won';
   }
   if (leg.market === 'btts' && live.homeGoals > 0 && live.awayGoals > 0) {
     return /\(non\)|ne marquent pas/i.test(sel) ? 'lost' : 'won';

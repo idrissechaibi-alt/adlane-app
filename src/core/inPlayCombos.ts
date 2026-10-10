@@ -94,6 +94,8 @@ import { normalizeTeamName, namesLikelyMatch } from './teamNameMatch';
 import { OmnirouteConfig } from '../types';
 import { mapWithConcurrency } from './concurrency';
 import { hubDateKey, hubKnowsMatch, hubLiveStatus, hubStats } from '../api/footballDataAPIs/liveDataHub';
+import { StrategyContext, evaluateStrategies, oddsFromExpectedGoals } from './strategies';
+import { SofaPeriodStats } from '../api/footballDataAPIs/sofaScore';
 import { DeltaUnit, LegProjection, describeCorrection, ensureDeltaSamplesLoaded, flushShadowProjections, getDeltaCorrection, projectFullMatchCount, recordShadowProjection } from './deltaLearning';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { matchesForDate, isWithinBreakWindow } from './internationalBreak';
@@ -174,6 +176,8 @@ const MAX_LEG_PROB = 0.85;
  * à 1 événement près (1 corner compté → plus de 1.5, 2 buts → plus de 2.5)
  * se paie toujours à une cote très faible. */
 const MIN_EVENTS_STILL_NEEDED = 2;
+/** Plafond plus strict pour les paris réels (argent en jeu). */
+const REAL_MAX_LEG_PROB = 0.75;
 
 /** Jambe digne d'être proposée : assez probable, mais pas déjà quasi acquise. */
 function worthProposing(leg: CandidateLeg): boolean {
@@ -450,7 +454,7 @@ async function fetchRealLiveStats(live: LiveFixture): Promise<LiveMatchStats | u
  * puis FotMob, 365Scores, ESPN, AllSportsApi pour ce qui manque). */
 async function fetchFreeLiveStats(
   live: LiveFixture
-): Promise<{ stats: LiveMatchStats; observed: ObservedLiveCounts } | undefined> {
+): Promise<{ stats: LiveMatchStats; observed: ObservedLiveCounts; all: SofaPeriodStats } | undefined> {
   const primary = live.sofaEventId ? await fetchSofaStats(live.sofaEventId).catch(() => null) : null;
   const merged = await hubStats(live.homeTeam, live.awayTeam, hubDateKey(), primary, { needFirstHalf: false }).catch(() => primary);
   const all = merged?.all;
@@ -465,6 +469,7 @@ async function fetchFreeLiveStats(
       possessionAway: all.possessionHome != null ? 100 - all.possessionHome : undefined,
     },
     observed: { corners: all.corners, cards: all.cards, fouls: all.fouls || undefined },
+    all,
   };
 }
 
@@ -689,7 +694,8 @@ async function buildLegs20(
   if (preMatchExpectedGoals) {
     const fullEst = estimateRemainingMatchMarket({ preMatchExpectedGoals: correctedGoals(preMatchExpectedGoals, 'goals_ft'), elapsedMinutes, currentScore, currentStats });
     const resultMarket = fullEst.markets.find((m) => m.market === 'FT_1X2_reprojete');
-    if (resultMarket) {
+    // Résultat déjà quasi joué (2 buts d'écart ou plus) : cote ridicule, jamais proposé.
+    if (resultMarket && Math.abs(currentScore.home - currentScore.away) < 2) {
       legs.push({ market: '1X2', selection: resultMarket.selection, prob: resultMarket.estimated_prob, evidence: resultMarket.reasoning });
     }
     const bttsMarket = fullEst.markets.find((m) => m.market === 'FT_btts_reprojete');
@@ -745,7 +751,7 @@ function buildLegs60(
   const est = estimateRemainingMatchMarket({ preMatchExpectedGoals: correctedGoals(preMatchExpectedGoals, 'goals_ft'), elapsedMinutes, currentScore, currentStats });
 
   const resultMarket = est.markets.find((m) => m.market === 'FT_1X2_reprojete');
-  if (resultMarket) {
+  if (resultMarket && Math.abs(currentScore.home - currentScore.away) < 2) {
     legs.push({ market: '1X2', selection: resultMarket.selection, prob: resultMarket.estimated_prob, evidence: resultMarket.reasoning });
   }
 
@@ -1049,7 +1055,9 @@ async function bestLegFor(
 
   // Tous les marchés concourent ; les plus sûrs passent devant, un seul par
   // marché (et par fenêtre 1ère MT / match).
-  const eligible = rawLegs.filter(worthProposing).sort((a, b) => b.prob - a.prob);
+  // Paris réels : au plus 75 % (cote juste ≥ 1,33) — au-delà, la cote proposée
+  // par les bookmakers est trop faible pour valoir la mise.
+  const eligible = rawLegs.filter((l) => worthProposing(l) && l.prob <= REAL_MAX_LEG_PROB).sort((a, b) => b.prob - a.prob);
   const seen = new Set<string>();
   const best: LegWithContext[] = [];
   for (const leg of eligible) {
@@ -1450,6 +1458,53 @@ async function withFallbackExpectedGoals(
   return result;
 }
 
+/** Paris des stratégies "SI… ALORS" déclenchées par ce match (une fois par stratégie). */
+function strategyProposals(
+  live: LiveFixture,
+  match: MatchRef,
+  all: SofaPeriodStats | undefined,
+  xg: { home: number; away: number },
+  marketOdds: { home: number; away: number } | null,
+  real: boolean,
+  alreadyProposed: Set<string>
+): InPlayProposal[] {
+  const odds = marketOdds && marketOdds.home > 1 && marketOdds.away > 1 ? marketOdds : oddsFromExpectedGoals(xg);
+  const ctx: StrategyContext = {
+    minute: live.minute,
+    statusShort: live.statusShort,
+    homeGoals: live.homeGoals,
+    awayGoals: live.awayGoals,
+    shotsHome: all?.shotsTotalHome,
+    shotsAway: all?.shotsTotalAway,
+    shotsOnTargetHome: all?.shotsOnTargetHome,
+    shotsOnTargetAway: all?.shotsOnTargetAway,
+    redCards: all?.redCards,
+    oddsHome: odds.home,
+    oddsAway: odds.away,
+    oddsFromMarket: Boolean(marketOdds),
+    xg,
+  };
+  const kind: 'minute20' | 'minute60' = live.statusShort === '1H' ? 'minute20' : 'minute60';
+  const out: InPlayProposal[] = [];
+  for (const bet of evaluateStrategies(ctx)) {
+    const key = `${live.fixtureId}-strat-${bet.strategyId}`;
+    if (alreadyProposed.has(key)) continue;
+    const leg: CandidateLeg = { market: bet.market, selection: bet.selection, prob: bet.prob, evidence: bet.evidence };
+    const proposal = buildProposalFromItems(kind, [{ leg, fixtureId: live.fixtureId, match, live }], `Stratégie : ${bet.strategyName}`, real);
+    if (!proposal) continue;
+    proposal.id = `${proposal.id}-strat-${bet.strategyId}`;
+    proposal.strategy = bet.strategyId;
+    out.push(proposal);
+    alreadyProposed.add(key);
+  }
+  return out;
+}
+
+/** Clés "déjà proposé" des stratégies, à partir des propositions existantes. */
+function strategyKeys(proposals: InPlayProposal[]): string[] {
+  return proposals.filter((p) => p.strategy).flatMap((p) => p.legs.map((l) => `${l.fixtureId}-strat-${p.strategy}`));
+}
+
 /** Ajoute des propositions en relisant le fichier juste avant d'écrire : le
  * scan réel rapide et le tour complet peuvent écrire à quelques secondes
  * d'intervalle, aucun ne doit effacer ce que l'autre vient d'ajouter. */
@@ -1466,11 +1521,11 @@ function appendInPlayProposals(fresh: InPlayProposal[]): void {
  */
 export async function runRealInPlayTick(liveFixtures: LiveFixture[]): Promise<number> {
   await ensureDeltaSamplesLoaded();
-  const alreadyProposed = new Set(
-    readInPlayProposals()
-      .filter((p) => p.real !== false)
-      .flatMap((p) => p.legs.map((l) => `${l.fixtureId}-${p.kind}`))
-  );
+  const existingReal = readInPlayProposals().filter((p) => p.real !== false);
+  const alreadyProposed = new Set([
+    ...existingReal.filter((p) => !p.strategy).flatMap((p) => p.legs.map((l) => `${l.fixtureId}-${p.kind}`)),
+    ...strategyKeys(existingReal),
+  ]);
   const fresh: InPlayProposal[] = [];
   const omnirouteConfig = await loadOmnirouteConfig();
   const plan = await getDailyPlan();
@@ -1479,6 +1534,19 @@ export async function runRealInPlayTick(liveFixtures: LiveFixture[]): Promise<nu
       const { matches: withOdds, skipped } = buildScheduledMatches([slot]);
       const slotMatches = [...withOdds, ...(await withFallbackExpectedGoals(skipped, omnirouteConfig))];
       await processRealSlot(slotMatches, liveFixtures, omnirouteConfig, alreadyProposed, fresh, null, null);
+
+      // Stratégies "SI… ALORS" sur chaque match réel en cours, à toute minute.
+      for (const scheduled of slotMatches) {
+        const live = findLiveFixture(scheduled, liveFixtures);
+        if (!live || !['1H', 'HT', '2H'].includes(live.statusShort)) continue;
+        const free = await fetchFreeLiveStats(live).catch(() => undefined);
+        const xg = correctedGoals({ home: scheduled.expectedHomeGoals, away: scheduled.expectedAwayGoals }, 'goals_ft');
+        const odds = scheduled.odds?.home > 1 && scheduled.odds?.away > 1 ? { home: scheduled.odds.home, away: scheduled.odds.away } : null;
+        for (const proposal of strategyProposals(live, matchRefOfScheduled(scheduled), free?.all, xg, odds, true, alreadyProposed)) {
+          fresh.push(proposal);
+          await notifyProposal(proposal);
+        }
+      }
     }
   }
   if (fresh.length > 0) appendInPlayProposals(fresh);
@@ -1498,13 +1566,14 @@ export async function runInPlayComboTick(
   // Réel : une jambe proposée bloque TOUT le match pour ce checkpoint (peu
   // importe le marché). Fictif : chaque marché est une jambe indépendante
   // (voir plus bas), donc seul CE marché précis est bloqué pour ce match.
-  const alreadyProposed = new Set(
-    existing.flatMap((p) =>
+  const alreadyProposed = new Set([
+    ...strategyKeys(existing),
+    ...existing.flatMap((p) =>
       p.real === false
         ? p.legs.map((l) => `${l.fixtureId}-${p.kind}-${l.market}`)
         : p.legs.map((l) => `${l.fixtureId}-${p.kind}`)
-    )
-  );
+    ),
+  ]);
   const fresh: InPlayProposal[] = [];
   const omnirouteConfig = await loadOmnirouteConfig();
 
@@ -1611,6 +1680,7 @@ export async function runInPlayComboTick(
           currentStats = { shotsOnTargetHome: free.stats.shotsOnTargetHome, shotsOnTargetAway: free.stats.shotsOnTargetAway };
           observedLive = free.observed;
         }
+        fresh.push(...strategyProposals(live, match, free?.all, correctedGoals(expectedGoals, 'goals_ft'), null, false, alreadyProposed));
 
         // Écart projeté/réel sur les buts, mesuré même sans pari (deltaLearning.ts).
         if (live.statusShort === '1H') {

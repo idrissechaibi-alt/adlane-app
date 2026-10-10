@@ -448,6 +448,8 @@ export interface InPlayProposal {
    * d'auto-apprentissage, jamais notifié ni affiché comme un vrai pari.
    */
   real?: boolean;
+  /** Stratégie "SI… ALORS" qui a déclenché ce pari (voir strategies.ts). */
+  strategy?: string;
 }
 
 // ==================== COURBE D'ÉVOLUTION PAR MARCHÉ ====================

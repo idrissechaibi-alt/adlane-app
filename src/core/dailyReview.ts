@@ -384,7 +384,11 @@ export function settleReprojectedLeg(
 
   // Le côté joué compte : un pari "Moins de 2.5" ou "BTTS Non" était réglé
   // comme son contraire, ce qui faussait la calibration de ces marchés.
-  if (market === 'total_buts') return /moins/i.test(selection) ? totalGoals < 2.5 : totalGoals > 2.5;
+  if (market === 'total_buts') {
+    const m = /(plus|moins) de\s+(\d+(?:[.,]\d+)?)/i.exec(selection);
+    const line = m ? Number(m[2].replace(',', '.')) : 2.5;
+    return /moins/i.test(selection) ? totalGoals < line : totalGoals > line;
+  }
   if (market === 'btts') {
     const bothScored = result.goalsHome > 0 && result.goalsAway > 0;
     return /\(non\)|ne marquent pas/i.test(selection) ? !bothScored : bothScored;
