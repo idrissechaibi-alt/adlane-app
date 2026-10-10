@@ -434,7 +434,15 @@ let currentTickStartedAt = '';
 
 /** Étape en cours du tour, persistée : si Android coupe le tour, le rapport
  * d'état (appHealth.ts) montre exactement où il s'est arrêté. */
+/** Durée (s) de chaque étape du tour en cours : montre où passe le temps. */
+let tickStepDurations: Record<string, number> = {};
+let currentStep: { name: string; at: number } | null = null;
+
 async function markTickStep(step: string): Promise<void> {
+  const now = Date.now();
+  if (step === 'scan matinal') tickStepDurations = {};
+  if (currentStep) tickStepDurations[currentStep.name] = Math.round((now - currentStep.at) / 1000);
+  currentStep = { name: step, at: now };
   try {
     await AsyncStorage.setItem(
       TICK_PROGRESS_KEY,
@@ -652,7 +660,13 @@ async function saveLastTickDiagnostics(diagnostics: AutoLearnTickDiagnostics): P
   try {
     await AsyncStorage.setItem(
       LAST_TICK_DIAGNOSTICS_KEY,
-      JSON.stringify({ finishedAt: new Date().toISOString(), ...diagnostics })
+      JSON.stringify({
+        startedAt: currentTickStartedAt,
+        finishedAt: new Date().toISOString(),
+        durationSec: currentTickStartedAt ? Math.round((Date.now() - Date.parse(currentTickStartedAt)) / 1000) : undefined,
+        stepDurationsSec: tickStepDurations,
+        ...diagnostics,
+      })
     );
   } catch (error: any) {
     console.warn('[Tâche de fond] Enregistrement du diagnostic échoué:', error?.message);

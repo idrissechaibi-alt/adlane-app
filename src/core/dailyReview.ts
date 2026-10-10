@@ -244,6 +244,7 @@ async function fetchFinalResultsViaSofaScore(
 ): Promise<Map<number, FinalResult>> {
   const results = new Map<number, FinalResult>();
   await mapWithConcurrency(legs.slice(0, SOFA_FINAL_RESULT_MAX_PER_PASS), 6, async ({ fixtureId }) => {
+    if (!reviewTimeLeft()) return;
     try {
       const eventId = await getSofaEventId(fixtureId);
       if (!eventId) return;
@@ -305,6 +306,7 @@ async function fetchFinalResultsViaOmniroute(
   const results = new Map<number, FinalResult>();
 
   await mapWithConcurrency(matches, OMNIROUTE_FINAL_RESULT_CONCURRENCY, async ({ fixtureId, homeTeam, awayTeam }) => {
+    if (!reviewTimeLeft()) return;
     // Ronde jusqu'à une réponse exploitable : un agent sans outil de recherche
     // répondrait "pas trouvé" et, s'il était en tête de ronde, empêcherait
     // tous les autres de régler le match.
@@ -495,7 +497,16 @@ async function settlePlacedLiveBets(proposals: InPlayProposal[]): Promise<void> 
  * Clôture toutes les journées écoulées depuis le dernier bilan.
  * Idempotent : une journée déjà traitée n'est jamais recomptée.
  */
+/** Budget de temps d'un passage du bilan : au-delà, plus aucune nouvelle
+ * recherche de résultat n'est lancée (le reste passe au passage suivant) —
+ * un bilan de 20 min retardait les scans en direct au point de rater la
+ * fenêtre de la 20e minute des matchs réels. */
+const REVIEW_TIME_BUDGET_MS = 3 * 60_000;
+let reviewDeadline = Infinity;
+const reviewTimeLeft = () => Date.now() < reviewDeadline;
+
 export async function runNightlyReviewIfDue(): Promise<number> {
+  reviewDeadline = Date.now() + REVIEW_TIME_BUDGET_MS;
   const today = dayKey(new Date());
   const yesterday = dayKey(new Date(Date.now() - 86_400_000));
 
@@ -576,7 +587,7 @@ export async function runNightlyReviewIfDue(): Promise<number> {
   // terminé : throttlé à une fois par heure via sa propre clé.
   // Valeurs réelles des matchs suivis sans pari (écarts projeté/réel).
   try {
-    await settleShadowProjections();
+    await settleShadowProjections(Date.now() + 60_000);
   } catch (error: any) {
     console.warn('[Bilan] Mesure des écarts échouée:', error?.message);
   }
@@ -665,6 +676,7 @@ export async function runNightlyReviewIfDue(): Promise<number> {
     // requêtes.
     const hubPending = allLegs.filter((l) => !finals.has(l.fixtureId)).slice(0, HUB_FINAL_RESULT_MAX_PER_PASS);
     await mapWithConcurrency(hubPending, 4, async (leg) => {
+      if (!reviewTimeLeft()) return;
       const result = await hubFinalResult(leg.homeTeam, leg.awayTeam, day).catch(() => null);
       if (result) finals.set(leg.fixtureId, result);
     });
@@ -681,6 +693,7 @@ export async function runNightlyReviewIfDue(): Promise<number> {
       return false;
     });
     await mapWithConcurrency(needCounts.slice(0, HUB_FINAL_RESULT_MAX_PER_PASS), 4, async (leg) => {
+      if (!reviewTimeLeft()) return;
       const stats = await hubStats(leg.homeTeam, leg.awayTeam, day).catch(() => null);
       const final = finals.get(leg.fixtureId);
       if (!final || !stats) return;
@@ -811,7 +824,17 @@ export async function runNightlyReviewIfDue(): Promise<number> {
     console.warn('[Bilan] Règlement des paris en direct placés échoué:', error.message);
   }
 
-  writeInPlayProposals(allProposals);
+  // Relu juste avant d'écrire : le bilan peut durer plusieurs minutes (sources
+  // live interrogées match par match) et un autre tour a pu créer des
+  // propositions entre-temps — les écraser avec la copie lue au début les
+  // ferait disparaître. Seules les propositions réglées ici sont remplacées.
+  const reviewedById = new Map(allProposals.map((p) => [p.id, p]));
+  const current = readInPlayProposals();
+  const currentIds = new Set(current.map((p) => p.id));
+  writeInPlayProposals([
+    ...current.map((p) => reviewedById.get(p.id) ?? p),
+    ...allProposals.filter((p) => !currentIds.has(p.id)),
+  ]);
   invalidateDeltaCache();
   writeMarketSeries(series.sort((a, b) => a.date.localeCompare(b.date)));
   writeMarketSeriesReal(seriesReal.sort((a, b) => a.date.localeCompare(b.date)));

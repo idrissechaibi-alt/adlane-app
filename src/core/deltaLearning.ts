@@ -243,7 +243,7 @@ export async function flushShadowProjections(): Promise<void> {
 const SHADOW_SETTLE_INTERVAL_MS = 30 * 60_000;
 let lastShadowSettle = 0;
 
-export async function settleShadowProjections(): Promise<number> {
+export async function settleShadowProjections(deadline = Infinity): Promise<number> {
   const now = Date.now();
   if (now - lastShadowSettle < SHADOW_SETTLE_INTERVAL_MS) return 0;
   lastShadowSettle = now;
@@ -258,6 +258,7 @@ export async function settleShadowProjections(): Promise<number> {
   let settled = 0;
   const groups = [...pending.values()].slice(0, SHADOW_SETTLE_MAX_PER_PASS);
   await mapWithConcurrency(groups, 4, async (group) => {
+    if (Date.now() > deadline) return;
     const first = group[0];
     const result = await hubFinalResult(first.homeTeam, first.awayTeam, first.date).catch(() => null);
     for (const s of group) {
