@@ -1,4 +1,4 @@
-// SofaScore API Client
+// Client données live : LiveScore en priorité (aucun blocage), SofaScore en repli.
 // Source de secours "scraping" : lit l'API publique (non officielle) de SofaScore.
 // Aucune clé requise. Best-effort : SofaScore peut bloquer certaines requêtes
 // (anti-bot Cloudflare) selon le réseau/l'IP ; en cas d'échec on renvoie
@@ -57,7 +57,7 @@ const RELAY_BASE = 'http://localhost:8788/api/v1';
 const RELAY_TIMEOUT_MS = 6000;
 const RELAY_RETRY_MS = 5 * 60_000;
 let relayDownUntil = 0;
-let lastRoute: 'relais' | 'direct' | null = null;
+let lastRoute: 'relais' | 'direct' | 'livescore' | null = null;
 
 async function sofaFetch(path: string): Promise<Response> {
   if (Date.now() >= relayDownUntil) {
@@ -506,7 +506,7 @@ async function recordSofaStatus(entry: { liveCount?: number; error?: string | nu
 }
 
 /** Dernier état de SofaScore (diagnostic) : nombre de matchs en direct ou erreur. */
-export async function getSofaStatus(): Promise<{ liveCount?: number; error?: string | null; route?: 'relais' | 'direct' | null; at: string } | null> {
+export async function getSofaStatus(): Promise<{ liveCount?: number; error?: string | null; route?: 'relais' | 'direct' | 'livescore' | null; at: string } | null> {
   try {
     const raw = await AsyncStorage.getItem(SOFA_STATUS_KEY);
     return raw ? JSON.parse(raw) : null;
@@ -523,25 +523,40 @@ async function getJson(path: string): Promise<any> {
 
 /** Tous les matchs de football EN DIRECT dans le monde (un seul appel). */
 export async function fetchSofaLiveEvents(): Promise<SofaEvent[]> {
+  let liveScoreError: any = null;
+  try {
+    const events = await fetchLiveScoreLive();
+    lastRoute = 'livescore';
+    await recordSofaStatus({ liveCount: events.length, error: null });
+    return events;
+  } catch (error) {
+    liveScoreError = error;
+  }
   try {
     const data = await getJson('/sport/football/events/live');
     const events = ((data.events ?? []) as any[]).map(mapSofaEvent).filter((e): e is SofaEvent => e !== null);
     await recordSofaStatus({ liveCount: events.length, error: null });
     return events;
   } catch (error: any) {
-    await recordSofaStatus({ error: error?.message || 'injoignable' });
+    await recordSofaStatus({ error: `LiveScore : ${liveScoreError?.message || 'injoignable'} · SofaScore : ${error?.message || 'injoignable'}` });
     throw error;
   }
 }
 
 /** Programme (tous les matchs de football) d'une date UTC. */
 export async function fetchSofaScheduledEvents(dateKey: string): Promise<SofaEvent[]> {
+  try {
+    return await fetchLiveScoreDate(dateKey);
+  } catch {
+    // repli SofaScore
+  }
   const data = await getJson(`/sport/football/scheduled-events/${dateKey}`);
   return ((data.events ?? []) as any[]).map(mapSofaEvent).filter((e): e is SofaEvent => e !== null);
 }
 
 /** Détail d'un match (statut, minute, score, score à la mi-temps). */
 export async function fetchSofaEvent(eventId: number): Promise<SofaEvent | null> {
+  if (eventId < 0) return fetchLiveScoreEvent(-eventId);
   const data = await getJson(`/event/${eventId}`);
   return mapSofaEvent(data.event);
 }
@@ -623,6 +638,7 @@ function parsePeriod(period: any): SofaPeriodStats | null {
 
 /** Statistiques d'un match, match entier et 1ère mi-temps. */
 export async function fetchSofaStats(eventId: number): Promise<SofaStats> {
+  if (eventId < 0) return fetchLiveScoreStats(-eventId);
   const data = await getJson(`/event/${eventId}/statistics`);
   const periods: any[] = data.statistics ?? [];
   return {
@@ -682,4 +698,152 @@ export async function registerSofaEvents(events: SofaEvent[], dateKey?: string):
 export async function getSofaEventId(fixtureId: number): Promise<number | null> {
   const store = await loadSofaIds();
   return store[fixtureId]?.id ?? null;
+}
+
+
+// ---------- LiveScore (prod-public-api.livescore.com) ----------
+// API publique de l'app LiveScore : sans clé, sans blocage d'IP ni d'empreinte
+// (contrairement à SofaScore, qui refuse le réseau de l'utilisateur). Couvre
+// tous les matchs du monde : direct, programme par date, score à la
+// mi-temps, statistiques par période (corners, cartons, fautes, tirs).
+// Ses matchs portent un identifiant NÉGATIF (-Eid) pour ne jamais se
+// confondre avec un identifiant SofaScore dans la table de correspondance.
+
+const LIVESCORE_BASE = 'https://prod-public-api.livescore.com/v1/api/app';
+
+async function liveScoreJson(path: string): Promise<any> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15_000);
+  try {
+    const response = await fetch(`${LIVESCORE_BASE}${path}`, { signal: controller.signal });
+    if (!response.ok) throw new Error(`LiveScore HTTP ${response.status}`);
+    return await response.json();
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/** "55'" → 55, "45+2'" → 47 ; null si ce n'est pas une minute de jeu. */
+function parseLiveScoreMinute(eps: string): number | null {
+  const m = /^(\d+)(?:\+(\d+))?'?$/.exec(eps.trim());
+  return m ? Number(m[1]) + Number(m[2] ?? 0) : null;
+}
+
+/** "20261010030000" (UTC) → secondes Unix. */
+function parseLiveScoreDate(esd: unknown): number {
+  const m = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/.exec(String(esd ?? ''));
+  return m ? Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]) / 1000 : 0;
+}
+
+function mapLiveScoreEvent(e: any, stage: any): SofaEvent | null {
+  const homeTeam = e?.T1?.[0]?.Nm;
+  const awayTeam = e?.T2?.[0]?.Nm;
+  const eid = Number(e?.Eid);
+  if (!eid || !homeTeam || !awayTeam) return null;
+
+  const eps = String(e.Eps ?? '');
+  const esid = Number(e.Esid);
+  let statusShort = 'OTHER';
+  let minute = 0;
+  const playing = parseLiveScoreMinute(eps);
+  if (eps === 'NS') {
+    statusShort = 'NS';
+  } else if (eps === 'HT') {
+    statusShort = 'HT';
+    minute = 45;
+  } else if (eps === 'FT' || eps === 'AET' || eps === 'AP') {
+    statusShort = 'FT';
+    minute = 90;
+  } else if (playing != null) {
+    minute = playing;
+    if (esid === 2) statusShort = '1H';
+    else if (esid === 3) statusShort = '2H';
+    else if (playing <= 45) statusShort = '1H';
+    else if (playing <= 95) statusShort = '2H';
+    else statusShort = 'OTHER'; // prolongation
+  }
+
+  const goalsHome = Number(e.Tr1 ?? 0) || 0;
+  const goalsAway = Number(e.Tr2 ?? 0) || 0;
+  const firstHalfDone = statusShort !== '1H' && statusShort !== 'NS';
+  return {
+    eventId: -eid,
+    homeTeam,
+    awayTeam,
+    league: stage?.CompN || stage?.Snm || 'Compétition inconnue',
+    country: stage?.Cnm || '',
+    statusShort,
+    minute,
+    homeGoals: goalsHome,
+    awayGoals: goalsAway,
+    homeGoalsHT: firstHalfDone ? Number(e.Trh1 ?? goalsHome) || 0 : goalsHome,
+    awayGoalsHT: firstHalfDone ? Number(e.Trh2 ?? goalsAway) || 0 : goalsAway,
+    startTimestamp: parseLiveScoreDate(e.Esd),
+  };
+}
+
+function liveScoreEvents(data: any): SofaEvent[] {
+  const events: SofaEvent[] = [];
+  for (const stage of data?.Stages ?? []) {
+    for (const e of stage.Events ?? []) {
+      const mapped = mapLiveScoreEvent(e, stage);
+      if (mapped) events.push(mapped);
+    }
+  }
+  return events;
+}
+
+async function fetchLiveScoreLive(): Promise<SofaEvent[]> {
+  return liveScoreEvents(await liveScoreJson('/live/soccer/0?MD=1'));
+}
+
+async function fetchLiveScoreDate(dateKey: string): Promise<SofaEvent[]> {
+  return liveScoreEvents(await liveScoreJson(`/date/soccer/${dateKey.replace(/-/g, '')}/0?MD=1`));
+}
+
+async function fetchLiveScoreEvent(eid: number): Promise<SofaEvent | null> {
+  const data = await liveScoreJson(`/scoreboard/soccer/${eid}`);
+  return mapLiveScoreEvent(data, data?.Stg ?? null);
+}
+
+function liveScorePeriod(home: any, away: any): SofaPeriodStats | null {
+  if (!home || !away) return null;
+  const n = (v: unknown) => Number(v ?? 0) || 0;
+  const cornersHome = n(home.Cos);
+  const cornersAway = n(away.Cos);
+  const cardsHome = n(home.Ycs) + n(home.Rcs) + n(home.YRcs);
+  const cardsAway = n(away.Ycs) + n(away.Rcs) + n(away.YRcs);
+  const foulsHome = n(home.Fls);
+  const foulsAway = n(away.Fls);
+  const onTargetHome = n(home.Shon);
+  const onTargetAway = n(away.Shon);
+  const total = cornersHome + cornersAway + cardsHome + cardsAway + foulsHome + foulsAway + onTargetHome + onTargetAway;
+  if (total === 0) return null; // pas de statistiques publiées : pas de faux zéro
+  return {
+    corners: cornersHome + cornersAway,
+    cards: cardsHome + cardsAway,
+    fouls: foulsHome + foulsAway,
+    shotsOnTargetHome: onTargetHome,
+    shotsOnTargetAway: onTargetAway,
+    shotsTotalHome: onTargetHome + n(home.Shof) + n(home.Shbl),
+    shotsTotalAway: onTargetAway + n(away.Shof) + n(away.Shbl),
+    cornersHome,
+    cornersAway,
+    cardsHome,
+    cardsAway,
+    foulsHome,
+    foulsAway,
+    possessionHome: home.Pss != null ? n(home.Pss) : undefined,
+  };
+}
+
+async function fetchLiveScoreStats(eid: number): Promise<SofaStats> {
+  const data = await liveScoreJson(`/statistics/soccer/${eid}`);
+  const stat: any[] = data?.Stat ?? [];
+  const home = stat.find((x) => Number(x.Tnb) === 1);
+  const away = stat.find((x) => Number(x.Tnb) === 2);
+  const periods: any[] = data?.PStat ?? [];
+  const homeP = periods.find((x) => Number(x?.['1']?.Tnb) === 1)?.['1'];
+  const awayP = periods.find((x) => Number(x?.['1']?.Tnb) === 2)?.['1'];
+  return { all: liveScorePeriod(home, away), firstHalf: liveScorePeriod(homeP, awayP) };
 }

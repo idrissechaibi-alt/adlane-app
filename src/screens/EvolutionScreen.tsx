@@ -121,8 +121,8 @@ export default function EvolutionScreen() {
           <View style={[styles.webAccessDot, { backgroundColor: sofaOk ? '#22c55e' : '#ef4444' }]} />
           <Text style={styles.webAccessText}>
             {sofaOk
-              ? `SofaScore : ${sofaState?.liveCount ?? 0} matchs en direct (via ${sofaState?.route ?? '?'})`
-              : 'SofaScore bloqué sur ce réseau (403) : le pipe fictif utilise AllSportsApi et les fournisseurs IA'}
+              ? `Données live ${sofaState?.route === 'livescore' ? 'LiveScore' : 'SofaScore'} : ${sofaState?.liveCount ?? 0} matchs en direct`
+              : 'Données live injoignables (LiveScore et SofaScore) : le pipe fictif utilise AllSportsApi et les fournisseurs IA'}
           </Text>
         </View>
       </View>
