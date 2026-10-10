@@ -32,6 +32,7 @@ import { syntheticFixtureId } from './halftimeMonitor';
 import { fetchRepoJson } from './gitAutoSync';
 import { mapWithConcurrency } from './concurrency';
 import { fetchSportmonksFixturesByDate } from '../api/footballDataAPIs/sportmonks';
+import { fetchSofaScheduledEvents, registerSofaEvents } from '../api/footballDataAPIs/sofaScore';
 import { spendBudget } from './requestBudget';
 import { getAPIConfig } from '../api/multiAPIManager';
 
@@ -103,7 +104,7 @@ export interface FictionalMatch {
   /** D'où vient cette rencontre — absent pour le planning transmis (déjà
    * distingué par sa propre clé de stockage). Sert uniquement au diagnostic
    * affiché (quelle source alimente réellement le programme du jour). */
-  source?: 'sportmonks' | 'omniroute';
+  source?: 'sportmonks' | 'omniroute' | 'sofascore';
 }
 
 function todayKey(): string {
@@ -512,6 +513,8 @@ interface StoredProgram {
   /** Dernière lecture réussie (même partielle) du calendrier Sportmonks —
    * même rythme de rafraîchissement que le planning transmis. */
   sportmonksLoadedAt?: string;
+  /** Dernière lecture réussie du programme SofaScore. */
+  sofaLoadedAt?: string;
   /** Raison précise du dernier échec/absence Sportmonks (voir
    * SportmonksWorldFixturesResult). Effacée dès qu'un appel réussit sans
    * erreur, pour ne jamais afficher une erreur périmée. */
@@ -582,6 +585,7 @@ export interface FictionalProgramStatus {
    * deviner à partir du seul décompte total. */
   sportmonksMatches: number;
   omnirouteMatches: number;
+  sofascoreMatches: number;
   /** Raison précise d'un "0 via Sportmonks" — clé absente, quota épuisé, ou
    * message d'erreur HTTP/réseau exact plutôt qu'un générique "injoignable"
    * qui ne permettait pas de distinguer les cas. */
@@ -606,6 +610,7 @@ export async function getFictionalProgramStatus(date: string = todayKey()): Prom
     lastTrace: stored.lastTrace,
     sportmonksMatches: all.filter((m) => m.source === 'sportmonks').length,
     omnirouteMatches: all.filter((m) => m.source === 'omniroute').length,
+    sofascoreMatches: all.filter((m) => m.source === 'sofascore').length,
     sportmonksLastError: stored.sportmonksLastError,
   };
 }
@@ -653,6 +658,38 @@ export async function ensureFictionalDailyProgram(
   // couvre déjà la journée.
   if ((stored.byCountry[FEED_SOURCE_KEY]?.length ?? 0) > 0) {
     return selectFromStored(stored);
+  }
+
+  // 2b) SofaScore — programme mondial de la date, gratuit et sans clé : tous
+  // les matchs de football avec leur heure de coup d'envoi, en un appel. Le
+  // pays est ramené au libellé français du balayage quand il est connu, sinon
+  // gardé tel quel (SofaScore couvre bien plus de pays que la liste du
+  // balayage). Rafraîchi chaque heure ; en cas d'échec, les sources suivantes
+  // prennent le relais.
+  if (!stored.sofaLoadedAt || now - Date.parse(stored.sofaLoadedAt) >= SWEEP_INTERVAL_MS) {
+    try {
+      const events = (await fetchSofaScheduledEvents(date)).filter((e) => e.statusShort !== 'OTHER' && e.startTimestamp > 0);
+      const ids = await registerSofaEvents(events, date);
+      for (const event of events) {
+        const country = SPORTMONKS_ENGLISH_TO_FRENCH_COUNTRY.get(event.country.toLowerCase()) ?? (event.country || 'Monde');
+        const match: FictionalMatch = {
+          fixtureId: ids.get(event.eventId)!,
+          homeTeam: event.homeTeam,
+          awayTeam: event.awayTeam,
+          league: event.league,
+          country,
+          kickoff_utc: new Date(event.startTimestamp * 1000).toISOString(),
+          source: 'sofascore',
+        };
+        const merged = new Map((stored.byCountry[country] ?? []).map((m) => [m.fixtureId, m]));
+        if (!merged.has(match.fixtureId)) merged.set(match.fixtureId, match);
+        stored.byCountry[country] = [...merged.values()].slice(0, MAX_MATCHES_PER_COUNTRY);
+      }
+      stored.sofaLoadedAt = new Date(now).toISOString();
+      await AsyncStorage.setItem(programKey(date), JSON.stringify(stored));
+    } catch (error: any) {
+      console.warn('[Programme fictif] SofaScore indisponible:', error?.message);
+    }
   }
 
   // 3) Sportmonks — découverte PRIMAIRE en l'absence de planning transmis :

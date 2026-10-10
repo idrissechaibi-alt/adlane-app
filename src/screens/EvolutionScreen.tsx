@@ -25,6 +25,7 @@ import { runAutoLearnTick, AutoLearnTickDiagnostics, getNativeBackgroundTickStat
 import { sendTelegramMessage } from '../core/telegram';
 import { loadOmnirouteConfig } from '../core/focusEnrichment';
 import { getWebCapableRoutes } from '../core/llmRouter';
+import { getSofaStatus } from '../api/footballDataAPIs/sofaScore';
 import { getRecentSearchSource, probeAnySearch } from '../core/webSearch';
 import { getAgentLearningDigest, getAccuracyTrend, AccuracyTrend, buildMarketDayPointsFromPaperBets, buildLearningReport } from '../core/autoLearn';
 
@@ -70,7 +71,14 @@ export default function EvolutionScreen() {
   /** Fournisseurs dont l'API de recherche web (OmniRoute /v1/search) répond. */
   const [searchProviders, setSearchProviders] = useState<string[]>([]);
 
+  const [sofaState, setSofaState] = useState<Awaited<ReturnType<typeof getSofaStatus>> | null>(null);
+
   const refreshWebAccess = async () => {
+    try {
+      setSofaState(await getSofaStatus());
+    } catch {
+      /* statut SofaScore indisponible */
+    }
     try {
       const config = await loadOmnirouteConfig();
       if (!config) {
@@ -98,14 +106,25 @@ export default function EvolutionScreen() {
         ? [`${webCapableModels.length} modèle${webCapableModels.length > 1 ? 's' : ''} qui cherche${webCapableModels.length > 1 ? 'nt' : ''} lui-même (${webCapableModels.slice(0, 3).map((m) => m.split(' · ').pop()).join(', ')}${webCapableModels.length > 3 ? '…' : ''})`]
         : []),
     ];
+    const sofaOk = Boolean(sofaState && !sofaState.error && (sofaState.liveCount ?? 0) >= 0 && sofaState.at);
     return (
-      <View style={styles.webAccessRow}>
-        <View style={[styles.webAccessDot, { backgroundColor: ok ? '#22c55e' : '#ef4444' }]} />
-        <Text style={styles.webAccessText}>
-          {ok
-            ? `Accès internet : ${parts.join(' + ')}`
-            : "Pas d'accès internet : aucune source de recherche ne répond (OmniRoute, Gemini, DuckDuckGo) et aucun modèle vérifié."}
-        </Text>
+      <View>
+        <View style={styles.webAccessRow}>
+          <View style={[styles.webAccessDot, { backgroundColor: ok ? '#22c55e' : '#ef4444' }]} />
+          <Text style={styles.webAccessText}>
+            {ok
+              ? `Accès internet : ${parts.join(' + ')}`
+              : "Pas d'accès internet : aucune source de recherche ne répond (OmniRoute, Gemini, DuckDuckGo) et aucun modèle vérifié."}
+          </Text>
+        </View>
+        <View style={styles.webAccessRow}>
+          <View style={[styles.webAccessDot, { backgroundColor: sofaOk ? '#22c55e' : '#ef4444' }]} />
+          <Text style={styles.webAccessText}>
+            {sofaOk
+              ? `SofaScore : ${sofaState?.liveCount ?? 0} matchs en direct (via ${sofaState?.route ?? '?'})`
+              : 'SofaScore bloqué : lance le relais Termux (scripts/sofascore-relay.js)'}
+          </Text>
+        </View>
       </View>
     );
   };

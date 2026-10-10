@@ -22,6 +22,7 @@ import { runInPlayComboTick, InternationalBreakTickDiagnostics } from './inPlayC
 import { runNightlyReviewIfDue } from './dailyReview';
 import { autoProbeWebCapability } from './llmRouter';
 import { getRecentSearchSource, probeAnySearch } from './webSearch';
+import { fetchSofaLiveEvents, registerSofaEvents } from '../api/footballDataAPIs/sofaScore';
 import { getDailyPlan, runMorningScanIfDue } from './scheduler';
 import { reconcileScoutingAnalyses } from './scoutingReview';
 import { refreshDueLineups } from './lineupRefresh';
@@ -123,8 +124,39 @@ async function fetchFictionalLiveFixtures(realLive: LiveFixture[]): Promise<Live
   }
 
   let fixtures: LiveFixture[];
+  let fromSofaScore = false;
+
+  // SofaScore d'abord : source structurée et gratuite (score, minute, période
+  // de TOUS les matchs en direct du monde en un appel), sans modèle ni
+  // recherche web. Les fournisseurs IA ne servent plus qu'en repli.
+  try {
+    const sofaEvents = (await fetchSofaLiveEvents()).filter((e) => ['1H', 'HT', '2H'].includes(e.statusShort));
+    if (sofaEvents.length > 0) {
+      const ids = await registerSofaEvents(sofaEvents);
+      fixtures = sofaEvents.map((e) => ({
+        statusShort: e.statusShort,
+        homeTeam: e.homeTeam,
+        awayTeam: e.awayTeam,
+        homeGoals: e.homeGoals,
+        awayGoals: e.awayGoals,
+        fixtureId: ids.get(e.eventId)!,
+        minute: e.minute,
+        league: e.league,
+        sofaEventId: e.eventId,
+      }));
+      fromSofaScore = true;
+    } else {
+      fixtures = [];
+    }
+  } catch (error: any) {
+    console.warn('[Tâche de fond] Relevé SofaScore indisponible, repli fournisseurs IA:', error?.message);
+    fixtures = [];
+  }
+
   const elapsedMinutes = fictionalLiveCache ? Math.floor((Date.now() - fictionalLiveCache.at) / 60_000) : Infinity;
-  if (fictionalLiveCache && elapsedMinutes * 60_000 < LIVE_FIXTURES_CACHE_MS) {
+  if (fromSofaScore) {
+    // déjà relevé
+  } else if (fictionalLiveCache && elapsedMinutes * 60_000 < LIVE_FIXTURES_CACHE_MS) {
     fixtures = fictionalLiveCache.fixtures
       .map((f) => ({ ...f, minute: f.minute + elapsedMinutes }))
       .filter((f) => (f.statusShort === '1H' ? f.minute <= 45 : f.statusShort === '2H' ? f.minute <= 90 : false));
@@ -273,6 +305,7 @@ export interface AutoLearnTickDiagnostics {
    * Sportmonks alimente bien le programme plutôt qu'Omniroute en dernier
    * recours (demande explicite : démotion d'Omniroute). */
   fictionalSportmonksMatches: number;
+  fictionalSofascoreMatches: number;
   fictionalOmnirouteMatches: number;
   /** Raison précise d'un "0 via Sportmonks" (clé absente, quota épuisé, ou
    * message d'erreur exact) — remplace un "injoignable" générique impossible
@@ -411,6 +444,7 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
   let fictionalCountriesTotal = 0;
   let fictionalLastTrace: { country: string; attempts: OmnirouteAttempt[] } | undefined;
   let fictionalSportmonksMatches = 0;
+  let fictionalSofascoreMatches = 0;
   let fictionalOmnirouteMatches = 0;
   let fictionalSportmonksError: string | undefined;
   try {
@@ -426,6 +460,7 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
     fictionalCountriesTotal = status.countriesTotal;
     fictionalLastTrace = status.lastTrace;
     fictionalSportmonksMatches = status.sportmonksMatches;
+    fictionalSofascoreMatches = status.sofascoreMatches;
     fictionalOmnirouteMatches = status.omnirouteMatches;
     fictionalSportmonksError = status.sportmonksLastError;
   } catch (error: any) {
@@ -526,6 +561,7 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
     fictionalCountriesTotal,
     fictionalLastTrace,
     fictionalSportmonksMatches,
+    fictionalSofascoreMatches,
     fictionalOmnirouteMatches,
     fictionalSportmonksError,
     liveFixturesFound: liveFixtures.length,

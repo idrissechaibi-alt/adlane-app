@@ -45,6 +45,7 @@ import { sendTelegramMessage } from './telegram';
 import { buildFictionalMarketStats, formatFictionalDigestMessage } from './dailyDigest';
 import { readMatchTimelines, MatchSample } from './fictionalProgram';
 import { isSyntheticFixtureId } from './halftimeMonitor';
+import { fetchSofaEvent, fetchSofaStats, getSofaEventId } from '../api/footballDataAPIs/sofaScore';
 
 const LAST_REVIEW_KEY = '@last_daily_review';
 const LAST_ELO_SYNC_KEY = '@last_elo_sync';
@@ -219,6 +220,40 @@ async function fetchFinalResults(
 const OMNIROUTE_FINAL_RESULT_CONCURRENCY = 6;
 /** Matchs interrogés par passage horaire (le reste suit au passage suivant). */
 const OMNIROUTE_FINAL_RESULT_MAX_PER_PASS = 30;
+
+const SOFA_FINAL_RESULT_MAX_PER_PASS = 60;
+
+/**
+ * Résultat final d'un match déjà connu de SofaScore (voir registerSofaEvents) :
+ * score final, score à la mi-temps, corners et cartons de la 1ère mi-temps —
+ * publiés directement, sans modèle ni recherche. Renvoie seulement les
+ * matchs TERMINÉS ; les autres restent à régler plus tard.
+ */
+async function fetchFinalResultsViaSofaScore(
+  legs: Array<{ fixtureId: number }>
+): Promise<Map<number, FinalResult>> {
+  const results = new Map<number, FinalResult>();
+  await mapWithConcurrency(legs.slice(0, SOFA_FINAL_RESULT_MAX_PER_PASS), 6, async ({ fixtureId }) => {
+    try {
+      const eventId = await getSofaEventId(fixtureId);
+      if (!eventId) return;
+      const event = await fetchSofaEvent(eventId);
+      if (!event || event.statusShort !== 'FT') return;
+      const stats = await fetchSofaStats(eventId).catch(() => null);
+      results.set(fixtureId, {
+        goalsHome: event.homeGoals,
+        goalsAway: event.awayGoals,
+        htHome: event.homeGoalsHT,
+        htAway: event.awayGoalsHT,
+        corners1H: stats?.firstHalf?.corners,
+        cards1H: stats?.firstHalf?.cards,
+      });
+    } catch {
+      // match suivant : retenté au prochain passage
+    }
+  });
+  return results;
+}
 
 /** Statuts considérés comme match terminé (API-Football) — même liste que
  * FINISHED_STATUSES dans inPlayCombos.ts (pas exportée de là pour éviter un
@@ -561,6 +596,14 @@ export async function runNightlyReviewIfDue(): Promise<number> {
     const finals = apiConfig.apiFootball
       ? await fetchFinalResults(apiConfig.apiFootball, Array.from(realFixtureIds).filter((id) => !isSyntheticFixtureId(id)))
       : new Map<number, FinalResult>();
+
+    // SofaScore : résultat publié directement (score, mi-temps, corners et
+    // cartons de 1ère MT) pour tout match du pipe fictif qu'il connaît.
+    const stillOpen = allLegs.filter((l) => !finals.has(l.fixtureId));
+    if (stillOpen.length > 0) {
+      const sofaFinals = await fetchFinalResultsViaSofaScore(stillOpen);
+      for (const [fixtureId, result] of sofaFinals) finals.set(fixtureId, result);
+    }
 
     // Repli GRATUIT, et plus fiable qu'une recherche : le score déjà capté
     // pendant le suivi en direct du match lui-même (inPlayCombos.ts). C'est

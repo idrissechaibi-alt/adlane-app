@@ -52,7 +52,7 @@
 import { getDailyPlan, todayLocalDateString } from './scheduler';
 import { buildScheduledMatches, ScheduledMatch } from './dailyWorkflow';
 import { ScheduledMatchDetail } from '../types/database';
-import { LiveFixture, fetchOmnirouteMatchStatus, isSyntheticFixtureId } from './halftimeMonitor';
+import { LiveFixture, LiveFixtureDetail, fetchOmnirouteMatchStatus, isSyntheticFixtureId } from './halftimeMonitor';
 import { getHistoricalPriors } from './footballDataCoUk';
 import {
   FictionalMatch,
@@ -96,7 +96,13 @@ import { matchesForDate, isWithinBreakWindow } from './internationalBreak';
 import { INTERNATIONAL_BREAK_CALENDAR } from '../data/internationalBreakCalendar';
 import { sendInternationalBreakCalendarNow } from './internationalBreakNotify';
 import { fetchSportmonksInPlayMatches, SportmonksInPlayMatch } from '../api/footballDataAPIs/sportmonks';
-import { getInPlayMatches as fetchSofaScoreInPlayMatches, SofaScoreInPlayMatch } from '../api/footballDataAPIs/sofaScore';
+import {
+  getInPlayMatches as fetchSofaScoreInPlayMatches,
+  SofaScoreInPlayMatch,
+  fetchSofaEvent,
+  fetchSofaStats,
+  getSofaEventId,
+} from '../api/footballDataAPIs/sofaScore';
 
 // Fenêtres larges : la tâche de fond n'est réveillée par Android qu'environ
 // toutes les 30-40 min ; avec 6 minutes de fenêtre, la plupart des matchs
@@ -1061,6 +1067,40 @@ export interface InPlayComboTickResult {
   sportmonksError?: string;
 }
 
+/**
+ * Statut en direct d'un match du programme via SofaScore : minute, score,
+ * tirs cadrés, corners et cartons. null si le match n'y est pas connu, pas
+ * encore commencé ou si SofaScore ne répond pas (l'appelant retombe sur les
+ * fournisseurs IA). Un match terminé est renvoyé avec le statut 'FT' : c'est
+ * ce relevé qui permet ensuite de le régler (voir dailyReview.ts).
+ */
+async function fetchSofaLiveDetail(scheduled: FictionalMatch): Promise<LiveFixtureDetail | null> {
+  try {
+    const eventId = await getSofaEventId(scheduled.fixtureId);
+    if (!eventId) return null;
+    const event = await fetchSofaEvent(eventId);
+    if (!event || event.statusShort === 'NS' || event.statusShort === 'OTHER') return null;
+    const stats = await fetchSofaStats(eventId).catch(() => null);
+    return {
+      statusShort: event.statusShort,
+      homeTeam: scheduled.homeTeam,
+      awayTeam: scheduled.awayTeam,
+      homeGoals: event.homeGoals,
+      awayGoals: event.awayGoals,
+      fixtureId: scheduled.fixtureId,
+      minute: event.minute,
+      league: scheduled.league,
+      sofaEventId: eventId,
+      shotsOnTargetHome: stats?.all?.shotsOnTargetHome,
+      shotsOnTargetAway: stats?.all?.shotsOnTargetAway,
+      cornersTotal: stats?.all?.corners,
+      cardsTotal: stats?.all?.cards,
+    };
+  } catch {
+    return null;
+  }
+}
+
 const REAL_XG_FALLBACK_CACHE_KEY = '@real_xg_fallback_cache';
 
 /**
@@ -1217,9 +1257,22 @@ export async function runInPlayComboTick(
             ? await estimateExpectedGoalsViaOmniroute(omnirouteConfig, match.homeTeam, match.awayTeam, match.league).catch(() => null)
             : null) ?? NEUTRAL_EXPECTED_GOALS;
 
+        // Statistiques réelles du match (tirs cadrés, corners, cartons déjà
+        // comptés) : SofaScore les publie, les jambes se projettent donc sur
+        // ce qui s'est vraiment passé et non sur la seule moyenne d'un match.
+        let currentStats: LiveMatchStats | undefined;
+        let observedLive: ObservedLiveCounts | undefined;
+        if (live.sofaEventId) {
+          const stats = await fetchSofaStats(live.sofaEventId).catch(() => null);
+          if (stats?.all) {
+            currentStats = { shotsOnTargetHome: stats.all.shotsOnTargetHome, shotsOnTargetAway: stats.all.shotsOnTargetAway };
+            observedLive = { corners: stats.all.corners, cards: stats.all.cards };
+          }
+        }
+
         const rawLegs = kind === 'minute20'
-          ? await buildLegs20(match, live.fixtureId, live, expectedGoals)
-          : buildLegs60(live, expectedGoals);
+          ? await buildLegs20(match, live.fixtureId, live, expectedGoals, currentStats, observedLive)
+          : buildLegs60(live, expectedGoals, currentStats);
         const window = kind === 'minute20' ? '20e → pause + match complet' : '60e → fin de match';
 
         for (const leg of rawLegs.filter((l) => l.prob >= MIN_LEG_PROB)) {
@@ -1338,10 +1391,15 @@ export async function runInPlayComboTick(
     // seulement au temps d'attente.
     await mapWithConcurrency(candidates, FICTIONAL_CHECK_CONCURRENCY, async (scheduled) => {
       try {
-        const live = await fetchOmnirouteMatchStatus(
-          omnirouteConfig, scheduled.homeTeam, scheduled.awayTeam, scheduled.league
-        ).catch(() => null);
-        if (!live) return; // pas encore commencé, déjà fini, ou introuvable : on retentera
+        // SofaScore d'abord (statut, minute, score et statistiques publiés
+        // directement) ; les fournisseurs IA seulement si ce match n'y est pas
+        // connu ou si SofaScore ne répond pas.
+        const live =
+          (await fetchSofaLiveDetail(scheduled)) ??
+          (await fetchOmnirouteMatchStatus(
+            omnirouteConfig, scheduled.homeTeam, scheduled.awayTeam, scheduled.league
+          ).catch(() => null));
+        if (!live) return; // pas encore commencé, introuvable : on retentera
 
         const timeline = timelines[scheduled.fixtureId] ?? [];
         timeline.push({

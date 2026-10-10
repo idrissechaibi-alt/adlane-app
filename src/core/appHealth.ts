@@ -12,6 +12,7 @@ import { getNativeBackgroundTickStats, readLastTickDiagnostics, readTickProgress
 import { loadOmnirouteConfig } from './focusEnrichment';
 import { checkAllProviders, getRouteLeaderboard, getWebCapableRoutes } from './llmRouter';
 import { getRecentSearchSource, getWorkingSearchProviders } from './webSearch';
+import { getSofaStatus } from '../api/footballDataAPIs/sofaScore';
 import { loadTelegramConfig } from './telegram';
 import {
   readAccuracySnapshots,
@@ -153,6 +154,7 @@ export async function buildAppHealth(): Promise<Record<string, unknown>> {
       autolearnUsedToday: await getRequestCount('apiFootball-autolearn'),
       autolearnRemaining: await remainingBudget('apiFootball'),
     })),
+    sofaScore: await section(async () => getSofaStatus()),
     configured: await section(async () => {
       const api = await getAPIConfig();
       return {

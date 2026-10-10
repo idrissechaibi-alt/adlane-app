@@ -19,6 +19,8 @@ import { API_FOOTBALL_RESERVE, spendBudget } from './requestBudget';
 import { getStoredUniverse, UniverseMatch } from './matchUniverse';
 import { fetchWithTimeout } from './httpTimeout';
 import { LiveFixture, isSyntheticFixtureId } from './halftimeMonitor';
+import { mapWithConcurrency } from './concurrency';
+import { fetchSofaStats } from '../api/footballDataAPIs/sofaScore';
 import {
   EventDeltas,
   LEARNING_HORIZONS,
@@ -39,6 +41,8 @@ import { OmnirouteConfig } from '../types';
 
 /** Nombre maximum de matchs enrichis en statistiques détaillées par tour (API-Football, quota limité). */
 const MAX_DETAILED_STATS_PER_TICK = 3;
+/** Matchs SofaScore (gratuit, sans quota) avec statistiques détaillées par tour. */
+const MAX_SOFASCORE_STATS_PER_TICK = 30;
 /**
  * Matchs supplémentaires couverts par Omniroute (scraping, pas soumis au
  * même quota) au-delà de ce que API-Football peut fournir dans le tour —
@@ -289,6 +293,34 @@ export async function runLiveMarkerTick(liveFixtures: LiveFixture[]): Promise<{ 
     markersByFixture.set(l.fixtureId, await fetchMarkers(config.apiFootball!, l.fixtureId));
   }
 
+  // SofaScore : statistiques STRUCTURÉES (corners, cartons, fautes, tirs,
+  // possession) des matchs relevés par lui, sans quota ni modèle. Ces
+  // instantanés valent ceux d'API-Football (source structurée vérifiée) et
+  // entrent donc directement dans les règles de calibrage, contrairement aux
+  // lignes lues par les fournisseurs IA, qui doivent d'abord prouver leur
+  // fiabilité (voir plus bas).
+  const sofaCovered = new Set<number>();
+  const sofaMatches = firstHalf.filter((l) => l.sofaEventId && !markersByFixture.has(l.fixtureId)).slice(0, MAX_SOFASCORE_STATS_PER_TICK);
+  await mapWithConcurrency(sofaMatches, 6, async (l) => {
+    const stats = await fetchSofaStats(l.sofaEventId!).catch(() => null);
+    const all = stats?.all;
+    if (!all) return;
+    markersByFixture.set(l.fixtureId, {
+      shotsOnTargetHome: all.shotsOnTargetHome,
+      shotsOnTargetAway: all.shotsOnTargetAway,
+      shotsTotalHome: all.shotsTotalHome,
+      shotsTotalAway: all.shotsTotalAway,
+      cornersHome: all.cornersHome,
+      cornersAway: all.cornersAway,
+      cardsHome: all.cardsHome,
+      cardsAway: all.cardsAway,
+      foulsHome: all.foulsHome,
+      foulsAway: all.foulsAway,
+      possessionHome: all.possessionHome,
+    });
+    sofaCovered.add(l.fixtureId);
+  });
+
   // Couverture supplémentaire au-delà du quota API-Football, ET tous les
   // matchs découverts directement par Omniroute (fixtureId synthétique — ces
   // derniers ne PEUVENT être couverts que par Omniroute, jamais par
@@ -305,7 +337,7 @@ export async function runLiveMarkerTick(liveFixtures: LiveFixture[]): Promise<{ 
   const crossCheckSamples: CrossCheckSample[] = [];
 
   if (omnirouteConfig) {
-    const alreadyCovered = new Set(topApiFootball.map((l) => l.fixtureId));
+    const alreadyCovered = new Set([...topApiFootball.map((l) => l.fixtureId), ...sofaCovered]);
     const beyondQuota = [
       ...eligibleForApiFootball.slice(MAX_DETAILED_STATS_PER_TICK),
       ...firstHalf.filter((l) => isSyntheticFixtureId(l.fixtureId)),

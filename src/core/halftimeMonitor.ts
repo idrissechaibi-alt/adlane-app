@@ -19,6 +19,9 @@ export interface LiveFixture {
   fixtureId: number;
   /** Minute de jeu actuelle (temps additionnel compris dans le décompte API-Football). */
   minute: number;
+  /** Identifiant du match chez SofaScore, quand le relevé en vient : permet
+   * d'aller chercher ses statistiques et son résultat sans passer par un modèle. */
+  sofaEventId?: number;
   /** Nom de la compétition, quand connu — absent historiquement côté
    * API-Football (jamais lu avant), toujours renseigné côté repli Omniroute. */
   league?: string;
