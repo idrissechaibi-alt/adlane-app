@@ -47,10 +47,12 @@ export const MAX_FICTIONAL_MATCHES_PER_DAY = 250;
 /** Garde-fou par pays : au-delà, la réponse est probablement bavarde plutôt
  * que réellement exhaustive — on tronque sans bloquer. */
 const MAX_MATCHES_PER_COUNTRY = 60;
-/** Pays balayés par tour : chaque pays coûte au moins une requête d'agent
- * (plusieurs si les premiers ne ramènent rien), donc un tour doit rester
- * court — le programme se complète sur les tours suivants. */
-const MAX_COUNTRIES_PER_RUN = 6;
+/** Pays balayés par tour : chaque pays coûte une recherche web + une requête
+ * IA, donc un tour doit rester court — le programme se complète sur les tours
+ * suivants. 20 par tour (60 pays en 3 tours) : la tâche de fond ne passe que
+ * toutes les 30-40 min, avec 6 par tour le planning mettait des heures à se
+ * remplir et la plupart des matchs du jour étaient déjà joués. */
+const MAX_COUNTRIES_PER_RUN = 20;
 /** Essais accordés à un pays par passe de balayage : une réponse vide vient
  * plus souvent d'un agent qui n'a pas su chercher que d'un pays sans match. */
 const MAX_ATTEMPTS_PER_COUNTRY = 3;
