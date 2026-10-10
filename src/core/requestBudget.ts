@@ -60,11 +60,31 @@ export async function remainingBudget(source: string): Promise<number> {
  * d'app ouverte, et plus aucun pari n'était réglé.
  */
 export const API_FOOTBALL_RESERVE = {
+  /** Gardé intact lors du relevé direct des matchs réels : le règlement des paris. */
+  settlement: 5,
   liveFixtures: 20,
   universe: 15,
   realLiveStats: 15,
   liveMarkerStats: 25,
 } as const;
+
+/**
+ * Budget DIRECT (pipeline réel, jour de match) : tire sur le quota réel total
+ * du fournisseur, pas sur la part de l'auto-apprentissage. Le relevé en
+ * direct des 5 grands championnats est la raison d'être de l'app ; il ne doit
+ * pas être bloqué parce que l'auto-apprentissage a consommé sa part.
+ */
+export async function spendDirectBudget(source: string, reserve: number = 0): Promise<boolean> {
+  const [totalUsed, quotas] = await Promise.all([getRequestCount(source), getQuotaConfig()]);
+  const setting = quotas[source];
+  if (!setting || setting.limit <= 0) return false;
+  const dailyLimit = setting.period === 'day'
+    ? setting.limit
+    : setting.period === 'hour' ? setting.limit * 24 : Math.floor(setting.limit / 30);
+  if (dailyLimit - totalUsed - reserve < 1) return false;
+  await incrementRequestCount(source);
+  return true;
+}
 
 /**
  * Consomme une unité de budget si elle est disponible, en laissant intacte

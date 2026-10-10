@@ -10,7 +10,7 @@ import * as BackgroundTask from 'expo-background-task';
 import * as TaskManager from 'expo-task-manager';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getAPIConfig } from '../api/multiAPIManager';
-import { API_FOOTBALL_RESERVE, spendBudget } from './requestBudget';
+import { API_FOOTBALL_RESERVE, spendDirectBudget } from './requestBudget';
 import { ensureDailyUniverse } from './matchUniverse';
 import { ensureFictionalDailyProgram, getFictionalProgramStatus } from './fictionalProgram';
 import { runLiveMarkerTick } from './liveMarkers';
@@ -22,7 +22,7 @@ import { runInPlayComboTick, InternationalBreakTickDiagnostics } from './inPlayC
 import { runNightlyReviewIfDue } from './dailyReview';
 import { autoProbeWebCapability } from './llmRouter';
 import { getRecentSearchSource, probeAnySearch } from './webSearch';
-import { runMorningScanIfDue } from './scheduler';
+import { getDailyPlan, runMorningScanIfDue } from './scheduler';
 import { reconcileScoutingAnalyses } from './scoutingReview';
 import { refreshDueLineups } from './lineupRefresh';
 import { readLearnedModel } from './learnStore';
@@ -70,6 +70,8 @@ interface SharedLiveFixturesResult {
 const LIVE_FIXTURES_CACHE_KEY = '@shared_live_fixtures_cache';
 /** Durée de réutilisation du relevé en direct API-Football. */
 const LIVE_FIXTURES_CACHE_MS = 15 * 60_000;
+/** Fenêtre (minutes depuis le coup d'envoi) pendant laquelle un match du planning réel peut être en direct. */
+const REAL_MATCH_LIVE_WINDOW = { from: -5, to: 125 };
 let liveFixturesCache: { at: number; fixtures: LiveFixture[] } | null = null;
 
 async function readCachedLiveFixtures(): Promise<LiveFixture[] | null> {
@@ -150,6 +152,22 @@ async function fetchFictionalLiveFixtures(realLive: LiveFixture[]): Promise<Live
   );
 }
 
+async function hasRealMatchInLiveWindow(): Promise<boolean> {
+  try {
+    const plan = await getDailyPlan();
+    if (!plan) return false;
+    const now = Date.now();
+    return plan.slots.some((slot) =>
+      (slot.matches as Array<{ kickoff_utc: string }>).some((m) => {
+        const minutes = (now - Date.parse(m.kickoff_utc)) / 60_000;
+        return minutes >= REAL_MATCH_LIVE_WINDOW.from && minutes <= REAL_MATCH_LIVE_WINDOW.to;
+      })
+    );
+  } catch {
+    return true; // planning illisible : on préfère relever que rater un pari réel
+  }
+}
+
 async function fetchSharedLiveFixtures(): Promise<SharedLiveFixturesResult> {
   const apiConfig = await getAPIConfig();
   let apiFootballError: string | undefined;
@@ -162,7 +180,11 @@ async function fetchSharedLiveFixtures(): Promise<SharedLiveFixturesResult> {
   const cached = await readCachedLiveFixtures();
   if (cached) {
     fixtures = cached;
-  } else if (apiConfig.apiFootball && (await spendBudget('apiFootball', 1, API_FOOTBALL_RESERVE.liveFixtures))) {
+  } else if (!(await hasRealMatchInLiveWindow())) {
+    // Aucun match du planning réel (5 grands championnats) ne peut être en
+    // cours : pas de requête API-Football (quota gardé pour les heures de match).
+    fixtures = [];
+  } else if (apiConfig.apiFootball && (await spendDirectBudget('apiFootball', API_FOOTBALL_RESERVE.settlement))) {
     try {
       fixtures = await fetchLiveFixtures(apiConfig.apiFootball);
       await writeCachedLiveFixtures(fixtures);

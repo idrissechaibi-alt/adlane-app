@@ -215,6 +215,8 @@ async function fetchFinalResults(
  * "Aucun bilan encore effectué" qui persistait malgré des jours d'activité.
  */
 const OMNIROUTE_FINAL_RESULT_CONCURRENCY = 6;
+/** Matchs interrogés par passage horaire (le reste suit au passage suivant). */
+const OMNIROUTE_FINAL_RESULT_MAX_PER_PASS = 30;
 
 /** Statuts considérés comme match terminé (API-Football) — même liste que
  * FINISHED_STATUSES dans inPlayCombos.ts (pas exportée de là pour éviter un
@@ -507,7 +509,13 @@ export async function runNightlyReviewIfDue(): Promise<number> {
   const lastTodayAttempt = lastTodayAttemptRaw ? Number(lastTodayAttemptRaw) : 0;
   const todayDue = Date.now() - lastTodayAttempt >= TODAY_RETRY_INTERVAL_MS;
 
-  const pendingDays = todayDue ? [...closedPendingDays, today] : closedPendingDays;
+  // Passage horaire : la veille est RETENTÉE aussi tant que des propositions y
+  // restent non réglées (moins de 48 h, avant la purge). Avant, une veille
+  // "close" au premier passage n'était jamais revue : ses paris dont le
+  // score n'avait pas encore pu être trouvé restaient non réglés pour
+  // toujours (111 paris fictifs du 9 octobre).
+  const retryDays = [yesterday, today].filter((day) => !closedPendingDays.includes(day));
+  const pendingDays = todayDue ? [...closedPendingDays, ...retryDays] : closedPendingDays;
   if (pendingDays.length === 0) return 0;
   if (todayDue) await AsyncStorage.setItem(LAST_TODAY_ATTEMPT_KEY, String(Date.now()));
 
@@ -598,7 +606,10 @@ export async function runNightlyReviewIfDue(): Promise<number> {
     if (unresolvedLegs.length > 0) {
       const omnirouteConfig = await loadOmnirouteConfig();
       if (omnirouteConfig) {
-        const omnirouteFinals = await fetchFinalResultsViaOmniroute(omnirouteConfig, unresolvedLegs);
+        const omnirouteFinals = await fetchFinalResultsViaOmniroute(
+          omnirouteConfig,
+          unresolvedLegs.slice(0, OMNIROUTE_FINAL_RESULT_MAX_PER_PASS)
+        );
         for (const [fixtureId, result] of omnirouteFinals) finals.set(fixtureId, result);
       }
     }
