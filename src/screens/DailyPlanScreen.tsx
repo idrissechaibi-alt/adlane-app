@@ -15,7 +15,7 @@ import {
   Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { executeMorningScan, getDailyPlan, checkAndUpdateT90Status, DailyPlan } from '../core/scheduler';
+import { executeMorningScan, getDailyPlan, checkAndUpdateT90Status, DailyPlan, runMorningScanIfDue, todayLocalDateString } from '../core/scheduler';
 import { buildScheduledMatches, ProposedSlip } from '../core/dailyWorkflow';
 import { InPlayProposal, readInPlayProposals } from '../core/learnStore';
 import { getLineupRefresh, isT90Reached, LineupRefresh } from '../core/lineupRefresh';
@@ -34,6 +34,8 @@ export default function DailyPlanScreen() {
   const [matchesMissingOdds, setMatchesMissingOdds] = useState(0);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [inPlayProposals, setInPlayProposals] = useState<InPlayProposal[]>([]);
+  /** Date du planning enregistré quand ce n'est pas celui d'aujourd'hui (masqué). */
+  const [stalePlanDate, setStalePlanDate] = useState<string | null>(null);
   const [lineupRefreshes, setLineupRefreshes] = useState<Record<string, LineupRefresh | null>>({});
   const [placedBetIds, setPlacedBetIds] = useState<Set<string>>(new Set());
   const [placingId, setPlacingId] = useState<string | null>(null);
@@ -86,11 +88,12 @@ export default function DailyPlanScreen() {
   };
 
   const loadInPlayProposals = () => {
-    const today = new Date().toISOString().split('T')[0];
+    // Journée LOCALE (pas UTC) : après minuit en Algérie, les paris d'hier ne reviennent pas.
+    const today = todayLocalDateString();
     // real !== false : les paris fictifs (boucle d'auto-apprentissage, tout
     // l'univers européen) ne sont jamais affichés ici, seulement les vrais
     // paris sur les 5 grands championnats.
-    setInPlayProposals(readInPlayProposals().filter((p) => p.createdAt.startsWith(today) && p.real !== false));
+    setInPlayProposals(readInPlayProposals().filter((p) => todayLocalDateString(new Date(p.createdAt)) === today && p.real !== false));
   };
 
   // Planning du Jour (solos/combinés pré-match) désactivé : les cotes
@@ -101,7 +104,17 @@ export default function DailyPlanScreen() {
   const loadDailyPlan = async () => {
     try {
       const existing = await getDailyPlan();
-      if (existing) {
+      if (existing && existing.date !== todayLocalDateString()) {
+        // Planning d'une autre journée (le scan du jour n'a pas encore eu lieu) :
+        // jamais affiché comme s'il était celui d'aujourd'hui. Le scan est relancé
+        // dès qu'il est dû (voir runMorningScanIfDue).
+        setPlan(null);
+        setStalePlanDate(existing.date);
+        setMatchesMissingOdds(0);
+        setProposals([]);
+        runMorningScanIfDue().then((ran) => { if (ran) void loadDailyPlan(); }).catch(() => {});
+      } else if (existing) {
+        setStalePlanDate(null);
         setPlan(existing);
         const { skippedNoOdds } = buildScheduledMatches(existing.slots);
         setMatchesMissingOdds(skippedNoOdds);
@@ -669,8 +682,10 @@ export default function DailyPlanScreen() {
         ) : (
           <View style={styles.emptyState}>
             <Ionicons name="calendar-outline" size={64} color="#64748b" />
-            <Text style={styles.emptyText}>Aucun match programmé aujourd'hui</Text>
-            <Text style={styles.emptySubText}>Lance le scan matinal pour détecter les matchs</Text>
+            <Text style={styles.emptyText}>{stalePlanDate ? "Le planning d'aujourd'hui n'est pas encore généré" : "Aucun match programmé aujourd'hui"}</Text>
+            <Text style={styles.emptySubText}>
+              {stalePlanDate ? `Le planning du ${stalePlanDate} est masqué. Tire pour actualiser ou lance le scan matinal.` : 'Lance le scan matinal pour détecter les matchs'}
+            </Text>
           </View>
         )}
       </ScrollView>

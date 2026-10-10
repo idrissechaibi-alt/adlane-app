@@ -326,15 +326,15 @@ export async function getDailyPlan(): Promise<DailyPlan | null> {
 }
 
 /** Heure locale (0-23) à partir de laquelle le scan matinal se déclenche tout seul. */
-const AUTO_SCAN_HOUR = 7;
+const AUTO_SCAN_HOUR = 1;
 
 /**
  * Déclenche le scan matinal automatiquement, sans action de l'utilisateur.
- * Android ne garantit pas une exécution pile à 7h00 (le système décide du
+ * Android ne garantit pas une exécution pile à 1h00 (le système décide du
  * moment exact de la tâche de fond, au mieux toutes les ~15 min) : on se
- * contente donc du PREMIER tour, après 7h locales, où la journée n'a pas
+ * contente donc du PREMIER tour, après 1h locale, où la journée n'a pas
  * encore été scannée — même principe que le bilan de minuit. Idempotent :
- * un tour de plus le même jour après 7h ne relance rien.
+ * un tour de plus le même jour après 1h ne relance rien.
  */
 export async function runMorningScanIfDue(): Promise<boolean> {
   const now = new Date();
