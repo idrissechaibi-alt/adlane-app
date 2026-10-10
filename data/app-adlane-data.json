@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-10-10T14:22:11.810Z",
+  "exportedAt": "2026-10-10T14:46:33.215Z",
   "formatVersion": 1,
   "source": "APP adlane",
   "data": {
@@ -4866,9 +4866,15 @@
     },
     "tickProgress": {
       "startedAt": "2026-10-10T14:22:07.724Z",
-      "step": "scan matinal",
-      "at": "2026-10-10T14:22:07.725Z",
-      "stepDurationsSec": {}
+      "step": "marqueurs live",
+      "at": "2026-10-10T14:26:23.663Z",
+      "stepDurationsSec": {
+        "scan matinal": 255,
+        "univers du jour": 0,
+        "programme fictif": 1,
+        "compositions T-90": 0,
+        "relevé live partagé": 0
+      }
     },
     "lastTick": {
       "finishedAt": "2026-10-10T12:33:36.538Z",
@@ -4911,10 +4917,11 @@
       "nightlyReviewPointsCreated": 9
     },
     "lastRealFastTick": {
-      "at": "2026-10-10T14:13:02.954Z",
-      "liveFound": 10,
-      "fresh": 0,
-      "source": "api_football"
+      "at": "2026-10-10T14:45:30.584Z",
+      "liveFound": 11,
+      "fresh": 2,
+      "source": "sources_live_gratuites",
+      "apiFootballError": "quota du jour atteint (réserve gardée pour le règlement)"
     },
     "paperBets": {
       "total": 122,
@@ -4988,12 +4995,12 @@
       ]
     },
     "inPlayProposals": {
-      "real": 15,
+      "real": 25,
       "fictional": 467,
       "fictionalReviewed": 248,
       "fictionalSettledLegs": 209,
-      "lastCreatedAt": "2026-10-10T13:52:36.148Z",
-      "createdLast24h": 482
+      "lastCreatedAt": "2026-10-10T14:45:28.400Z",
+      "createdLast24h": 492
     },
     "predictionOutcomes30d": 242,
     "marketSeries": {
@@ -5053,7 +5060,7 @@
         {
           "name": "Principal",
           "ok": true,
-          "latencyMs": 115,
+          "latencyMs": 54,
           "readyModels": 27,
           "configuredReady": 12,
           "configuredTotal": 13
@@ -5061,7 +5068,7 @@
         {
           "name": "Omniroute",
           "ok": true,
-          "latencyMs": 1094,
+          "latencyMs": 1833,
           "readyModels": 941,
           "configuredReady": 2,
           "configuredTotal": 2
@@ -5070,58 +5077,58 @@
       "leaderboard": [
         {
           "label": "Principal · nemotron-3.5-content-safety",
-          "ok": 346,
+          "ok": 352,
           "fail": 240,
-          "avgMs": 534,
-          "coolingDown": true
+          "avgMs": 702,
+          "coolingDown": false
         },
         {
           "label": "Principal · allam-2-7b",
-          "ok": 318,
-          "fail": 252,
-          "avgMs": 526,
-          "coolingDown": true
+          "ok": 322,
+          "fail": 255,
+          "avgMs": 617,
+          "coolingDown": false
         },
         {
           "label": "Principal · qwen3.8-27b",
           "ok": 102,
-          "fail": 87,
+          "fail": 89,
           "avgMs": 662,
           "coolingDown": true
         },
         {
+          "label": "Principal · gpt-oss-20b",
+          "ok": 447,
+          "fail": 24,
+          "avgMs": 2161,
+          "coolingDown": false
+        },
+        {
           "label": "Principal · gpt-oss-120b",
           "ok": 68,
-          "fail": 86,
+          "fail": 87,
           "avgMs": 1732,
           "coolingDown": true
         },
         {
-          "label": "Principal · gpt-oss-20b",
-          "ok": 439,
-          "fail": 24,
-          "avgMs": 6247,
-          "coolingDown": true
-        },
-        {
           "label": "Principal · auto",
-          "ok": 368,
-          "fail": 17,
-          "avgMs": 23680,
+          "ok": 370,
+          "fail": 18,
+          "avgMs": 12181,
           "coolingDown": false
         },
         {
           "label": "Principal · diffusiongemma-26b-a4b-it",
-          "ok": 69,
+          "ok": 70,
           "fail": 42,
-          "avgMs": 59765,
+          "avgMs": 42337,
           "coolingDown": false
         },
         {
           "label": "Principal · nemotron-3-super-120b",
-          "ok": 10,
+          "ok": 11,
           "fail": 3,
-          "avgMs": 113624,
+          "avgMs": 81969,
           "coolingDown": false
         },
         {
@@ -5145,7 +5152,7 @@
     },
     "dailyPlan": {
       "date": "2026-10-10",
-      "generatedAt": "2026-10-10T14:22:01.714Z",
+      "generatedAt": "2026-10-10T14:40:24.093Z",
       "matches": [
         {
           "match": "Arsenal FC - Leeds United FC",
@@ -5166,24 +5173,6 @@
           "hasOdds": true
         },
         {
-          "match": "TSG 1899 Hoffenheim - Hamburger SV",
-          "league": "Bundesliga",
-          "kickoff": "2026-10-10T13:30:00Z",
-          "hasOdds": false
-        },
-        {
-          "match": "1. FSV Mainz 05 - Bayer 04 Leverkusen",
-          "league": "Bundesliga",
-          "kickoff": "2026-10-10T13:30:00Z",
-          "hasOdds": false
-        },
-        {
-          "match": "SC Paderborn 07 - VfB Stuttgart",
-          "league": "Bundesliga",
-          "kickoff": "2026-10-10T13:30:00Z",
-          "hasOdds": true
-        },
-        {
           "match": "1. FC Union Berlin - SV 07 Elversberg",
           "league": "Bundesliga",
           "kickoff": "2026-10-10T13:30:00Z",
@@ -5196,13 +5185,25 @@
           "hasOdds": false
         },
         {
-          "match": "Sunderland AFC - Brighton & Hove Albion FC",
-          "league": "Premier League",
-          "kickoff": "2026-10-10T14:00:00Z",
+          "match": "SC Paderborn 07 - VfB Stuttgart",
+          "league": "Bundesliga",
+          "kickoff": "2026-10-10T13:30:00Z",
           "hasOdds": true
         },
         {
-          "match": "Chelsea FC - AFC Bournemouth",
+          "match": "TSG 1899 Hoffenheim - Hamburger SV",
+          "league": "Bundesliga",
+          "kickoff": "2026-10-10T13:30:00Z",
+          "hasOdds": false
+        },
+        {
+          "match": "1. FSV Mainz 05 - Bayer 04 Leverkusen",
+          "league": "Bundesliga",
+          "kickoff": "2026-10-10T13:30:00Z",
+          "hasOdds": false
+        },
+        {
+          "match": "Aston Villa FC - Brentford FC",
           "league": "Premier League",
           "kickoff": "2026-10-10T14:00:00Z",
           "hasOdds": false
@@ -5211,13 +5212,19 @@
           "match": "Ipswich Town FC - Fulham FC",
           "league": "Premier League",
           "kickoff": "2026-10-10T14:00:00Z",
-          "hasOdds": true
+          "hasOdds": false
         },
         {
-          "match": "Aston Villa FC - Brentford FC",
+          "match": "Sunderland AFC - Brighton & Hove Albion FC",
           "league": "Premier League",
           "kickoff": "2026-10-10T14:00:00Z",
-          "hasOdds": true
+          "hasOdds": false
+        },
+        {
+          "match": "Chelsea FC - AFC Bournemouth",
+          "league": "Premier League",
+          "kickoff": "2026-10-10T14:00:00Z",
+          "hasOdds": false
         },
         {
           "match": "Deportivo Alavés - Club Atlético de Madrid",
@@ -5238,6 +5245,12 @@
           "hasOdds": false
         },
         {
+          "match": "FC Barcelona - Getafe CF",
+          "league": "Primera Division",
+          "kickoff": "2026-10-10T16:30:00Z",
+          "hasOdds": true
+        },
+        {
           "match": "RB Leipzig - Eintracht Frankfurt",
           "league": "Bundesliga",
           "kickoff": "2026-10-10T16:30:00Z",
@@ -5250,9 +5263,15 @@
           "hasOdds": true
         },
         {
-          "match": "FC Barcelona - Getafe CF",
-          "league": "Primera Division",
-          "kickoff": "2026-10-10T16:30:00Z",
+          "match": "Stade Brestois 29 - Angers SCO",
+          "league": "Ligue 1",
+          "kickoff": "2026-10-10T18:45:00Z",
+          "hasOdds": true
+        },
+        {
+          "match": "Paris Saint-Germain FC - Le Mans FC",
+          "league": "Ligue 1",
+          "kickoff": "2026-10-10T18:45:00Z",
           "hasOdds": true
         },
         {
@@ -5274,18 +5293,6 @@
           "hasOdds": true
         },
         {
-          "match": "Stade Brestois 29 - Angers SCO",
-          "league": "Ligue 1",
-          "kickoff": "2026-10-10T18:45:00Z",
-          "hasOdds": true
-        },
-        {
-          "match": "Paris Saint-Germain FC - Le Mans FC",
-          "league": "Ligue 1",
-          "kickoff": "2026-10-10T18:45:00Z",
-          "hasOdds": true
-        },
-        {
           "match": "Real Madrid CF - Villarreal CF",
           "league": "Primera Division",
           "kickoff": "2026-10-10T19:00:00Z",
@@ -5295,9 +5302,9 @@
     },
     "apiUsageToday": {
       "countsToday": {
-        "footballData": 31,
+        "footballData": 37,
         "apiFootball": 95,
-        "theOddsApi": 131,
+        "theOddsApi": 151,
         "perplexity": 3,
         "apiFootball-autolearn": 70,
         "sportmonks-autolearn": 12,
@@ -5305,7 +5312,7 @@
         "sportmonks": 48
       },
       "theOddsApiMonth": {
-        "used": 384,
+        "used": 424,
         "limit": 500,
         "period": "month",
         "live": true
@@ -5320,33 +5327,33 @@
     "liveSources": {
       "LiveScore": {
         "ok": true,
-        "count": 240,
-        "at": "2026-10-10T14:22:08.240Z"
+        "count": 232,
+        "at": "2026-10-10T14:46:30.871Z"
       },
       "365Scores": {
         "ok": true,
-        "count": 87,
-        "at": "2026-10-10T14:22:08.344Z"
+        "count": 65,
+        "at": "2026-10-10T14:46:31.981Z"
       },
       "TheSportsDB": {
         "ok": true,
         "count": 313,
-        "at": "2026-10-10T14:22:08.350Z"
+        "at": "2026-10-10T14:46:30.623Z"
       },
       "FotMob": {
         "ok": true,
-        "count": 262,
-        "at": "2026-10-10T14:22:08.545Z"
+        "count": 253,
+        "at": "2026-10-10T14:46:32.674Z"
       },
       "ESPN": {
         "ok": true,
-        "count": 25,
-        "at": "2026-10-10T14:22:09.053Z"
+        "count": 26,
+        "at": "2026-10-10T14:46:31.616Z"
       },
       "AllSportsApi": {
         "ok": true,
         "count": 0,
-        "at": "2026-10-10T14:22:10.587Z"
+        "at": "2026-10-10T14:46:31.988Z"
       }
     },
     "deltaCorrections": {
@@ -5409,7 +5416,7 @@
         }
       ],
       "samples": {
-        "pending": 484,
+        "pending": 618,
         "measured": 0
       }
     },
