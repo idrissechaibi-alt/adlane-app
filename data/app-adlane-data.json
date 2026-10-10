@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-10-10T14:22:11.810Z",
+  "exportedAt": "2026-10-10T14:47:54.276Z",
   "formatVersion": 1,
   "source": "APP adlane",
   "data": {
@@ -4865,9 +4865,9 @@
       "ticksLast24h": 55
     },
     "tickProgress": {
-      "startedAt": "2026-10-10T14:22:07.724Z",
+      "startedAt": "2026-10-10T14:47:34.692Z",
       "step": "scan matinal",
-      "at": "2026-10-10T14:22:07.725Z",
+      "at": "2026-10-10T14:47:34.692Z",
       "stepDurationsSec": {}
     },
     "lastTick": {
@@ -4911,11 +4911,26 @@
       "nightlyReviewPointsCreated": 9
     },
     "lastRealFastTick": {
-      "at": "2026-10-10T14:13:02.954Z",
-      "liveFound": 10,
+      "at": "2026-10-10T14:46:32.248Z",
+      "liveFound": 11,
       "fresh": 0,
-      "source": "api_football"
+      "source": "sources_live_gratuites",
+      "apiFootballError": "quota du jour atteint (réserve gardée pour le règlement)"
     },
+    "abortedTicks": [
+      {
+        "startedAt": "2026-10-10T14:22:07.724Z",
+        "step": "marqueurs live",
+        "at": "2026-10-10T14:26:23.663Z",
+        "stepDurationsSec": {
+          "scan matinal": 255,
+          "univers du jour": 0,
+          "programme fictif": 1,
+          "compositions T-90": 0,
+          "relevé live partagé": 0
+        }
+      }
+    ],
     "paperBets": {
       "total": 122,
       "settled": 118,
@@ -4988,12 +5003,12 @@
       ]
     },
     "inPlayProposals": {
-      "real": 15,
+      "real": 25,
       "fictional": 467,
       "fictionalReviewed": 248,
       "fictionalSettledLegs": 209,
-      "lastCreatedAt": "2026-10-10T13:52:36.148Z",
-      "createdLast24h": 482
+      "lastCreatedAt": "2026-10-10T14:45:28.400Z",
+      "createdLast24h": 492
     },
     "predictionOutcomes30d": 242,
     "marketSeries": {
@@ -5053,7 +5068,7 @@
         {
           "name": "Principal",
           "ok": true,
-          "latencyMs": 115,
+          "latencyMs": 120,
           "readyModels": 27,
           "configuredReady": 12,
           "configuredTotal": 13
@@ -5061,7 +5076,7 @@
         {
           "name": "Omniroute",
           "ok": true,
-          "latencyMs": 1094,
+          "latencyMs": 1558,
           "readyModels": 941,
           "configuredReady": 2,
           "configuredTotal": 2
@@ -5069,59 +5084,59 @@
       ],
       "leaderboard": [
         {
-          "label": "Principal · nemotron-3.5-content-safety",
-          "ok": 346,
-          "fail": 240,
-          "avgMs": 534,
-          "coolingDown": true
+          "label": "Principal · allam-2-7b",
+          "ok": 322,
+          "fail": 255,
+          "avgMs": 617,
+          "coolingDown": false
         },
         {
-          "label": "Principal · allam-2-7b",
-          "ok": 318,
-          "fail": 252,
-          "avgMs": 526,
-          "coolingDown": true
+          "label": "Principal · nemotron-3.5-content-safety",
+          "ok": 353,
+          "fail": 240,
+          "avgMs": 781,
+          "coolingDown": false
         },
         {
           "label": "Principal · qwen3.8-27b",
           "ok": 102,
-          "fail": 87,
+          "fail": 89,
           "avgMs": 662,
           "coolingDown": true
         },
         {
+          "label": "Principal · gpt-oss-20b",
+          "ok": 448,
+          "fail": 24,
+          "avgMs": 2027,
+          "coolingDown": false
+        },
+        {
           "label": "Principal · gpt-oss-120b",
           "ok": 68,
-          "fail": 86,
+          "fail": 87,
           "avgMs": 1732,
           "coolingDown": true
         },
         {
-          "label": "Principal · gpt-oss-20b",
-          "ok": 439,
-          "fail": 24,
-          "avgMs": 6247,
-          "coolingDown": true
-        },
-        {
           "label": "Principal · auto",
-          "ok": 368,
-          "fail": 17,
-          "avgMs": 23680,
+          "ok": 370,
+          "fail": 18,
+          "avgMs": 12181,
           "coolingDown": false
         },
         {
           "label": "Principal · diffusiongemma-26b-a4b-it",
-          "ok": 69,
+          "ok": 70,
           "fail": 42,
-          "avgMs": 59765,
+          "avgMs": 42337,
           "coolingDown": false
         },
         {
           "label": "Principal · nemotron-3-super-120b",
-          "ok": 10,
+          "ok": 11,
           "fail": 3,
-          "avgMs": 113624,
+          "avgMs": 81969,
           "coolingDown": false
         },
         {
@@ -5145,7 +5160,7 @@
     },
     "dailyPlan": {
       "date": "2026-10-10",
-      "generatedAt": "2026-10-10T14:22:01.714Z",
+      "generatedAt": "2026-10-10T14:46:47.916Z",
       "matches": [
         {
           "match": "Arsenal FC - Leeds United FC",
@@ -5163,7 +5178,7 @@
           "match": "Genoa CFC - ACF Fiorentina",
           "league": "Serie A",
           "kickoff": "2026-10-10T13:00:00Z",
-          "hasOdds": true
+          "hasOdds": false
         },
         {
           "match": "TSG 1899 Hoffenheim - Hamburger SV",
@@ -5173,6 +5188,12 @@
         },
         {
           "match": "1. FSV Mainz 05 - Bayer 04 Leverkusen",
+          "league": "Bundesliga",
+          "kickoff": "2026-10-10T13:30:00Z",
+          "hasOdds": false
+        },
+        {
+          "match": "FC Augsburg - FC Bayern München",
           "league": "Bundesliga",
           "kickoff": "2026-10-10T13:30:00Z",
           "hasOdds": false
@@ -5190,19 +5211,7 @@
           "hasOdds": false
         },
         {
-          "match": "FC Augsburg - FC Bayern München",
-          "league": "Bundesliga",
-          "kickoff": "2026-10-10T13:30:00Z",
-          "hasOdds": false
-        },
-        {
-          "match": "Sunderland AFC - Brighton & Hove Albion FC",
-          "league": "Premier League",
-          "kickoff": "2026-10-10T14:00:00Z",
-          "hasOdds": true
-        },
-        {
-          "match": "Chelsea FC - AFC Bournemouth",
+          "match": "Aston Villa FC - Brentford FC",
           "league": "Premier League",
           "kickoff": "2026-10-10T14:00:00Z",
           "hasOdds": false
@@ -5211,19 +5220,25 @@
           "match": "Ipswich Town FC - Fulham FC",
           "league": "Premier League",
           "kickoff": "2026-10-10T14:00:00Z",
-          "hasOdds": true
+          "hasOdds": false
         },
         {
-          "match": "Aston Villa FC - Brentford FC",
+          "match": "Sunderland AFC - Brighton & Hove Albion FC",
           "league": "Premier League",
           "kickoff": "2026-10-10T14:00:00Z",
-          "hasOdds": true
+          "hasOdds": false
+        },
+        {
+          "match": "Chelsea FC - AFC Bournemouth",
+          "league": "Premier League",
+          "kickoff": "2026-10-10T14:00:00Z",
+          "hasOdds": false
         },
         {
           "match": "Deportivo Alavés - Club Atlético de Madrid",
           "league": "Primera Division",
           "kickoff": "2026-10-10T14:15:00Z",
-          "hasOdds": true
+          "hasOdds": false
         },
         {
           "match": "Lille OSC - Le Havre AC",
@@ -5256,12 +5271,6 @@
           "hasOdds": true
         },
         {
-          "match": "SSC Napoli - Frosinone Calcio",
-          "league": "Serie A",
-          "kickoff": "2026-10-10T18:45:00Z",
-          "hasOdds": true
-        },
-        {
           "match": "FC Lorient - Paris FC",
           "league": "Ligue 1",
           "kickoff": "2026-10-10T18:45:00Z",
@@ -5270,6 +5279,12 @@
         {
           "match": "AS Monaco FC - Toulouse FC",
           "league": "Ligue 1",
+          "kickoff": "2026-10-10T18:45:00Z",
+          "hasOdds": true
+        },
+        {
+          "match": "SSC Napoli - Frosinone Calcio",
+          "league": "Serie A",
           "kickoff": "2026-10-10T18:45:00Z",
           "hasOdds": true
         },
@@ -5295,9 +5310,9 @@
     },
     "apiUsageToday": {
       "countsToday": {
-        "footballData": 31,
+        "footballData": 38,
         "apiFootball": 95,
-        "theOddsApi": 131,
+        "theOddsApi": 161,
         "perplexity": 3,
         "apiFootball-autolearn": 70,
         "sportmonks-autolearn": 12,
@@ -5305,7 +5320,7 @@
         "sportmonks": 48
       },
       "theOddsApiMonth": {
-        "used": 384,
+        "used": 444,
         "limit": 500,
         "period": "month",
         "live": true
@@ -5318,35 +5333,35 @@
     },
     "sofaScore": null,
     "liveSources": {
-      "LiveScore": {
-        "ok": true,
-        "count": 240,
-        "at": "2026-10-10T14:22:08.240Z"
-      },
-      "365Scores": {
-        "ok": true,
-        "count": 87,
-        "at": "2026-10-10T14:22:08.344Z"
-      },
       "TheSportsDB": {
         "ok": true,
         "count": 313,
-        "at": "2026-10-10T14:22:08.350Z"
+        "at": "2026-10-10T14:47:35.029Z"
       },
       "FotMob": {
         "ok": true,
-        "count": 262,
-        "at": "2026-10-10T14:22:08.545Z"
+        "count": 254,
+        "at": "2026-10-10T14:47:35.035Z"
+      },
+      "LiveScore": {
+        "ok": true,
+        "count": 231,
+        "at": "2026-10-10T14:47:35.541Z"
       },
       "ESPN": {
         "ok": true,
-        "count": 25,
-        "at": "2026-10-10T14:22:09.053Z"
+        "count": 26,
+        "at": "2026-10-10T14:47:39.878Z"
+      },
+      "365Scores": {
+        "ok": true,
+        "count": 64,
+        "at": "2026-10-10T14:47:47.797Z"
       },
       "AllSportsApi": {
         "ok": true,
         "count": 0,
-        "at": "2026-10-10T14:22:10.587Z"
+        "at": "2026-10-10T14:47:50.500Z"
       }
     },
     "deltaCorrections": {
@@ -5409,7 +5424,7 @@
         }
       ],
       "samples": {
-        "pending": 484,
+        "pending": 618,
         "measured": 0
       }
     },
