@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-10-10T18:48:27.514Z",
+  "exportedAt": "2026-10-10T19:08:15.427Z",
   "formatVersion": 1,
   "source": "APP adlane",
   "data": {
@@ -4861,33 +4861,31 @@
   },
   "health": {
     "nativeBackgroundTicks": {
-      "lastTickAt": "2026-10-10T18:26:23.976Z",
-      "ticksLast24h": 57
+      "lastTickAt": "2026-10-10T18:57:10.008Z",
+      "ticksLast24h": 58
     },
     "tickProgress": {
-      "startedAt": "2026-10-10T18:48:23.276Z",
+      "startedAt": "2026-10-10T19:08:08.962Z",
       "step": "scan matinal",
-      "at": "2026-10-10T18:48:23.276Z",
-      "stepDurationsSec": {
-        "terminé": 36
-      }
+      "at": "2026-10-10T19:08:08.962Z",
+      "stepDurationsSec": {}
     },
     "lastTick": {
-      "startedAt": "2026-10-10T18:44:34.874Z",
-      "finishedAt": "2026-10-10T18:47:47.680Z",
-      "durationSec": 193,
+      "startedAt": "2026-10-10T18:48:23.276Z",
+      "finishedAt": "2026-10-10T18:59:37.450Z",
+      "durationSec": 674,
       "stepDurationsSec": {
-        "terminé": 147,
-        "scan matinal": 1,
+        "terminé": 36,
+        "scan matinal": 5,
         "relevé live partagé": 0,
-        "scan en direct 20e/60e": 36,
+        "scan en direct 20e/60e": 6,
         "bilan de minuit": 0,
-        "marqueurs live": 149,
-        "programme fictif": 3,
+        "marqueurs live": 661,
+        "programme fictif": 1,
         "univers du jour": 0,
-        "compositions T-90": 1,
+        "compositions T-90": 0,
         "bilan Scouting": 0,
-        "consolidation apprentissage": 3,
+        "consolidation apprentissage": 0,
         "enrichissement matchs suivis": 0,
         "vérification accès internet des modèles": 0
       },
@@ -4912,13 +4910,13 @@
       "fictionalSportmonksMatches": 4,
       "fictionalSofascoreMatches": 967,
       "fictionalOmnirouteMatches": 290,
-      "liveFixturesFound": 0,
+      "liveFixturesFound": 5,
       "fictionalLiveFixturesFound": 83,
-      "liveFixturesSource": "aucune_echec_omniroute",
+      "liveFixturesSource": "sources_live_gratuites",
       "apiFootballError": "quota du jour atteint (réserve gardée pour le règlement)",
-      "liveMarkerObserved": 44,
-      "liveMarkerClosed": 5,
-      "freshInPlayProposals": 80,
+      "liveMarkerObserved": 46,
+      "liveMarkerClosed": 4,
+      "freshInPlayProposals": 46,
       "intlBreak": {
         "withinWindow": false,
         "matchesScheduledToday": 0,
@@ -4931,10 +4929,10 @@
       "nightlyReviewPointsCreated": 0
     },
     "lastRealFastTick": {
-      "at": "2026-10-10T18:44:35.491Z",
-      "liveFound": 0,
-      "fresh": 0,
-      "source": "aucune_echec_omniroute",
+      "at": "2026-10-10T19:08:00.424Z",
+      "liveFound": 5,
+      "fresh": 2,
+      "source": "sources_live_gratuites",
       "apiFootballError": "quota du jour atteint (réserve gardée pour le règlement)"
     },
     "abortedTicks": [
@@ -5037,6 +5035,14 @@
           "relevé live partagé": 0,
           "scan en direct 20e/60e": 944
         }
+      },
+      {
+        "startedAt": "2026-10-10T19:08:00.803Z",
+        "step": "scan matinal",
+        "at": "2026-10-10T19:08:00.803Z",
+        "stepDurationsSec": {
+          "terminé": 503
+        }
       }
     ],
     "strategies": [
@@ -5066,6 +5072,60 @@
         "hitRate": 0,
         "meanPredicted": 0,
         "suspended": false
+      },
+      {
+        "id": "mt-deux-buts-2e",
+        "name": "2 buts ou plus en 2e MT (gros volume de tirs, peu de corners)",
+        "settled": 0,
+        "won": 0,
+        "hitRate": 0,
+        "meanPredicted": 0,
+        "suspended": false
+      },
+      {
+        "id": "mt-peu-de-buts-2e",
+        "name": "Au plus 1 but en 2e MT (peu de tirs cadrés malgré les corners)",
+        "settled": 0,
+        "won": 0,
+        "hitRate": 0,
+        "meanPredicted": 0,
+        "suspended": false
+      },
+      {
+        "id": "mt-cartons-plus2",
+        "name": "2 cartons ou plus en 2e MT (match déjà tendu)",
+        "settled": 0,
+        "won": 0,
+        "hitRate": 0,
+        "meanPredicted": 0,
+        "suspended": false
+      },
+      {
+        "id": "mt-cartons-plus3",
+        "name": "3 cartons ou plus en 2e MT (match très tendu)",
+        "settled": 0,
+        "won": 0,
+        "hitRate": 0,
+        "meanPredicted": 0,
+        "suspended": false
+      },
+      {
+        "id": "mt-match-propre",
+        "name": "Au plus 1 carton en 2e MT (match offensif et propre)",
+        "settled": 0,
+        "won": 0,
+        "hitRate": 0,
+        "meanPredicted": 0,
+        "suspended": false
+      },
+      {
+        "id": "mt-corners-domination",
+        "name": "5 corners ou plus en 2e MT (domination nette)",
+        "settled": 0,
+        "won": 0,
+        "hitRate": 0,
+        "meanPredicted": 0,
+        "suspended": false
       }
     ],
     "paperBets": {
@@ -5074,20 +5134,20 @@
       "won": 31,
       "lastPlacedAt": "2026-10-10T06:36:17.078Z",
       "lastSettledAt": "2026-10-10T10:59:45.440Z",
-      "placedLast24h": 25,
-      "settledLast24h": 27
+      "placedLast24h": 20,
+      "settledLast24h": 26
     },
     "trainingRows": {
-      "last14Days": 1980,
-      "lastClosedAt": "2026-10-10T18:47:40.408Z",
+      "last14Days": 1984,
+      "lastClosedAt": "2026-10-10T18:59:36.053Z",
       "bySource": {
-        "api_football": 1207,
-        "omniroute": 773
+        "api_football": 1210,
+        "omniroute": 774
       }
     },
     "model": {
-      "updatedAt": "2026-10-10T18:47:47.536Z",
-      "totalRows": 1980,
+      "updatedAt": "2026-10-10T18:59:37.439Z",
+      "totalRows": 1984,
       "markerRules": 40,
       "paperBets": {
         "total": 122,
@@ -5140,12 +5200,12 @@
       ]
     },
     "inPlayProposals": {
-      "real": 45,
-      "fictional": 1246,
+      "real": 47,
+      "fictional": 1292,
       "fictionalReviewed": 273,
       "fictionalSettledLegs": 214,
-      "lastCreatedAt": "2026-10-10T18:44:59.389Z",
-      "createdLast24h": 1273
+      "lastCreatedAt": "2026-10-10T19:00:09.311Z",
+      "createdLast24h": 1280
     },
     "predictionOutcomes30d": 246,
     "marketSeries": {
@@ -5205,7 +5265,7 @@
         {
           "name": "Principal",
           "ok": true,
-          "latencyMs": 33,
+          "latencyMs": 76,
           "readyModels": 27,
           "configuredReady": 12,
           "configuredTotal": 13
@@ -5213,7 +5273,7 @@
         {
           "name": "Omniroute",
           "ok": true,
-          "latencyMs": 1378,
+          "latencyMs": 1538,
           "readyModels": 941,
           "configuredReady": 2,
           "configuredTotal": 2
@@ -5222,37 +5282,37 @@
       "leaderboard": [
         {
           "label": "Principal · allam-2-7b",
-          "ok": 464,
-          "fail": 313,
-          "avgMs": 442,
+          "ok": 471,
+          "fail": 316,
+          "avgMs": 537,
           "coolingDown": false
         },
         {
           "label": "Principal · qwen3.8-27b",
           "ok": 102,
-          "fail": 116,
+          "fail": 120,
           "avgMs": 662,
-          "coolingDown": false
+          "coolingDown": true
         },
         {
           "label": "Principal · gpt-oss-120b",
-          "ok": 120,
-          "fail": 110,
-          "avgMs": 1108,
-          "coolingDown": false
+          "ok": 128,
+          "fail": 113,
+          "avgMs": 2163,
+          "coolingDown": true
         },
         {
           "label": "Principal · gpt-oss-20b",
-          "ok": 638,
-          "fail": 27,
-          "avgMs": 8839,
+          "ok": 640,
+          "fail": 28,
+          "avgMs": 5706,
           "coolingDown": false
         },
         {
           "label": "Principal · nemotron-3.5-content-safety",
-          "ok": 401,
+          "ok": 402,
           "fail": 258,
-          "avgMs": 12086,
+          "avgMs": 8722,
           "coolingDown": false
         },
         {
@@ -5454,7 +5514,7 @@
         "apiFootball-autolearn": 70,
         "sportmonks-autolearn": 15,
         "sofaScore": 0,
-        "sportmonks": 62
+        "sportmonks": 63
       },
       "theOddsApiMonth": {
         "used": 500,
@@ -5472,33 +5532,23 @@
     "liveSources": {
       "LiveScore": {
         "ok": true,
-        "count": 49,
-        "at": "2026-10-10T18:48:24.145Z"
+        "count": 53,
+        "at": "2026-10-10T19:08:10.242Z"
       },
       "TheSportsDB": {
         "ok": true,
-        "count": 63,
-        "at": "2026-10-10T18:48:24.076Z"
+        "count": 64,
+        "at": "2026-10-10T19:08:10.242Z"
       },
       "FotMob": {
         "ok": true,
-        "count": 48,
-        "at": "2026-10-10T18:48:24.697Z"
-      },
-      "365Scores": {
-        "ok": true,
-        "count": 52,
-        "at": "2026-10-10T18:48:24.117Z"
-      },
-      "AllSportsApi": {
-        "ok": true,
-        "count": 0,
-        "at": "2026-10-10T18:48:24.206Z"
+        "count": 53,
+        "at": "2026-10-10T19:08:11.057Z"
       },
       "ESPN": {
         "ok": true,
-        "count": 10,
-        "at": "2026-10-10T18:48:24.595Z"
+        "count": 13,
+        "at": "2026-10-10T19:08:12.261Z"
       }
     },
     "deltaCorrections": {
@@ -5561,7 +5611,7 @@
         }
       ],
       "samples": {
-        "pending": 438,
+        "pending": 457,
         "measured": 699
       }
     },
