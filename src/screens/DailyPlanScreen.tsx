@@ -23,6 +23,7 @@ import { getAllBets, saveBet } from '../database/storage';
 import { DailyScheduleSlot } from '../types/database';
 import { Bet, Market } from '../types';
 import { TrackedMarket } from '../core/learnStore';
+import { namesLikelyMatch, normalizeTeamName } from '../core/teamNameMatch';
 
 export default function DailyPlanScreen() {
   const [loading, setLoading] = useState(false);
@@ -264,8 +265,85 @@ export default function DailyPlanScreen() {
     }
   };
 
+  /** Un pari en direct (simple ou combiné) avec son bouton "Placer". */
+  const renderLiveProposal = (proposal: InPlayProposal) => (
+      <View key={proposal.id} style={styles.halftimeAlertRow}>
+        <Text style={styles.halftimeAlertMatch}>
+          {proposal.kind === 'minute60' ? '⏱️' : proposal.kind === 'halftime' ? '⏸️' : '⚡'}{' '}
+          {proposal.legs.length === 1
+            ? `${proposal.legs[0].homeTeam} ${proposal.legs[0].scoreLabel} ${proposal.legs[0].awayTeam}`
+            : `Combo (${proposal.legs.length} matchs)`}
+        </Text>
+        <Text style={styles.halftimeAlertWindow}>
+          {proposal.window} — {(proposal.combinedProb * 100).toFixed(0)}% combiné
+        </Text>
+        {proposal.legs.map((leg, legIdx) => (
+          <Text key={legIdx} style={styles.halftimeAlertSelection}>
+            • {leg.homeTeam} {leg.scoreLabel} {leg.awayTeam} — {leg.selection} ({(leg.prob * 100).toFixed(0)}%) — {leg.evidence}
+          </Text>
+        ))}
+        {placedBetIds.has(`live-${proposal.id}`) ? (
+          <Text style={styles.placeLockedText}>✅ Pari placé — visible dans le Bilan P&L.</Text>
+        ) : placingId === `live-${proposal.id}` ? (
+          <View style={styles.placeStakeRow}>
+            <TextInput
+              style={styles.stakeInput}
+              value={oddsInput}
+              onChangeText={setOddsInput}
+              placeholder="Cote réelle"
+              placeholderTextColor="#64748b"
+              keyboardType="decimal-pad"
+              autoFocus
+            />
+            <TextInput
+              style={styles.stakeInput}
+              value={stakeInput}
+              onChangeText={setStakeInput}
+              placeholder="Mise (ex: 10)"
+              placeholderTextColor="#64748b"
+              keyboardType="decimal-pad"
+            />
+            <TouchableOpacity
+              style={styles.confirmStakeButton}
+              disabled={placing}
+              onPress={() => handleConfirmPlaceLiveBet(proposal)}
+            >
+              {placing ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.confirmStakeText}>OK</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.cancelStakeButton} onPress={() => { setPlacingId(null); setStakeInput(''); setOddsInput(''); }}>
+              <Ionicons name="close" size={16} color="#94a3b8" />
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={styles.placeBetButton}
+            onPress={() => {
+              setOddsInput('');
+              setPlacingId(`live-${proposal.id}`);
+            }}
+          >
+            <Ionicons name="checkmark-circle-outline" size={16} color="#ffffff" />
+            <Text style={styles.placeBetButtonText}>Placer ce pari (cote + mise)</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+  );
+
+  /** Paris en direct rattachés à un créneau : au moins une jambe sur un de ses matchs. */
+  const liveProposalsForSlot = (slot: DailyScheduleSlot) =>
+    inPlayProposals.filter((p) =>
+      p.legs.some((leg) =>
+        slot.matches.some(
+          (m) =>
+            namesLikelyMatch(normalizeTeamName(leg.homeTeam), normalizeTeamName(m.homeTeam)) &&
+            namesLikelyMatch(normalizeTeamName(leg.awayTeam), normalizeTeamName(m.awayTeam))
+        )
+      )
+    );
+
   const renderSlot = (slot: DailyScheduleSlot) => {
     const isSelected = selectedSlot === slot.slotId;
+    const slotLive = liveProposalsForSlot(slot);
     const slotProposals = proposals.filter(p =>
       p.legs.some(leg => slot.matches.some(m => leg.match.includes(m.homeTeam)))
     );
@@ -304,6 +382,16 @@ export default function DailyPlanScreen() {
             />
           </View>
         </TouchableOpacity>
+
+        {slotLive.length > 0 && (
+          <View style={[styles.halftimeAlertsBox, styles.slotLiveBox]}>
+            <View style={styles.halftimeAlertsHeader}>
+              <Ionicons name="flash" size={18} color="#a78bfa" />
+              <Text style={styles.halftimeAlertsTitle}>Paris en direct ({slotLive.length})</Text>
+            </View>
+            {slotLive.map(renderLiveProposal)}
+          </View>
+        )}
 
         {isSelected && (
           <View style={styles.slotContent}>
@@ -482,6 +570,8 @@ export default function DailyPlanScreen() {
     );
   };
 
+  const orphanLive = inPlayProposals.filter((p) => !(plan?.slots ?? []).some((slot) => liveProposalsForSlot(slot).includes(p)));
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -506,95 +596,19 @@ export default function DailyPlanScreen() {
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#3b82f6" />}
       >
-        {inPlayProposals.length > 0 && (
+
+        <Text style={styles.infoLine}>
+          ℹ️ Pronostics en direct (20e / 60e) dans chaque créneau
+          {matchesMissingOdds > 0 ? ` · ${matchesMissingOdds} match${matchesMissingOdds > 1 ? 's' : ''} sans cotes (xG estimés par l'IA)` : ''}
+        </Text>
+
+        {orphanLive.length > 0 && (
           <View style={styles.halftimeAlertsBox}>
             <View style={styles.halftimeAlertsHeader}>
               <Ionicons name="flash" size={18} color="#a78bfa" />
-              <Text style={styles.halftimeAlertsTitle}>
-                Combos en direct du jour ({inPlayProposals.length})
-              </Text>
+              <Text style={styles.halftimeAlertsTitle}>Autres paris en direct ({orphanLive.length})</Text>
             </View>
-            {inPlayProposals.map((proposal) => (
-              <View key={proposal.id} style={styles.halftimeAlertRow}>
-                <Text style={styles.halftimeAlertMatch}>
-                  {proposal.kind === 'minute60' ? '⏱️' : proposal.kind === 'halftime' ? '⏸️' : '⚡'}{' '}
-                  {proposal.legs.length === 1
-                    ? `${proposal.legs[0].homeTeam} ${proposal.legs[0].scoreLabel} ${proposal.legs[0].awayTeam}`
-                    : `Combo (${proposal.legs.length} matchs)`}
-                </Text>
-                <Text style={styles.halftimeAlertWindow}>
-                  {proposal.window} — {(proposal.combinedProb * 100).toFixed(0)}% combiné
-                </Text>
-                {proposal.legs.map((leg, legIdx) => (
-                  <Text key={legIdx} style={styles.halftimeAlertSelection}>
-                    • {leg.homeTeam} {leg.scoreLabel} {leg.awayTeam} — {leg.selection} ({(leg.prob * 100).toFixed(0)}%) — {leg.evidence}
-                  </Text>
-                ))}
-                {placedBetIds.has(`live-${proposal.id}`) ? (
-                  <Text style={styles.placeLockedText}>✅ Pari placé — visible dans le Bilan P&L.</Text>
-                ) : placingId === `live-${proposal.id}` ? (
-                  <View style={styles.placeStakeRow}>
-                    <TextInput
-                      style={styles.stakeInput}
-                      value={oddsInput}
-                      onChangeText={setOddsInput}
-                      placeholder="Cote réelle"
-                      placeholderTextColor="#64748b"
-                      keyboardType="decimal-pad"
-                      autoFocus
-                    />
-                    <TextInput
-                      style={styles.stakeInput}
-                      value={stakeInput}
-                      onChangeText={setStakeInput}
-                      placeholder="Mise (ex: 10)"
-                      placeholderTextColor="#64748b"
-                      keyboardType="decimal-pad"
-                    />
-                    <TouchableOpacity
-                      style={styles.confirmStakeButton}
-                      disabled={placing}
-                      onPress={() => handleConfirmPlaceLiveBet(proposal)}
-                    >
-                      {placing ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.confirmStakeText}>OK</Text>}
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.cancelStakeButton} onPress={() => { setPlacingId(null); setStakeInput(''); setOddsInput(''); }}>
-                      <Ionicons name="close" size={16} color="#94a3b8" />
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  <TouchableOpacity
-                    style={styles.placeBetButton}
-                    onPress={() => {
-                      setOddsInput('');
-                      setPlacingId(`live-${proposal.id}`);
-                    }}
-                  >
-                    <Ionicons name="checkmark-circle-outline" size={16} color="#ffffff" />
-                    <Text style={styles.placeBetButtonText}>Placer ce pari (cote + mise)</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            ))}
-          </View>
-        )}
-
-        <View style={styles.oddsWarningBox}>
-          <Ionicons name="information-circle" size={20} color="#f59e0b" />
-          <Text style={styles.oddsWarningText}>
-            Propositions solo/combiné pré-match désactivées (cotes d'avant-match jugées plus assez rentables).
-            Les pronostics se font maintenant en direct, à la 20e et à la 60e minute — voir "Combos en direct du jour" ci-dessus une fois un match lancé.
-          </Text>
-        </View>
-
-        {matchesMissingOdds > 0 && (
-          <View style={styles.oddsWarningBox}>
-            <Ionicons name="information-circle" size={20} color="#f59e0b" />
-            <Text style={styles.oddsWarningText}>
-              {matchesMissingOdds} match{matchesMissingOdds > 1 ? 's' : ''} sans cotes bookmaker (ni TheOddsAPI ni API-Football) —
-              analysé{matchesMissingOdds > 1 ? 's' : ''} quand même en direct, avec des buts attendus estimés par l'IA à la
-              place des cotes (moins précis). Relance le Scan Matinal pour retenter les cotes.
-            </Text>
+            {orphanLive.map(renderLiveProposal)}
           </View>
         )}
 
@@ -935,6 +949,15 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#64748b',
     marginTop: 4,
+  },
+  slotLiveBox: {
+    marginHorizontal: 12,
+    marginBottom: 12,
+  },
+  infoLine: {
+    color: '#94a3b8',
+    fontSize: 12,
+    marginBottom: 10,
   },
   oddsWarningBox: {
     flexDirection: 'row',
