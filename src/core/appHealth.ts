@@ -162,6 +162,7 @@ export async function buildAppHealth(): Promise<Record<string, unknown>> {
         telegram: Boolean(await loadTelegramConfig()),
         apiFootball: Boolean(api.apiFootball?.trim()),
         sportmonks: Boolean(api.sportmonks?.trim()),
+        allSports: Boolean(api.allSports?.trim()),
         theOddsApi: Boolean(api.theOddsApi?.trim()),
       };
     }),

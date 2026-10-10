@@ -10,6 +10,7 @@ export interface APIConfig {
   theOddsApi: string;
   footballData: string;
   sportmonks: string;
+  allSports: string;
   sofaScore: string;
   perplexity: string;
   fallbackEnabled: boolean;
@@ -21,6 +22,7 @@ const DEFAULT_CONFIG: APIConfig = {
   theOddsApi: '',
   footballData: '',
   sportmonks: '',
+  allSports: '',
   sofaScore: '',
   perplexity: '',
   fallbackEnabled: true,

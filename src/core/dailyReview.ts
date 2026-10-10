@@ -45,6 +45,7 @@ import { sendTelegramMessage } from './telegram';
 import { buildFictionalMarketStats, formatFictionalDigestMessage } from './dailyDigest';
 import { readMatchTimelines, MatchSample } from './fictionalProgram';
 import { isSyntheticFixtureId } from './halftimeMonitor';
+import { fetchAllSportsFixtures, findAllSportsResult } from '../api/footballDataAPIs/allSports';
 import { fetchSofaEvent, fetchSofaStats, getSofaEventId } from '../api/footballDataAPIs/sofaScore';
 
 const LAST_REVIEW_KEY = '@last_daily_review';
@@ -596,6 +597,25 @@ export async function runNightlyReviewIfDue(): Promise<number> {
     const finals = apiConfig.apiFootball
       ? await fetchFinalResults(apiConfig.apiFootball, Array.from(realFixtureIds).filter((id) => !isSyntheticFixtureId(id)))
       : new Map<number, FinalResult>();
+
+    // AllSportsApi (pipe réel seulement) : repli quand API-Football n'a pas
+    // pu donner le score d'un match réel (quota épuisé, réponse vide).
+    if (apiConfig.allSports) {
+      const missingReal = allLegs.filter(
+        (l) => realFixtureIds.has(l.fixtureId) && !finals.has(l.fixtureId)
+      );
+      if (missingReal.length > 0) {
+        try {
+          const fixtures = await fetchAllSportsFixtures(apiConfig.allSports, day);
+          for (const leg of missingReal) {
+            const r = findAllSportsResult(fixtures, leg.homeTeam, leg.awayTeam);
+            if (r) finals.set(leg.fixtureId, r);
+          }
+        } catch {
+          // repli suivant (SofaScore, relevés) ou prochain bilan
+        }
+      }
+    }
 
     // SofaScore : résultat publié directement (score, mi-temps, corners et
     // cartons de 1ère MT) pour tout match du pipe fictif qu'il connaît.

@@ -916,6 +916,21 @@ export default function SettingsScreen({ navigation }: any) {
             />
           </View>
 
+          <View style={styles.inputGroup}>
+            <View style={styles.labelRow}>
+              <Text style={styles.label}>AllSportsApi (pipe réel uniquement)</Text>
+            </View>
+            <TextInput
+              style={styles.input}
+              value={apiConfig?.allSports || ''}
+              onChangeText={(text) => setApiConfig({ ...apiConfig!, allSports: text })}
+              placeholder="Clé AllSportsApi (optionnel)"
+              placeholderTextColor="#64748b"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </View>
+
           <View style={styles.switchRow}>
             <Text style={styles.switchLabel}>Fallback automatique</Text>
             <Switch
