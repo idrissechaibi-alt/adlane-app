@@ -503,7 +503,36 @@ export async function readTickProgress(): Promise<{ startedAt: string; step: str
   return raw ? JSON.parse(raw) : null;
 }
 
+const ABORTED_TICKS_KEY = '@aborted_ticks';
+
+/** Tour précédent coupé avant la fin (Android, fermeture de l'app) : l'étape
+ * atteinte est journalisée pour savoir où le temps manque. */
+async function recordAbortedPreviousTick(): Promise<void> {
+  try {
+    const progress = await readTickProgress();
+    if (!progress?.startedAt || progress.step === 'terminé') return;
+    const last = (await readLastTickDiagnostics()) as { startedAt?: string } | null;
+    if (last?.startedAt === progress.startedAt) return;
+    const raw = await AsyncStorage.getItem(ABORTED_TICKS_KEY);
+    const log: unknown[] = raw ? JSON.parse(raw) : [];
+    log.push(progress);
+    await AsyncStorage.setItem(ABORTED_TICKS_KEY, JSON.stringify(log.slice(-15)));
+  } catch {
+    // diagnostic best-effort
+  }
+}
+
+export async function readAbortedTicks(): Promise<unknown[]> {
+  try {
+    const raw = await AsyncStorage.getItem(ABORTED_TICKS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
 async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
+  await recordAbortedPreviousTick();
   // Scan matinal automatique (7h locales) : voir runMorningScanIfDue pour le
   // principe de déclenchement (premier tour après l'heure cible, idempotent).
   currentTickStartedAt = new Date().toISOString();
@@ -517,18 +546,58 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
     console.warn('[Tâche de fond] Scan matinal automatique échoué:', error.message);
   }
 
-  // Planning du Jour (solos/combinés pré-match) désactivé : les cotes
-  // avant-match ne sont plus jugées rentables (demande explicite). L'univers
-  // du jour ci-dessous reste construit — c'est la base des scans en direct
-  // (20e/60e minute), pas seulement du Planning du Jour.
-  await markTickStep('univers du jour');
-  let universeSize = 0;
+  // Ordre : ce qui produit des paris et règle les résultats d'abord. Android
+  // coupe souvent le tour en arrière-plan avant la fin : les étapes de
+  // préparation (programme, univers, compositions, apprentissage) passent
+  // après, elles reprennent au tour suivant sur ce qui est déjà stocké.
+  await markTickStep('relevé live partagé');
+  const shared = await fetchSharedLiveFixtures();
+  const liveFixtures = shared.fixtures;
+
+  // Scan en direct 20e minute (buts/corners/cartons 1ère MT + BTTS/total du
+  // match) et 60e minute (reste du match) — remplace l'ancien combo 20e
+  // minute (règles apprises seules) et le moniteur mi-temps.
+  await markTickStep('scan en direct 20e/60e');
+  let freshInPlayProposals = 0;
+  let intlBreak: InternationalBreakTickDiagnostics | undefined;
+  let sportmonksConfirmedMatches: number | null | undefined;
+  let sofaScoreConfirmedMatches: number | null | undefined;
+  let sportmonksError: string | undefined;
   try {
-    const model = readLearnedModel();
-    const universe = await ensureDailyUniverse(model?.focusLeagues ?? []);
-    universeSize = universe.length;
+    const result = await runInPlayComboTick(liveFixtures, shared.fictionalFixtures);
+    freshInPlayProposals = result.freshProposals;
+    intlBreak = result.intlBreak;
+    sportmonksConfirmedMatches = result.sportmonksConfirmedMatches;
+    sofaScoreConfirmedMatches = result.sofaScoreConfirmedMatches;
+    sportmonksError = result.sportmonksError;
   } catch (error: any) {
-    console.warn('[Tâche de fond] Univers du jour indisponible:', error.message);
+    console.warn('[Tâche de fond] Scan en direct échoué:', error.message);
+  }
+
+  await markTickStep('marqueurs live');
+  let liveMarkerObserved = 0;
+  let liveMarkerClosed = 0;
+  try {
+    const result = await runLiveMarkerTick([...liveFixtures, ...shared.fictionalFixtures]);
+    liveMarkerObserved = result.observed;
+    liveMarkerClosed = result.closed;
+  } catch (error: any) {
+    console.warn('[Tâche de fond] Relevé live échoué:', error.message);
+  }
+
+  // Bilan de la journée écoulée : se déclenche au premier tour après minuit.
+  // Erreur capturée et remontée au diagnostic (plutôt qu'un simple
+  // console.warn invisible) : "Aucun bilan encore effectué" dans les courbes
+  // était indiscernable entre "pas encore l'heure" et "échoue à chaque
+  // tentative depuis toujours" sans ça.
+  await markTickStep('bilan de minuit');
+  let nightlyReviewPointsCreated: number | undefined;
+  let nightlyReviewError: string | undefined;
+  try {
+    nightlyReviewPointsCreated = await runNightlyReviewIfDue();
+  } catch (error: any) {
+    nightlyReviewError = error?.message || 'erreur inconnue';
+    console.warn('[Tâche de fond] Bilan de minuit échoué:', error.message);
   }
 
   // Programme du jour de la boucle FICTIVE : découvert par planning transmis,
@@ -572,6 +641,20 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
     console.warn('[Tâche de fond] Programme fictif du jour indisponible:', error.message);
   }
 
+  // Planning du Jour (solos/combinés pré-match) désactivé : les cotes
+  // avant-match ne sont plus jugées rentables (demande explicite). L'univers
+  // du jour ci-dessous reste construit — c'est la base des scans en direct
+  // (20e/60e minute), pas seulement du Planning du Jour.
+  await markTickStep('univers du jour');
+  let universeSize = 0;
+  try {
+    const model = readLearnedModel();
+    const universe = await ensureDailyUniverse(model?.focusLeagues ?? []);
+    universeSize = universe.length;
+  } catch (error: any) {
+    console.warn('[Tâche de fond] Univers du jour indisponible:', error.message);
+  }
+
   // Compositions confirmées à T-90 (recherche Google/Omniroute, gratuit) :
   // débloque le placement direct des paris du Planning dès que l'info est là.
   await markTickStep('compositions T-90');
@@ -579,21 +662,6 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
     await refreshDueLineups();
   } catch (error: any) {
     console.warn('[Tâche de fond] Rafraîchissement compositions T-90 échoué:', error.message);
-  }
-
-  await markTickStep('relevé live partagé');
-  const shared = await fetchSharedLiveFixtures();
-  const liveFixtures = shared.fixtures;
-
-  await markTickStep('marqueurs live');
-  let liveMarkerObserved = 0;
-  let liveMarkerClosed = 0;
-  try {
-    const result = await runLiveMarkerTick([...liveFixtures, ...shared.fictionalFixtures]);
-    liveMarkerObserved = result.observed;
-    liveMarkerClosed = result.closed;
-  } catch (error: any) {
-    console.warn('[Tâche de fond] Relevé live échoué:', error.message);
   }
 
   // Confronte les analyses Scouting IA de la veille (et plus anciennes) au
@@ -620,41 +688,6 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
     if (Date.now() - Date.parse(currentTickStartedAt) < 5 * 60_000) await enrichFocusMatches();
   } catch (error: any) {
     console.warn('[Tâche de fond] Enrichissement des matchs suivis échoué:', error.message);
-  }
-
-  // Scan en direct 20e minute (buts/corners/cartons 1ère MT + BTTS/total du
-  // match) et 60e minute (reste du match) — remplace l'ancien combo 20e
-  // minute (règles apprises seules) et le moniteur mi-temps.
-  await markTickStep('scan en direct 20e/60e');
-  let freshInPlayProposals = 0;
-  let intlBreak: InternationalBreakTickDiagnostics | undefined;
-  let sportmonksConfirmedMatches: number | null | undefined;
-  let sofaScoreConfirmedMatches: number | null | undefined;
-  let sportmonksError: string | undefined;
-  try {
-    const result = await runInPlayComboTick(liveFixtures, shared.fictionalFixtures);
-    freshInPlayProposals = result.freshProposals;
-    intlBreak = result.intlBreak;
-    sportmonksConfirmedMatches = result.sportmonksConfirmedMatches;
-    sofaScoreConfirmedMatches = result.sofaScoreConfirmedMatches;
-    sportmonksError = result.sportmonksError;
-  } catch (error: any) {
-    console.warn('[Tâche de fond] Scan en direct échoué:', error.message);
-  }
-
-  // Bilan de la journée écoulée : se déclenche au premier tour après minuit.
-  // Erreur capturée et remontée au diagnostic (plutôt qu'un simple
-  // console.warn invisible) : "Aucun bilan encore effectué" dans les courbes
-  // était indiscernable entre "pas encore l'heure" et "échoue à chaque
-  // tentative depuis toujours" sans ça.
-  await markTickStep('bilan de minuit');
-  let nightlyReviewPointsCreated: number | undefined;
-  let nightlyReviewError: string | undefined;
-  try {
-    nightlyReviewPointsCreated = await runNightlyReviewIfDue();
-  } catch (error: any) {
-    nightlyReviewError = error?.message || 'erreur inconnue';
-    console.warn('[Tâche de fond] Bilan de minuit échoué:', error.message);
   }
 
   const diagnostics: AutoLearnTickDiagnostics = {
