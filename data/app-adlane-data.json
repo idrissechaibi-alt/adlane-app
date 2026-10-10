@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-10-10T00:03:23.281Z",
+  "exportedAt": "2026-10-10T00:34:40.847Z",
   "formatVersion": 1,
   "source": "APP adlane",
   "data": {
@@ -4824,25 +4824,26 @@
   },
   "health": {
     "nativeBackgroundTicks": {
-      "lastTickAt": "2026-10-10T00:03:18.099Z",
-      "ticksLast24h": 27
+      "lastTickAt": "2026-10-10T00:34:36.888Z",
+      "ticksLast24h": 29
     },
     "tickProgress": {
-      "startedAt": "2026-10-10T00:03:18.095Z",
+      "startedAt": "2026-10-10T00:34:36.887Z",
       "step": "programme fictif",
-      "at": "2026-10-10T00:03:20.065Z"
+      "at": "2026-10-10T00:34:38.621Z"
     },
     "lastTick": {
-      "finishedAt": "2026-10-09T23:48:07.714Z",
+      "finishedAt": "2026-10-10T00:18:58.981Z",
       "universeSize": 0,
       "omnirouteConfigured": true,
-      "fictionalProgramSize": 38,
+      "fictionalProgramSize": 4,
       "fictionalProgramFromFeed": false,
-      "fictionalMatchesAhead": 0,
+      "fictionalMatchesAhead": 4,
+      "fictionalNextKickoffUtc": "2026-10-10T14:00:00Z",
       "fictionalCountriesTried": 0,
       "fictionalCountriesTotal": 60,
       "fictionalLastTrace": {
-        "country": "Espagne",
+        "country": "Portugal",
         "attempts": [
           {
             "model": "(aucun)",
@@ -4851,13 +4852,13 @@
           }
         ]
       },
-      "fictionalSportmonksMatches": 1,
-      "fictionalOmnirouteMatches": 37,
-      "liveFixturesFound": 0,
-      "liveFixturesSource": "omniroute",
-      "liveMarkerObserved": 0,
+      "fictionalSportmonksMatches": 4,
+      "fictionalOmnirouteMatches": 0,
+      "liveFixturesFound": 11,
+      "liveFixturesSource": "api_football",
+      "liveMarkerObserved": 2,
       "liveMarkerClosed": 0,
-      "freshInPlayProposals": 0,
+      "freshInPlayProposals": 14,
       "intlBreak": {
         "withinWindow": false,
         "matchesScheduledToday": 0,
@@ -4871,31 +4872,31 @@
     },
     "paperBets": {
       "total": 102,
-      "settled": 92,
+      "settled": 98,
       "won": 30,
       "lastPlacedAt": "2026-10-09T19:05:51.234Z",
-      "lastSettledAt": "2026-10-09T19:05:51.370Z",
+      "lastSettledAt": "2026-10-10T00:03:22.965Z",
       "placedLast24h": 7,
-      "settledLast24h": 1
+      "settledLast24h": 7
     },
     "trainingRows": {
-      "last14Days": 1016,
-      "lastClosedAt": "2026-10-09T19:05:51.230Z",
+      "last14Days": 1099,
+      "lastClosedAt": "2026-10-10T00:03:21.994Z",
       "bySource": {
-        "api_football": 723,
+        "api_football": 806,
         "omniroute": 293
       }
     },
     "model": {
-      "updatedAt": "2026-10-09T23:48:03.794Z",
-      "totalRows": 1068,
+      "updatedAt": "2026-10-10T00:18:53.538Z",
+      "totalRows": 1099,
       "markerRules": 40,
       "paperBets": {
         "total": 102,
-        "settled": 92,
+        "settled": 98,
         "won": 30,
-        "hitRate": 0.32608695652173914,
-        "calibrationFactor": 0.7703172991976789
+        "hitRate": 0.30612244897959184,
+        "calibrationFactor": 0.7379437184932786
       },
       "omnirouteTrust": {
         "samples": 72,
@@ -4906,11 +4907,11 @@
     },
     "inPlayProposals": {
       "real": 1,
-      "fictional": 58,
+      "fictional": 75,
       "fictionalReviewed": 0,
       "fictionalSettledLegs": 0,
-      "lastCreatedAt": "2026-10-09T19:06:01.501Z",
-      "createdLast24h": 59
+      "lastCreatedAt": "2026-10-10T00:18:58.122Z",
+      "createdLast24h": 76
     },
     "predictionOutcomes30d": 0,
     "marketSeries": {
@@ -4958,19 +4959,19 @@
       },
       {
         "date": "2026-10-10",
-        "hitRate": 0.32608695652173914,
-        "total": 92,
+        "hitRate": 0.30612244897959184,
+        "total": 98,
         "won": 30
       }
     ],
-    "lastNightlyReview": "2026-10-08",
+    "lastNightlyReview": "2026-10-09",
     "aiProviders": {
       "configured": true,
       "checks": [
         {
           "name": "Principal",
           "ok": true,
-          "latencyMs": 132,
+          "latencyMs": 103,
           "readyModels": 28,
           "configuredReady": 10,
           "configuredTotal": 10
@@ -4978,7 +4979,7 @@
         {
           "name": "Omniroute",
           "ok": true,
-          "latencyMs": 2301,
+          "latencyMs": 1505,
           "readyModels": 953,
           "configuredReady": 1,
           "configuredTotal": 1
@@ -4987,23 +4988,23 @@
       "leaderboard": [
         {
           "label": "Principal · allam-2-7b",
-          "ok": 47,
+          "ok": 56,
           "fail": 12,
-          "avgMs": 590,
+          "avgMs": 413,
           "coolingDown": false
         },
         {
           "label": "Principal · auto",
-          "ok": 53,
+          "ok": 56,
           "fail": 0,
-          "avgMs": 1225,
+          "avgMs": 1261,
           "coolingDown": false
         },
         {
           "label": "Principal · gpt-oss-120b",
-          "ok": 16,
+          "ok": 22,
           "fail": 9,
-          "avgMs": 1083,
+          "avgMs": 1029,
           "coolingDown": false
         },
         {
