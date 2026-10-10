@@ -70,6 +70,9 @@ export interface MatchTrend {
   samples: { home: number; away: number };
 }
 
+/** Compteurs de diagnostic (appHealth) : prouvent que le fichier est chargé et réellement utilisé. */
+const usage = { lookups: 0, withTrend: 0, unknownTeams: 0, lastTrendAt: null as string | null, lastUnknown: null as string | null };
+
 let indexMemo: { at: number; index: TeamIndex } | null = null;
 let summariesMemo: Record<string, TeamSummary> | null = null;
 
@@ -221,11 +224,16 @@ function rate(team: TeamSummary, venue: 'home' | 'away', key: TrendKey): [number
  */
 export async function getMatchTrend(homeTeam: string, awayTeam: string): Promise<MatchTrend | null> {
   try {
+    usage.lookups++;
     const index = await loadIndex();
     if (!index) return null;
     const hTeam = findTeam(index, homeTeam);
     const aTeam = findTeam(index, awayTeam);
-    if (!hTeam || !aTeam || hTeam.id === aTeam.id) return null;
+    if (!hTeam || !aTeam || hTeam.id === aTeam.id) {
+      usage.unknownTeams++;
+      usage.lastUnknown = `${homeTeam} - ${awayTeam}`;
+      return null;
+    }
     const [h, a] = await Promise.all([ensureSummary(hTeam), ensureSummary(aTeam)]);
     if (!h || !a || h.n.all < MIN_MATCHES || a.n.all < MIN_MATCHES) return null;
 
@@ -251,6 +259,8 @@ export async function getMatchTrend(homeTeam: string, awayTeam: string): Promise
         ? { home: xH != null ? (gH + xH) / 2 : gH, away: xA != null ? (gA + xA) / 2 : gA }
         : undefined;
     if (Object.keys(expected).length === 0 && !goals) return null;
+    usage.withTrend++;
+    usage.lastTrendAt = new Date().toISOString();
     return { homeTeam: h.name, awayTeam: a.name, expected, goals, samples: { home: h.n.all, away: a.n.all } };
   } catch {
     return null;
@@ -293,4 +303,25 @@ export function trendVerdict(
   const overProb = atLeast(trendLambda, neededOver);
   const prob = side === 'over' ? overProb : 1 - overProb;
   return { prob, blocked: prob < BLOCK_BELOW };
+}
+
+/** État du fichier de tendances pour le diagnostic de l'app. */
+export async function getTeamStatsStatus(): Promise<{
+  indexUpdatedAt: string | null;
+  teamsInIndex: number;
+  summariesCached: number;
+  lookups: number;
+  withTrend: number;
+  unknownTeams: number;
+  lastTrendAt: string | null;
+  lastUnknown: string | null;
+}> {
+  const index = indexMemo?.index ?? null;
+  const summaries = await loadSummaries();
+  return {
+    indexUpdatedAt: index?.updatedAt ?? null,
+    teamsInIndex: index?.teams.length ?? 0,
+    summariesCached: Object.keys(summaries).length,
+    ...usage,
+  };
 }

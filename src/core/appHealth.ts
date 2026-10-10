@@ -14,6 +14,7 @@ import { checkAllProviders, getRouteLeaderboard, getWebCapableRoutes } from './l
 import { getRecentSearchSource, getWorkingSearchProviders } from './webSearch';
 import { getSofaStatus } from '../api/footballDataAPIs/sofaScore';
 import { getHubStatus } from '../api/footballDataAPIs/liveDataHub';
+import { getTeamStatsStatus } from './teamStats';
 import { getStrategyRecords } from './strategies';
 import { ensureDeltaSamplesLoaded, getAllDeltaCorrections, getShadowStats } from './deltaLearning';
 import { loadTelegramConfig } from './telegram';
@@ -170,6 +171,7 @@ export async function buildAppHealth(): Promise<Record<string, unknown>> {
     })),
     sofaScore: await section(async () => getSofaStatus()),
     liveSources: await section(async () => getHubStatus()),
+    teamStats: await section(async () => getTeamStatsStatus()),
     deltaCorrections: await section(async () => {
       await ensureDeltaSamplesLoaded();
       return { corrections: getAllDeltaCorrections(), samples: getShadowStats() };
