@@ -92,7 +92,7 @@ import { normalizeTeamName, namesLikelyMatch } from './teamNameMatch';
 import { OmnirouteConfig } from '../types';
 import { mapWithConcurrency } from './concurrency';
 import { hubDateKey, hubLiveStatus, hubStats } from '../api/footballDataAPIs/liveDataHub';
-import { DeltaUnit, LegProjection, describeCorrection, ensureDeltaSamplesLoaded, flushShadowProjections, getDeltaCorrection, recordShadowProjection } from './deltaLearning';
+import { DeltaUnit, LegProjection, describeCorrection, ensureDeltaSamplesLoaded, flushShadowProjections, getDeltaCorrection, projectFullMatchCount, recordShadowProjection } from './deltaLearning';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { matchesForDate, isWithinBreakWindow } from './internationalBreak';
 import { INTERNATIONAL_BREAK_CALENDAR } from '../data/internationalBreakCalendar';
@@ -171,6 +171,8 @@ const LINE_PICK_THRESHOLD = 0.55;
 const SLOT_COMBO_THRESHOLD = 3;
 /** Nombre maximum de combos émis par créneau et par checkpoint (paris réels). */
 const MAX_COMBOS_PER_SLOT = 2;
+/** Paris simples réels proposés par match et par checkpoint (les plus sûrs). */
+const REAL_LEGS_PER_MATCH = 3;
 /** Probabilité combinée minimale pour émettre un combo réel (3 jambes à ≥55% chacune peut descendre très bas, ex. 0.55³ ≈ 17%). */
 const MIN_COMBO_PROB = 0.25;
 
@@ -481,6 +483,40 @@ function blendPace(observedPerMinute: number, elapsedMinutes: number, typicalPer
   return (observedEvents + typicalPerMinute * PACE_PRIOR_MINUTES) / (elapsedMinutes + PACE_PRIOR_MINUTES);
 }
 
+/**
+ * Corners et cartons sur le MATCH ENTIER, projetés au rythme observé (mêlé au
+ * rythme moyen) sur le temps restant, corrigés de l'écart appris. Proposés à
+ * la 20e comme à la 60e : tous les marchés concourent, le plus sûr gagne.
+ */
+function fullMatchCountLegs(elapsedMinutes: number, observed?: { corners?: number; cards?: number }): CandidateLeg[] {
+  if (!observed || elapsedMinutes < MIN_MINUTES_FOR_PACE_PROJECTION) return [];
+  const legs: CandidateLeg[] = [];
+  const remainingMinutes = Math.max(0, 94 - elapsedMinutes); // temps additionnel moyen compris
+  const specs = [
+    { unit: 'corners_ft' as const, market: 'corners' as const, count: observed.corners, typical: TYPICAL_CORNERS_PER_MINUTE, noun: 'corners' },
+    { unit: 'cards_ft' as const, market: 'cartons' as const, count: observed.cards, typical: TYPICAL_CARDS_PER_MINUTE, noun: 'cartons' },
+  ];
+  for (const spec of specs) {
+    if (spec.count == null) continue;
+    const fix = getDeltaCorrection(spec.unit);
+    const perMinute = blendPace(spec.count / elapsedMinutes, elapsedMinutes, spec.typical);
+    const lambda = perMinute * remainingMinutes * fix.factor;
+    const line = pickHighestConfidentOverLine(lambda, LINE_PICK_THRESHOLD, spec.count);
+    if (!line) continue;
+    legs.push({
+      market: spec.market,
+      selection: `Plus de ${line.line} ${spec.noun} sur le match`,
+      prob: line.prob,
+      evidence:
+        `${spec.count} ${spec.noun} à la ${elapsedMinutes}e minute, rythme ${perMinute.toFixed(2)}/min → ` +
+        `${lambda.toFixed(1)} attendu(s) d'ici la fin (${(spec.count + lambda).toFixed(1)} au total).` +
+        describeCorrection(fix, spec.noun),
+      projection: { unit: spec.unit, observed: spec.count, expected: spec.count + lambda, factorUsed: fix.factor },
+    });
+  }
+  return legs;
+}
+
 async function buildLegs20(
   match: MatchRef,
   fixtureId: number,
@@ -590,6 +626,9 @@ async function buildLegs20(
     }
   }
 
+  // Corners / cartons du match entier.
+  legs.push(...fullMatchCountLegs(elapsedMinutes, { corners: observedCorners ?? undefined, cards: observedCards ?? undefined }));
+
   // 4) BTTS / 5) Total du match — projection sur le match ENTIER, pas
   // seulement la 1ère MT (déjà acquis si les deux ont déjà marqué / si le
   // total dépasse déjà la ligne : rien à prédire, on ne propose pas).
@@ -630,11 +669,14 @@ function withLearnedExpertise(legs: CandidateLeg[]): CandidateLeg[] {
 function buildLegs60(
   live: LiveFixture,
   preMatchExpectedGoals: { home: number; away: number } | null,
-  currentStats?: LiveMatchStats
+  currentStats?: LiveMatchStats,
+  observedLive?: ObservedLiveCounts
 ): CandidateLeg[] {
-  if (!preMatchExpectedGoals) return [];
+  // Corners / cartons du match entier : indépendants des buts attendus.
+  const countLegs = fullMatchCountLegs(live.minute, observedLive);
+  if (!preMatchExpectedGoals) return withLearnedExpertise(countLegs);
 
-  const legs: CandidateLeg[] = [];
+  const legs: CandidateLeg[] = [...countLegs];
   const currentScore = { home: live.homeGoals, away: live.awayGoals };
   const elapsedMinutes = live.minute;
 
@@ -923,19 +965,36 @@ async function bestLegFor(
   kind: 'minute20' | 'minute60',
   scheduled: ScheduledMatch,
   live: LiveFixture
-): Promise<LegWithContext | null> {
+): Promise<LegWithContext[]> {
   const match = matchRefOfScheduled(scheduled);
   const preMatchExpectedGoals = { home: scheduled.expectedHomeGoals, away: scheduled.expectedAwayGoals };
   const currentStats = await fetchRealLiveStats(live);
+  // Corners et cartons déjà comptés (sources live gratuites) : sans eux, le
+  // pipe réel ne pouvait proposer que des marchés de buts.
+  const observedLive = (await fetchFreeLiveStats(live).catch(() => undefined))?.observed;
 
   const rawLegs = kind === 'minute20'
-    ? await buildLegs20(match, live.fixtureId, live, preMatchExpectedGoals, currentStats)
-    : buildLegs60(live, preMatchExpectedGoals, currentStats);
+    ? await buildLegs20(match, live.fixtureId, live, preMatchExpectedGoals, currentStats, observedLive)
+    : buildLegs60(live, preMatchExpectedGoals, currentStats, observedLive);
 
+  // Tous les marchés concourent ; les plus sûrs passent devant, un seul par
+  // marché (et par fenêtre 1ère MT / match).
   const eligible = rawLegs.filter((l) => l.prob >= MIN_LEG_PROB).sort((a, b) => b.prob - a.prob);
-  if (eligible.length === 0) return null;
+  const seen = new Set<string>();
+  const best: LegWithContext[] = [];
+  for (const leg of eligible) {
+    const key = legDedupSuffix(leg);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    best.push({ leg, fixtureId: live.fixtureId, match, live });
+    if (best.length >= REAL_LEGS_PER_MATCH) break;
+  }
+  return best;
+}
 
-  return { leg: eligible[0], fixtureId: live.fixtureId, match, live };
+/** Marché + fenêtre d'une jambe (corners 1ère MT ≠ corners du match). */
+function legDedupSuffix(leg: CandidateLeg): string {
+  return `${leg.market}${/sur le match/i.test(leg.selection) ? '-ft' : ''}`;
 }
 
 /**
@@ -963,21 +1022,25 @@ async function processRealSlotCheckpoint(
       return await bestLegFor(kind, scheduled, live);
     } catch (error: any) {
       console.warn(`[Scan en direct] Vérification réelle de ${scheduled.homeTeam} vs ${scheduled.awayTeam} échouée:`, error?.message);
-      return null;
+      return [] as LegWithContext[];
     }
   });
-  const perMatch: LegWithContext[] = perMatchResults.filter((r): r is LegWithContext => r !== null);
+  const perMatchLegs = perMatchResults.filter((r) => r.length > 0);
+  // Meilleure jambe de chaque match : sert aux combos.
+  const perMatch: LegWithContext[] = perMatchLegs.map((r) => r[0]);
   if (perMatch.length === 0) return;
 
   if (slotMatchCount < SLOT_COMBO_THRESHOLD) {
-    // Paris simples : un par match candidat.
-    for (const item of perMatch) {
-      const [enriched] = await formulateWithOmniroute([item], checkpointLabel);
-      const proposal = buildProposalFromItems(kind, [enriched], window, true);
-      if (proposal) {
-        fresh.push(proposal);
-        alreadyProposed.add(`${item.fixtureId}-${kind}`);
-        await notifyProposal(proposal);
+    // Paris simples : les plus sûrs de chaque match, tous marchés confondus.
+    for (const items of perMatchLegs) {
+      for (const item of items) {
+        const [enriched] = await formulateWithOmniroute([item], checkpointLabel);
+        const proposal = buildProposalFromItems(kind, [enriched], window, true);
+        if (proposal) {
+          fresh.push(proposal);
+          alreadyProposed.add(`${item.fixtureId}-${kind}`);
+          await notifyProposal(proposal);
+        }
       }
     }
     return;
@@ -1376,13 +1439,18 @@ export async function runInPlayComboTick(
           });
         }
 
+        if (live.statusShort === '2H' && observedLive) {
+          if (observedLive.corners != null) await recordShadowProjection(live, projectFullMatchCount('corners_ft', observedLive.corners, live.minute));
+          if (observedLive.cards != null) await recordShadowProjection(live, projectFullMatchCount('cards_ft', observedLive.cards, live.minute));
+        }
+
         const rawLegs = kind === 'minute20'
           ? await buildLegs20(match, live.fixtureId, live, expectedGoals, currentStats, observedLive)
-          : buildLegs60(live, expectedGoals, currentStats);
+          : buildLegs60(live, expectedGoals, currentStats, observedLive);
         const window = kind === 'minute20' ? '20e → pause + match complet' : '60e → fin de match';
 
         for (const leg of rawLegs.filter((l) => l.prob >= MIN_LEG_PROB)) {
-          const dedupKey = `${live.fixtureId}-${kind}-${leg.market}`;
+          const dedupKey = `${live.fixtureId}-${kind}-${legDedupSuffix(leg)}`;
           if (alreadyProposed.has(dedupKey)) continue;
           const proposal = buildProposalFromItems(kind, [{ leg, fixtureId: live.fixtureId, match, live }], window, false);
           if (proposal) {
@@ -1565,11 +1633,11 @@ export async function runInPlayComboTick(
 
         const rawLegs = kind === 'minute20'
           ? await buildLegs20(match, live.fixtureId, live, preMatchExpectedGoals, currentStats, observedLive)
-          : buildLegs60(live, preMatchExpectedGoals, currentStats);
+          : buildLegs60(live, preMatchExpectedGoals, currentStats, observedLive);
 
         const window = kind === 'minute20' ? '20e → pause + match complet' : '60e → fin de match';
         for (const leg of rawLegs.filter((l) => l.prob >= MIN_LEG_PROB)) {
-          const dedupKey = `${live.fixtureId}-${kind}-${leg.market}`;
+          const dedupKey = `${live.fixtureId}-${kind}-${legDedupSuffix(leg)}`;
           if (alreadyProposed.has(dedupKey)) continue;
           const proposal = buildProposalFromItems(kind, [{ leg, fixtureId: live.fixtureId, match, live }], window, false);
           if (proposal) {

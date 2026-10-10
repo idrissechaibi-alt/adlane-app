@@ -45,7 +45,7 @@ import { sendTelegramMessage } from './telegram';
 import { buildFictionalMarketStats, formatFictionalDigestMessage } from './dailyDigest';
 import { readMatchTimelines, MatchSample } from './fictionalProgram';
 import { isSyntheticFixtureId } from './halftimeMonitor';
-import { hubFinalResult } from '../api/footballDataAPIs/liveDataHub';
+import { hubFinalResult, hubStats } from '../api/footballDataAPIs/liveDataHub';
 import { DeltaUnit, invalidateDeltaCache, settleShadowProjections } from './deltaLearning';
 import { fetchSofaEvent, fetchSofaStats, getSofaEventId } from '../api/footballDataAPIs/sofaScore';
 
@@ -92,6 +92,9 @@ interface FinalResult {
    * API-Football les fournit (fixtures/statistics avec half=true). */
   corners1H?: number;
   cards1H?: number;
+  /** Corners / cartons du match entier. */
+  cornersFT?: number;
+  cardsFT?: number;
 }
 
 /** Matchs réglés via les sources live gratuites par passage du bilan. */
@@ -252,6 +255,8 @@ async function fetchFinalResultsViaSofaScore(
         htAway: event.awayGoalsHT,
         corners1H: stats?.firstHalf?.corners,
         cards1H: stats?.firstHalf?.cards,
+        cornersFT: stats?.all?.corners,
+        cardsFT: stats?.all?.cards,
       });
     } catch {
       // match suivant : retenté au prochain passage
@@ -382,8 +387,12 @@ function settleReprojectedLeg(
 
   if (market === 'corners' || market === 'cartons') {
     const line = selection.match(/plus de\s+(\d+(?:[.,]\d+)?)/i);
-    if (!line || !/1[èe]re mi-temps/i.test(selection)) return null;
-    const value = market === 'corners' ? result.corners1H : result.cards1H;
+    if (!line) return null;
+    const fullMatch = /sur le match/i.test(selection);
+    if (!fullMatch && !/1[èe]re mi-temps/i.test(selection)) return null;
+    const value = fullMatch
+      ? market === 'corners' ? result.cornersFT : result.cardsFT
+      : market === 'corners' ? result.corners1H : result.cards1H;
     if (value == null) return null;
     return value > Number(line[1].replace(',', '.'));
   }
@@ -395,6 +404,8 @@ function settleReprojectedLeg(
 function actualValueFor(unit: DeltaUnit, result: FinalResult): number | null {
   if (unit === 'corners_1h') return result.corners1H ?? null;
   if (unit === 'cards_1h') return result.cards1H ?? null;
+  if (unit === 'corners_ft') return result.cornersFT ?? null;
+  if (unit === 'cards_ft') return result.cardsFT ?? null;
   if (unit === 'goals_1h') return result.htHome + result.htAway;
   return result.goalsHome + result.goalsAway;
 }
@@ -648,6 +659,20 @@ export async function runNightlyReviewIfDue(): Promise<number> {
     await mapWithConcurrency(hubPending, 4, async (leg) => {
       const result = await hubFinalResult(leg.homeTeam, leg.awayTeam, day).catch(() => null);
       if (result) finals.set(leg.fixtureId, result);
+    });
+
+    // Corners / cartons du match entier manquants (score venu d'API-Football,
+    // qui ne les donne pas ici) : complétés par les sources live gratuites.
+    const needFullCounts = allLegs.filter((l) => {
+      const final = finals.get(l.fixtureId);
+      return final && /sur le match/i.test(l.selection) && (l.market === 'corners' ? final.cornersFT == null : l.market === 'cartons' && final.cardsFT == null);
+    });
+    await mapWithConcurrency(needFullCounts.slice(0, HUB_FINAL_RESULT_MAX_PER_PASS), 4, async (leg) => {
+      const stats = await hubStats(leg.homeTeam, leg.awayTeam, day).catch(() => null);
+      const final = finals.get(leg.fixtureId);
+      if (!final || !stats?.all) return;
+      final.cornersFT ??= stats.all.corners;
+      final.cardsFT ??= stats.all.cards;
     });
 
     // Repli Omniroute (recherche web rétroactive) : seulement pour ce qui

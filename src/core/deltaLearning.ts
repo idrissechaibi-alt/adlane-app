@@ -11,7 +11,7 @@ import { readInPlayProposals } from './learnStore';
 import { hubFinalResult } from '../api/footballDataAPIs/liveDataHub';
 import { mapWithConcurrency } from './concurrency';
 
-export type DeltaUnit = 'corners_1h' | 'cards_1h' | 'goals_1h' | 'goals_ft';
+export type DeltaUnit = 'corners_1h' | 'cards_1h' | 'goals_1h' | 'goals_ft' | 'corners_ft' | 'cards_ft';
 
 export interface LegProjection {
   unit: DeltaUnit;
@@ -107,7 +107,7 @@ export function getDeltaCorrection(unit: DeltaUnit): DeltaCorrection {
 }
 
 export function getAllDeltaCorrections(): DeltaCorrection[] {
-  return (['corners_1h', 'cards_1h', 'goals_1h', 'goals_ft'] as DeltaUnit[]).map(getDeltaCorrection);
+  return (['corners_1h', 'cards_1h', 'corners_ft', 'cards_ft', 'goals_1h', 'goals_ft'] as DeltaUnit[]).map(getDeltaCorrection);
 }
 
 /** Phrase d'explication ajoutée au raisonnement d'un pronostic corrigé. */
@@ -126,6 +126,8 @@ export const DELTA_LABELS: Record<DeltaUnit, string> = {
   cards_1h: 'Cartons 1ère mi-temps',
   goals_1h: 'Buts à la pause',
   goals_ft: 'Buts en fin de match',
+  corners_ft: 'Corners sur le match',
+  cards_ft: 'Cartons sur le match',
 };
 
 
@@ -197,12 +199,21 @@ export function projectFirstHalfCount(unit: 'corners_1h' | 'cards_1h', observed:
   return { unit, observed, expected: observed + perMinute * Math.max(0, 45 - minute) * factor, factorUsed: factor };
 }
 
+/** Projection en fin de match (corners/cartons du match entier), même formule. */
+export function projectFullMatchCount(unit: 'corners_ft' | 'cards_ft', observed: number, minute: number): LegProjection {
+  const typical = unit === 'corners_ft' ? 10 / 90 : 4 / 90;
+  const perMinute = (observed + typical * PACE_PRIOR_MINUTES) / (Math.max(1, minute) + PACE_PRIOR_MINUTES);
+  const factor = getDeltaCorrection(unit).factor;
+  return { unit, observed, expected: observed + perMinute * Math.max(0, 94 - minute) * factor, factorUsed: factor };
+}
+
 /** Enregistre (une fois par match et par fenêtre) la projection d'un match suivi. */
 export async function recordShadowProjection(
   match: { fixtureId: number; homeTeam: string; awayTeam: string; minute: number },
   projection: LegProjection
 ): Promise<void> {
-  if (match.minute < 15 || match.minute > 35) return;
+  const fullMatchCount = projection.unit === 'corners_ft' || projection.unit === 'cards_ft';
+  if (fullMatchCount ? match.minute < 50 || match.minute > 75 : match.minute < 15 || match.minute > 35) return;
   const list = await loadShadows();
   if (list.some((s) => s.fixtureId === match.fixtureId && s.unit === projection.unit)) return;
   list.push({
@@ -253,6 +264,8 @@ export async function settleShadowProjections(): Promise<number> {
       const actual =
         s.unit === 'corners_1h' ? result.corners1H
         : s.unit === 'cards_1h' ? result.cards1H
+        : s.unit === 'corners_ft' ? result.cornersFT
+        : s.unit === 'cards_ft' ? result.cardsFT
         : s.unit === 'goals_1h' ? result.htHome + result.htAway
         : result.goalsHome + result.goalsAway;
       if (actual != null) {

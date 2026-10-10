@@ -656,6 +656,9 @@ export interface HubFinalResult {
   htAway: number;
   corners1H?: number;
   cards1H?: number;
+  /** Corners / cartons du match entier. */
+  cornersFT?: number;
+  cardsFT?: number;
   sources: HubProviderName[];
 }
 
@@ -685,12 +688,14 @@ export async function hubFinalResult(homeTeam: string, awayTeam: string, dateKey
   const fromList = agreeing.find((m) => m.hasHalfTime);
   if (fromList) ht = [fromList.homeGoalsHT, fromList.awayGoalsHT];
   let firstHalf: SofaPeriodStats | null = null;
+  let all: SofaPeriodStats | null = null;
   for (const m of agreeing) {
-    if (ht && firstHalf) break;
+    if (ht && firstHalf && all) break;
     const detail = await detailOf(m);
     if (!detail) continue;
     ht ??= detail.ht;
     firstHalf ??= detail.stats.firstHalf;
+    all ??= detail.stats.all;
   }
   if (!ht) return null;
   if (ht[0] > goalsHome || ht[1] > goalsAway) return null; // incohérent : on n'invente rien
@@ -702,6 +707,8 @@ export async function hubFinalResult(homeTeam: string, awayTeam: string, dateKey
     htAway: ht[1],
     corners1H: firstHalf?.corners,
     cards1H: firstHalf?.cards,
+    cornersFT: all?.corners,
+    cardsFT: all?.cards,
     sources: agreeing.map((m) => m.provider),
   };
 }
