@@ -1,6 +1,7 @@
 // Écran Planning & Propositions du Jour
 // Affiche les créneaux chronologiques, compte à rebours T-90, et propositions validées/rejetées
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
@@ -51,6 +52,8 @@ export default function DailyPlanScreen() {
   const [, setOddsVersion] = useState(0);
   /** Saisie de la ligne minimale réellement proposée (et sa cote) quand la ligne du pari n'existe pas. */
   const [minLineForm, setMinLineForm] = useState<{ id: string; line: string; odds: string } | null>(null);
+  /** Jambes de combiné signalées « non proposées » par le bookmaker (clé : proposition:numéro de jambe). */
+  const [missingLegs, setMissingLegs] = useState<Record<string, boolean>>({});
   const [placing, setPlacing] = useState(false);
   const [proposalStatus, setProposalStatus] = useState<Record<string, LegStatus>>({});
   const [legStatuses, setLegStatuses] = useState<Record<string, LegStatus[]>>({});
@@ -77,6 +80,7 @@ export default function DailyPlanScreen() {
     loadInPlayProposals();
     loadPlacedBets();
     ensureOddsLoaded().then(() => setOddsVersion((v) => v + 1)).catch(() => {});
+    AsyncStorage.getItem('@missing_combo_legs').then((raw) => raw && setMissingLegs(JSON.parse(raw))).catch(() => {});
 
     // Vérifier T-90 toutes les 30 secondes, et relire les alertes mi-temps
     // au même rythme (le moniteur tourne en tâche de fond dans App.tsx).
@@ -354,15 +358,23 @@ export default function DailyPlanScreen() {
    * dans cette situation (l'app affine l'écart appris), soit le MARCHÉ n'est pas proposé
    * du tout pour l'instant (l'app le met de côté 30 min pour ce match, sans toucher aux lignes).
    */
-  const handleNotFound = (proposal: InPlayProposal) => {
-    const leg = proposal.legs.length === 1 ? proposal.legs[0] : null;
-    if (!leg) {
-      Alert.alert('Pari non concerné', 'Ce signalement vaut pour un pari simple.');
-      return;
-    }
+  const handleNotFound = (proposal: InPlayProposal, legIndex = 0) => {
+    const leg = proposal.legs[legIndex];
+    if (!leg) return;
+    const formId = `${proposal.id}:${legIndex}`;
     const parsed = parseLine(leg.selection);
     const key = leg.projection?.unit ?? leg.market;
+    // Jambe d'un combiné : elle est aussi marquée sur la carte (combiné à rejouer sans elle).
+    const flagLeg = () => {
+      if (proposal.legs.length < 2) return;
+      setMissingLegs((prev) => {
+        const next = { ...prev, [formId]: true };
+        AsyncStorage.setItem('@missing_combo_legs', JSON.stringify(next)).catch(() => {});
+        return next;
+      });
+    };
     const marketOff = async () => {
+      flagLeg();
       await markMarketOff(leg.fixtureId, key);
       Alert.alert('Noté', "Marché mis de côté 30 minutes pour ce match. Les lignes apprises ne changent pas.");
       setOddsVersion((v) => v + 1);
@@ -373,7 +385,8 @@ export default function DailyPlanScreen() {
         return;
       }
       // La ligne n'existe pas : l'utilisateur donne la ligne minimale réellement proposée et sa cote.
-      setMinLineForm({ id: proposal.id, line: '', odds: '' });
+      flagLeg();
+      setMinLineForm({ id: formId, line: '', odds: '' });
     };
     Alert.alert('Introuvable chez ton bookmaker', 'Que se passe-t-il ?', [
       ...(leg.projection && parsed ? [{ text: "Cette ligne n'existe pas", onPress: () => void lineMissing() }] : []),
@@ -384,7 +397,8 @@ export default function DailyPlanScreen() {
 
   /** Enregistre : la ligne du pari n'existe pas, voici la ligne minimale proposée par le bookmaker et sa cote. */
   const handleSaveMinLine = async (proposal: InPlayProposal) => {
-    const leg = proposal.legs[0];
+    const legIndex = Number((minLineForm?.id ?? '').split(':').pop()) || 0;
+    const leg = proposal.legs[legIndex];
     const parsed = parseLine(leg.selection);
     if (!minLineForm || !leg.projection || !parsed) return;
     const line = Number(minLineForm.line.replace(',', '.'));
@@ -412,7 +426,7 @@ export default function DailyPlanScreen() {
       }
       // 3) Sa cote est apprise comme n'importe quelle cote saisie, avec le contexte du moment.
       const selection = leg.selection.replace(/(plus|moins) de\s+[\d.,]+/i, `$1 de ${line}`);
-      const asked = { ...proposal, id: `${proposal.id}#min`, legs: [{ ...leg, selection }] };
+      const asked = { ...proposal, id: `${proposal.id}#min${legIndex}`, combinedProb: leg.prob, legs: [{ ...leg, selection }] };
       const askedCtx = await liveLegContext(asked.legs[0]).catch(() => null);
       await recordBookieOdds(asked, odds, askedCtx);
       setMinLineForm(null);
@@ -451,14 +465,34 @@ export default function DailyPlanScreen() {
         </Text>
         {proposal.legs.length > 1 &&
           proposal.legs.map((leg, i) => (
-            <Text key={i} style={styles.liveBetLeg}>
-              {(() => {
-                const st = legStatuses[proposal.id]?.[i];
-                return st === 'won' ? '✅' : st === 'lost' ? '❌' : '⏳';
-              })()}{' '}
-              {leg.homeTeam} - {leg.awayTeam} : {leg.selection} ({Math.round(leg.prob * 100)}%)
-            </Text>
+            <View key={i}>
+              <Text style={styles.liveBetLeg}>
+                {(() => {
+                  const st = legStatuses[proposal.id]?.[i];
+                  return st === 'won' ? '✅' : st === 'lost' ? '❌' : '⏳';
+                })()}{' '}
+                {leg.homeTeam} - {leg.awayTeam} : {leg.selection} ({Math.round(leg.prob * 100)}%)
+                {missingLegs[`${proposal.id}:${i}`] ? '  ⚠️ non proposée' : ''}
+              </Text>
+              {legStatuses[proposal.id]?.[i] !== 'won' && legStatuses[proposal.id]?.[i] !== 'lost' && !missingLegs[`${proposal.id}:${i}`] && (
+                <TouchableOpacity onPress={() => handleNotFound(proposal, i)}>
+                  <Text style={styles.legNotFound}>Cette jambe est introuvable chez mon bookmaker</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           ))}
+        {proposal.legs.length > 1 && proposal.legs.some((_, i) => missingLegs[`${proposal.id}:${i}`]) && (() => {
+          const kept = proposal.legs.filter((_, i) => !missingLegs[`${proposal.id}:${i}`]);
+          return (
+            <Text style={styles.liveBetLeg}>
+              {kept.length >= 2
+                ? `⚠️ Combiné à jouer sans la jambe introuvable : ${kept.length} jambes, ${Math.round(kept.reduce((p, l) => p * l.prob, 1) * 100)} % de confiance.`
+                : kept.length === 1
+                  ? `⚠️ Il ne reste qu'une jambe jouable : ${kept[0].selection} (${Math.round(kept[0].prob * 100)} %), à jouer en simple.`
+                  : '⚠️ Plus aucune jambe jouable.'}
+            </Text>
+          );
+        })()}
         <View style={styles.liveBetStatusRow}>
           <Text style={[styles.liveBetBadge, played ? styles.badgePlayed : styles.badgeNotPlayed]}>
             {played ? 'Joué' : 'Non joué'}
@@ -535,13 +569,13 @@ export default function DailyPlanScreen() {
             </View>
           )}
         </View>
-        {minLineForm?.id === proposal.id && (
+        {minLineForm?.id.startsWith(`${proposal.id}:`) && (
           <View style={styles.placeStakeRow}>
             <TextInput
               style={styles.stakeInput}
               value={minLineForm.line}
               onChangeText={(v) => setMinLineForm({ ...minLineForm, line: v })}
-              placeholder={parseLine(proposal.legs[0].selection)?.side === 'under' ? 'Ligne MAXIMALE (ex 4.5)' : 'Ligne minimale (ex 2.5)'}
+              placeholder={parseLine(proposal.legs[Number(minLineForm.id.split(':').pop()) || 0].selection)?.side === 'under' ? 'Ligne MAXIMALE (ex 4.5)' : 'Ligne minimale (ex 2.5)'}
               placeholderTextColor="#64748b"
               keyboardType="decimal-pad"
               autoFocus
@@ -1239,6 +1273,13 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderTopWidth: 1,
     borderTopColor: 'rgba(167, 139, 250, 0.2)',
+  },
+  legNotFound: {
+    fontSize: 11,
+    color: '#a78bfa',
+    textDecorationLine: 'underline',
+    marginLeft: 22,
+    marginBottom: 4,
   },
   liveBetMatch: {
     fontSize: 12,
