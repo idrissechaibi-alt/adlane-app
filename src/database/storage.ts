@@ -86,8 +86,18 @@ export async function seedDatabaseIfEmpty(): Promise<void> {
 
 // ==================== BETS ====================
 
-export async function saveBet(bet: Bet): Promise<void> {
-  if (!db) await initDatabase();
+const PENDING_BETS_KEY = '@pending_bet_writes';
+
+async function readPendingBets(): Promise<Bet[]> {
+  try {
+    const raw = await AsyncStorage.getItem(PENDING_BETS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+async function insertBet(bet: Bet): Promise<void> {
   await db!.runAsync(`INSERT OR REPLACE INTO bets VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
     bet.id, bet.version, bet.date, bet.creneau_utc, bet.creneau_display, bet.league, JSON.stringify(bet.legs),
     bet.odds, bet.stake, bet.payout ?? null, bet.net_pnl ?? null, bet.excluded_from_pnl ? 1 : 0, bet.status, bet.played ? 1 : 0,
@@ -96,16 +106,51 @@ export async function saveBet(bet: Bet): Promise<void> {
   ]);
 }
 
+/** Écrit dans la base les paris mis en attente quand elle était verrouillée. */
+export async function flushPendingBets(): Promise<void> {
+  const pending = await readPendingBets();
+  if (pending.length === 0) return;
+  if (!db) await initDatabase();
+  const left: Bet[] = [];
+  for (const bet of pending) {
+    try {
+      await insertBet(bet);
+    } catch {
+      left.push(bet);
+    }
+  }
+  await AsyncStorage.setItem(PENDING_BETS_KEY, JSON.stringify(left)).catch(() => {});
+}
+
+export async function saveBet(bet: Bet): Promise<void> {
+  if (!db) await initDatabase();
+  try {
+    await insertBet(bet);
+  } catch (error) {
+    if (!isLockError(error)) throw error;
+    // Base verrouillée par un autre accès, même après les nouvelles tentatives : le pari
+    // est gardé sur le téléphone et écrit dès que la base se libère (jamais perdu).
+    const pending = (await readPendingBets()).filter((b) => b.id !== bet.id);
+    await AsyncStorage.setItem(PENDING_BETS_KEY, JSON.stringify([...pending, bet]));
+  }
+}
+
 export async function getAllBets(): Promise<Bet[]> {
   if (!db) await initDatabase();
+  await flushPendingBets().catch(() => {});
   const rows = await db!.getAllAsync('SELECT * FROM bets ORDER BY createdAt DESC');
-  return rows.map((r: any) => ({
+  const bets: Bet[] = rows.map((r: any) => ({
     ...r,
     legs: JSON.parse(r.legs),
     excluded_from_pnl: r.excluded_from_pnl === 1,
     played: r.played === 1,
     validation_flags: JSON.parse(r.validation_flags)
   }));
+  // Paris encore en attente d'écriture : visibles tout de suite (Joué, Bilan P&L).
+  const pending = await readPendingBets();
+  if (pending.length === 0) return bets;
+  const ids = new Set(pending.map((b) => b.id));
+  return [...pending, ...bets.filter((b) => !ids.has(b.id))];
 }
 
 export async function getBetById(id: string): Promise<Bet | null> {

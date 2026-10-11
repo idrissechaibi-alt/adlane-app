@@ -48,19 +48,24 @@ const cache = new Map<string, { at: number; status: LegStatus }>();
 const CHECK_INTERVAL_MS = 50_000;
 
 export async function checkLegStatus(leg: InPlayProposalLeg, dateKey: string): Promise<LegStatus> {
-  if (leg.settled && leg.won != null) return leg.won ? 'won' : 'lost';
+  // Un verdict déjà enregistré ne vaut que si le match n'est PAS en cours : un match
+  // qui se joue encore n'a pas de résultat (réglage erroné d'un passage précédent).
+  const liveNow = await hubLiveStatus(leg.homeTeam, leg.awayTeam).catch(() => null);
+  const inPlay = !!liveNow && ['1H', 'HT', '2H'].includes(liveNow.statusShort);
+  if (leg.settled && leg.won != null && !inPlay) return leg.won ? 'won' : 'lost';
   const key = `${dateKey}|${leg.fixtureId}|${leg.market}|${leg.selection}`;
   const hit = cache.get(key);
-  if (hit && (hit.status !== 'pending' || Date.now() - hit.at < CHECK_INTERVAL_MS)) return hit.status;
+  if (hit && Date.now() - hit.at < CHECK_INTERVAL_MS) return hit.status;
 
   let status: LegStatus = 'pending';
   try {
-    const final = await hubFinalResult(leg.homeTeam, leg.awayTeam, dateKey);
+    // Match en cours : aucun « résultat final » n'est acceptable (autre match homonyme, source en retard…).
+    const final = inPlay ? null : await hubFinalResult(leg.homeTeam, leg.awayTeam, dateKey);
     if (final) {
       const won = settleReprojectedLeg(leg.market, leg.selection, final as FinalResult);
       if (won != null) status = won ? 'won' : 'lost';
     } else {
-      const live = await hubLiveStatus(leg.homeTeam, leg.awayTeam);
+      const live = liveNow;
       if (live) {
         const stats = await hubStats(leg.homeTeam, leg.awayTeam, dateKey).catch(() => null);
         status = decidedEarly(leg, live, { all: stats?.all, firstHalf: stats?.firstHalf });

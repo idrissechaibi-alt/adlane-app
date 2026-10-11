@@ -45,7 +45,7 @@ import { sendTelegramMessage } from './telegram';
 import { buildFictionalMarketStats, formatFictionalDigestMessage } from './dailyDigest';
 import { readMatchTimelines, MatchSample } from './fictionalProgram';
 import { isSyntheticFixtureId } from './halftimeMonitor';
-import { hubFinalResult, hubStats } from '../api/footballDataAPIs/liveDataHub';
+import { hubFinalResult, hubLiveStatus, hubStats } from '../api/footballDataAPIs/liveDataHub';
 import { DeltaUnit, invalidateDeltaCache, settleShadowProjections } from './deltaLearning';
 import { fetchSofaEvent, fetchSofaStats, getSofaEventId } from '../api/footballDataAPIs/sofaScore';
 
@@ -297,6 +297,12 @@ function extractFinalResultFromTimeline(timeline: MatchSample[]): FinalResult | 
     htHome: lastFirstHalf?.homeGoals ?? 0,
     htAway: lastFirstHalf?.awayGoals ?? 0,
   };
+}
+
+/** Le match est-il en cours (1ère MT, pause, 2e MT) d'après les sources live ? */
+async function isLiveNow(homeTeam: string, awayTeam: string): Promise<boolean> {
+  const live = await hubLiveStatus(homeTeam, awayTeam).catch(() => null);
+  return !!live && ['1H', 'HT', '2H'].includes(live.statusShort);
 }
 
 async function fetchFinalResultsViaOmniroute(
@@ -737,7 +743,19 @@ export async function runNightlyReviewIfDue(): Promise<number> {
       }
     }
 
-    const unresolvedLegs = allLegs.filter((l) => !finals.has(l.fixtureId));
+    // Jamais de recherche IA pour un match encore en cours ou démarré il y a moins
+    // de 4 h : un modèle de langage peut « trouver » un score final qui n'existe pas
+    // (un pari annoncé réussi alors que le match était à 0-0).
+    const oldestAllowed = Date.now() - 4 * 3_600_000;
+    const ageByFixture = new Map<number, number>();
+    for (const p of unreviewedDayProposals) for (const l of p.legs) ageByFixture.set(l.fixtureId, Math.min(ageByFixture.get(l.fixtureId) ?? Infinity, Date.parse(p.createdAt)));
+    const unresolvedLegs: typeof allLegs = [];
+    for (const l of allLegs) {
+      if (finals.has(l.fixtureId)) continue;
+      if ((ageByFixture.get(l.fixtureId) ?? 0) > oldestAllowed) continue;
+      if (await isLiveNow(l.homeTeam, l.awayTeam)) continue;
+      unresolvedLegs.push(l);
+    }
     if (unresolvedLegs.length > 0) {
       const omnirouteConfig = await loadOmnirouteConfig();
       if (omnirouteConfig) {
@@ -754,6 +772,23 @@ export async function runNightlyReviewIfDue(): Promise<number> {
     // prédiction suivante consulte (applyMarketExpertise). Sans cette
     // écriture, un match qui se termine n'apprend rien à l'app.
     const settledOutcomes: PredictionOutcome[] = [];
+
+    // Défense : un match encore en cours n'a pas de résultat final, d'où qu'il vienne.
+    for (const l of allLegs) {
+      if (finals.has(l.fixtureId) && (await isLiveNow(l.homeTeam, l.awayTeam))) finals.delete(l.fixtureId);
+    }
+    // Réparation : jambes déjà « réglées » à tort alors que leur match se joue encore.
+    for (const p of allProposals) {
+      if (!p.createdAt.startsWith(day) || !p.legs.some((l) => l.settled)) continue;
+      for (const l of p.legs) {
+        if (l.settled && (await isLiveNow(l.homeTeam, l.awayTeam))) {
+          l.settled = false;
+          l.won = undefined;
+          if (l.projection) l.projection.actual = undefined;
+          p.reviewed = false;
+        }
+      }
+    }
 
     for (const proposal of unreviewedDayProposals) {
       const allResolved = proposal.legs.every((leg) => finals.has(leg.fixtureId));

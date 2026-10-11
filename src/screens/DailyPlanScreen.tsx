@@ -15,7 +15,8 @@ import {
   Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { ensureOddsLoaded, estimateBookieOdds, getObservedOdds, proposalSegment, recordBookieOdds } from '../core/oddsLearning';
+import { ensureOddsLoaded, estimateProposalOdds, getObservedOddsList, recordBookieOdds } from '../core/oddsLearning';
+import { liveLegContext } from '../core/inPlayCombos';
 import { executeMorningScan, getDailyPlan, checkAndUpdateT90Status, DailyPlan, runMorningScanIfDue, todayLocalDateString } from '../core/scheduler';
 import { buildScheduledMatches, ProposedSlip } from '../core/dailyWorkflow';
 import { InPlayProposal, readInPlayProposals } from '../core/learnStore';
@@ -255,7 +256,7 @@ export default function DailyPlanScreen() {
         updatedAt: now,
       };
       await saveBet(bet);
-      await recordBookieOdds(proposal, odds).catch(() => {});
+      await recordBookieOdds(proposal, odds, proposal.legs.length === 1 ? await liveLegContext(proposal.legs[0]) : null).catch(() => {});
       setPlacedBetIds((prev) => new Set(prev).add(bet.id));
       setPlacingId(null);
       setStakeInput('');
@@ -313,7 +314,9 @@ export default function DailyPlanScreen() {
       return;
     }
     try {
-      await recordBookieOdds(proposal, odds);
+      // Minute, score et compteur au moment de la saisie : la cote du 30e et celle du 67e comptent toutes les deux.
+      const context = proposal.legs.length === 1 ? await liveLegContext(proposal.legs[0]) : null;
+      await recordBookieOdds(proposal, odds, context);
       setOddsNoteId(null);
       setOddsNoteInput('');
       setOddsVersion((v) => v + 1);
@@ -369,11 +372,14 @@ export default function DailyPlanScreen() {
           )}
         </View>
         {(() => {
-          const observed = getObservedOdds(proposal.id);
-          const est = estimateBookieOdds(proposalSegment(proposal), proposal.combinedProb);
+          const history = getObservedOddsList(proposal.id);
+          const est = estimateProposalOdds(proposal);
           return (
             <Text style={styles.liveBetLeg}>
-              {observed ? `Cote bookie saisie : ${observed.odds.toFixed(2)} · ` : ''}cote estimée ≈ {est.odds.toFixed(2)}
+              {history.length > 0
+                ? `Cotes saisies : ${history.map((o) => `${o.minute != null ? `${o.minute}e` : '?'} → ${o.odds.toFixed(2)}`).join(' · ')} · `
+                : ''}
+              cote estimée à la création ≈ {est.odds.toFixed(2)}
               {est.observations > 0 ? ` (${est.observations} cotes apprises)` : ''}
             </Text>
           );
@@ -383,11 +389,11 @@ export default function DailyPlanScreen() {
             <TouchableOpacity
               style={styles.liveBetPlaceButton}
               onPress={() => {
-                setOddsNoteInput(getObservedOdds(proposal.id)?.odds.toFixed(2) ?? '');
+                setOddsNoteInput('');
                 setOddsNoteId(proposal.id);
               }}
             >
-              <Text style={styles.placeBetButtonText}>{getObservedOdds(proposal.id) ? 'Modifier la cote' : 'Donner la cote'}</Text>
+              <Text style={styles.placeBetButtonText}>{getObservedOddsList(proposal.id).length > 0 ? 'Ajouter une cote' : 'Donner la cote'}</Text>
             </TouchableOpacity>
           ) : (
             <View style={styles.placeStakeRow}>

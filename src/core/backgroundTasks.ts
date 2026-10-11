@@ -14,6 +14,7 @@ import { API_FOOTBALL_RESERVE, spendDirectBudget } from './requestBudget';
 import { ensureDailyUniverse } from './matchUniverse';
 import { ensureFictionalDailyProgram, getFictionalProgramStatus } from './fictionalProgram';
 import { runLiveMarkerTick } from './liveMarkers';
+import { flushPendingBets } from '../database/storage';
 import { fetchLiveFixtures, fetchOmnirouteAllLiveFixtures, LiveFixture } from './halftimeMonitor';
 import { consolidateLearning } from './autoLearn';
 import { OmnirouteAttempt } from './omniroute';
@@ -538,6 +539,8 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
   currentTickStartedAt = new Date().toISOString();
   // Paris réels d'abord : quelques matchs, à ne jamais faire attendre derrière
   // les 500 matchs fictifs.
+  // Paris mis en attente quand la base était verrouillée : écrits dès qu'elle se libère.
+  await flushPendingBets().catch(() => {});
   await markTickStep('scan matinal');
   await runRealFastTick();
   try {
