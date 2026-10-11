@@ -542,7 +542,7 @@ function projectFullTimeMarkets(
     },
     {
       market: 'FT_btts_reprojete',
-      selection: 'Les deux équipes marquent (BTTS)',
+      selection: 'BTTS Oui — les deux équipes marquent (Oui)',
       estimated_prob: pBttsFT,
       confidence: confidenceFromProb(pBttsFT),
       reasoning: 'Probabilité recalculée en tenant compte des buts déjà inscrits à la mi-temps.'

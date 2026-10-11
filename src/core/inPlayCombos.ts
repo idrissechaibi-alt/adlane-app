@@ -778,7 +778,7 @@ async function buildLegs20(
     }
     const bttsMarket = fullEst.markets.find((m) => m.market === 'FT_btts_reprojete');
     if (bttsMarket && !(currentScore.home > 0 && currentScore.away > 0)) {
-      legs.push(pickBinarySide('btts', bttsMarket, 'Les deux équipes ne marquent pas toutes les deux (Non)'));
+      legs.push(pickBinarySide('btts', bttsMarket, 'BTTS Non — au moins une des deux équipes ne marque pas (Non)'));
     }
     legs.push(...goalsTotalLegs(currentScore, fullEst.secondHalfExpectedGoals, situation?.features, sitFt.mult));
   }
@@ -832,7 +832,7 @@ function buildLegs60(
 
   const bttsMarket = est.markets.find((m) => m.market === 'FT_btts_reprojete');
   if (bttsMarket && !(currentScore.home > 0 && currentScore.away > 0)) {
-    legs.push(pickBinarySide('btts', bttsMarket, 'Les deux équipes ne marquent pas toutes les deux (Non)'));
+    legs.push(pickBinarySide('btts', bttsMarket, 'BTTS Non — au moins une des deux équipes ne marque pas (Non)'));
   }
   legs.push(...goalsTotalLegs(currentScore, est.secondHalfExpectedGoals, situation?.features, sitFt.mult));
 
