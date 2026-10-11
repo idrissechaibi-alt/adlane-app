@@ -328,13 +328,26 @@ export function appendPredictionOutcomes(outcomes: PredictionOutcome[]): void {
   if (outcomes.length === 0) return;
   const file = fileIn(`outcomes-${dayKey()}.jsonl`);
   const existing = readTextSafe(file) ?? '';
-  const added = outcomes.map((o) => JSON.stringify(o)).join('\n');
+  // Ne réécrit pas ce qui est déjà enregistré (le bilan repasse plusieurs fois par jour sur les mêmes paris).
+  const known = new Set(readPredictionOutcomes(2).map(outcomeKey));
+  const fresh = outcomes.filter((o) => {
+    const key = outcomeKey(o);
+    if (known.has(key)) return false;
+    known.add(key);
+    return true;
+  });
+  if (fresh.length === 0) return;
+  const added = fresh.map((o) => JSON.stringify(o)).join('\n');
   writeText(file, existing ? `${existing}\n${added}` : added);
 }
 
 /** Corpus glissant des résultats mesurés (les deux pipelines confondus). */
+const outcomeKey = (o: PredictionOutcome) => `${o.fixtureId}|${o.market}|${o.selection}|${o.kind}|${o.real ? 1 : 0}`;
+
 export function readPredictionOutcomes(days: number = 30): PredictionOutcome[] {
   const outcomes: PredictionOutcome[] = [];
+  // Un même pari (match, marché, sélection, checkpoint) n'est compté qu'une fois, même si le bilan l'a enregistré à plusieurs passages.
+  const seen = new Set<string>();
   for (let i = 0; i < days; i++) {
     const date = new Date(Date.now() - i * 86_400_000);
     const content = readTextSafe(fileIn(`outcomes-${dayKey(date)}.jsonl`));
@@ -342,7 +355,11 @@ export function readPredictionOutcomes(days: number = 30): PredictionOutcome[] {
     for (const line of content.split('\n')) {
       if (!line.trim()) continue;
       try {
-        outcomes.push(JSON.parse(line));
+        const o: PredictionOutcome = JSON.parse(line);
+        const key = outcomeKey(o);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        outcomes.push(o);
       } catch {
         // ligne corrompue : ignorée sans casser la lecture
       }

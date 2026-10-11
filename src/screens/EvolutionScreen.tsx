@@ -17,7 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import MarketTrendChart from '../components/MarketTrendChart';
 import { MarketDayPoint, TRACKED_MARKETS, TrackedMarket, marketLabel, readInPlayProposals, readMarketSeries, readMarketSeriesReal, readMarketSeriesFictional, readCumulativeCounts, readPaperBets, readPredictionOutcomes } from '../core/learnStore';
 import { getAllBets, getAllLessons, getAllCalibrations, getDailyReports } from '../database/storage';
-import { computeAllBetsCalibrations } from '../core/calibration';
+import { MARKET_TITLES, computeAllBetsCalibrations } from '../core/calibration';
 import { generateImprovementReport } from '../core/reporter';
 import { MarketCalibration, Lesson, Bet, DailyReport } from '../types';
 import { useIsFocused } from '@react-navigation/native';
@@ -649,7 +649,7 @@ export default function EvolutionScreen() {
         return (
           <View key={idx} style={styles.calibrationCard}>
             <View style={styles.calibrationHeader}>
-              <Text style={styles.marketLabel}>{cal.market}</Text>
+              <Text style={styles.marketLabel}>{MARKET_TITLES[cal.market] ?? cal.market}</Text>
               <View style={[styles.statusBadge, { borderColor: statusColor }]}>
                 <Ionicons name={statusIcon} size={12} color={statusColor} />
                 <Text style={[styles.statusText, { color: statusColor }]}>{statusLabel}</Text>

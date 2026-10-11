@@ -108,7 +108,17 @@ export function computeAllBetsCalibrations(
     if (bet.id.startsWith('live-') || bet.excluded_from_pnl || !['won', 'lost'].includes(bet.status)) continue;
     for (const leg of bet.legs) if (!leg.is_void) add(leg.market, leg.result === 'won', leg.estimated_prob ?? 0);
   }
-  for (const p of proposals) for (const l of p.legs) if (l.settled) add(TRACKED_TO_MARKET[l.market], !!l.won, l.prob);
+  // Un même pari (match, marché, sélection, checkpoint) n'est compté qu'une fois.
+  const seen = new Set<string>();
+  for (const p of proposals as Array<{ kind?: string; legs: Array<{ market: string; prob: number; settled?: boolean; won?: boolean; fixtureId?: number; selection?: string }> }>) {
+    for (const l of p.legs) {
+      if (!l.settled) continue;
+      const key = `${l.fixtureId}|${l.market}|${l.selection}|${p.kind}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      add(TRACKED_TO_MARKET[l.market], !!l.won, l.prob);
+    }
+  }
 
   const now = new Date().toISOString();
   return [...stats.entries()]
@@ -120,3 +130,16 @@ export function computeAllBetsCalibrations(
       return { market, total_predictions: e.total, predictions_won: e.won, actual_success_rate: rate, avg_predicted_prob: avg, calibration_status: status, last_updated: now };
     });
 }
+
+/** Titres clairs des marchés (le code interne « OU_2_5 » ne parle à personne). */
+export const MARKET_TITLES: Record<string, string> = {
+  '1X2': 'Victoire (1X2)',
+  BTTS: 'Les deux équipes marquent',
+  OU_2_5: 'Total de buts (plus / moins de X buts)',
+  '1ere_mi_temps': 'But en 1ère mi-temps',
+  corners: 'Corners',
+  cards: 'Cartons',
+  fouls: 'Fautes',
+  shots_on_target: 'Tirs cadrés (joueur)',
+  saves: 'Arrêts du gardien',
+};
