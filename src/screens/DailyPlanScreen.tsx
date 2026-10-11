@@ -15,7 +15,7 @@ import {
   Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { ensureOddsLoaded, estimateProposalOdds, getObservedOddsList, recordBookieOdds } from '../core/oddsLearning';
+import { ensureOddsLoaded, estimateProposalOdds, explainOddsMoves, getObservedOddsList, recordBookieOdds } from '../core/oddsLearning';
 import { liveLegContext } from '../core/inPlayCombos';
 import { markLineAvailable, markLineUnavailable, markMarketOff, minLineFor } from '../core/lineLimits';
 import { parseLine } from '../core/oddsLearning';
@@ -428,6 +428,7 @@ export default function DailyPlanScreen() {
                 : ''}
               cote estimée à la création ≈ {est.odds.toFixed(2)}
               {est.observations > 0 ? ` (${est.observations} cotes apprises)` : ''}
+              {explainOddsMoves(proposal.id).map((l) => `\n${l}`).join('')}
             </Text>
           );
         })()}

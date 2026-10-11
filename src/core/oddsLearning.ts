@@ -43,11 +43,41 @@ export interface CountInfo {
   fano: number;
 }
 
+/** Ce qui s'est passé dans le match au moment de la saisie : sert à expliquer les variations de cote. */
+export interface OddsStats {
+  goalsHome: number;
+  goalsAway: number;
+  /** Tirs cadrés (total des deux équipes). */
+  sot: number;
+  shots: number;
+  corners?: number;
+  cards?: number;
+  fouls?: number;
+  reds: number;
+}
+
 /** Contexte relevé au moment où la cote est saisie. */
 export interface OddsContext {
   minute: number;
   goalsNow: number;
   count?: CountInfo;
+  stats?: OddsStats;
+}
+
+const TYPICAL_PER_MIN: Record<string, number> = { corners: 10 / 90, cards: 4 / 90, fouls: 24 / 90, goals: 2.6 / 94 };
+const FEATURE_NAMES = ['rythme du compteur', 'buts', 'tirs cadrés', 'cartons rouges', 'temps écoulé'];
+
+/**
+ * Variables de situation qui peuvent faire bouger une cote : rythme du compteur
+ * comparé au rythme habituel, buts, tirs cadrés (par rapport à ~8 par match), rouges, temps.
+ */
+export function featuresOf(unit: string, minute: number, done: number, stats?: { goals: number; sot: number; reds: number }): number[] {
+  const typical = TYPICAL_PER_MIN[unit.split('_')[0]] ?? 0;
+  const m = Math.max(5, minute);
+  const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
+  const paceRel = typical > 0 ? clamp((done / m) / typical - 1, -1, 3) : 0;
+  const sotRel = clamp(((stats?.sot ?? 0) / m) * 90 / 8 - 1, -1, 3);
+  return [paceRel, stats?.goals ?? 0, sotRel, stats?.reds ?? 0, minute / 90];
 }
 
 export interface OddsObservation {
@@ -61,13 +91,16 @@ export interface OddsObservation {
   minute?: number;
   goalsNow?: number;
   count?: CountInfo;
+  stats?: OddsStats;
+  /** Variables de situation (voir featuresOf), pour expliquer les variations. */
+  features?: number[];
   /** Multiplicateur du rythme du modèle qui redonne 1/cote (comptages). */
   k?: number;
   label: string;
 }
 
 let memo: OddsObservation[] | null = null;
-let cache: { at: number; k: Map<string, { k: number; n: number }>; ratio: Map<string, { ratio: number; n: number }>; globalRatio: { ratio: number; n: number } } | null = null;
+let cache: { at: number; reaction: Map<string, { b: number[]; meanF: number[]; pairs: number }>; k: Map<string, { k: number; n: number }>; ratio: Map<string, { ratio: number; n: number }>; globalRatio: { ratio: number; n: number } } | null = null;
 
 async function load(): Promise<OddsObservation[]> {
   if (memo) return memo;
@@ -135,6 +168,62 @@ const median = (xs: number[]) => {
   return s.length ? (s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2) : NaN;
 };
 
+/** Paires consécutives de saisies sur un même pari (même compteur, coefficient k connu). */
+function pairsOf(obs: OddsObservation[]): Array<[OddsObservation, OddsObservation]> {
+  const byProposal = new Map<string, OddsObservation[]>();
+  for (const o of obs) if (o.count && o.k != null && o.features) byProposal.set(o.proposalId, [...(byProposal.get(o.proposalId) ?? []), o]);
+  const pairs: Array<[OddsObservation, OddsObservation]> = [];
+  for (const list of byProposal.values()) {
+    const sorted = [...list].sort((a, b) => (a.minute ?? 0) - (b.minute ?? 0));
+    for (let i = 1; i < sorted.length; i++) pairs.push([sorted[i - 1], sorted[i]]);
+  }
+  return pairs;
+}
+
+/** Résout (A + lambda I) x = y par élimination de Gauss (petite dimension). */
+function solveRidge(X: number[][], y: number[], lambda: number): number[] {
+  const d = X[0].length;
+  const A = Array.from({ length: d }, (_, i) => Array.from({ length: d }, (_, j) => X.reduce((s, r) => s + r[i] * r[j], 0) + (i === j ? lambda : 0)));
+  const b = Array.from({ length: d }, (_, i) => X.reduce((s, r, n) => s + r[i] * y[n], 0));
+  for (let i = 0; i < d; i++) {
+    let p = i;
+    for (let r = i + 1; r < d; r++) if (Math.abs(A[r][i]) > Math.abs(A[p][i])) p = r;
+    [A[i], A[p]] = [A[p], A[i]];
+    [b[i], b[p]] = [b[p], b[i]];
+    for (let r = i + 1; r < d; r++) {
+      const f = A[r][i] / A[i][i];
+      for (let c = i; c < d; c++) A[r][c] -= f * A[i][c];
+      b[r] -= f * b[i];
+    }
+  }
+  const x = new Array(d).fill(0);
+  for (let i = d - 1; i >= 0; i--) x[i] = (b[i] - A[i].slice(i + 1).reduce((s, v, j) => s + v * x[i + 1 + j], 0)) / A[i][i];
+  return x;
+}
+
+/**
+ * Comment le bookmaker RÉAGIT : sur les paires de cotes d'un même pari, régression de
+ * l'écart de ln(k) (son rythme implicite) sur l'écart des variables de situation. Les
+ * coefficients sont fortement atténués (ridge) tant que les paires sont peu nombreuses.
+ */
+function fitReactions(obs: OddsObservation[]): Map<string, { b: number[]; meanF: number[]; pairs: number }> {
+  const out = new Map<string, { b: number[]; meanF: number[]; pairs: number }>();
+  const byUnit = new Map<string, Array<[OddsObservation, OddsObservation]>>();
+  for (const pr of pairsOf(obs)) byUnit.set(pr[0].count!.unit, [...(byUnit.get(pr[0].count!.unit) ?? []), pr]);
+  for (const [unit, pairs] of byUnit) {
+    const feats = obs.filter((o) => o.count?.unit === unit && o.features).map((o) => o.features!);
+    const meanF = FEATURE_NAMES.map((_, j) => feats.reduce((s, f) => s + f[j], 0) / Math.max(1, feats.length));
+    if (pairs.length < 3) {
+      out.set(unit, { b: new Array(FEATURE_NAMES.length).fill(0), meanF, pairs: pairs.length });
+      continue;
+    }
+    const X = pairs.map(([a, b]) => b.features!.map((v, j) => v - a.features![j]));
+    const y = pairs.map(([a, b]) => Math.log(b.k!) - Math.log(a.k!));
+    out.set(unit, { b: solveRidge(X, y, 3), meanF, pairs: pairs.length });
+  }
+  return out;
+}
+
 function build() {
   if (cache && Date.now() - cache.at < 60_000) return cache;
   const obs = memo ?? [];
@@ -159,12 +248,12 @@ function build() {
     return { ratio: (median(list) * n + PRIOR_RATIO * PRIOR_WEIGHT) / (n + PRIOR_WEIGHT), n };
   };
   for (const [key, list] of ratioGroups) ratio.set(key, shrink(list));
-  cache = { at: Date.now(), k, ratio, globalRatio: allRatios.length ? shrink(allRatios) : { ratio: PRIOR_RATIO, n: 0 } };
+  cache = { at: Date.now(), reaction: fitReactions(obs), k, ratio, globalRatio: allRatios.length ? shrink(allRatios) : { ratio: PRIOR_RATIO, n: 0 } };
   return cache;
 }
 
 /** Cote estimée d'un pari de comptage : le rythme du modèle corrigé de ce que le bookmaker a montré. */
-export function estimateCountOdds(c: CountInfo, minute: number | undefined): { odds: number; observations: number } {
+export function estimateCountOdds(c: CountInfo, minute: number | undefined, features?: number[]): { odds: number; observations: number } {
   const b = build();
   const bucket = bucketOf(minute);
   const learned = b.k.get(`${c.unit}|${bucket}`) ?? b.k.get(`${c.unit}|*`);
@@ -172,7 +261,14 @@ export function estimateCountOdds(c: CountInfo, minute: number | undefined): { o
   const prior = PRIOR_RATIO / Math.max(0.05, p);
   if (!learned) return { odds: Math.max(1.01, prior), observations: 0 };
   const w = Math.min(1, learned.n / FULL_WEIGHT_AT);
-  const learnedOdds = 1 / Math.max(0.05, sideProb(c, learned.k));
+  // Réaction apprise du bookmaker : le rythme implicite se déplace selon ce qui a changé dans le match.
+  const react = features ? b.reaction.get(c.unit) : undefined;
+  let k = learned.k;
+  if (react && features) {
+    const shift = react.b.reduce((sum, coef, j) => sum + coef * (features[j] - react.meanF[j]), 0);
+    k = Math.min(K_MAX, Math.max(K_MIN, learned.k * Math.exp(shift)));
+  }
+  const learnedOdds = 1 / Math.max(0.05, sideProb(c, k));
   return { odds: Math.max(1.01, learnedOdds * w + prior * (1 - w)), observations: learned.n };
 }
 
@@ -188,21 +284,23 @@ export function estimateBookieOdds(segment: string, prob: number, minute?: numbe
 export function estimateLegOdds(
   leg: { market: TrackedMarket; selection: string; prob: number; projection?: { unit: string; observed: number; expected: number } },
   fano: number,
-  minute: number | undefined
+  minute: number | undefined,
+  features?: number[]
 ): { odds: number; observations: number } {
   const parsed = parseLine(leg.selection);
   if (leg.projection && parsed && /^(corners|cards|fouls|goals)_/.test(leg.projection.unit)) {
     return estimateCountOdds(
       { unit: leg.projection.unit, side: parsed.side, line: parsed.line, done: leg.projection.observed, lambda: Math.max(0.01, leg.projection.expected - leg.projection.observed), fano },
-      minute
+      minute,
+      features
     );
   }
   return estimateBookieOdds(oddsSegment(leg.market, leg.selection), leg.prob, minute);
 }
 
 /** Un pari réel dont la cote estimée tombe sous le plancher n'est pas proposé. */
-export function legOddsFloorOk(leg: Parameters<typeof estimateLegOdds>[0], fano: number, minute: number | undefined): boolean {
-  return estimateLegOdds(leg, fano, minute).odds >= MIN_ESTIMATED_ODDS;
+export function legOddsFloorOk(leg: Parameters<typeof estimateLegOdds>[0], fano: number, minute: number | undefined, features?: number[]): boolean {
+  return estimateLegOdds(leg, fano, minute, features).odds >= MIN_ESTIMATED_ODDS;
 }
 
 /** Cote estimée affichée sur la carte d'une proposition (situation à sa création). */
@@ -231,6 +329,8 @@ export async function recordBookieOdds(proposal: InPlayProposal, odds: number, c
     minute: context?.minute,
     goalsNow: context?.goalsNow,
     count,
+    stats: context?.stats,
+    features: count && context ? featuresOf(count.unit, context.minute, count.done, context.stats ? { goals: context.stats.goalsHome + context.stats.goalsAway, sot: context.stats.sot, reds: context.stats.reds } : undefined) : undefined,
     k: k ?? undefined,
     label: proposal.legs.map((l) => l.selection).join(' + '),
   };
@@ -252,13 +352,50 @@ export function getOddsLearningStatus(): {
   observations: number;
   withContext: number;
   countMultipliers: Array<{ key: string; n: number; k: number }>;
+  reactions: Array<{ unit: string; pairs: number; effects: Record<string, number> }>;
   ratios: Array<{ key: string; n: number; ratio: number }>;
 } {
   const b = build();
   return {
     observations: memo?.length ?? 0,
     withContext: (memo ?? []).filter((o) => o.minute != null).length,
+    reactions: getReactionStatus(),
     countMultipliers: Array.from(b.k.entries()).map(([key, v]) => ({ key, n: v.n, k: Math.round(v.k * 100) / 100 })),
     ratios: Array.from(b.ratio.entries()).map(([key, v]) => ({ key, n: v.n, ratio: Math.round(v.ratio * 1000) / 1000 })),
   };
+}
+
+const fmt = (x: number) => (x >= 0 ? `+${x}` : `${x}`);
+
+/** Pourquoi la cote a bougé entre deux saisies d'un même pari : ce qui a changé dans le match. */
+export function explainOddsMoves(proposalId: string): string[] {
+  const obs = getObservedOddsList(proposalId).filter((o) => o.minute != null).sort((a, b) => (a.minute ?? 0) - (b.minute ?? 0));
+  const lines: string[] = [];
+  for (let i = 1; i < obs.length; i++) {
+    const a = obs[i - 1];
+    const b = obs[i];
+    const changes: string[] = [`${fmt((b.minute ?? 0) - (a.minute ?? 0))} min`];
+    if (a.stats && b.stats) {
+      const goals = b.stats.goalsHome + b.stats.goalsAway - (a.stats.goalsHome + a.stats.goalsAway);
+      if (goals) changes.push(`${fmt(goals)} but${Math.abs(goals) > 1 ? 's' : ''}`);
+      if (a.stats.corners != null && b.stats.corners != null && b.stats.corners !== a.stats.corners) changes.push(`${fmt(b.stats.corners - a.stats.corners)} corners`);
+      if (a.stats.cards != null && b.stats.cards != null && b.stats.cards !== a.stats.cards) changes.push(`${fmt(b.stats.cards - a.stats.cards)} cartons`);
+      if (a.stats.fouls != null && b.stats.fouls != null && b.stats.fouls !== a.stats.fouls) changes.push(`${fmt(b.stats.fouls - a.stats.fouls)} fautes`);
+      if (b.stats.sot !== a.stats.sot) changes.push(`${fmt(b.stats.sot - a.stats.sot)} tirs cadrés`);
+      if (b.stats.reds !== a.stats.reds) changes.push(`${fmt(b.stats.reds - a.stats.reds)} rouge`);
+    }
+    const rhythm = a.k != null && b.k != null ? ` · rythme du bookmaker ×${a.k.toFixed(2)} → ×${b.k.toFixed(2)}` : '';
+    lines.push(`${a.minute}e → ${b.minute}e : cote ${a.odds.toFixed(2)} → ${b.odds.toFixed(2)} (${changes.join(', ')})${rhythm}`);
+  }
+  return lines;
+}
+
+/** Ce que l'app a appris de la réaction du bookmaker (coefficients par variable), pour le diagnostic. */
+export function getReactionStatus(): Array<{ unit: string; pairs: number; effects: Record<string, number> }> {
+  const b = build();
+  return Array.from(b.reaction.entries()).map(([unit, r]) => ({
+    unit,
+    pairs: r.pairs,
+    effects: Object.fromEntries(FEATURE_NAMES.map((name, j) => [name, Math.round(r.b[j] * 1000) / 1000])),
+  }));
 }

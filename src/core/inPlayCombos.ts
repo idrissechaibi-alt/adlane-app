@@ -98,7 +98,7 @@ import { hubDateKey, hubKnowsMatch, hubLiveStatus, hubStats } from '../api/footb
 import { StrategyContext, evaluateStrategies, oddsFromExpectedGoals } from './strategies';
 import { SofaPeriodStats } from '../api/footballDataAPIs/sofaScore';
 import { DeltaUnit, LegProjection, describeCorrection, ensureDeltaSamplesLoaded, flushShadowProjections, getDeltaCorrection, projectFullMatchCount, recordShadowProjection, factorForRemaining } from './deltaLearning';
-import { CountInfo, OddsContext, ensureOddsLoaded, legOddsFloorOk, parseLine } from './oddsLearning';
+import { CountInfo, OddsContext, ensureOddsLoaded, featuresOf, legOddsFloorOk, parseLine } from './oddsLearning';
 import { ensureLineLimitsLoaded, ensureMarketOffLoaded, isMarketOff, minLineFor } from './lineLimits';
 import { atLeastProb, pickHighestOverLine, pickLowestUnderLine } from './countModel';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -1100,7 +1100,18 @@ async function bestLegFor(
         // Marché que le bookmaker ne propose pas pour l'instant sur ce match (signalé par l'utilisateur).
         !isMarketOff(live.fixtureId, l.projection?.unit ?? l.market) &&
         l.prob <= REAL_MAX_LEG_PROB &&
-        legOddsFloorOk(l, l.projection ? getDeltaCorrection(l.projection.unit).dispersion : 1, live.minute)
+        legOddsFloorOk(
+          l,
+          l.projection ? getDeltaCorrection(l.projection.unit).dispersion : 1,
+          live.minute,
+          l.projection
+            ? featuresOf(l.projection.unit, live.minute, l.projection.observed, {
+                goals: live.homeGoals + live.awayGoals,
+                sot: (currentStats?.shotsOnTargetHome ?? 0) + (currentStats?.shotsOnTargetAway ?? 0),
+                reds: 0,
+              })
+            : undefined
+        )
     )
     .sort((a, b) => b.prob - a.prob);
   const seen = new Set<string>();
@@ -2013,7 +2024,22 @@ export async function liveLegContext(leg: InPlayProposalLeg): Promise<OddsContex
     if (!live) return null;
     const minute = live.minute;
     const goalsNow = live.homeGoals + live.awayGoals;
-    const base: OddsContext = { minute, goalsNow };
+    // Situation complète du match (sources gratuites) : sert à expliquer les variations de cote.
+    const statsAll = (await hubStats(leg.homeTeam, leg.awayTeam, hubDateKey(), null, { needFirstHalf: false }).catch(() => null))?.all ?? null;
+    const base: OddsContext = {
+      minute,
+      goalsNow,
+      stats: {
+        goalsHome: live.homeGoals,
+        goalsAway: live.awayGoals,
+        sot: (statsAll?.shotsOnTargetHome ?? 0) + (statsAll?.shotsOnTargetAway ?? 0),
+        shots: (statsAll?.shotsTotalHome ?? 0) + (statsAll?.shotsTotalAway ?? 0),
+        corners: statsAll?.corners,
+        cards: statsAll?.cards,
+        fouls: statsAll?.fouls || undefined,
+        reds: statsAll?.redCards ?? 0,
+      },
+    };
     const parsed = parseLine(leg.selection);
     const unit = leg.projection?.unit;
     if (!parsed || !unit) return base;
@@ -2031,17 +2057,15 @@ export async function liveLegContext(leg: InPlayProposalLeg): Promise<OddsContex
     } else {
       // 1ère mi-temps déjà terminée : le compteur de la période n'est plus lisible ici.
       if (window === '1h' && minute > 45) return base;
-      const stats = await hubStats(leg.homeTeam, leg.awayTeam, hubDateKey(), null, { needFirstHalf: false }).catch(() => null);
-      const all = stats?.all;
-      if (!all) return base;
+      if (!statsAll) return base;
       if (unit.startsWith('corners')) {
-        done = all.corners;
+        done = statsAll.corners;
         typical = TYPICAL_CORNERS_PER_MINUTE;
       } else if (unit.startsWith('cards')) {
-        done = all.cards;
+        done = statsAll.cards;
         typical = TYPICAL_CARDS_PER_MINUTE;
       } else {
-        done = all.fouls || undefined;
+        done = statsAll.fouls || undefined;
         typical = TYPICAL_FOULS_PER_MINUTE;
       }
     }
