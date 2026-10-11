@@ -17,7 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import MarketTrendChart from '../components/MarketTrendChart';
 import { MarketDayPoint, TRACKED_MARKETS, TrackedMarket, marketLabel, readInPlayProposals, readMarketSeries, readMarketSeriesReal, readMarketSeriesFictional, readCumulativeCounts, readPaperBets, readPredictionOutcomes } from '../core/learnStore';
 import { getAllBets, getAllLessons, getAllCalibrations, getDailyReports } from '../database/storage';
-import { computeMarketCalibrations } from '../core/calibration';
+import { computeAllBetsCalibrations } from '../core/calibration';
 import { generateImprovementReport } from '../core/reporter';
 import { MarketCalibration, Lesson, Bet, DailyReport } from '../types';
 import { useIsFocused } from '@react-navigation/native';
@@ -491,7 +491,8 @@ export default function EvolutionScreen() {
       setDailyReports(reports);
 
       // Recalculer la calibration à partir des paris réglés
-      const freshCalibrations = computeMarketCalibrations(dbBets);
+      // Tous les paris (réels, fictifs, posés) servent à la calibration — pas seulement ceux que vous avez posés.
+      const freshCalibrations = computeAllBetsCalibrations(dbBets, readInPlayProposals());
       setCalibrations(freshCalibrations.length > 0 ? freshCalibrations : dbCalibrations);
     } catch (error) {
       console.error('Erreur chargement Evolution:', error);
@@ -625,7 +626,7 @@ export default function EvolutionScreen() {
         })
       )}
 
-      <Text style={styles.sectionTitle}>Paris réellement placés</Text>
+      <Text style={styles.sectionTitle}>Tous les paris (réels, fictifs et posés)</Text>
       {calibrations.map((cal, idx) => {
         if (cal.total_predictions === 0) return null;
 

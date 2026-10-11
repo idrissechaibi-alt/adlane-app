@@ -81,3 +81,42 @@ export function isMarketReliable(market: Market, calibrations: MarketCalibration
   if (!cal) return false;
   return cal.calibration_status === 'calibre';
 }
+
+const TRACKED_TO_MARKET: Record<string, Market> = {
+  '1X2': '1X2', total_buts: 'OU_2_5', btts: 'BTTS', buts_1ere_mt: '1ere_mi_temps',
+  corners: 'corners', cartons: 'cards', fautes: 'fouls', tirs_cadres: 'shots_on_target',
+};
+
+/**
+ * Calibration sur TOUS les paris : propositions réelles ET fictives réglées (jambe par jambe) + anciens paris
+ * posés hors direct. Les paris en direct posés (« live-… ») ne sont pas recomptés : leur proposition l'est déjà.
+ */
+export function computeAllBetsCalibrations(
+  bets: Bet[],
+  proposals: Array<{ legs: Array<{ market: string; prob: number; settled?: boolean; won?: boolean }> }>
+): MarketCalibration[] {
+  const stats = new Map<Market, { total: number; won: number; probSum: number }>();
+  const add = (market: Market | undefined, won: boolean, prob: number) => {
+    if (!market) return;
+    const e = stats.get(market) ?? { total: 0, won: 0, probSum: 0 };
+    e.total += 1;
+    if (won) e.won += 1;
+    e.probSum += prob || 0;
+    stats.set(market, e);
+  };
+  for (const bet of bets) {
+    if (bet.id.startsWith('live-') || bet.excluded_from_pnl || !['won', 'lost'].includes(bet.status)) continue;
+    for (const leg of bet.legs) if (!leg.is_void) add(leg.market, leg.result === 'won', leg.estimated_prob ?? 0);
+  }
+  for (const p of proposals) for (const l of p.legs) if (l.settled) add(TRACKED_TO_MARKET[l.market], !!l.won, l.prob);
+
+  const now = new Date().toISOString();
+  return [...stats.entries()]
+    .sort((a, b) => b[1].total - a[1].total)
+    .map(([market, e]) => {
+      const rate = e.won / e.total;
+      const avg = e.probSum / e.total;
+      const status = e.total < 5 ? 'non_calibre' : avg - rate > 0.15 ? 'suspect' : 'calibre';
+      return { market, total_predictions: e.total, predictions_won: e.won, actual_success_rate: rate, avg_predicted_prob: avg, calibration_status: status, last_updated: now };
+    });
+}
