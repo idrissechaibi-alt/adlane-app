@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-10-11T14:36:02.455Z",
+  "exportedAt": "2026-10-11T14:36:13.443Z",
   "formatVersion": 1,
   "source": "APP adlane",
   "data": {
@@ -5025,19 +5025,10 @@
       "ticksLast24h": 71
     },
     "tickProgress": {
-      "startedAt": "2026-10-11T14:31:02.112Z",
-      "step": "compositions T-90",
-      "at": "2026-10-11T14:35:59.269Z",
-      "stepDurationsSec": {
-        "terminé": 193,
-        "scan matinal": 13,
-        "relevé live partagé": 0,
-        "scan en direct 20e/60e": 17,
-        "bilan de minuit": 3,
-        "marqueurs live": 263,
-        "programme fictif": 1,
-        "univers du jour": 0
-      }
+      "startedAt": "2026-10-11T14:36:10.841Z",
+      "step": "scan matinal",
+      "at": "2026-10-11T14:36:10.842Z",
+      "stepDurationsSec": {}
     },
     "lastTick": {
       "startedAt": "2026-10-11T14:24:04.281Z",
@@ -5094,18 +5085,6 @@
       "apiFootballError": "quota du jour atteint (réserve gardée pour le règlement)"
     },
     "abortedTicks": [
-      {
-        "startedAt": "2026-10-11T11:52:18.982Z",
-        "step": "marqueurs live",
-        "at": "2026-10-11T11:53:24.776Z",
-        "stepDurationsSec": {
-          "terminé": 45,
-          "scan matinal": 0,
-          "relevé live partagé": 0,
-          "scan en direct 20e/60e": 65,
-          "bilan de minuit": 0
-        }
-      },
       {
         "startedAt": "2026-10-11T11:53:51.771Z",
         "step": "scan en direct 20e/60e",
@@ -5250,6 +5229,21 @@
           "scan matinal": 1,
           "relevé live partagé": 0,
           "scan en direct 20e/60e": 29
+        }
+      },
+      {
+        "startedAt": "2026-10-11T14:31:02.112Z",
+        "step": "compositions T-90",
+        "at": "2026-10-11T14:35:59.269Z",
+        "stepDurationsSec": {
+          "terminé": 193,
+          "scan matinal": 13,
+          "relevé live partagé": 0,
+          "scan en direct 20e/60e": 17,
+          "bilan de minuit": 3,
+          "marqueurs live": 263,
+          "programme fictif": 1,
+          "univers du jour": 0
         }
       }
     ],
@@ -5550,7 +5544,7 @@
         {
           "name": "Principal",
           "ok": true,
-          "latencyMs": 257,
+          "latencyMs": 203,
           "readyModels": 27,
           "configuredReady": 12,
           "configuredTotal": 13
@@ -5558,7 +5552,7 @@
         {
           "name": "Omniroute",
           "ok": false,
-          "latencyMs": 76,
+          "latencyMs": 57,
           "readyModels": null,
           "configuredReady": null,
           "configuredTotal": 2,
@@ -5568,24 +5562,24 @@
       "leaderboard": [
         {
           "label": "Principal · auto",
-          "ok": 1151,
+          "ok": 1154,
           "fail": 65,
-          "avgMs": 2278,
+          "avgMs": 1383,
           "coolingDown": false
         },
         {
           "label": "Principal · nemotron-3-super-120b",
-          "ok": 789,
+          "ok": 791,
           "fail": 220,
-          "avgMs": 1723,
+          "avgMs": 1695,
           "coolingDown": false
         },
         {
           "label": "Omniroute · Clodiko",
           "ok": 1916,
-          "fail": 161,
+          "fail": 162,
           "avgMs": 2487,
-          "coolingDown": false
+          "coolingDown": true
         },
         {
           "label": "Principal · qwen3.8-27b",
@@ -5774,46 +5768,46 @@
     },
     "sofaScore": null,
     "liveSources": {
-      "TheSportsDB": {
-        "ok": true,
-        "count": 224,
-        "at": "2026-10-11T14:35:59.233Z"
-      },
       "LiveScore": {
         "ok": true,
         "count": 84,
-        "at": "2026-10-11T14:36:00.117Z"
+        "at": "2026-10-11T14:36:11.343Z"
       },
-      "AllSportsApi": {
+      "TheSportsDB": {
         "ok": true,
-        "count": 0,
-        "at": "2026-10-11T14:36:00.836Z"
-      },
-      "ESPN": {
-        "ok": true,
-        "count": 19,
-        "at": "2026-10-11T14:36:00.377Z"
-      },
-      "365Scores": {
-        "ok": true,
-        "count": 47,
-        "at": "2026-10-11T14:36:00.382Z"
+        "count": 224,
+        "at": "2026-10-11T14:36:11.632Z"
       },
       "FotMob": {
         "ok": true,
         "count": 89,
-        "at": "2026-10-11T14:36:00.401Z"
+        "at": "2026-10-11T14:36:12.317Z"
+      },
+      "AllSportsApi": {
+        "ok": true,
+        "count": 0,
+        "at": "2026-10-11T14:36:13.215Z"
+      },
+      "ESPN": {
+        "ok": true,
+        "count": 19,
+        "at": "2026-10-11T14:36:12.870Z"
+      },
+      "365Scores": {
+        "ok": true,
+        "count": 47,
+        "at": "2026-10-11T14:36:12.310Z"
       }
     },
     "teamStats": {
-      "indexUpdatedAt": "2026-10-10T23:38:04Z",
-      "teamsInIndex": 111,
+      "indexUpdatedAt": null,
+      "teamsInIndex": 0,
       "summariesCached": 21,
-      "lookups": 107,
-      "withTrend": 21,
-      "unknownTeams": 86,
-      "lastTrendAt": "2026-10-11T14:31:28.231Z",
-      "lastUnknown": "FC Etzella Ettelbruck - F91 Dudelange"
+      "lookups": 0,
+      "withTrend": 0,
+      "unknownTeams": 0,
+      "lastTrendAt": null,
+      "lastUnknown": null
     },
     "bookieLineMinimums": {
       "limits": {
@@ -5851,103 +5845,98 @@
       {
         "unit": "corners_1h",
         "label": "Corners 1ère mi-temps",
-        "verified": 294,
-        "pending": 349,
-        "meanPredicted": 4.7,
-        "meanActual": 4.4,
-        "meanError": -0.23,
-        "meanAbsError": 1.81,
-        "bigMisses": 19,
+        "verified": 30,
+        "pending": 125,
+        "meanPredicted": 4.1,
+        "meanActual": 4.1,
+        "meanError": -0.04,
+        "meanAbsError": 1.06,
+        "bigMisses": 0,
         "worst": [
           {
-            "match": "Gwangju FC - Ulsan Hyundai",
-            "predicted": 19.4,
-            "actual": 2
+            "match": "Manchester United FC - Tottenham Hotspur FC",
+            "predicted": 3.8,
+            "actual": 1
           },
           {
-            "match": "Independiente del Valle - Aucas",
-            "predicted": 10.3,
-            "actual": 0
+            "match": "Slovan Liberec - Slovacko",
+            "predicted": 2.4,
+            "actual": 5
           },
           {
-            "match": "Maccabi Tel Aviv - Bnei Sakhnin",
-            "predicted": 17.2,
-            "actual": 9
+            "match": "St. Pauli - Karlsruher SC",
+            "predicted": 2.5,
+            "actual": 5
           }
         ]
       },
       {
         "unit": "cards_1h",
         "label": "Cartons 1ère mi-temps",
-        "verified": 294,
-        "pending": 349,
-        "meanPredicted": 1.4,
+        "verified": 27,
+        "pending": 103,
+        "meanPredicted": 1,
         "meanActual": 1.4,
-        "meanError": 0,
-        "meanAbsError": 0.91,
-        "bigMisses": 7,
+        "meanError": 0.46,
+        "meanAbsError": 1.01,
+        "bigMisses": 1,
         "worst": [
           {
-            "match": "FC Krasnodar - Zenit St. Petersburg",
-            "predicted": 10.7,
+            "match": "Liaoning Tieren - Wuhan Three Towns",
+            "predicted": 1.1,
             "actual": 5
           },
           {
-            "match": "Port FC - Pattani FC",
-            "predicted": 0.5,
-            "actual": 5
+            "match": "Guangdong GZ-Power - Jiangxi Dingnan United",
+            "predicted": 0.8,
+            "actual": 3
           },
           {
-            "match": "Tigre - Banfield",
-            "predicted": 0.7,
-            "actual": 5
+            "match": "Prachuap FC - Chiangrai United",
+            "predicted": 0.9,
+            "actual": 3
           }
         ]
       },
       {
         "unit": "goals_1h",
         "label": "Buts à la pause",
-        "verified": 331,
-        "pending": 307,
-        "meanPredicted": 1.3,
-        "meanActual": 1.3,
-        "meanError": 0.03,
-        "meanAbsError": 0.7,
-        "bigMisses": 5,
+        "verified": 13,
+        "pending": 31,
+        "meanPredicted": 0.6,
+        "meanActual": 0.5,
+        "meanError": -0.03,
+        "meanAbsError": 0.67,
+        "bigMisses": 0,
         "worst": [
           {
-            "match": "Rohda Raalte - Rkav Volendam",
-            "predicted": 3.4,
-            "actual": 8
+            "match": "St.Pauli II - HSC Hannover",
+            "predicted": 0.6,
+            "actual": 2
           },
           {
-            "match": "RoPS - JJK Jyvaskyla",
-            "predicted": 1.5,
-            "actual": 5
+            "match": "Freiburg II - Freiberg",
+            "predicted": 0.6,
+            "actual": 2
           },
           {
-            "match": "Gwangju FC - Ulsan Hyundai",
-            "predicted": 0.7,
-            "actual": 4
+            "match": "Liaoning Tieren - Wuhan Three Towns",
+            "predicted": 1.1,
+            "actual": 0
           }
         ]
       },
       {
         "unit": "goals_ft",
         "label": "Buts en fin de match",
-        "verified": 354,
-        "pending": 365,
-        "meanPredicted": 3.1,
-        "meanActual": 3,
-        "meanError": -0.1,
-        "meanAbsError": 1.48,
-        "bigMisses": 25,
+        "verified": 113,
+        "pending": 253,
+        "meanPredicted": 2.9,
+        "meanActual": 2.9,
+        "meanError": 0.02,
+        "meanAbsError": 1.42,
+        "bigMisses": 9,
         "worst": [
-          {
-            "match": "AIK - Brommapojkarna",
-            "predicted": 2.8,
-            "actual": 11
-          },
           {
             "match": "Bochum II - SV Roedinghausen",
             "predicted": 3.3,
@@ -5957,20 +5946,30 @@
             "match": "Bochum II - SV Rödinghausen",
             "predicted": 4.2,
             "actual": 11
+          },
+          {
+            "match": "St.Pauli II - HSC Hannover",
+            "predicted": 2,
+            "actual": 7
           }
         ]
       },
       {
         "unit": "corners_ft",
         "label": "Corners sur le match",
-        "verified": 207,
-        "pending": 166,
-        "meanPredicted": 9.1,
-        "meanActual": 9.3,
-        "meanError": 0.13,
-        "meanAbsError": 1.91,
-        "bigMisses": 4,
+        "verified": 57,
+        "pending": 138,
+        "meanPredicted": 8.9,
+        "meanActual": 9.6,
+        "meanError": 0.67,
+        "meanAbsError": 2.51,
+        "bigMisses": 3,
         "worst": [
+          {
+            "match": "St. Pauli - Karlsruher SC",
+            "predicted": 4.1,
+            "actual": 15
+          },
           {
             "match": "Standard Liege - Royal Charleroi SC",
             "predicted": 3.6,
@@ -5980,38 +5979,33 @@
             "match": "Hammarby IF - Djurgaarden",
             "predicted": 14.2,
             "actual": 7
-          },
-          {
-            "match": "KACM - Ittihad Tanger",
-            "predicted": 2,
-            "actual": 9
           }
         ]
       },
       {
         "unit": "cards_ft",
         "label": "Cartons sur le match",
-        "verified": 201,
-        "pending": 103,
-        "meanPredicted": 3.4,
+        "verified": 47,
+        "pending": 61,
+        "meanPredicted": 3,
         "meanActual": 3.9,
-        "meanError": 0.45,
-        "meanAbsError": 1.49,
-        "bigMisses": 18,
+        "meanError": 0.83,
+        "meanAbsError": 1.53,
+        "bigMisses": 8,
         "worst": [
-          {
-            "match": "Ofk Malzenice - Inter Bratislava",
-            "predicted": 14.3,
-            "actual": 6
-          },
-          {
-            "match": "Paysandu - Rentistas",
-            "predicted": 7.9,
-            "actual": 14
-          },
           {
             "match": "Liaoning Tieren - Wuhan Three Towns",
             "predicted": 2.2,
+            "actual": 8
+          },
+          {
+            "match": "Guangdong GZ-Power - Jiangxi Dingnan United",
+            "predicted": 1.9,
+            "actual": 7
+          },
+          {
+            "match": "Genoa CFC - ACF Fiorentina",
+            "predicted": 3.2,
             "actual": 8
           }
         ]
@@ -6019,51 +6013,51 @@
       {
         "unit": "fouls_1h",
         "label": "Fautes 1ère mi-temps",
-        "verified": 258,
-        "pending": 85,
-        "meanPredicted": 12,
-        "meanActual": 11.6,
-        "meanError": -0.4,
-        "meanAbsError": 3.17,
-        "bigMisses": 8,
+        "verified": 26,
+        "pending": 53,
+        "meanPredicted": 9.9,
+        "meanActual": 11.2,
+        "meanError": 1.3,
+        "meanAbsError": 2.36,
+        "bigMisses": 1,
         "worst": [
           {
-            "match": "FC Krasnodar - Zenit St. Petersburg",
-            "predicted": 35.7,
+            "match": "Liaoning Tieren - Wuhan Three Towns",
+            "predicted": 8.2,
+            "actual": 18
+          },
+          {
+            "match": "Prachuap FC - Chiangrai United",
+            "predicted": 9.3,
             "actual": 17
           },
           {
-            "match": "Hapoel Ironi Kiryat Shmona - Hapoel Tel Aviv",
-            "predicted": 39.2,
-            "actual": 21
-          },
-          {
-            "match": "RB Leipzig - Eintracht Frankfurt",
-            "predicted": 30.7,
-            "actual": 16
+            "match": "Slovan Liberec - Slovacko",
+            "predicted": 9,
+            "actual": 14
           }
         ]
       },
       {
         "unit": "fouls_ft",
         "label": "Fautes sur le match",
-        "verified": 119,
-        "pending": 45,
-        "meanPredicted": 23.8,
-        "meanActual": 24.3,
-        "meanError": 0.48,
-        "meanAbsError": 3.28,
+        "verified": 28,
+        "pending": 17,
+        "meanPredicted": 23,
+        "meanActual": 24.1,
+        "meanError": 1.12,
+        "meanAbsError": 4.38,
         "bigMisses": 1,
         "worst": [
           {
-            "match": "Sonnenhof Grossaspach - Waldhof Mannheim",
-            "predicted": 10.6,
-            "actual": 24
+            "match": "St. Pauli - Karlsruher SC",
+            "predicted": 13.4,
+            "actual": 27
           },
           {
-            "match": "Rosenborg - Sandefjord",
-            "predicted": 41.1,
-            "actual": 30
+            "match": "FK Akhmat - Baltika",
+            "predicted": 25.9,
+            "actual": 36
           },
           {
             "match": "Akhmat Grozny - Baltika",
