@@ -99,6 +99,7 @@ import { StrategyContext, evaluateStrategies, oddsFromExpectedGoals } from './st
 import { SofaPeriodStats } from '../api/footballDataAPIs/sofaScore';
 import { DeltaUnit, LegProjection, describeCorrection, ensureDeltaSamplesLoaded, flushShadowProjections, getDeltaCorrection, projectFullMatchCount, recordShadowProjection, factorForRemaining } from './deltaLearning';
 import { CountInfo, OddsContext, ensureOddsLoaded, legOddsFloorOk, parseLine } from './oddsLearning';
+import { ensureLineLimitsLoaded, minLineFor } from './lineLimits';
 import { atLeastProb, pickHighestOverLine, pickLowestUnderLine } from './countModel';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { matchesForDate, isWithinBreakWindow } from './internationalBreak';
@@ -662,10 +663,17 @@ function countMarketLegs(
     // La tendance seule contredit nettement la ligne (< 30 % pour le reste du match) : pas de pari.
     const contradicted = (side: 'over' | 'under', line: number): boolean =>
       trendLambda != null && trendVerdict(side, line, done, trendLambda).blocked;
+    // Lignes proposées par le bookmaker : en dessous de son minimum, le pari n'existe pas.
+    const minLine = minLineFor(unit);
     const over = pickHighestOverLine(lambda, fano, LINE_PICK_THRESHOLD, done);
-    if (over && over.line - done >= MIN_EVENTS_STILL_NEEDED - 0.5 && !contradicted('over', over.line)) legs.push({ market: spec.market, selection: `Plus de ${over.line} ${spec.noun} ${where}`, prob: over.prob, evidence, projection });
+    if (over && over.line >= minLine && over.line - done >= MIN_EVENTS_STILL_NEEDED - 0.5 && !contradicted('over', over.line)) legs.push({ market: spec.market, selection: `Plus de ${over.line} ${spec.noun} ${where}`, prob: over.prob, evidence, projection });
     const under = pickLowestUnderLine(lambda, fano, LINE_PICK_THRESHOLD, done);
-    if (under && !contradicted('under', under.line)) legs.push({ market: spec.market, selection: `Moins de ${under.line} ${spec.noun} ${where}`, prob: under.prob, evidence, projection });
+    if (under) {
+      // « Moins de » sous le minimum du bookmaker : la ligne existante la plus basse (plus sûre).
+      const line = Math.max(under.line, minLine > 0 ? Math.ceil(minLine - 0.5) + 0.5 : 0);
+      const prob = line === under.line ? under.prob : 1 - atLeastProb(lambda, fano, Math.floor(line) + 1 - done);
+      if (prob >= LINE_PICK_THRESHOLD && !contradicted('under', line)) legs.push({ market: spec.market, selection: `Moins de ${line} ${spec.noun} ${where}`, prob, evidence, projection });
+    }
   }
   return legs;
 }
@@ -682,6 +690,7 @@ async function buildLegs20(
   const currentScore = { home: live.homeGoals, away: live.awayGoals };
   const elapsedMinutes = live.minute;
   const snapshot = mostRecentSnapshot(fixtureId);
+  await ensureLineLimitsLoaded();
   const trend = await getMatchTrend(match.homeTeam, match.awayTeam);
   if (preMatchExpectedGoals) preMatchExpectedGoals = blendExpectedGoals(preMatchExpectedGoals, trend);
 
@@ -1068,6 +1077,7 @@ async function bestLegFor(
   const match = matchRefOfScheduled(scheduled);
   const preMatchExpectedGoals = { home: scheduled.expectedHomeGoals, away: scheduled.expectedAwayGoals };
   await ensureOddsLoaded();
+  await ensureLineLimitsLoaded();
   const currentStats = await fetchRealLiveStats(live);
   // Corners et cartons déjà comptés (sources live gratuites) : sans eux, le
   // pipe réel ne pouvait proposer que des marchés de buts.

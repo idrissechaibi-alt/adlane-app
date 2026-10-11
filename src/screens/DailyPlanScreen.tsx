@@ -17,6 +17,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { ensureOddsLoaded, estimateProposalOdds, getObservedOddsList, recordBookieOdds } from '../core/oddsLearning';
 import { liveLegContext } from '../core/inPlayCombos';
+import { markLineAvailable, markLineUnavailable, minLineFor } from '../core/lineLimits';
+import { parseLine } from '../core/oddsLearning';
 import { executeMorningScan, getDailyPlan, checkAndUpdateT90Status, DailyPlan, runMorningScanIfDue, todayLocalDateString } from '../core/scheduler';
 import { buildScheduledMatches, ProposedSlip } from '../core/dailyWorkflow';
 import { InPlayProposal, readInPlayProposals } from '../core/learnStore';
@@ -317,12 +319,29 @@ export default function DailyPlanScreen() {
       // Minute, score et compteur au moment de la saisie : la cote du 30e et celle du 67e comptent toutes les deux.
       const context = proposal.legs.length === 1 ? await liveLegContext(proposal.legs[0]) : null;
       await recordBookieOdds(proposal, odds, context);
+      // La ligne a une cote chez le bookmaker : elle existe.
+      const leg = proposal.legs.length === 1 ? proposal.legs[0] : null;
+      const parsed = leg ? parseLine(leg.selection) : null;
+      if (leg?.projection && parsed) await markLineAvailable(leg.projection.unit, parsed.line);
       setOddsNoteId(null);
       setOddsNoteInput('');
       setOddsVersion((v) => v + 1);
     } catch (error: any) {
       Alert.alert('Erreur', `Impossible d'enregistrer la cote : ${error.message}`);
     }
+  };
+
+  /** « Cette ligne n'existe pas chez mon bookmaker » : l'app relève son minimum pour ce compteur. */
+  const handleLineUnavailable = async (proposal: InPlayProposal) => {
+    const leg = proposal.legs.length === 1 ? proposal.legs[0] : null;
+    const parsed = leg ? parseLine(leg.selection) : null;
+    if (!leg?.projection || !parsed) {
+      Alert.alert('Pari non concerné', 'Ce signalement vaut pour un pari simple sur un compteur (corners, cartons, fautes, buts).');
+      return;
+    }
+    await markLineUnavailable(leg.projection.unit, parsed.line);
+    Alert.alert('Noté', `L'app ne proposera plus de ligne sous ${minLineFor(leg.projection.unit)} pour ce marché.`);
+    setOddsVersion((v) => v + 1);
   };
 
   /** Un pari en direct (simple ou combiné) avec son bouton "Placer". */
@@ -386,15 +405,22 @@ export default function DailyPlanScreen() {
         })()}
         <View style={styles.liveBetStatusRow}>
           {oddsNoteId !== proposal.id ? (
-            <TouchableOpacity
-              style={styles.liveBetPlaceButton}
-              onPress={() => {
-                setOddsNoteInput('');
-                setOddsNoteId(proposal.id);
-              }}
-            >
-              <Text style={styles.placeBetButtonText}>{getObservedOddsList(proposal.id).length > 0 ? 'Ajouter une cote' : 'Donner la cote'}</Text>
-            </TouchableOpacity>
+            <>
+              <TouchableOpacity
+                style={styles.liveBetPlaceButton}
+                onPress={() => {
+                  setOddsNoteInput('');
+                  setOddsNoteId(proposal.id);
+                }}
+              >
+                <Text style={styles.placeBetButtonText}>{getObservedOddsList(proposal.id).length > 0 ? 'Ajouter une cote' : 'Donner la cote'}</Text>
+              </TouchableOpacity>
+              {proposal.legs.length === 1 && proposal.legs[0].projection ? (
+                <TouchableOpacity style={styles.liveBetPlaceButton} onPress={() => handleLineUnavailable(proposal)}>
+                  <Text style={styles.placeBetButtonText}>Ligne introuvable</Text>
+                </TouchableOpacity>
+              ) : null}
+            </>
           ) : (
             <View style={styles.placeStakeRow}>
               <TextInput
