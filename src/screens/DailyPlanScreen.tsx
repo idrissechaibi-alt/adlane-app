@@ -54,7 +54,7 @@ export default function DailyPlanScreen() {
   /** Paris dont la cote estimée est sous le plancher : en attente qu'elle monte. */
   const [oddsWatch, setOddsWatch] = useState<WatchedBet[]>([]);
   /** Saisie de la ligne minimale réellement proposée (et sa cote) quand la ligne du pari n'existe pas. */
-  const [minLineForm, setMinLineForm] = useState<{ id: string; line: string; odds: string } | null>(null);
+  const [minLineForm, setMinLineForm] = useState<{ id: string; low: string; lowOdds: string; high: string; highOdds: string } | null>(null);
   /** Jambes de combiné signalées « non proposées » par le bookmaker (clé : proposition:numéro de jambe). */
   const [missingLegs, setMissingLegs] = useState<Record<string, boolean>>({});
   const [placing, setPlacing] = useState(false);
@@ -390,7 +390,7 @@ export default function DailyPlanScreen() {
       }
       // La ligne n'existe pas : l'utilisateur donne la ligne minimale réellement proposée et sa cote.
       flagLeg();
-      setMinLineForm({ id: formId, line: '', odds: '' });
+      setMinLineForm({ id: formId, low: '', lowOdds: '', high: '', highOdds: '' });
     };
     Alert.alert('Introuvable chez ton bookmaker', 'Que se passe-t-il ?', [
       ...(leg.projection && parsed ? [{ text: "Cette ligne n'existe pas", onPress: () => void lineMissing() }] : []),
@@ -399,49 +399,66 @@ export default function DailyPlanScreen() {
     ]);
   };
 
-  /** Enregistre : la ligne du pari n'existe pas, voici la ligne minimale proposée par le bookmaker et sa cote. */
+  /**
+   * Enregistre : la ligne du pari n'existe pas. L'utilisateur donne la ligne BASSE (la plus petite) et/ou la
+   * ligne HAUTE (la plus grande) que son bookmaker propose, chacune avec sa cote.
+   */
   const handleSaveMinLine = async (proposal: InPlayProposal) => {
     const legIndex = Number((minLineForm?.id ?? '').split(':').pop()) || 0;
     const leg = proposal.legs[legIndex];
-    const parsed = parseLine(leg.selection);
-    if (!minLineForm || !leg.projection || !parsed) return;
-    const line = Number(minLineForm.line.replace(',', '.'));
-    const odds = Number(minLineForm.odds.replace(',', '.'));
-    if (!Number.isFinite(line) || line <= 0) {
-      Alert.alert('Ligne invalide', 'Entre la ligne minimale proposée par ton bookmaker (ex. 2.5).');
+    const parsed = leg ? parseLine(leg.selection) : null;
+    if (!minLineForm || !leg?.projection || !parsed) return;
+    const num = (v: string) => Number(v.replace(',', '.'));
+    const low = minLineForm.low.trim() ? num(minLineForm.low) : null;
+    const high = minLineForm.high.trim() ? num(minLineForm.high) : null;
+    const lowOdds = minLineForm.lowOdds.trim() ? num(minLineForm.lowOdds) : null;
+    const highOdds = minLineForm.highOdds.trim() ? num(minLineForm.highOdds) : null;
+    if (low == null && high == null) {
+      Alert.alert('Ligne manquante', 'Entre au moins la ligne basse ou la ligne haute proposée par ton bookmaker (ex. 2.5).');
       return;
     }
-    if (!Number.isFinite(odds) || odds <= 1) {
-      Alert.alert('Cote invalide', 'Entre la cote de cette ligne (supérieure à 1).');
+    if ((low != null && (!Number.isFinite(low) || low <= 0)) || (high != null && (!Number.isFinite(high) || high <= 0)) || (low != null && high != null && low > high)) {
+      Alert.alert('Lignes invalides', 'La ligne basse doit être inférieure ou égale à la ligne haute (ex. 2.5 et 6.5).');
+      return;
+    }
+    if ((lowOdds != null && (!Number.isFinite(lowOdds) || lowOdds <= 1)) || (highOdds != null && (!Number.isFinite(highOdds) || highOdds <= 1))) {
+      Alert.alert('Cote invalide', 'Une cote doit être supérieure à 1.');
       return;
     }
     try {
+      const unit = leg.projection.unit;
       // Total attendu AU MOMENT de la saisie (situation actuelle du match), sinon celui du pari.
       const ctx = await liveLegContext(leg).catch(() => null);
       const expected = ctx?.count ? ctx.count.done + ctx.count.lambda : leg.projection.expected;
-      // Pour un « Moins de », l'utilisateur donne la ligne MAXIMALE proposée ; pour un « Plus de », la MINIMALE.
-      if (parsed.side === 'under') {
-        if (line < parsed.line) await markLineUnavailable(leg.projection.unit, parsed.line, expected, 'under'); // ligne du pari trop haute
-        else await markLineUnavailable(leg.projection.unit, parsed.line, expected, 'over'); // trop basse : sous le minimum
-        await markLineAvailable(leg.projection.unit, line, expected, 'under');
-      } else {
-        await markLineUnavailable(leg.projection.unit, parsed.line, expected, 'over');
-        await markLineAvailable(leg.projection.unit, line, expected, 'over');
+      // Ligne BASSE : elle existe ; la ligne du pari et celles en dessous, si plus basses, n'existent pas.
+      if (low != null) {
+        await markLineAvailable(unit, low, expected, 'over');
+        if (parsed.line < low) await markLineUnavailable(unit, parsed.line, expected, 'over');
       }
-      // 3) Sa cote est apprise comme n'importe quelle cote saisie, avec le contexte du moment.
-      const selection = leg.selection.replace(/(plus|moins) de\s+[\d.,]+/i, `$1 de ${line}`);
-      const asked = { ...proposal, id: `${proposal.id}#min${legIndex}`, combinedProb: leg.prob, legs: [{ ...leg, selection }] };
-      const askedCtx = await liveLegContext(asked.legs[0]).catch(() => null);
-      await recordOddsAndLearn(asked, odds, askedCtx);
+      // Ligne HAUTE : elle existe ; la ligne du pari, si plus haute, n'existe pas.
+      if (high != null) {
+        await markLineAvailable(unit, high, expected, 'under');
+        if (parsed.line > high) await markLineUnavailable(unit, parsed.line, expected, 'under');
+      }
+      // Les cotes données sont apprises comme n'importe quelle cote saisie, avec le contexte du moment.
+      const learn = async (line: number, odds: number | null, tag: string) => {
+        if (odds == null) return;
+        const selection = leg.selection.replace(/(plus|moins) de\s+[\d.,]+/i, `$1 de ${line}`);
+        const asked = { ...proposal, id: `${proposal.id}#${tag}${legIndex}`, combinedProb: leg.prob, legs: [{ ...leg, selection }] };
+        const askedCtx = await liveLegContext(asked.legs[0]).catch(() => null);
+        await recordOddsAndLearn(asked, odds, askedCtx);
+      };
+      if (low != null) await learn(low, lowOdds, 'low');
+      if (high != null) await learn(high, highOdds, 'high');
       setMinLineForm(null);
       setOddsVersion((v) => v + 1);
-      const min = minLineFor(leg.projection.unit, expected);
-      const max = maxLineFor(leg.projection.unit, expected);
+      const min = minLineFor(unit, expected);
+      const max = maxLineFor(unit, expected);
       Alert.alert(
         'Noté',
-        `Ligne ${line} à ${odds.toFixed(2)} enregistrée.` +
-          (parsed.side === 'under' && Number.isFinite(max) ? ` Dans cette situation, l'app ne proposera plus de « Moins de » au-dessus de ${max}.` : '') +
-          (parsed.side === 'over' && min > 0 ? ` Dans cette situation, l'app ne proposera plus de ligne sous ${min}.` : '')
+        `Lignes enregistrées${low != null ? ` · basse ${low}${lowOdds ? ` à ${lowOdds.toFixed(2)}` : ''}` : ''}${high != null ? ` · haute ${high}${highOdds ? ` à ${highOdds.toFixed(2)}` : ''}` : ''}.` +
+          (min > 0 ? ` Dans cette situation, l'app ne proposera plus de ligne sous ${min}` : '') +
+          (Number.isFinite(max) ? `${min > 0 ? ' ni' : " Dans cette situation, l'app ne proposera plus de ligne"} au-dessus de ${max}.` : min > 0 ? '.' : '')
       );
     } catch (error: any) {
       Alert.alert('Erreur', `Impossible d'enregistrer : ${error.message}`);
@@ -574,30 +591,51 @@ export default function DailyPlanScreen() {
           )}
         </View>
         {minLineForm?.id.startsWith(`${proposal.id}:`) && (
-          <View style={styles.placeStakeRow}>
-            <TextInput
-              style={styles.stakeInput}
-              value={minLineForm.line}
-              onChangeText={(v) => setMinLineForm({ ...minLineForm, line: v })}
-              placeholder={parseLine(proposal.legs[Number(minLineForm.id.split(':').pop()) || 0].selection)?.side === 'under' ? 'Ligne MAXIMALE (ex 4.5)' : 'Ligne minimale (ex 2.5)'}
-              placeholderTextColor="#64748b"
-              keyboardType="decimal-pad"
-              autoFocus
-            />
-            <TextInput
-              style={styles.stakeInput}
-              value={minLineForm.odds}
-              onChangeText={(v) => setMinLineForm({ ...minLineForm, odds: v })}
-              placeholder="Sa cote"
-              placeholderTextColor="#64748b"
-              keyboardType="decimal-pad"
-            />
-            <TouchableOpacity style={styles.confirmStakeButton} onPress={() => handleSaveMinLine(proposal)}>
-              <Text style={styles.confirmStakeText}>OK</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.cancelStakeButton} onPress={() => setMinLineForm(null)}>
-              <Ionicons name="close" size={16} color="#94a3b8" />
-            </TouchableOpacity>
+          <View>
+            <Text style={styles.liveBetLeg}>Lignes proposées par ton bookmaker pour ce marché (une seule suffit) :</Text>
+            <View style={styles.placeStakeRow}>
+              <TextInput
+                style={styles.stakeInput}
+                value={minLineForm.low}
+                onChangeText={(v) => setMinLineForm({ ...minLineForm, low: v })}
+                placeholder="Ligne BASSE (ex 2.5)"
+                placeholderTextColor="#64748b"
+                keyboardType="decimal-pad"
+                autoFocus
+              />
+              <TextInput
+                style={styles.stakeInput}
+                value={minLineForm.lowOdds}
+                onChangeText={(v) => setMinLineForm({ ...minLineForm, lowOdds: v })}
+                placeholder="Sa cote"
+                placeholderTextColor="#64748b"
+                keyboardType="decimal-pad"
+              />
+            </View>
+            <View style={styles.placeStakeRow}>
+              <TextInput
+                style={styles.stakeInput}
+                value={minLineForm.high}
+                onChangeText={(v) => setMinLineForm({ ...minLineForm, high: v })}
+                placeholder="Ligne HAUTE (ex 6.5)"
+                placeholderTextColor="#64748b"
+                keyboardType="decimal-pad"
+              />
+              <TextInput
+                style={styles.stakeInput}
+                value={minLineForm.highOdds}
+                onChangeText={(v) => setMinLineForm({ ...minLineForm, highOdds: v })}
+                placeholder="Sa cote"
+                placeholderTextColor="#64748b"
+                keyboardType="decimal-pad"
+              />
+              <TouchableOpacity style={styles.confirmStakeButton} onPress={() => handleSaveMinLine(proposal)}>
+                <Text style={styles.confirmStakeText}>OK</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.cancelStakeButton} onPress={() => setMinLineForm(null)}>
+                <Ionicons name="close" size={16} color="#94a3b8" />
+              </TouchableOpacity>
+            </View>
           </View>
         )}
         {placingId === `live-${proposal.id}` && (
