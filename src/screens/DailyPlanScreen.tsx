@@ -487,6 +487,12 @@ export default function DailyPlanScreen() {
         <Text style={styles.liveBetTitle}>
           {minuteLabel} · {proposal.legs.length === 1 ? first.selection : `Combiné ${proposal.legs.length} matchs`} — {confidence}%
         </Text>
+        {proposal.legs.some((l) => l.waitForOdds) && (
+          <Text style={styles.waitOdds}>
+            ⏳ À poser seulement si ta cote atteint {proposal.legs.find((l) => l.waitForOdds)!.waitForOdds!.min.toFixed(2)}
+            {proposal.legs.length === 1 ? ` (estimée ${first.waitForOdds!.estimated.toFixed(2)})` : ' sur chaque jambe concernée'} : attends qu'elle monte.
+          </Text>
+        )}
         {proposal.legs.length > 1 &&
           proposal.legs.map((leg, i) => (
             <View key={i}>
@@ -496,6 +502,7 @@ export default function DailyPlanScreen() {
                   return st === 'won' ? '✅' : st === 'lost' ? '❌' : '⏳';
                 })()}{' '}
                 {leg.homeTeam} - {leg.awayTeam} : {leg.selection} ({Math.round(leg.prob * 100)}%)
+                {leg.waitForOdds ? `  ⏳ cote ≥ ${leg.waitForOdds.min.toFixed(2)}` : ''}
                 {missingLegs[`${proposal.id}:${i}`] ? '  ⚠️ non proposée' : ''}
               </Text>
               {legStatuses[proposal.id]?.[i] !== 'won' && legStatuses[proposal.id]?.[i] !== 'lost' && !missingLegs[`${proposal.id}:${i}`] && (
@@ -1342,6 +1349,11 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderTopWidth: 1,
     borderTopColor: 'rgba(167, 139, 250, 0.2)',
+  },
+  waitOdds: {
+    fontSize: 11,
+    color: '#fbbf24',
+    marginBottom: 2,
   },
   legNotFound: {
     fontSize: 11,

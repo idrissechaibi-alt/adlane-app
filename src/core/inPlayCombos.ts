@@ -226,6 +226,8 @@ interface CandidateLeg {
   projection?: LegProjection;
   /** Chance (0-1) que le bookmaker propose cette ligne dans cette situation (indice appris, jamais bloquant). */
   availability?: number;
+  /** Cote estimée sous le plancher : proposé quand même, à poser seulement si la cote atteint le minimum. */
+  waitForOdds?: { min: number; estimated: number };
 }
 
 /** Buts attendus corrigés par l'écart mesuré sur les matchs réglés. */
@@ -853,6 +855,7 @@ function toProposalLeg(item: LegWithContext): InPlayProposalLeg {
     awayTeam: item.match.awayTeam,
     scoreLabel: `${item.live.homeGoals}-${item.live.awayGoals}`,
     projection: item.leg.projection,
+    waitForOdds: item.leg.waitForOdds,
   };
 }
 
@@ -1159,24 +1162,17 @@ async function bestLegFor(
     return bet365;
   };
   const withOdds = playable.map((l) => ({ leg: l, odds: oddsOf(l) }));
-  // Cote estimée sous le plancher : pas proposé maintenant, mis en attente (rejoué si la cote monte).
-  const waiting = withOdds.filter((x) => x.odds < MIN_ESTIMATED_ODDS).sort((a, b) => b.leg.prob - a.leg.prob).slice(0, 4);
-  await setOddsWatch(
-    live.fixtureId,
-    waiting.map((x) => ({
-      homeTeam: match.homeTeam,
-      awayTeam: match.awayTeam,
-      selection: x.leg.selection,
-      prob: x.leg.prob,
-      estimatedOdds: x.odds,
-      minute: live.minute,
-    }))
-  );
+  // Cote estimée sous le plancher : le pari est PROPOSÉ quand même, avec la cote minimale à obtenir pour le poser
+  // (attendre que la cote monte). Plus de liste d'attente séparée : un plancher sec ne laissait plus rien passer.
+  await setOddsWatch(live.fixtureId, []);
   // Le marché le plus OPTIMAL d'abord : probabilité × cote estimée × chance que le bookmaker le propose
   // (à probabilité égale, la meilleure cote ; une ligne probablement absente passe derrière).
   const eligible = withOdds
-    .filter((x) => x.odds >= MIN_ESTIMATED_ODDS)
-    .sort((a, b) => b.leg.prob * b.odds * (b.leg.availability ?? 1) - a.leg.prob * a.odds * (a.leg.availability ?? 1))
+    .map((x) => {
+      if (x.odds < MIN_ESTIMATED_ODDS) x.leg.waitForOdds = { min: MIN_ESTIMATED_ODDS, estimated: x.odds };
+      return x;
+    })
+    .sort((a, b) => b.leg.prob * Math.max(b.odds, MIN_ESTIMATED_ODDS * 0.9) * (b.leg.availability ?? 1) - a.leg.prob * Math.max(a.odds, MIN_ESTIMATED_ODDS * 0.9) * (a.leg.availability ?? 1))
     .map((x) => x.leg);
   const seen = new Set<string>();
   const best: LegWithContext[] = [];

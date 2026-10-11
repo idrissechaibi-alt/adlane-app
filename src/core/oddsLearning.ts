@@ -24,7 +24,11 @@ const MAX_OBSERVATIONS = 1000;
 const PRIOR_RATIO = 0.92;
 const PRIOR_WEIGHT = 4;
 /** Observations à partir desquelles le rapport appris remplace entièrement la valeur de départ. */
-const FULL_WEIGHT_AT = 6;
+const FULL_WEIGHT_AT = 12;
+/** Une cote de bookmaker reste dans cette fourchette de la cote « juste » du modèle (1 / probabilité) : sans ça, 1-2 saisies suffisaient à écrouler les estimations. */
+const RATIO_MIN = 0.78;
+const RATIO_MAX = 1.02;
+const clampOdds = (odds: number, prob: number) => Math.max(RATIO_MIN / Math.max(0.05, prob), Math.min(RATIO_MAX / Math.max(0.05, prob), odds));
 const K_MIN = 0.3;
 const K_MAX = 3;
 /** Cote estimée minimale pour qu'un pari réel soit proposé (en dessous : mis en attente, rejoué si la cote monte). */
@@ -293,7 +297,7 @@ export function estimateCountOdds(c: CountInfo, minute: number | undefined, feat
   const learned = b.k.get(`${c.unit}|${bucket}`) ?? b.k.get(`${c.unit}|*`);
   const p = sideProb(c);
   const prior = PRIOR_RATIO / Math.max(0.05, p);
-  if (!learned) return { odds: Math.max(1.01, prior * Math.exp(b.resid.get(`c:${c.unit}`) ?? 0)), raw: Math.max(1.01, prior), observations: 0 };
+  if (!learned) return { odds: Math.max(1.01, clampOdds(prior * Math.exp(b.resid.get(`c:${c.unit}`) ?? 0), p)), raw: Math.max(1.01, prior), observations: 0 };
   const w = Math.min(1, learned.n / FULL_WEIGHT_AT);
   // Réaction apprise du bookmaker : le rythme implicite se déplace selon ce qui a changé dans le match.
   const react = features ? b.reaction.get(c.unit) : undefined;
@@ -304,7 +308,7 @@ export function estimateCountOdds(c: CountInfo, minute: number | undefined, feat
   }
   const learnedOdds = 1 / Math.max(0.05, sideProb(c, k));
   const raw = Math.max(1.01, learnedOdds * w + prior * (1 - w));
-  return { odds: Math.max(1.01, raw * Math.exp(b.resid.get(`c:${c.unit}`) ?? 0)), raw, observations: learned.n };
+  return { odds: Math.max(1.01, clampOdds(raw * Math.exp(b.resid.get(`c:${c.unit}`) ?? 0), p)), raw, observations: learned.n };
 }
 
 /** Cote estimée d'un pari hors comptage (1X2, BTTS…), d'après le rapport cote × probabilité. */
@@ -313,7 +317,7 @@ export function estimateBookieOdds(segment: string, prob: number, minute?: numbe
   const hit = b.ratio.get(`${segment}|${bucketOf(minute)}`) ?? b.ratio.get(`${segment}|*`);
   const ratio = hit ? (hit.ratio * Math.min(1, hit.n / FULL_WEIGHT_AT) + b.globalRatio.ratio * (1 - Math.min(1, hit.n / FULL_WEIGHT_AT))) : b.globalRatio.ratio;
   const raw = Math.max(1.01, ratio / Math.max(0.05, prob));
-  return { odds: Math.max(1.01, raw * Math.exp(b.resid.get(`s:${segment}`) ?? 0)), raw, observations: hit?.n ?? 0 };
+  return { odds: Math.max(1.01, clampOdds(raw * Math.exp(b.resid.get(`s:${segment}`) ?? 0), prob)), raw, observations: hit?.n ?? 0 };
 }
 
 /** Jambe candidate : comptage si sa projection le permet, sinon rapport par segment. */

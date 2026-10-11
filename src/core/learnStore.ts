@@ -440,6 +440,8 @@ export interface InPlayProposalLeg {
   scoreLabel: string;
   /** Valeur projetée vs réelle (marchés de comptage) — voir deltaLearning.ts. */
   projection?: LegProjection;
+  /** Cote estimée sous le plancher : à poser seulement quand la cote du bookmaker atteint ce minimum. */
+  waitForOdds?: { min: number; estimated: number };
 }
 
 export interface InPlayProposal {
