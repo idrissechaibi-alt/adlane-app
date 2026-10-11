@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-10-11T15:53:25.604Z",
+  "exportedAt": "2026-10-11T15:53:42.670Z",
   "formatVersion": 1,
   "source": "APP adlane",
   "data": {
@@ -5062,9 +5062,9 @@
       "ticksLast24h": 75
     },
     "tickProgress": {
-      "startedAt": "2026-10-11T15:53:22.660Z",
+      "startedAt": "2026-10-11T15:53:40.112Z",
       "step": "scan matinal",
-      "at": "2026-10-11T15:53:22.661Z",
+      "at": "2026-10-11T15:53:40.119Z",
       "stepDurationsSec": {}
     },
     "lastTick": {
@@ -5123,16 +5123,6 @@
       "apiFootballError": "quota du jour atteint (réserve gardée pour le règlement)"
     },
     "abortedTicks": [
-      {
-        "startedAt": "2026-10-11T13:12:02.762Z",
-        "step": "scan en direct 20e/60e",
-        "at": "2026-10-11T13:12:05.215Z",
-        "stepDurationsSec": {
-          "terminé": 199,
-          "scan matinal": 2,
-          "relevé live partagé": 0
-        }
-      },
       {
         "startedAt": "2026-10-11T13:12:09.749Z",
         "step": "scan en direct 20e/60e",
@@ -5284,6 +5274,12 @@
         "stepDurationsSec": {
           "terminé": 26
         }
+      },
+      {
+        "startedAt": "2026-10-11T15:53:22.660Z",
+        "step": "scan matinal",
+        "at": "2026-10-11T15:53:22.661Z",
+        "stepDurationsSec": {}
       }
     ],
     "strategies": [
@@ -5583,7 +5579,7 @@
         {
           "name": "Principal",
           "ok": true,
-          "latencyMs": 83,
+          "latencyMs": 187,
           "readyModels": 27,
           "configuredReady": 12,
           "configuredTotal": 13
@@ -5591,7 +5587,7 @@
         {
           "name": "Omniroute",
           "ok": false,
-          "latencyMs": 15,
+          "latencyMs": 122,
           "readyModels": null,
           "configuredReady": null,
           "configuredTotal": 2,
@@ -5604,7 +5600,7 @@
           "ok": 1916,
           "fail": 169,
           "avgMs": 2487,
-          "coolingDown": true
+          "coolingDown": false
         },
         {
           "label": "Principal · ising-calibration-1.5-31b",
@@ -5639,7 +5635,7 @@
           "ok": 258,
           "fail": 396,
           "avgMs": 826,
-          "coolingDown": true
+          "coolingDown": false
         },
         {
           "label": "Principal · gpt-oss-20b",
@@ -5810,32 +5806,32 @@
       "TheSportsDB": {
         "ok": true,
         "count": 165,
-        "at": "2026-10-11T15:53:23.195Z"
+        "at": "2026-10-11T15:53:40.941Z"
       },
       "AllSportsApi": {
         "ok": true,
         "count": 5,
-        "at": "2026-10-11T15:53:24.942Z"
+        "at": "2026-10-11T15:53:42.396Z"
       },
       "LiveScore": {
         "ok": true,
         "count": 90,
-        "at": "2026-10-11T15:53:23.656Z"
+        "at": "2026-10-11T15:53:41.064Z"
       },
       "FotMob": {
         "ok": true,
-        "count": 93,
-        "at": "2026-10-11T15:53:23.579Z"
+        "count": 92,
+        "at": "2026-10-11T15:53:41.412Z"
+      },
+      "365Scores": {
+        "ok": true,
+        "count": 49,
+        "at": "2026-10-11T15:53:41.540Z"
       },
       "ESPN": {
         "ok": true,
         "count": 14,
-        "at": "2026-10-11T15:53:24.381Z"
-      },
-      "365Scores": {
-        "ok": true,
-        "count": 50,
-        "at": "2026-10-11T15:53:23.794Z"
+        "at": "2026-10-11T15:53:42.334Z"
       }
     },
     "teamStats": {
@@ -6110,196 +6106,9 @@
     "bookieOdds": {
       "observations": 57,
       "withContext": 56,
-      "reactions": [
-        {
-          "unit": "goals_ft",
-          "pairs": 5,
-          "effects": {
-            "rythme du compteur": -0.122,
-            "buts": -0.154,
-            "tirs cadrés": -0.04,
-            "cartons rouges": 0,
-            "temps écoulé": -0.005
-          }
-        },
-        {
-          "unit": "cards_ft",
-          "pairs": 3,
-          "effects": {
-            "rythme du compteur": -0.081,
-            "buts": 0,
-            "tirs cadrés": 0.052,
-            "cartons rouges": 0,
-            "temps écoulé": -0.076
-          }
-        },
-        {
-          "unit": "corners_1h",
-          "pairs": 1,
-          "effects": {
-            "rythme du compteur": 0,
-            "buts": 0,
-            "tirs cadrés": 0,
-            "cartons rouges": 0,
-            "temps écoulé": 0
-          }
-        },
-        {
-          "unit": "corners_ft",
-          "pairs": 2,
-          "effects": {
-            "rythme du compteur": 0,
-            "buts": 0,
-            "tirs cadrés": 0,
-            "cartons rouges": 0,
-            "temps écoulé": 0
-          }
-        }
-      ],
-      "countMultipliers": [
-        {
-          "key": "cards_ft|b",
-          "n": 4,
-          "k": 1.08
-        },
-        {
-          "key": "cards_ft|*",
-          "n": 10,
-          "k": 1
-        },
-        {
-          "key": "fouls_ft|b",
-          "n": 1,
-          "k": 1.04
-        },
-        {
-          "key": "fouls_ft|*",
-          "n": 3,
-          "k": 1.04
-        },
-        {
-          "key": "corners_ft|b",
-          "n": 3,
-          "k": 1.67
-        },
-        {
-          "key": "corners_ft|*",
-          "n": 9,
-          "k": 1.67
-        },
-        {
-          "key": "corners_ft|c",
-          "n": 3,
-          "k": 1.23
-        },
-        {
-          "key": "goals_ft|c",
-          "n": 2,
-          "k": 1.91
-        },
-        {
-          "key": "goals_ft|*",
-          "n": 12,
-          "k": 1.68
-        },
-        {
-          "key": "goals_ft|a",
-          "n": 4,
-          "k": 1.68
-        },
-        {
-          "key": "cards_ft|a",
-          "n": 5,
-          "k": 0.91
-        },
-        {
-          "key": "goals_ft|b",
-          "n": 6,
-          "k": 1.63
-        },
-        {
-          "key": "corners_ft|a",
-          "n": 3,
-          "k": 2.2
-        },
-        {
-          "key": "cards_ft|c",
-          "n": 1,
-          "k": 1.09
-        },
-        {
-          "key": "corners_1h|a",
-          "n": 3,
-          "k": 1.34
-        },
-        {
-          "key": "corners_1h|*",
-          "n": 3,
-          "k": 1.34
-        },
-        {
-          "key": "fouls_ft|c",
-          "n": 2,
-          "k": 0.97
-        }
-      ],
-      "ratios": [
-        {
-          "key": "total_buts|over|ft|b",
-          "n": 7,
-          "ratio": 0.992
-        },
-        {
-          "key": "total_buts|over|ft|*",
-          "n": 13,
-          "ratio": 0.951
-        },
-        {
-          "key": "total_buts|under|ft|b",
-          "n": 3,
-          "ratio": 0.894
-        },
-        {
-          "key": "total_buts|under|ft|*",
-          "n": 5,
-          "ratio": 0.886
-        },
-        {
-          "key": "total_buts|over|ft|c",
-          "n": 5,
-          "ratio": 0.498
-        },
-        {
-          "key": "total_buts|under|ft|c",
-          "n": 2,
-          "ratio": 0.923
-        },
-        {
-          "key": "corners|over|ft|b",
-          "n": 1,
-          "ratio": 1.01
-        },
-        {
-          "key": "corners|over|ft|*",
-          "n": 1,
-          "ratio": 1.01
-        },
-        {
-          "key": "total_buts|over|ft|a",
-          "n": 1,
-          "ratio": 0.943
-        },
-        {
-          "key": "combo|b",
-          "n": 1,
-          "ratio": 0.936
-        },
-        {
-          "key": "combo|*",
-          "n": 1,
-          "ratio": 0.936
-        }
-      ]
+      "reactions": [],
+      "countMultipliers": [],
+      "ratios": []
     },
     "oddsAlignment": {
       "score": 2,
