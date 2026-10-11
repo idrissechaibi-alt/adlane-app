@@ -16,6 +16,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { InPlayProposal, TrackedMarket } from './learnStore';
 import { atLeastProb } from './countModel';
+import { normalizeTeamName } from './teamNameMatch';
 import { DeltaUnit, getDeltaCorrection } from './deltaLearning';
 
 const KEY = '@bookie_odds_observations_v2';
@@ -83,6 +84,8 @@ export function featuresOf(unit: string, minute: number, done: number, stats?: {
 export interface OddsObservation {
   id: string;
   proposalId: string;
+  /** Même match + même pari (sélection identique) : plusieurs propositions à des horaires différents partagent leurs cotes. */
+  groupKey?: string;
   ts: string;
   odds: number;
   segment: string;
@@ -128,6 +131,13 @@ export function oddsSegment(market: TrackedMarket, selection: string): string {
   return `${market}|${side}|${window}`;
 }
 
+/** Clé commune des paris identiques (même match, même sélection) proposés à des moments différents ; null pour un combiné. */
+export function groupKeyOf(proposal: InPlayProposal): string | null {
+  if (proposal.legs.length !== 1) return null;
+  const l = proposal.legs[0];
+  return `${normalizeTeamName(l.homeTeam)}|${normalizeTeamName(l.awayTeam)}|${l.market}|${l.selection}`;
+}
+
 export function proposalSegment(proposal: InPlayProposal): string {
   return proposal.legs.length === 1 ? oddsSegment(proposal.legs[0].market, proposal.legs[0].selection) : 'combo';
 }
@@ -171,7 +181,7 @@ const median = (xs: number[]) => {
 /** Paires consécutives de saisies sur un même pari (même compteur, coefficient k connu). */
 function pairsOf(obs: OddsObservation[]): Array<[OddsObservation, OddsObservation]> {
   const byProposal = new Map<string, OddsObservation[]>();
-  for (const o of obs) if (o.count && o.k != null && o.features) byProposal.set(o.proposalId, [...(byProposal.get(o.proposalId) ?? []), o]);
+  for (const o of obs) if (o.count && o.k != null && o.features) byProposal.set(o.groupKey ?? o.proposalId, [...(byProposal.get(o.groupKey ?? o.proposalId) ?? []), o]);
   const pairs: Array<[OddsObservation, OddsObservation]> = [];
   for (const list of byProposal.values()) {
     const sorted = [...list].sort((a, b) => (a.minute ?? 0) - (b.minute ?? 0));
@@ -322,6 +332,7 @@ export async function recordBookieOdds(proposal: InPlayProposal, odds: number, c
   const entry: OddsObservation = {
     id: `${proposal.id}@${Date.now()}`,
     proposalId: proposal.id,
+    groupKey: groupKeyOf(proposal) ?? undefined,
     ts: new Date().toISOString(),
     odds,
     segment: proposalSegment(proposal),
@@ -337,15 +348,17 @@ export async function recordBookieOdds(proposal: InPlayProposal, odds: number, c
   if (first?.fixtureId == null) return;
   // Toutes les saisies d'un même pari sont gardées (30e, 67e…) ; seule une répétition
   // de la même cote à la même minute est ignorée.
-  const dup = list.some((o) => o.proposalId === proposal.id && o.odds === odds && o.minute === entry.minute);
+  const dup = list.some((o) => (o.groupKey && o.groupKey === entry.groupKey ? true : o.proposalId === proposal.id) && o.odds === odds && o.minute === entry.minute);
   const next = dup ? list : [...list, entry].slice(-MAX_OBSERVATIONS);
   memo = next;
   cache = null;
   await AsyncStorage.setItem(KEY, JSON.stringify(next));
 }
 
-export function getObservedOddsList(proposalId: string): OddsObservation[] {
-  return (memo ?? []).filter((o) => o.proposalId === proposalId);
+/** Cotes saisies pour un pari, y compris celles données sur un pari identique d'un autre horaire. */
+export function getObservedOddsList(proposal: InPlayProposal): OddsObservation[] {
+  const key = groupKeyOf(proposal);
+  return (memo ?? []).filter((o) => o.proposalId === proposal.id || (key != null && o.groupKey === key));
 }
 
 export function getOddsLearningStatus(): {
@@ -368,8 +381,8 @@ export function getOddsLearningStatus(): {
 const fmt = (x: number) => (x >= 0 ? `+${x}` : `${x}`);
 
 /** Pourquoi la cote a bougé entre deux saisies d'un même pari : ce qui a changé dans le match. */
-export function explainOddsMoves(proposalId: string): string[] {
-  const obs = getObservedOddsList(proposalId).filter((o) => o.minute != null).sort((a, b) => (a.minute ?? 0) - (b.minute ?? 0));
+export function explainOddsMoves(proposal: InPlayProposal): string[] {
+  const obs = getObservedOddsList(proposal).filter((o) => o.minute != null).sort((a, b) => (a.minute ?? 0) - (b.minute ?? 0));
   const lines: string[] = [];
   for (let i = 1; i < obs.length; i++) {
     const a = obs[i - 1];

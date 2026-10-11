@@ -521,7 +521,7 @@ export default function DailyPlanScreen() {
           )}
         </View>
         {(() => {
-          const history = getObservedOddsList(proposal.id);
+          const history = getObservedOddsList(proposal);
           const est = estimateProposalOdds(proposal);
           return (
             <Text style={styles.liveBetLeg}>
@@ -530,7 +530,7 @@ export default function DailyPlanScreen() {
                 : ''}
               cote estimée à la création ≈ {est.odds.toFixed(2)}
               {est.observations > 0 ? ` (${est.observations} cotes apprises)` : ''}
-              {explainOddsMoves(proposal.id).map((l) => `\n${l}`).join('')}
+              {explainOddsMoves(proposal).map((l) => `\n${l}`).join('')}
             </Text>
           );
         })()}
@@ -544,7 +544,7 @@ export default function DailyPlanScreen() {
                   setOddsNoteId(proposal.id);
                 }}
               >
-                <Text style={styles.placeBetButtonText}>{getObservedOddsList(proposal.id).length > 0 ? 'Ajouter une cote' : 'Donner la cote'}</Text>
+                <Text style={styles.placeBetButtonText}>{getObservedOddsList(proposal).length > 0 ? 'Ajouter une cote' : 'Donner la cote'}</Text>
               </TouchableOpacity>
               {proposal.legs.length === 1 ? (
                 <TouchableOpacity style={styles.liveBetPlaceButton} onPress={() => handleNotFound(proposal)}>
