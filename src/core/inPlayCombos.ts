@@ -1572,7 +1572,34 @@ function strategyKeys(proposals: InPlayProposal[]): string[] {
 function appendInPlayProposals(fresh: InPlayProposal[]): void {
   const current = readInPlayProposals();
   const ids = new Set(current.map((p) => p.id));
-  writeInPlayProposals([...current, ...fresh.filter((p) => !ids.has(p.id))]);
+  // Doublons : même match (noms normalisés, donc même si deux sources donnent deux
+  // identifiants), même marché, même fenêtre, même côté, même checkpoint. Un pari de
+  // stratégie qui reprend un pari déjà proposé n'est pas ajouté une seconde fois.
+  const keys = new Set(current.map(proposalDuplicateKey).filter((k): k is string => k != null));
+  const kept: InPlayProposal[] = [];
+  for (const p of fresh) {
+    if (ids.has(p.id)) continue;
+    const key = proposalDuplicateKey(p);
+    if (key) {
+      if (keys.has(key)) continue;
+      keys.add(key);
+    }
+    kept.push(p);
+  }
+  writeInPlayProposals([...current, ...kept]);
+}
+
+/**
+ * Clé de doublon d'un pari simple : match + marché + fenêtre + côté + checkpoint.
+ * null pour un combiné (plusieurs matchs, jamais comparé ici).
+ */
+export function proposalDuplicateKey(p: InPlayProposal): string | null {
+  if (p.legs.length !== 1) return null;
+  const l = p.legs[0];
+  const side = /^moins de|^0-0|ne marquent pas|\(non\)/i.test(l.selection) ? 'under' : 'over';
+  const window = /sur le match|total match/i.test(l.selection) ? 'ft' : 'other';
+  const kind = p.kind === 'halftime' || (p.kind === 'minute60' && p.minute != null && p.minute < 55) ? 'ht' : p.kind;
+  return `${p.real === false ? 'f' : 'r'}|${normalizeTeamName(l.homeTeam)}|${normalizeTeamName(l.awayTeam)}|${l.market}|${window}|${side}|${kind}`;
 }
 
 /**

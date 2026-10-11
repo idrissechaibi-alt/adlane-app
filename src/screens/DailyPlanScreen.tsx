@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ensureOddsLoaded, estimateProposalOdds, explainOddsMoves, getObservedOddsList, recordBookieOdds } from '../core/oddsLearning';
-import { liveLegContext } from '../core/inPlayCombos';
+import { liveLegContext, proposalDuplicateKey } from '../core/inPlayCombos';
 import { markLineAvailable, markLineUnavailable, markMarketOff, minLineFor } from '../core/lineLimits';
 import { parseLine } from '../core/oddsLearning';
 import { executeMorningScan, getDailyPlan, checkAndUpdateT90Status, DailyPlan, runMorningScanIfDue, todayLocalDateString } from '../core/scheduler';
@@ -102,7 +102,20 @@ export default function DailyPlanScreen() {
     // real !== false : les paris fictifs (boucle d'auto-apprentissage, tout
     // l'univers européen) ne sont jamais affichés ici, seulement les vrais
     // paris sur les 5 grands championnats.
-    setInPlayProposals(readInPlayProposals().filter((p) => todayLocalDateString(new Date(p.createdAt)) === today && p.real !== false));
+    const seen = new Set<string>();
+    setInPlayProposals(
+      readInPlayProposals()
+        .filter((p) => todayLocalDateString(new Date(p.createdAt)) === today && p.real !== false)
+        // Doublons déjà enregistrés (même match, marché, fenêtre, côté) : le plus ancien seul est affiché.
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+        .filter((p) => {
+          const key = proposalDuplicateKey(p);
+          if (!key) return true;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        })
+    );
   };
 
   // Planning du Jour (solos/combinés pré-match) désactivé : les cotes
