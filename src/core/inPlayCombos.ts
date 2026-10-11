@@ -99,7 +99,7 @@ import { StrategyContext, evaluateStrategies, oddsFromExpectedGoals } from './st
 import { SofaPeriodStats } from '../api/footballDataAPIs/sofaScore';
 import { DeltaUnit, LegProjection, describeCorrection, ensureDeltaSamplesLoaded, flushShadowProjections, getDeltaCorrection, projectFullMatchCount, recordShadowProjection, factorForRemaining } from './deltaLearning';
 import { CountInfo, OddsContext, ensureOddsLoaded, featuresOf, legOddsFloorOk, parseLine } from './oddsLearning';
-import { ensureLineLimitsLoaded, ensureMarketOffLoaded, isMarketOff, minLineFor } from './lineLimits';
+import { ensureLineLimitsLoaded, ensureMarketOffLoaded, isMarketOff, maxLineFor, minLineFor } from './lineLimits';
 import { atLeastProb, pickHighestOverLine, pickLowestUnderLine } from './countModel';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { matchesForDate, isWithinBreakWindow } from './internationalBreak';
@@ -672,7 +672,8 @@ function countMarketLegs(
       // « Moins de » sous le minimum du bookmaker : la ligne existante la plus basse (plus sûre).
       const line = Math.max(under.line, minLine > 0 ? Math.ceil(minLine - 0.5) + 0.5 : 0);
       const prob = line === under.line ? under.prob : 1 - atLeastProb(lambda, fano, Math.floor(line) + 1 - done);
-      if (prob >= LINE_PICK_THRESHOLD && !contradicted('under', line)) legs.push({ market: spec.market, selection: `Moins de ${line} ${spec.noun} ${where}`, prob, evidence, projection });
+      // « Moins de » au-dessus du maximum proposé par le bookmaker : ligne inexistante.
+      if (prob >= LINE_PICK_THRESHOLD && line <= maxLineFor(unit, done + lambda) && !contradicted('under', line)) legs.push({ market: spec.market, selection: `Moins de ${line} ${spec.noun} ${where}`, prob, evidence, projection });
     }
   }
   return legs;

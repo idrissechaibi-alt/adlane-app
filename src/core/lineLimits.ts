@@ -19,7 +19,8 @@ const MAX_OBS = 400;
 
 interface LineObs {
   unit: string;
-  /** Total attendu − ligne, au moment de l'observation. */
+  /** 'over' : écart = total attendu − ligne (ligne trop basse) ; 'under' : écart = ligne − total attendu (ligne trop haute). */
+  side?: 'over' | 'under';
   gap: number;
   available: boolean;
   ts?: string;
@@ -47,8 +48,8 @@ export async function ensureLineLimitsLoaded(): Promise<void> {
 }
 
 /** Écart maximal total attendu − ligne pour que la ligne existe (Infinity = aucune limite connue). */
-export function maxGapFor(unit: string): number {
-  const mine = observations.filter((o) => o.unit === unit);
+export function maxGapFor(unit: string, side: 'over' | 'under' = 'over'): number {
+  const mine = observations.filter((o) => o.unit === unit && (o.side ?? 'over') === side);
   if (mine.length === 0) return Number.POSITIVE_INFINITY;
   const unavailable = mine.filter((o) => !o.available).map((o) => o.gap);
   const available = mine.filter((o) => o.available).map((o) => o.gap);
@@ -74,29 +75,41 @@ async function save(): Promise<void> {
   }
 }
 
-async function record(unit: string, line: number, expectedTotal: number, available: boolean): Promise<void> {
+async function record(unit: string, line: number, expectedTotal: number, available: boolean, side: 'over' | 'under'): Promise<void> {
   await ensureLineLimitsLoaded();
-  observations.push({ unit, gap: Math.round((expectedTotal - line) * 100) / 100, available, ts: new Date().toISOString() });
+  const gap = side === 'over' ? expectedTotal - line : line - expectedTotal;
+  observations.push({ unit, side, gap: Math.round(gap * 100) / 100, available, ts: new Date().toISOString() });
   await save();
 }
 
-/** « Cette ligne n'existe pas chez mon bookmaker » dans la situation actuelle. */
-export function markLineUnavailable(unit: string, line: number, expectedTotal: number): Promise<void> {
-  return record(unit, line, expectedTotal, false);
+/**
+ * Plus grande ligne X.5 que le bookmaker propose pour un « Moins de » sur ce compteur et ce
+ * total attendu (Infinity = aucune limite connue) : au-dessus, la ligne est trop facile.
+ */
+export function maxLineFor(unit: string, expectedTotal: number): number {
+  const gap = maxGapFor(unit, 'under');
+  if (!Number.isFinite(gap)) return Number.POSITIVE_INFINITY;
+  return Math.floor(expectedTotal + gap - 0.5) + 0.5;
+}
+
+/**
+ * « Cette ligne n'existe pas chez mon bookmaker » dans la situation actuelle.
+ * side 'over' : ligne trop basse (minimum) ; side 'under' : ligne trop haute (maximum).
+ */
+export function markLineUnavailable(unit: string, line: number, expectedTotal: number, side: 'over' | 'under' = 'over'): Promise<void> {
+  return record(unit, line, expectedTotal, false, side);
 }
 
 /** Une cote a été donnée pour cette ligne : elle existe dans la situation actuelle. */
-export function markLineAvailable(unit: string, line: number, expectedTotal: number): Promise<void> {
-  return record(unit, line, expectedTotal, true);
+export function markLineAvailable(unit: string, line: number, expectedTotal: number, side: 'over' | 'under' = 'over'): Promise<void> {
+  return record(unit, line, expectedTotal, true, side);
 }
 
-export function getLineLimits(): Record<string, { maxGap: number | null; observations: number }> {
+export function getLineLimits(): Record<string, { maxGapOver: number | null; maxGapUnder: number | null; observations: number }> {
   const units = [...new Set(observations.map((o) => o.unit))];
+  const r = (g: number) => (Number.isFinite(g) ? Math.round(g * 100) / 100 : null);
   return Object.fromEntries(
-    units.map((u) => {
-      const g = maxGapFor(u);
-      return [u, { maxGap: Number.isFinite(g) ? Math.round(g * 100) / 100 : null, observations: observations.filter((o) => o.unit === u && o.ts).length }];
-    })
+    units.map((u) => [u, { maxGapOver: r(maxGapFor(u, 'over')), maxGapUnder: r(maxGapFor(u, 'under')), observations: observations.filter((o) => o.unit === u && o.ts).length }])
   );
 }
 

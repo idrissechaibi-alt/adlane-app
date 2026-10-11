@@ -17,7 +17,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { ensureOddsLoaded, estimateProposalOdds, explainOddsMoves, getObservedOddsList, recordBookieOdds } from '../core/oddsLearning';
 import { liveLegContext, proposalDuplicateKey } from '../core/inPlayCombos';
-import { markLineAvailable, markLineUnavailable, markMarketOff, minLineFor } from '../core/lineLimits';
+import { markLineAvailable, markLineUnavailable, markMarketOff, maxLineFor, minLineFor } from '../core/lineLimits';
 import { parseLine } from '../core/oddsLearning';
 import { executeMorningScan, getDailyPlan, checkAndUpdateT90Status, DailyPlan, runMorningScanIfDue, todayLocalDateString } from '../core/scheduler';
 import { buildScheduledMatches, ProposedSlip } from '../core/dailyWorkflow';
@@ -401,9 +401,15 @@ export default function DailyPlanScreen() {
       // Total attendu AU MOMENT de la saisie (situation actuelle du match), sinon celui du pari.
       const ctx = await liveLegContext(leg).catch(() => null);
       const expected = ctx?.count ? ctx.count.done + ctx.count.lambda : leg.projection.expected;
-      // 1) La ligne du pari n'existe pas dans cette situation ; 2) la ligne saisie existe.
-      await markLineUnavailable(leg.projection.unit, parsed.line, expected);
-      await markLineAvailable(leg.projection.unit, line, expected);
+      // Pour un « Moins de », l'utilisateur donne la ligne MAXIMALE proposée ; pour un « Plus de », la MINIMALE.
+      if (parsed.side === 'under') {
+        if (line < parsed.line) await markLineUnavailable(leg.projection.unit, parsed.line, expected, 'under'); // ligne du pari trop haute
+        else await markLineUnavailable(leg.projection.unit, parsed.line, expected, 'over'); // trop basse : sous le minimum
+        await markLineAvailable(leg.projection.unit, line, expected, 'under');
+      } else {
+        await markLineUnavailable(leg.projection.unit, parsed.line, expected, 'over');
+        await markLineAvailable(leg.projection.unit, line, expected, 'over');
+      }
       // 3) Sa cote est apprise comme n'importe quelle cote saisie, avec le contexte du moment.
       const selection = leg.selection.replace(/(plus|moins) de\s+[\d.,]+/i, `$1 de ${line}`);
       const asked = { ...proposal, id: `${proposal.id}#min`, legs: [{ ...leg, selection }] };
@@ -412,7 +418,13 @@ export default function DailyPlanScreen() {
       setMinLineForm(null);
       setOddsVersion((v) => v + 1);
       const min = minLineFor(leg.projection.unit, expected);
-      Alert.alert('Noté', `Ligne ${line} à ${odds.toFixed(2)} enregistrée.${min > 0 ? ` Dans cette situation, l'app ne proposera plus de ligne sous ${min}.` : ''}`);
+      const max = maxLineFor(leg.projection.unit, expected);
+      Alert.alert(
+        'Noté',
+        `Ligne ${line} à ${odds.toFixed(2)} enregistrée.` +
+          (parsed.side === 'under' && Number.isFinite(max) ? ` Dans cette situation, l'app ne proposera plus de « Moins de » au-dessus de ${max}.` : '') +
+          (parsed.side === 'over' && min > 0 ? ` Dans cette situation, l'app ne proposera plus de ligne sous ${min}.` : '')
+      );
     } catch (error: any) {
       Alert.alert('Erreur', `Impossible d'enregistrer : ${error.message}`);
     }
@@ -523,7 +535,7 @@ export default function DailyPlanScreen() {
               style={styles.stakeInput}
               value={minLineForm.line}
               onChangeText={(v) => setMinLineForm({ ...minLineForm, line: v })}
-              placeholder="Ligne minimale (ex 2.5)"
+              placeholder={parseLine(proposal.legs[0].selection)?.side === 'under' ? 'Ligne MAXIMALE (ex 4.5)' : 'Ligne minimale (ex 2.5)'}
               placeholderTextColor="#64748b"
               keyboardType="decimal-pad"
               autoFocus
