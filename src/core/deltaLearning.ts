@@ -342,3 +342,73 @@ export function getShadowStats(): { pending: number; measured: number } {
     measured: shadowCache.filter((s) => s.actual != null).length,
   };
 }
+
+
+// ---------- Écarts EXACTS prédit / réel ----------
+// Pour chaque compteur : la valeur finale prédite comparée à la valeur finale réelle,
+// que le pari soit gagné ou perdu. « 2 prédit, 10 réel » est un gros écart même si le
+// pari « Plus de 1.5 » est passé. Les plus gros ratés sont listés avec leur match.
+
+export interface DeltaMiss {
+  match: string;
+  predicted: number;
+  actual: number;
+}
+
+export interface DeltaReportRow {
+  unit: DeltaUnit;
+  label: string;
+  /** Projections réglées avec la valeur réelle connue. */
+  verified: number;
+  /** Projections encore sans valeur réelle (match en cours, source muette). */
+  pending: number;
+  meanPredicted: number;
+  meanActual: number;
+  /** Écart signé moyen : réel − prédit (positif = l'app sous-estime). */
+  meanError: number;
+  /** Écart absolu moyen. */
+  meanAbsError: number;
+  /** Cas où |réel − prédit| ≥ max(3, 100 % de la valeur prédite). */
+  bigMisses: number;
+  worst: DeltaMiss[];
+}
+
+export function getDeltaReport(): DeltaReportRow[] {
+  const entries: Array<{ unit: DeltaUnit; predicted: number; actual?: number; match: string; key: string }> = [];
+  const seen = new Set<string>();
+  const push = (fixtureId: number, p: LegProjection, match: string) => {
+    const key = `${fixtureId}|${p.unit}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    entries.push({ unit: p.unit, predicted: p.expected, actual: p.actual, match, key });
+  };
+  for (const sh of shadowCache) push(sh.fixtureId, sh, `${sh.homeTeam} - ${sh.awayTeam}`);
+  for (const proposal of readInPlayProposals()) {
+    for (const leg of proposal.legs) {
+      const p = (leg as { projection?: LegProjection }).projection;
+      if (p) push(leg.fixtureId, p, `${leg.homeTeam} - ${leg.awayTeam}`);
+    }
+  }
+  return (Object.keys(DELTA_LABELS) as DeltaUnit[]).map((unit) => {
+    const mine = entries.filter((e) => e.unit === unit);
+    const done = mine.filter((e) => e.actual != null) as Array<{ predicted: number; actual: number; match: string }>;
+    const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
+    const errs = done.map((e) => e.actual - e.predicted);
+    const big = done.filter((e) => Math.abs(e.actual - e.predicted) >= Math.max(3, e.predicted));
+    return {
+      unit,
+      label: DELTA_LABELS[unit],
+      verified: done.length,
+      pending: mine.length - done.length,
+      meanPredicted: avg(done.map((e) => e.predicted)),
+      meanActual: avg(done.map((e) => e.actual)),
+      meanError: avg(errs),
+      meanAbsError: avg(errs.map(Math.abs)),
+      bigMisses: big.length,
+      worst: [...done]
+        .sort((a, b) => Math.abs(b.actual - b.predicted) - Math.abs(a.actual - a.predicted))
+        .slice(0, 3)
+        .map((e) => ({ match: e.match, predicted: Math.round(e.predicted * 10) / 10, actual: e.actual })),
+    };
+  });
+}

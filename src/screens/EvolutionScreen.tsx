@@ -26,7 +26,7 @@ import { sendTelegramMessage } from '../core/telegram';
 import { loadOmnirouteConfig } from '../core/focusEnrichment';
 import { getWebCapableRoutes } from '../core/llmRouter';
 import { getHubStatus } from '../api/footballDataAPIs/liveDataHub';
-import { ensureDeltaSamplesLoaded } from '../core/deltaLearning';
+import { DeltaReportRow, ensureDeltaSamplesLoaded, getDeltaReport } from '../core/deltaLearning';
 import { OddsLoopFile, updateOddsLoopFile } from '../core/oddsLoop';
 import { ensureOddsLoaded } from '../core/oddsLearning';
 import { getRecentSearchSource, probeAnySearch } from '../core/webSearch';
@@ -78,7 +78,10 @@ export default function EvolutionScreen() {
 
   /** Fichier de la boucle d'apprentissage des cotes (score d'alignement avec le bookmaker). */
   const [oddsFile, setOddsFile] = useState<OddsLoopFile | null>(null);
+  /** Écarts exacts prédit / réel par compteur (que le pari soit gagné ou non). */
+  const [deltaReport, setDeltaReport] = useState<DeltaReportRow[]>([]);
   const refreshOddsFile = () => {
+    ensureDeltaSamplesLoaded().then(() => setDeltaReport(getDeltaReport().filter((r) => r.verified + r.pending > 0))).catch(() => {});
     ensureOddsLoaded().then(() => updateOddsLoopFile()).then(setOddsFile).catch(() => {});
   };
 
@@ -184,6 +187,30 @@ export default function EvolutionScreen() {
           Aucune cote comparée pour l'instant. Donne la cote de ton bookmaker sur les paris du Planning (« Donner la cote ») : l'app compare à chaque fois sa propre estimation à la tienne, mesure l'écart et s'en sert pour coter comme lui.
         </Text>
       )}
+    </View>
+  );
+
+  const renderExactDeltas = () => (
+    <View style={styles.oddsCard}>
+      <Text style={styles.oddsTitle}>Écarts exacts : valeur prédite / valeur réelle</Text>
+      <Text style={styles.oddsLine}>Mesurés même quand le pari est gagné : prédire 2 corners pour 10 réels est un écart, pas une réussite.</Text>
+      {deltaReport.length === 0 && <Text style={styles.oddsLine}>Pas encore de match réglé.</Text>}
+      {deltaReport.map((r) => (
+        <View key={r.unit} style={{ marginTop: 6 }}>
+          <Text style={styles.oddsWhy}>{r.label}</Text>
+          <Text style={styles.oddsLine}>
+            {r.verified} vérifiés{r.pending > 0 ? ` (+${r.pending} en attente du résultat)` : ''} · prédit {r.meanPredicted.toFixed(1)} en moyenne, réel {r.meanActual.toFixed(1)}
+          </Text>
+          <Text style={styles.oddsLine}>
+            Écart moyen {r.meanError > 0 ? '+' : ''}{r.meanError.toFixed(1)} ({r.meanError > 0 ? "l'app sous-estime" : "l'app surestime"}) · écart absolu {r.meanAbsError.toFixed(1)} · {r.bigMisses} gros écart{r.bigMisses > 1 ? 's' : ''}
+          </Text>
+          {r.worst.slice(0, 2).map((w, i) => (
+            <Text key={i} style={styles.oddsLine}>
+              ↳ {w.match} : prédit {w.predicted}, réel {w.actual}
+            </Text>
+          ))}
+        </View>
+      ))}
     </View>
   );
 
@@ -451,6 +478,7 @@ export default function EvolutionScreen() {
     <View>
       {renderWebAccessIndicator()}
       {renderOddsAlignment()}
+      {renderExactDeltas()}
       {fictionalCounter && (
         <View style={styles.liveCounterRow}>
           <Ionicons name="radio-button-on" size={10} color="#4ade80" />
