@@ -443,6 +443,8 @@ export interface InPlayProposalLeg {
   projection?: LegProjection;
   /** Cote estimée sous le plancher : à poser seulement quand la cote du bookmaker atteint ce minimum. */
   waitForOdds?: { min: number; estimated: number };
+  /** Cote estimée au moment de la proposition (celle qui a servi au filtre du plancher) : affichée telle quelle. */
+  estOdds?: number;
 }
 
 export interface InPlayProposal {

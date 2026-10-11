@@ -229,6 +229,8 @@ interface CandidateLeg {
   availability?: number;
   /** Cote estimée sous le plancher : proposé quand même, à poser seulement si la cote atteint le minimum. */
   waitForOdds?: { min: number; estimated: number };
+  /** Cote estimée retenue pour le filtre du plancher. */
+  estOdds?: number;
 }
 
 /** Buts attendus corrigés par l'écart mesuré sur les matchs réglés. */
@@ -863,6 +865,7 @@ function toProposalLeg(item: LegWithContext): InPlayProposalLeg {
     scoreLabel: `${item.live.homeGoals}-${item.live.awayGoals}`,
     projection: item.leg.projection,
     waitForOdds: item.leg.waitForOdds,
+    estOdds: item.leg.estOdds,
   };
 }
 
@@ -1188,6 +1191,7 @@ async function bestLegFor(
   // (à probabilité égale, la meilleure cote ; une ligne probablement absente passe derrière).
   const eligible = withOdds
     .filter((x) => x.odds >= MIN_ESTIMATED_ODDS)
+    .map((x) => ({ ...x, leg: { ...x.leg, estOdds: x.odds } }))
     .sort((a, b) => b.leg.prob * b.odds * (b.leg.availability ?? 1) - a.leg.prob * a.odds * (a.leg.availability ?? 1))
     .map((x) => x.leg);
   const seen = new Set<string>();
@@ -1627,6 +1631,12 @@ function strategyProposals(
     const key = `${live.fixtureId}-strat-${bet.strategyId}`;
     if (alreadyProposed.has(key)) continue;
     const leg: CandidateLeg = { market: bet.market, selection: bet.selection, prob: bet.prob, evidence: bet.evidence };
+    // Pari réel : même plancher de cote que les autres paris (estimation sous 1.40 = pas proposé, réévalué au passage suivant).
+    if (real) {
+      const est = estimateLegOdds(leg, 1, live.minute).odds;
+      if (est < MIN_ESTIMATED_ODDS) continue;
+      leg.estOdds = est;
+    }
     const proposal = buildProposalFromItems(kind, [{ leg, fixtureId: live.fixtureId, match, live }], `Stratégie : ${bet.strategyName}`, real);
     if (!proposal) continue;
     proposal.id = `${proposal.id}-strat-${bet.strategyId}`;

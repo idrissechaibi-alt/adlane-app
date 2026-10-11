@@ -771,7 +771,8 @@ export interface HubFinalResult {
  * les publie. null tant qu'aucune source ne le donne terminé, ou sans score
  * à la pause (indispensable aux marchés 1ère mi-temps).
  */
-export async function hubFinalResult(homeTeam: string, awayTeam: string, dateKey: string): Promise<HubFinalResult | null> {
+export async function hubFinalResult(homeTeam: string, awayTeam: string, dateKey: string, options: { needHalfTime?: boolean } = {}): Promise<HubFinalResult | null> {
+  const needHalfTime = options.needHalfTime ?? true;
   let matches = (await findEverywhere(homeTeam, awayTeam, dateKey, false)).filter((m) => m.statusShort === 'FT');
   if (matches.length === 0) {
     // Fuseaux différents selon la source : match tard le soir rangé au lendemain.
@@ -799,6 +800,8 @@ export async function hubFinalResult(homeTeam: string, awayTeam: string, dateKey
     firstHalf ??= detail.stats.firstHalf;
     all ??= detail.stats.all;
   }
+  // Pari sur le match entier : le score à la pause n'est pas nécessaire (0-0 par défaut, jamais utilisé).
+  if (!ht && !needHalfTime) ht = [0, 0];
   if (!ht) return null;
   if (ht[0] > goalsHome || ht[1] > goalsAway) return null; // incohérent : on n'invente rien
 

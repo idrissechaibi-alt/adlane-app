@@ -85,9 +85,17 @@ export async function checkLegStatus(leg: InPlayProposalLeg, dateKey: string): P
     } else if (leg.settled && leg.won != null) {
       status = leg.won ? 'won' : 'lost';
     } else {
-      const final = await hubFinalResult(leg.homeTeam, leg.awayTeam, dateKey);
+      // La mi-temps n'est exigée que des paris qui en dépendent : un score final suffit aux autres.
+      const needsHalf = leg.market === 'buts_1ere_mt' || (['corners', 'cartons', 'fautes'].includes(leg.market) && !/sur le match/i.test(leg.selection));
+      const final = await hubFinalResult(leg.homeTeam, leg.awayTeam, dateKey, { needHalfTime: needsHalf });
       if (final) {
         const result = { ...final } as FinalResult;
+        if (['corners', 'cartons', 'fautes'].includes(leg.market) && /sur le match/i.test(leg.selection) && (leg.market === 'corners' ? result.cornersFT : leg.market === 'cartons' ? result.cardsFT : result.foulsFT) == null) {
+          const st = await hubStats(leg.homeTeam, leg.awayTeam, dateKey).catch(() => null);
+          result.cornersFT ??= st?.all?.corners;
+          result.cardsFT ??= st?.all?.cards;
+          result.foulsFT ??= st?.all?.fouls || undefined;
+        }
         if (leg.market === 'tirs_cadres') result.playerSot = (await hubPlayerShots(leg.homeTeam, leg.awayTeam, dateKey).catch(() => null)) ?? undefined;
         const won = settleReprojectedLeg(leg.market, leg.selection, result);
         if (won != null) status = won ? 'won' : 'lost';

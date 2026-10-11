@@ -694,7 +694,10 @@ export async function runNightlyReviewIfDue(): Promise<number> {
     const hubPending = allLegs.filter((l) => !finals.has(l.fixtureId)).slice(0, HUB_FINAL_RESULT_MAX_PER_PASS);
     await mapWithConcurrency(hubPending, 4, async (leg) => {
       if (!reviewTimeLeft()) return;
-      const result = await hubFinalResult(leg.homeTeam, leg.awayTeam, day).catch(() => null);
+      let result = await hubFinalResult(leg.homeTeam, leg.awayTeam, day).catch(() => null);
+      // Pari sur le match entier : le score final suffit, sans score à la pause.
+      const needsHalf = leg.market === 'buts_1ere_mt' || (['corners', 'cartons', 'fautes'].includes(leg.market) && !/sur le match/i.test(leg.selection));
+      if (!result && !needsHalf) result = await hubFinalResult(leg.homeTeam, leg.awayTeam, day, { needHalfTime: false }).catch(() => null);
       if (result) finals.set(leg.fixtureId, result);
     });
 

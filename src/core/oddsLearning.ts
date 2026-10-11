@@ -346,6 +346,11 @@ export function legOddsFloorOk(leg: Parameters<typeof estimateLegOdds>[0], fano:
 /** Cote estimée affichée sur la carte d'une proposition (situation à sa création). */
 export function estimateProposalOdds(proposal: InPlayProposal): { odds: number; raw: number; observations: number } {
   const minute = proposal.minute ?? (proposal.kind === 'minute60' ? 60 : proposal.kind === 'halftime' ? 45 : 20);
+  // Cote retenue à la création (celle qui a passé le plancher 1.40) : affichée telle quelle, jamais recalculée sans contexte.
+  if (proposal.legs.every((l) => l.estOdds != null)) {
+    const product = proposal.legs.reduce((acc, l) => acc * (l.estOdds as number), 1);
+    return { odds: Math.round(product * 100) / 100, raw: product, observations: 0 };
+  }
   if (proposal.legs.length === 1) {
     const leg = proposal.legs[0];
     return estimateLegOdds(leg, leg.projection ? getDeltaCorrection(leg.projection.unit as DeltaUnit).dispersion : 1, minute);

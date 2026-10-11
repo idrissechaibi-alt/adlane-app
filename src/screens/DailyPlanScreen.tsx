@@ -116,6 +116,8 @@ export default function DailyPlanScreen() {
     setInPlayProposals(
       readInPlayProposals()
         .filter((p) => todayLocalDateString(new Date(p.createdAt)) === today && p.real !== false)
+        // Anciens paris créés avant le plancher de cote : cote estimée sous 1.40 et aucune cote saisie → masqués.
+        .filter((p) => p.legs.every((l) => l.estOdds != null) || getObservedOddsList(p).length > 0 || estimateProposalOdds(p).odds >= MIN_ESTIMATED_ODDS)
         // Doublons déjà enregistrés (même match, marché, fenêtre, côté) : le plus ancien seul est affiché.
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
         .filter((p) => {
