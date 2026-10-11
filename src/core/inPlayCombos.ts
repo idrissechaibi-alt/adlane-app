@@ -664,7 +664,7 @@ function countMarketLegs(
     const contradicted = (side: 'over' | 'under', line: number): boolean =>
       trendLambda != null && trendVerdict(side, line, done, trendLambda).blocked;
     // Lignes proposées par le bookmaker : en dessous de son minimum, le pari n'existe pas.
-    const minLine = minLineFor(unit);
+    const minLine = minLineFor(unit, done + lambda);
     const over = pickHighestOverLine(lambda, fano, LINE_PICK_THRESHOLD, done);
     if (over && over.line >= minLine && over.line - done >= MIN_EVENTS_STILL_NEEDED - 0.5 && !contradicted('over', over.line)) legs.push({ market: spec.market, selection: `Plus de ${over.line} ${spec.noun} ${where}`, prob: over.prob, evidence, projection });
     const under = pickLowestUnderLine(lambda, fano, LINE_PICK_THRESHOLD, done);

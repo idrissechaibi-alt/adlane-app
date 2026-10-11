@@ -322,7 +322,10 @@ export default function DailyPlanScreen() {
       // La ligne a une cote chez le bookmaker : elle existe.
       const leg = proposal.legs.length === 1 ? proposal.legs[0] : null;
       const parsed = leg ? parseLine(leg.selection) : null;
-      if (leg?.projection && parsed) await markLineAvailable(leg.projection.unit, parsed.line);
+      if (leg?.projection && parsed) {
+        const c = context?.count;
+        await markLineAvailable(leg.projection.unit, parsed.line, c ? c.done + c.lambda : leg.projection.expected);
+      }
       setOddsNoteId(null);
       setOddsNoteInput('');
       setOddsVersion((v) => v + 1);
@@ -339,8 +342,12 @@ export default function DailyPlanScreen() {
       Alert.alert('Pari non concerné', 'Ce signalement vaut pour un pari simple sur un compteur (corners, cartons, fautes, buts).');
       return;
     }
-    await markLineUnavailable(leg.projection.unit, parsed.line);
-    Alert.alert('Noté', `L'app ne proposera plus de ligne sous ${minLineFor(leg.projection.unit)} pour ce marché.`);
+    // Total attendu AU MOMENT du signalement (situation actuelle du match), sinon celui du pari.
+    const ctx = await liveLegContext(leg).catch(() => null);
+    const expected = ctx?.count ? ctx.count.done + ctx.count.lambda : leg.projection.expected;
+    await markLineUnavailable(leg.projection.unit, parsed.line, expected);
+    const min = minLineFor(leg.projection.unit, expected);
+    Alert.alert('Noté', min > 0 ? `Dans cette situation, l'app ne proposera plus de ligne sous ${min}.` : 'Noté. Pas assez de signalements pour fixer une limite.');
     setOddsVersion((v) => v + 1);
   };
 
