@@ -225,6 +225,7 @@ export default function DailyPlanScreen() {
     corners: 'corners',
     cartons: 'cards',
     fautes: 'fouls',
+    tirs_cadres: 'shots_on_target',
   };
 
   /**

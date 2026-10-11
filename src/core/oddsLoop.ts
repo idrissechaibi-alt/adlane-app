@@ -121,7 +121,7 @@ function group(obs: OddsObservation[], keyOf: (o: OddsObservation) => string): G
 }
 
 const SEGMENT_LABEL: Record<string, string> = {
-  corners: 'corners', cartons: 'cartons', fautes: 'fautes', total_buts: 'total de buts', btts: 'les deux équipes marquent', '1X2': '1X2', buts_1ere_mt: 'but en 1ère mi-temps', combo: 'combinés',
+  corners: 'corners', cartons: 'cartons', fautes: 'fautes', tirs_cadres: 'tirs cadrés joueur', total_buts: 'total de buts', btts: 'les deux équipes marquent', '1X2': '1X2', buts_1ere_mt: 'but en 1ère mi-temps', combo: 'combinés',
 };
 function segmentLabel(o: OddsObservation): string {
   if (o.count) return `${SEGMENT_LABEL[o.segment.split('|')[0]] ?? o.segment.split('|')[0]} ${o.count.unit.endsWith('_1h') ? '(1ère MT)' : '(match)'} · ${o.count.side === 'over' ? 'Plus de' : 'Moins de'}`;

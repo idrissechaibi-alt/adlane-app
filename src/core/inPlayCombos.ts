@@ -96,6 +96,7 @@ import { normalizeTeamName, namesLikelyMatch } from './teamNameMatch';
 import { OmnirouteConfig } from '../types';
 import { mapWithConcurrency } from './concurrency';
 import { hubDateKey, hubKnowsMatch, hubLiveStatus, hubStats } from '../api/footballDataAPIs/liveDataHub';
+import { playerShotLegs } from './playerShots';
 import { StrategyContext, evaluateStrategies, oddsFromExpectedGoals } from './strategies';
 import { SofaPeriodStats } from '../api/footballDataAPIs/sofaScore';
 import { DeltaUnit, LegProjection, describeCorrection, ensureDeltaSamplesLoaded, flushShadowProjections, getDeltaCorrection, projectFullMatchCount, recordShadowProjection, factorForRemaining, situationMultiplier } from './deltaLearning';
@@ -836,6 +837,12 @@ function buildLegs60(
   return withLearnedExpertise(legs);
 }
 
+/** Jambes « tirs cadrés joueur » (ESPN gratuit), passées par la même calibration que les autres marchés. */
+async function playerShotCandidates(live: LiveFixture): Promise<CandidateLeg[]> {
+  const found = await playerShotLegs(live.homeTeam, live.awayTeam, hubDateKey(), live.minute).catch(() => []);
+  return withLearnedExpertise(found.map((l) => ({ market: 'tirs_cadres' as const, selection: l.selection, prob: l.prob, evidence: l.evidence })));
+}
+
 interface LegWithContext {
   leg: CandidateLeg;
   fixtureId: number;
@@ -1124,6 +1131,7 @@ async function bestLegFor(
   const rawLegs = kind === 'minute20'
     ? await buildLegs20(match, live.fixtureId, live, preMatchExpectedGoals, currentStats, observedLive, situation)
     : buildLegs60(live, preMatchExpectedGoals, currentStats, observedLive, await getMatchTrend(match.homeTeam, match.awayTeam), situation);
+  rawLegs.push(...(await playerShotCandidates(live)));
 
   // Tous les marchés concourent ; les plus sûrs passent devant, un seul par
   // marché (et par fenêtre 1ère MT / match).
@@ -1865,6 +1873,7 @@ export async function runInPlayComboTick(
         const rawLegs = kind === 'minute20'
           ? await buildLegs20(match, live.fixtureId, live, expectedGoals, currentStats, observedLive, { features: free?.features ?? null, real: false })
           : buildLegs60(live, expectedGoals, currentStats, observedLive, await getMatchTrend(match.homeTeam, match.awayTeam), { features: free?.features ?? null, real: false });
+        rawLegs.push(...(await playerShotCandidates(live)));
         const window = kind === 'minute20' ? '20e → pause + match complet' : '60e → fin de match';
 
         for (const leg of rawLegs.filter(worthProposing)) {
@@ -2075,6 +2084,7 @@ export async function runInPlayComboTick(
         const rawLegs = kind === 'minute20'
           ? await buildLegs20(match, live.fixtureId, live, preMatchExpectedGoals, currentStats, observedLive)
           : buildLegs60(live, preMatchExpectedGoals, currentStats, observedLive, await getMatchTrend(match.homeTeam, match.awayTeam));
+        rawLegs.push(...(await playerShotCandidates(live)));
 
         const window = kind === 'minute20' ? '20e → pause + match complet' : '60e → fin de match';
         for (const leg of rawLegs.filter(worthProposing)) {

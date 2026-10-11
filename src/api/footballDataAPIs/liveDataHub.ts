@@ -817,6 +817,45 @@ export async function hubFinalResult(homeTeam: string, awayTeam: string, dateKey
   };
 }
 
+
+export interface HubPlayerShots {
+  name: string;
+  team: 'home' | 'away';
+  position: string;
+  starter: boolean;
+  /** Tirs cadrés / tirs totaux déjà pris (ESPN, relevé joueur par joueur). */
+  sot: number;
+  shots: number;
+}
+
+/** Tirs cadrés par joueur (ESPN, gratuit) : en direct comme après le match. */
+export async function hubPlayerShots(homeTeam: string, awayTeam: string, dateKey: string): Promise<HubPlayerShots[] | null> {
+  let matches = (await findEverywhere(homeTeam, awayTeam, dateKey, dateKey === utcDay())).filter((m) => m.provider === 'ESPN');
+  if (matches.length === 0) {
+    const live = await hubLiveEvents().catch(() => [] as HubMatch[]);
+    const m = findInList(live.filter((x) => x.provider === 'ESPN'), { homeTeam, awayTeam });
+    if (m) matches = [m];
+  }
+  const match = matches[0];
+  if (!match) return null;
+  try {
+    const d = await getJson(`${ESPN}/summary?event=${match.ref}`);
+    const out: HubPlayerShots[] = [];
+    for (const r of d?.rosters ?? []) {
+      const side = r.homeAway === 'home' ? 'home' : 'away';
+      for (const p of r.roster ?? []) {
+        const stat = (name: string) => num((p.stats ?? []).find((s: any) => s.name === name)?.value);
+        const name = p.athlete?.displayName;
+        if (!name) continue;
+        out.push({ name, team: side, position: String(p.position?.abbreviation ?? ''), starter: !!p.starter, sot: stat('shotsOnTarget'), shots: stat('totalShots') });
+      }
+    }
+    return out.length > 0 ? out : null;
+  } catch {
+    return null;
+  }
+}
+
 /** État de chaque source au dernier relevé en direct (diagnostic / écran). */
 export async function getHubStatus(): Promise<Record<string, { ok: boolean; count?: number; error?: string; at: string }>> {
   if (Object.keys(status).length > 0) return status;

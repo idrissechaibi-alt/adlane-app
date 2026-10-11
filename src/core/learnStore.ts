@@ -43,6 +43,7 @@ export const TRACKED_MARKETS = [
   { key: 'corners', label: 'Corners' },
   { key: 'cartons', label: 'Cartons' },
   { key: 'fautes', label: 'Fautes' },
+  { key: 'tirs_cadres', label: 'Tirs cadrés (joueur)' },
 ] as const;
 
 export type TrackedMarket = (typeof TRACKED_MARKETS)[number]['key'];

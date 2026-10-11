@@ -45,7 +45,8 @@ import { sendTelegramMessage } from './telegram';
 import { buildFictionalMarketStats, formatFictionalDigestMessage } from './dailyDigest';
 import { readMatchTimelines, MatchSample } from './fictionalProgram';
 import { isSyntheticFixtureId } from './halftimeMonitor';
-import { hubFinalResult, hubLiveStatus, hubStats } from '../api/footballDataAPIs/liveDataHub';
+import { HubPlayerShots, hubFinalResult, hubLiveStatus, hubPlayerShots, hubStats } from '../api/footballDataAPIs/liveDataHub';
+import { playerSotFromSelection } from './playerShots';
 import { liveLegVerdict } from './liveBetStatus';
 import { DeltaUnit, invalidateDeltaCache, settleShadowProjections } from './deltaLearning';
 import { fetchSofaEvent, fetchSofaStats, getSofaEventId } from '../api/footballDataAPIs/sofaScore';
@@ -98,6 +99,8 @@ export interface FinalResult {
   cardsFT?: number;
   fouls1H?: number;
   foulsFT?: number;
+  /** Tirs cadrés par joueur en fin de match (ESPN) : marché « tirs cadrés joueur ». */
+  playerSot?: HubPlayerShots[];
 }
 
 /** Matchs réglés via les sources live gratuites par passage du bilan. */
@@ -395,6 +398,15 @@ export function settleReprojectedLeg(
     return /\(non\)|ne marquent pas/i.test(selection) ? !bothScored : bothScored;
   }
   if (market === 'buts_1ere_mt') return /0-0 à la pause|pas de but/i.test(selection) ? htGoals === 0 : htGoals >= 1;
+
+  if (market === 'tirs_cadres') {
+    const line = selection.match(/(plus|moins) de\s+(\d+(?:[.,]\d+)?)/i);
+    if (!line || result.playerSot == null) return null;
+    const value = playerSotFromSelection(selection, result.playerSot);
+    if (value == null) return null;
+    const threshold = Number(line[2].replace(',', '.'));
+    return /moins/i.test(line[1]) ? value < threshold : value > threshold;
+  }
 
   if (market === 'corners' || market === 'cartons' || market === 'fautes') {
     const line = selection.match(/(plus|moins) de\s+(\d+(?:[.,]\d+)?)/i);
@@ -708,6 +720,15 @@ export async function runNightlyReviewIfDue(): Promise<number> {
       final.corners1H ??= stats.firstHalf?.corners;
       final.cards1H ??= stats.firstHalf?.cards;
       final.fouls1H ??= stats.firstHalf?.fouls || undefined;
+    });
+
+    // Tirs cadrés par joueur (marché « tirs cadrés joueur ») : ESPN, une requête par match concerné.
+    const needPlayers = Array.from(new Map(allLegs.filter((l) => l.market === 'tirs_cadres' && finals.has(l.fixtureId) && !finals.get(l.fixtureId)!.playerSot).map((l) => [l.fixtureId, l])).values());
+    await mapWithConcurrency(needPlayers.slice(0, HUB_FINAL_RESULT_MAX_PER_PASS), 4, async (leg) => {
+      if (!reviewTimeLeft()) return;
+      const players = await hubPlayerShots(leg.homeTeam, leg.awayTeam, day).catch(() => null);
+      const final = finals.get(leg.fixtureId);
+      if (final && players) final.playerSot = players;
     });
 
     // Repli Omniroute (recherche web rétroactive) : seulement pour ce qui
