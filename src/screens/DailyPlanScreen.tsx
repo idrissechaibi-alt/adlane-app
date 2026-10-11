@@ -17,7 +17,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { ensureOddsLoaded, estimateProposalOdds, getObservedOddsList, recordBookieOdds } from '../core/oddsLearning';
 import { liveLegContext } from '../core/inPlayCombos';
-import { markLineAvailable, markLineUnavailable, minLineFor } from '../core/lineLimits';
+import { markLineAvailable, markLineUnavailable, markMarketOff, minLineFor } from '../core/lineLimits';
 import { parseLine } from '../core/oddsLearning';
 import { executeMorningScan, getDailyPlan, checkAndUpdateT90Status, DailyPlan, runMorningScanIfDue, todayLocalDateString } from '../core/scheduler';
 import { buildScheduledMatches, ProposedSlip } from '../core/dailyWorkflow';
@@ -334,21 +334,42 @@ export default function DailyPlanScreen() {
     }
   };
 
-  /** « Cette ligne n'existe pas chez mon bookmaker » : l'app relève son minimum pour ce compteur. */
-  const handleLineUnavailable = async (proposal: InPlayProposal) => {
+  /**
+   * « Introuvable chez mon bookmaker » : deux cas différents. Soit la LIGNE n'existe pas
+   * dans cette situation (l'app affine l'écart appris), soit le MARCHÉ n'est pas proposé
+   * du tout pour l'instant (l'app le met de côté 30 min pour ce match, sans toucher aux lignes).
+   */
+  const handleNotFound = (proposal: InPlayProposal) => {
     const leg = proposal.legs.length === 1 ? proposal.legs[0] : null;
-    const parsed = leg ? parseLine(leg.selection) : null;
-    if (!leg?.projection || !parsed) {
-      Alert.alert('Pari non concerné', 'Ce signalement vaut pour un pari simple sur un compteur (corners, cartons, fautes, buts).');
+    if (!leg) {
+      Alert.alert('Pari non concerné', 'Ce signalement vaut pour un pari simple.');
       return;
     }
-    // Total attendu AU MOMENT du signalement (situation actuelle du match), sinon celui du pari.
-    const ctx = await liveLegContext(leg).catch(() => null);
-    const expected = ctx?.count ? ctx.count.done + ctx.count.lambda : leg.projection.expected;
-    await markLineUnavailable(leg.projection.unit, parsed.line, expected);
-    const min = minLineFor(leg.projection.unit, expected);
-    Alert.alert('Noté', min > 0 ? `Dans cette situation, l'app ne proposera plus de ligne sous ${min}.` : 'Noté. Pas assez de signalements pour fixer une limite.');
-    setOddsVersion((v) => v + 1);
+    const parsed = parseLine(leg.selection);
+    const key = leg.projection?.unit ?? leg.market;
+    const marketOff = async () => {
+      await markMarketOff(leg.fixtureId, key);
+      Alert.alert('Noté', "Marché mis de côté 30 minutes pour ce match. Les lignes apprises ne changent pas.");
+      setOddsVersion((v) => v + 1);
+    };
+    const lineMissing = async () => {
+      if (!leg.projection || !parsed) {
+        await marketOff();
+        return;
+      }
+      // Total attendu AU MOMENT du signalement (situation actuelle du match), sinon celui du pari.
+      const ctx = await liveLegContext(leg).catch(() => null);
+      const expected = ctx?.count ? ctx.count.done + ctx.count.lambda : leg.projection.expected;
+      await markLineUnavailable(leg.projection.unit, parsed.line, expected);
+      const min = minLineFor(leg.projection.unit, expected);
+      Alert.alert('Noté', min > 0 ? `Dans cette situation, l'app ne proposera plus de ligne sous ${min}.` : 'Noté. Pas assez de signalements pour fixer une limite.');
+      setOddsVersion((v) => v + 1);
+    };
+    Alert.alert('Introuvable chez ton bookmaker', 'Que se passe-t-il ?', [
+      ...(leg.projection && parsed ? [{ text: "Cette ligne n'existe pas", onPress: () => void lineMissing() }] : []),
+      { text: 'Marché non proposé', onPress: () => void marketOff() },
+      { text: 'Annuler', style: 'cancel' as const },
+    ]);
   };
 
   /** Un pari en direct (simple ou combiné) avec son bouton "Placer". */
@@ -422,9 +443,9 @@ export default function DailyPlanScreen() {
               >
                 <Text style={styles.placeBetButtonText}>{getObservedOddsList(proposal.id).length > 0 ? 'Ajouter une cote' : 'Donner la cote'}</Text>
               </TouchableOpacity>
-              {proposal.legs.length === 1 && proposal.legs[0].projection ? (
-                <TouchableOpacity style={styles.liveBetPlaceButton} onPress={() => handleLineUnavailable(proposal)}>
-                  <Text style={styles.placeBetButtonText}>Ligne introuvable</Text>
+              {proposal.legs.length === 1 ? (
+                <TouchableOpacity style={styles.liveBetPlaceButton} onPress={() => handleNotFound(proposal)}>
+                  <Text style={styles.placeBetButtonText}>Introuvable</Text>
                 </TouchableOpacity>
               ) : null}
             </>

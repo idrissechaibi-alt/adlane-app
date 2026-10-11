@@ -99,7 +99,7 @@ import { StrategyContext, evaluateStrategies, oddsFromExpectedGoals } from './st
 import { SofaPeriodStats } from '../api/footballDataAPIs/sofaScore';
 import { DeltaUnit, LegProjection, describeCorrection, ensureDeltaSamplesLoaded, flushShadowProjections, getDeltaCorrection, projectFullMatchCount, recordShadowProjection, factorForRemaining } from './deltaLearning';
 import { CountInfo, OddsContext, ensureOddsLoaded, legOddsFloorOk, parseLine } from './oddsLearning';
-import { ensureLineLimitsLoaded, minLineFor } from './lineLimits';
+import { ensureLineLimitsLoaded, ensureMarketOffLoaded, isMarketOff, minLineFor } from './lineLimits';
 import { atLeastProb, pickHighestOverLine, pickLowestUnderLine } from './countModel';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { matchesForDate, isWithinBreakWindow } from './internationalBreak';
@@ -1078,6 +1078,7 @@ async function bestLegFor(
   const preMatchExpectedGoals = { home: scheduled.expectedHomeGoals, away: scheduled.expectedAwayGoals };
   await ensureOddsLoaded();
   await ensureLineLimitsLoaded();
+  await ensureMarketOffLoaded();
   const currentStats = await fetchRealLiveStats(live);
   // Corners et cartons déjà comptés (sources live gratuites) : sans eux, le
   // pipe réel ne pouvait proposer que des marchés de buts.
@@ -1096,6 +1097,8 @@ async function bestLegFor(
     .filter(
       (l) =>
         worthProposing(l) &&
+        // Marché que le bookmaker ne propose pas pour l'instant sur ce match (signalé par l'utilisateur).
+        !isMarketOff(live.fixtureId, l.projection?.unit ?? l.market) &&
         l.prob <= REAL_MAX_LEG_PROB &&
         legOddsFloorOk(l, l.projection ? getDeltaCorrection(l.projection.unit).dispersion : 1, live.minute)
     )

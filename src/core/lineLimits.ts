@@ -99,3 +99,58 @@ export function getLineLimits(): Record<string, { maxGap: number | null; observa
     })
   );
 }
+
+// ---------- Marché non proposé « pour l'instant » ----------
+// Parfois le bookmaker n'offre pas du tout le marché (suspendu, pas encore ouvert
+// pour ce match). Ce n'est pas un problème de ligne : l'écart appris n'est pas
+// touché. Le marché est simplement mis de côté pour CE match pendant un moment.
+
+const OFF_KEY = '@bookie_market_off';
+const OFF_MINUTES = 30;
+
+interface MarketOff {
+  fixtureId: number;
+  /** Compteur (corners_ft…) ou marché (1X2, btts…). */
+  key: string;
+  until: number;
+  ts: string;
+}
+
+let marketOff: MarketOff[] = [];
+let offLoaded = false;
+
+export async function ensureMarketOffLoaded(): Promise<void> {
+  if (offLoaded) return;
+  offLoaded = true;
+  try {
+    const raw = await AsyncStorage.getItem(OFF_KEY);
+    if (raw) marketOff = JSON.parse(raw);
+  } catch {
+    marketOff = [];
+  }
+}
+
+/** « Mon bookmaker ne propose pas ce marché pour l'instant ». */
+export async function markMarketOff(fixtureId: number, key: string): Promise<void> {
+  await ensureMarketOffLoaded();
+  const now = Date.now();
+  marketOff = [...marketOff.filter((m) => !(m.fixtureId === fixtureId && m.key === key)), { fixtureId, key, until: now + OFF_MINUTES * 60_000, ts: new Date(now).toISOString() }].slice(-300);
+  try {
+    await AsyncStorage.setItem(OFF_KEY, JSON.stringify(marketOff));
+  } catch {
+    // best-effort
+  }
+}
+
+/** Le marché est-il signalé indisponible pour ce match en ce moment ? */
+export function isMarketOff(fixtureId: number, key: string): boolean {
+  const now = Date.now();
+  return marketOff.some((m) => m.fixtureId === fixtureId && m.key === key && m.until > now);
+}
+
+/** Nombre de signalements « marché non proposé » par compteur / marché (diagnostic). */
+export function getMarketOffCounts(): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const m of marketOff) out[m.key] = (out[m.key] ?? 0) + 1;
+  return out;
+}
