@@ -19,7 +19,7 @@ import { consolidateLearning } from './autoLearn';
 import { OmnirouteAttempt } from './omniroute';
 import { enrichFocusMatches, loadOmnirouteConfig } from './focusEnrichment';
 import { runInPlayComboTick, runRealInPlayTick, InternationalBreakTickDiagnostics } from './inPlayCombos';
-import { runNightlyReviewIfDue } from './dailyReview';
+import { runNightlyReviewIfDue, sendEveningDigestIfDue } from './dailyReview';
 import { autoProbeWebCapability } from './llmRouter';
 import { getRecentSearchSource, probeAnySearch } from './webSearch';
 import { hubLiveEvents } from '../api/footballDataAPIs/liveDataHub';
@@ -588,6 +588,8 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
     nightlyReviewError = error?.message || 'erreur inconnue';
     console.warn('[Tâche de fond] Bilan de minuit échoué:', error.message);
   }
+  // Bilan unique du soir (23h30 locales), jamais plus d'un par jour.
+  await sendEveningDigestIfDue().catch((error: any) => console.warn('[Tâche de fond] Bilan du soir échoué:', error?.message));
 
   await markTickStep('marqueurs live');
   let liveMarkerObserved = 0;

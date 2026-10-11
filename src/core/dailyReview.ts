@@ -850,9 +850,44 @@ export async function runNightlyReviewIfDue(): Promise<number> {
     await AsyncStorage.setItem(LAST_REVIEW_KEY, yesterday);
   }
 
-  for (const digest of telegramDigests) {
-    await sendTelegramMessage(digest);
-  }
+  // Plus d'envoi à chaque passage : « today » repasse ici toutes les 15 min et
+  // chaque règlement partiel envoyait un bilan (des dizaines dans la journée).
+  // Un seul bilan par soir, à 23h30 (voir sendEveningDigestIfDue).
+  void telegramDigests;
 
   return created;
+}
+
+
+const EVENING_DIGEST_KEY = '@evening_digest_sent_date';
+/** Heure locale du bilan unique du soir. */
+const EVENING_DIGEST_HOUR = 23;
+const EVENING_DIGEST_MINUTE = 30;
+
+function localDay(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * Bilan UNIQUE du soir (Telegram), à partir de 23h30 locales : tout ce qui a
+ * été réglé aujourd'hui sur les paris fictifs, par marché, avec la tendance
+ * face à l'historique. Marqué envoyé seulement si Telegram a accepté le
+ * message ; un tour de plus le même soir ne renvoie rien.
+ */
+export async function sendEveningDigestIfDue(): Promise<boolean> {
+  const now = new Date();
+  if (now.getHours() * 60 + now.getMinutes() < EVENING_DIGEST_HOUR * 60 + EVENING_DIGEST_MINUTE) return false;
+  const day = localDay(now);
+  if ((await AsyncStorage.getItem(EVENING_DIGEST_KEY)) === day) return false;
+
+  const todays = readInPlayProposals().filter((p) => localDay(new Date(p.createdAt)) === day);
+  const message = formatFictionalDigestMessage(day, buildFictionalMarketStats(todays), readMarketSeries().filter((p) => p.date < day));
+  if (!message) {
+    // Rien de réglé aujourd'hui : pas de message, mais la soirée est marquée traitée.
+    await AsyncStorage.setItem(EVENING_DIGEST_KEY, day);
+    return false;
+  }
+  const sent = await sendTelegramMessage(message);
+  if (sent) await AsyncStorage.setItem(EVENING_DIGEST_KEY, day);
+  return sent;
 }
