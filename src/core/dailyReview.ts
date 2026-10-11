@@ -47,6 +47,8 @@ import { readMatchTimelines, MatchSample } from './fictionalProgram';
 import { isSyntheticFixtureId } from './halftimeMonitor';
 import { HubPlayerShots, hubFinalResult, hubLiveStatus, hubPlayerShots, hubStats } from '../api/footballDataAPIs/liveDataHub';
 import { playerSotFromSelection } from './playerShots';
+import { EVENING_PARTS, EveningPart, buildEveningMessage } from './eveningReport';
+import { syncFullBackupToGitHub } from './gitAutoSync';
 import { liveLegVerdict } from './liveBetStatus';
 import { DeltaUnit, invalidateDeltaCache, settleShadowProjections } from './deltaLearning';
 import { fetchSofaEvent, fetchSofaStats, getSofaEventId } from '../api/footballDataAPIs/sofaScore';
@@ -901,6 +903,7 @@ export async function runNightlyReviewIfDue(): Promise<number> {
 
 
 const EVENING_DIGEST_KEY = '@evening_digest_sent_date';
+const EVENING_PARTS_KEY = '@evening_digest_parts';
 /** Heure locale du bilan unique du soir. */
 const EVENING_DIGEST_HOUR = 23;
 const EVENING_DIGEST_MINUTE = 30;
@@ -921,14 +924,24 @@ export async function sendEveningDigestIfDue(): Promise<boolean> {
   const day = localDay(now);
   if ((await AsyncStorage.getItem(EVENING_DIGEST_KEY)) === day) return false;
 
-  const todays = readInPlayProposals().filter((p) => localDay(new Date(p.createdAt)) === day);
-  const message = formatFictionalDigestMessage(day, buildFictionalMarketStats(todays), readMarketSeries().filter((p) => p.date < day));
-  if (!message) {
-    // Rien de réglé aujourd'hui : pas de message, mais la soirée est marquée traitée.
-    await AsyncStorage.setItem(EVENING_DIGEST_KEY, day);
-    return false;
+  // 4 messages séparés ; chacun marqué envoyé seul, un échec Telegram n'en fait pas renvoyer un autre.
+  let state: { day: string; sent: EveningPart[] } = { day, sent: [] };
+  try {
+    const raw = JSON.parse((await AsyncStorage.getItem(EVENING_PARTS_KEY)) ?? 'null');
+    if (raw?.day === day) state = raw;
+  } catch {
+    // état illisible : on repart de zéro pour ce soir
   }
-  const sent = await sendTelegramMessage(message);
-  if (sent) await AsyncStorage.setItem(EVENING_DIGEST_KEY, day);
-  return sent;
+  if (state.sent.length === 0) await syncFullBackupToGitHub(true).catch(() => {});
+  let sentAny = false;
+  for (const part of EVENING_PARTS) {
+    if (state.sent.includes(part)) continue;
+    const text = await buildEveningMessage(part, day).catch((error: any) => `⚠️ Rapport « ${part} » indisponible : ${error?.message ?? error}`);
+    if (!(await sendTelegramMessage(text))) continue;
+    state.sent.push(part);
+    sentAny = true;
+    await AsyncStorage.setItem(EVENING_PARTS_KEY, JSON.stringify(state));
+  }
+  if (state.sent.length === EVENING_PARTS.length) await AsyncStorage.setItem(EVENING_DIGEST_KEY, day);
+  return sentAny;
 }

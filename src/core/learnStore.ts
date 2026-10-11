@@ -675,6 +675,21 @@ export function readAgentDigest(): string | null {
 }
 
 /** Chemin du dossier, pour la synchronisation GitHub et le débogage. */
+/** Tous les fichiers d'apprentissage (nom + texte) — pour la sauvegarde complète vers GitHub. */
+export function readAllLearningFiles(): Array<{ name: string; text: string }> {
+  const out: Array<{ name: string; text: string }> = [];
+  try {
+    for (const entry of learningDirectory().list()) {
+      if (!(entry instanceof File)) continue;
+      const text = readTextSafe(entry);
+      if (text && text.length > 2) out.push({ name: entry.name, text });
+    }
+  } catch {
+    // dossier illisible : rien à sauvegarder
+  }
+  return out;
+}
+
 export function learningDirectoryUri(): string {
   return learningDirectory().uri;
 }

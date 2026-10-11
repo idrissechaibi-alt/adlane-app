@@ -3,6 +3,8 @@ on:
   schedule:
     # 02:00 UTC = 03:00 en Algérie : après les derniers matchs de la veille.
     - cron: '0 2 * * *'
+    # 21:30 UTC = 22:30 en Algérie : avant le bilan Telegram de 23h30, la plupart des matchs du jour y sont déjà.
+    - cron: '30 21 * * *'
   workflow_dispatch:
 permissions:
   contents: write

@@ -6,6 +6,7 @@ import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getAllBets, getAllCalibrations, getAllLessons, getDailyReports, restoreSnapshot } from '../database/storage';
 import { fetchWithTimeout } from './httpTimeout';
+import { readAllLearningFiles } from './learnStore';
 
 const SYNC_CONFIG_KEY = '@github_data_sync_config';
 const LAST_SYNC_KEY = '@last_github_data_sync';
@@ -479,6 +480,89 @@ export async function syncDataFromGitHub(): Promise<{
   }
 }
 
+// ==================== SAUVEGARDE COMPLÈTE (apprentissage) ====================
+// Tout ce que l'app a appris (paris, compteurs, modèle, cotes saisies, échantillons…) est copié
+// dans data/full-backup/, découpé en morceaux < 700 Ko (limite de l'API GitHub), uniquement
+// quand un morceau a changé. Les clés contenant token / clé d'API / configuration sont exclues.
+
+const FULL_BACKUP_HASHES_KEY = '@full_backup_hashes';
+const FULL_BACKUP_LAST_KEY = '@full_backup_last';
+const FULL_BACKUP_MIN_INTERVAL_MS = 3 * 3_600_000;
+const CHUNK_CHARS = 250_000; // ≈ 750 Ko en UTF-8 au pire des cas accentués
+const SECRET_KEY = /key|token|secret|password|config|credential|auth|telegram|omniroute|api/i;
+const LEARNING_KEY = /odds|bookie|delta|situation|learn|calib|market|strateg|expert|pending|missing|digest|stats|lesson|review|proposal|paper/i;
+
+function hashText(text: string): string {
+  let h = 5381;
+  for (let i = 0; i < text.length; i++) h = ((h << 5) + h + text.charCodeAt(i)) | 0;
+  return `${text.length}:${h}`;
+}
+
+async function putRepoFile(config: GitHubDataSyncConfig, token: string, repositoryPath: string, text: string, message: string): Promise<boolean> {
+  const directory = new Directory(config.localDataDirectory);
+  directory.create({ intermediates: true, idempotent: true });
+  const tmp = new File(directory, 'full-backup-chunk.tmp');
+  if (!tmp.exists) tmp.create({ intermediates: true });
+  tmp.write(text, { encoding: EncodingType.UTF8 });
+  const content = await tmp.base64();
+  const remote = await getRemoteFileSha(config, token, repositoryPath);
+  if (remote.message) return false;
+  const response = await fetchWithTimeout(
+    `https://api.github.com/repos/${encodeURIComponent(config.repoOwner)}/${encodeURIComponent(config.repoName)}/contents/${repositoryPath}`,
+    {
+      method: 'PUT',
+      headers: { ...githubHeaders(token), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ branch: config.branch, content, message, ...(remote.sha ? { sha: remote.sha } : {}) }),
+    },
+    30_000
+  );
+  return response.ok;
+}
+
+/** Copie complète de l'apprentissage vers GitHub. `force` ignore le délai minimal de 3 h. */
+export async function syncFullBackupToGitHub(force = false): Promise<{ uploaded: number; unchanged: number; failed: number; skipped?: string }> {
+  try {
+    const config = await getGitHubSyncConfig();
+    if (!config.enabled) return { uploaded: 0, unchanged: 0, failed: 0, skipped: 'désactivée' };
+    const token = await getGitHubToken();
+    if (!token) return { uploaded: 0, unchanged: 0, failed: 0, skipped: 'token absent' };
+    const last = Number(await AsyncStorage.getItem(FULL_BACKUP_LAST_KEY)) || 0;
+    if (!force && Date.now() - last < FULL_BACKUP_MIN_INTERVAL_MS) return { uploaded: 0, unchanged: 0, failed: 0, skipped: 'trop récent' };
+
+    const entries: Array<{ name: string; text: string }> = readAllLearningFiles().map((f) => ({ name: `files/${f.name}`, text: f.text }));
+    const keys = (await AsyncStorage.getAllKeys()).filter((k) => LEARNING_KEY.test(k) && !SECRET_KEY.test(k));
+    for (const [k, v] of await AsyncStorage.multiGet(keys)) if (v && v.length > 2) entries.push({ name: `storage/${k.replace(/[^A-Za-z0-9_.-]/g, '_')}`, text: v });
+
+    const hashes: Record<string, string> = JSON.parse((await AsyncStorage.getItem(FULL_BACKUP_HASHES_KEY)) ?? '{}');
+    const base = `${normalizeFolderPath(config.dataFolderPath)}/full-backup`;
+    const manifest: Record<string, number> = {};
+    let uploaded = 0, unchanged = 0, failed = 0;
+    const deadline = Date.now() + 120_000;
+    for (const entry of entries) {
+      const parts = Math.max(1, Math.ceil(entry.text.length / CHUNK_CHARS));
+      manifest[entry.name] = parts;
+      for (let i = 0; i < parts; i++) {
+        const chunk = entry.text.slice(i * CHUNK_CHARS, (i + 1) * CHUNK_CHARS);
+        const id = `${entry.name}.part${i + 1}`;
+        const h = hashText(chunk);
+        if (hashes[id] === h) { unchanged++; continue; }
+        if (Date.now() > deadline) { failed++; continue; }
+        const ok = await putRepoFile(config, token, `${base}/${id}.txt`, chunk, `[APP adlane] Sauvegarde complète ${id}`).catch(() => false);
+        if (ok) { hashes[id] = h; uploaded++; } else failed++;
+      }
+    }
+    await AsyncStorage.setItem(FULL_BACKUP_HASHES_KEY, JSON.stringify(hashes));
+    if (failed === 0) {
+      await AsyncStorage.setItem(FULL_BACKUP_LAST_KEY, String(Date.now()));
+      await putRepoFile(config, token, `${base}/manifest.json`, JSON.stringify({ updatedAt: new Date().toISOString(), parts: manifest }), '[APP adlane] Sauvegarde complète : manifeste').catch(() => false);
+    }
+    return { uploaded, unchanged, failed };
+  } catch (error) {
+    console.warn('Sauvegarde complète GitHub échouée:', safeErrorMessage(error));
+    return { uploaded: 0, unchanged: 0, failed: 1 };
+  }
+}
+
 /** Sauvegarde automatiquement toutes les 20 minutes lorsque l'option est activée. */
 export async function startAutoSync(): Promise<void> {
   const config = await getGitHubSyncConfig();
@@ -489,9 +573,9 @@ export async function startAutoSync(): Promise<void> {
     return;
   }
 
-  void syncDataToGitHub('Sauvegarde au démarrage');
+  void syncDataToGitHub('Sauvegarde au démarrage').then(() => syncFullBackupToGitHub());
   syncIntervalId = setInterval(() => {
-    void syncDataToGitHub('Sauvegarde planifiée');
+    void syncDataToGitHub('Sauvegarde planifiée').then(() => syncFullBackupToGitHub());
   }, config.interval * 60 * 1000);
 }
 
