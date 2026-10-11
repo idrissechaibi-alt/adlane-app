@@ -578,6 +578,12 @@ export interface SofaPeriodStats {
   possessionHome?: number;
   /** Cartons rouges (absent = la source ne les distingue pas). */
   redCards?: number;
+  /** Buts attendus en direct (FotMob seulement ; absent = non publié). */
+  xgHome?: number;
+  xgAway?: number;
+  /** Grosses occasions (FotMob seulement). */
+  bigChancesHome?: number;
+  bigChancesAway?: number;
 }
 
 export interface SofaStats {

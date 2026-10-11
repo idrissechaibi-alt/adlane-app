@@ -23,6 +23,10 @@ export interface LegProjection {
   actual?: number;
   /** Correction déjà appliquée dans `expected` (pour retrouver la projection brute). */
   factorUsed?: number;
+  /** Situation du match au moment de la projection (voir SITUATION_FEATURES) : sert à apprendre leurs effets. */
+  features?: number[];
+  /** Multiplicateur de situation déjà appliqué dans `expected` (1 = aucun). */
+  situationUsed?: number;
 }
 
 export interface DeltaCorrection {
@@ -94,7 +98,7 @@ function compute(): Map<DeltaUnit, DeltaCorrection> {
       actualRemaining += Math.max(0, p.actual! - p.observed);
       // Projection SANS la correction de l'époque : le facteur reste absolu,
       // il ne se corrige pas lui-même au fil des passes.
-      rawExpectedRemaining += Math.max(0, p.expected - p.observed) / (p.factorUsed ?? 1);
+      rawExpectedRemaining += Math.max(0, p.expected - p.observed) / ((p.factorUsed ?? 1) * (p.situationUsed ?? 1));
       delta += p.actual! - p.expected;
       absDelta += Math.abs(p.actual! - p.expected);
     }
@@ -102,7 +106,7 @@ function compute(): Map<DeltaUnit, DeltaCorrection> {
 
     // Reste attendu brut / réel de chaque match, pour les tranches et la dispersion.
     const rows = list.map((p) => ({
-      raw: Math.max(0, p.expected - p.observed) / (p.factorUsed ?? 1),
+      raw: Math.max(0, p.expected - p.observed) / ((p.factorUsed ?? 1) * (p.situationUsed ?? 1)),
       act: Math.max(0, p.actual! - p.observed),
     }));
     // Tranches (3 terciles de reste attendu) : facteur propre quand l'échantillon suffit.
@@ -169,6 +173,7 @@ export function describeCorrection(c: DeltaCorrection, noun: string): string {
 
 export function invalidateDeltaCache(): void {
   cached = null;
+  situationCache = null;
 }
 
 export const DELTA_LABELS: Record<DeltaUnit, string> = {
@@ -244,19 +249,19 @@ const TYPICAL_PER_MINUTE: Partial<Record<DeltaUnit, number>> = { corners_1h: 10 
 const PACE_PRIOR_MINUTES = 20;
 
 /** Projection à la pause au rythme observé (mêlé au rythme moyen), corrigée de l'écart appris. */
-export function projectFirstHalfCount(unit: 'corners_1h' | 'cards_1h' | 'fouls_1h', observed: number, minute: number): LegProjection {
+export function projectFirstHalfCount(unit: 'corners_1h' | 'cards_1h' | 'fouls_1h', observed: number, minute: number, features?: number[] | null): LegProjection {
   const typical = TYPICAL_PER_MINUTE[unit]!;
   const perMinute = (observed + typical * PACE_PRIOR_MINUTES) / (Math.max(1, minute) + PACE_PRIOR_MINUTES);
   const factor = getDeltaCorrection(unit).factor;
-  return { unit, observed, expected: observed + perMinute * Math.max(0, 45 - minute) * factor, factorUsed: factor };
+  return { unit, observed, expected: observed + perMinute * Math.max(0, 45 - minute) * factor, factorUsed: factor, features: features ?? undefined };
 }
 
 /** Projection en fin de match (corners/cartons du match entier), même formule. */
-export function projectFullMatchCount(unit: 'corners_ft' | 'cards_ft' | 'fouls_ft', observed: number, minute: number): LegProjection {
+export function projectFullMatchCount(unit: 'corners_ft' | 'cards_ft' | 'fouls_ft', observed: number, minute: number, features?: number[] | null): LegProjection {
   const typical = unit === 'corners_ft' ? 10 / 90 : unit === 'cards_ft' ? 4 / 90 : 24 / 90;
   const perMinute = (observed + typical * PACE_PRIOR_MINUTES) / (Math.max(1, minute) + PACE_PRIOR_MINUTES);
   const factor = getDeltaCorrection(unit).factor;
-  return { unit, observed, expected: observed + perMinute * Math.max(0, 94 - minute) * factor, factorUsed: factor };
+  return { unit, observed, expected: observed + perMinute * Math.max(0, 94 - minute) * factor, factorUsed: factor, features: features ?? undefined };
 }
 
 /** Enregistre (une fois par match et par fenêtre) la projection d'un match suivi. */
@@ -409,6 +414,179 @@ export function getDeltaReport(): DeltaReportRow[] {
         .sort((a, b) => Math.abs(b.actual - b.predicted) - Math.abs(a.actual - a.predicted))
         .slice(0, 3)
         .map((e) => ({ match: e.match, predicted: Math.round(e.predicted * 10) / 10, actual: e.actual })),
+    };
+  });
+}
+
+
+// ---------- Situation du match : momentum, favori, état du match, rouges, occasions ----------
+// Chaque projection enregistre la SITUATION du match à cet instant (SITUATION_FEATURES). Une fois le
+// résultat connu, une régression (ridge) mesure de combien le reste à jouer réel s'écarte du reste
+// prévu par le modèle de base, en fonction de ces variables. Les poids ne sont pas devinés : ils sont
+// appris, plafonnés (±25 % par variable, ±40 % au total) et ne passent sur le pipe RÉEL qu'une fois
+// qu'ils améliorent l'erreur sur des matchs mis de côté (« promus »).
+
+export const SITUATION_FEATURES = [
+  'intensité récente 10 min',
+  'intensité récente 20 min',
+  'momentum (une équipe domine)',
+  'force du favori',
+  'favori mené',
+  'favori devant',
+  'écart de buts',
+  'cartons rouges',
+  'qualité des occasions',
+];
+const PER_FEATURE_CAP = Math.log(1.25);
+const TOTAL_CAP = Math.log(1.4);
+const SITUATION_MIN_SAMPLES = 40;
+const SITUATION_PROMOTE_SAMPLES = 60;
+const SITUATION_PROMOTE_GAIN = 0.03;
+const RIDGE = 6;
+
+interface SituationFit {
+  unit: DeltaUnit;
+  n: number;
+  weights: number[];
+  maeBase: number | null;
+  maeNew: number | null;
+  promoted: boolean;
+}
+
+let situationCache: { at: number; byUnit: Map<DeltaUnit, SituationFit> } | null = null;
+
+function solve(A: number[][], b: number[]): number[] {
+  const d = b.length;
+  for (let i = 0; i < d; i++) {
+    let piv = i;
+    for (let r = i + 1; r < d; r++) if (Math.abs(A[r][i]) > Math.abs(A[piv][i])) piv = r;
+    [A[i], A[piv]] = [A[piv], A[i]];
+    [b[i], b[piv]] = [b[piv], b[i]];
+    if (Math.abs(A[i][i]) < 1e-9) continue;
+    for (let r = i + 1; r < d; r++) {
+      const f = A[r][i] / A[i][i];
+      for (let c = i; c < d; c++) A[r][c] -= f * A[i][c];
+      b[r] -= f * b[i];
+    }
+  }
+  const x = new Array(d).fill(0);
+  for (let i = d - 1; i >= 0; i--) {
+    if (Math.abs(A[i][i]) < 1e-9) continue;
+    x[i] = (b[i] - A[i].slice(i + 1).reduce((s, v, j) => s + v * x[i + 1 + j], 0)) / A[i][i];
+  }
+  return x;
+}
+
+function ridge(rows: Array<{ f: number[]; y: number }>): number[] {
+  const d = SITUATION_FEATURES.length;
+  const A = Array.from({ length: d }, (_, i) => Array.from({ length: d }, (_, j) => rows.reduce((s, r) => s + r.f[i] * r.f[j], 0) + (i === j ? RIDGE : 0)));
+  const b = Array.from({ length: d }, (_, i) => rows.reduce((s, r) => s + r.f[i] * r.y, 0));
+  return solve(A, b);
+}
+
+function capped(weights: number[], f: number[]): number {
+  let total = 0;
+  for (let j = 0; j < weights.length; j++) total += Math.max(-PER_FEATURE_CAP, Math.min(PER_FEATURE_CAP, weights[j] * (f[j] ?? 0)));
+  return Math.max(-TOTAL_CAP, Math.min(TOTAL_CAP, total));
+}
+
+function fitSituation(): Map<DeltaUnit, SituationFit> {
+  const byUnit = new Map<DeltaUnit, Array<{ f: number[]; baseRem: number; actRem: number; at: number }>>();
+  const seen = new Set<string>();
+  const add = (fixtureId: number, p: LegProjection, at: number) => {
+    if (p.actual == null || !p.features || p.features.length !== SITUATION_FEATURES.length) return;
+    const key = `${fixtureId}|${p.unit}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    const baseRem = Math.max(0, p.expected - p.observed) / (p.situationUsed ?? 1);
+    const list = byUnit.get(p.unit) ?? [];
+    list.push({ f: p.features, baseRem, actRem: Math.max(0, p.actual - p.observed), at });
+    byUnit.set(p.unit, list);
+  };
+  for (const sh of shadowCache) add(sh.fixtureId, sh, sh.at);
+  let proposals: ReturnType<typeof readInPlayProposals> = [];
+  try {
+    proposals = readInPlayProposals();
+  } catch {
+    proposals = [];
+  }
+  for (const proposal of proposals) {
+    for (const leg of proposal.legs) {
+      const p = (leg as { projection?: LegProjection }).projection;
+      if (p) add(leg.fixtureId, p, Date.parse(proposal.createdAt));
+    }
+  }
+  const out = new Map<DeltaUnit, SituationFit>();
+  for (const [unit, list] of byUnit) {
+    list.sort((a, b) => a.at - b.at);
+    const rows = list.map((r) => ({ f: r.f, y: Math.log((r.actRem + 1) / (r.baseRem + 1)) }));
+    if (list.length < SITUATION_MIN_SAMPLES) {
+      out.set(unit, { unit, n: list.length, weights: new Array(SITUATION_FEATURES.length).fill(0), maeBase: null, maeNew: null, promoted: false });
+      continue;
+    }
+    // Évaluation sur les 30 % de matchs les plus récents, poids appris sur les 70 % précédents.
+    const cut = Math.floor(list.length * 0.7);
+    const wTrain = ridge(rows.slice(0, cut));
+    const test = list.slice(cut);
+    const mae = (pred: (r: (typeof list)[number]) => number) => test.reduce((s, r) => s + Math.abs(r.actRem - pred(r)), 0) / test.length;
+    const maeBase = mae((r) => r.baseRem);
+    const maeNew = mae((r) => r.baseRem * Math.exp(capped(wTrain, r.f)));
+    const promoted = list.length >= SITUATION_PROMOTE_SAMPLES && maeNew <= maeBase * (1 - SITUATION_PROMOTE_GAIN);
+    out.set(unit, { unit, n: list.length, weights: ridge(rows), maeBase, maeNew, promoted });
+  }
+  return out;
+}
+
+function situationFits(): Map<DeltaUnit, SituationFit> {
+  if (!situationCache || Date.now() - situationCache.at > CACHE_MS) {
+    try {
+      situationCache = { at: Date.now(), byUnit: fitSituation() };
+    } catch {
+      situationCache = { at: Date.now(), byUnit: new Map() };
+    }
+  }
+  return situationCache.byUnit;
+}
+
+/**
+ * Multiplicateur de situation du reste à jouer pour ce compteur. Pipe fictif : appliqué dès que les poids sont
+ * appris (c'est lui qui apporte la preuve). Pipe réel : seulement une fois « promus » sur des matchs de test.
+ */
+export function situationMultiplier(unit: DeltaUnit, features: number[] | null | undefined, real: boolean): number {
+  if (!features) return 1;
+  const fit = situationFits().get(unit);
+  if (!fit || fit.n < SITUATION_MIN_SAMPLES) return 1;
+  if (real && !fit.promoted) return 1;
+  return Math.exp(capped(fit.weights, features));
+}
+
+export interface SituationReportRow {
+  unit: DeltaUnit;
+  label: string;
+  samples: number;
+  /** Erreur absolue du reste à jouer sur les matchs de test : modèle de base / avec situation. */
+  maeBase: number | null;
+  maeNew: number | null;
+  promoted: boolean;
+  /** Effet (en %) sur le reste à jouer d'une variable à +1 (plafonné). */
+  effects: Array<{ name: string; pct: number }>;
+}
+
+export function getSituationReport(): SituationReportRow[] {
+  const fits = situationFits();
+  return (Object.keys(DELTA_LABELS) as DeltaUnit[]).map((unit) => {
+    const fit = fits.get(unit);
+    return {
+      unit,
+      label: DELTA_LABELS[unit],
+      samples: fit?.n ?? 0,
+      maeBase: fit?.maeBase ?? null,
+      maeNew: fit?.maeNew ?? null,
+      promoted: fit?.promoted ?? false,
+      effects: SITUATION_FEATURES.map((name, j) => ({
+        name,
+        pct: Math.round((Math.exp(Math.max(-PER_FEATURE_CAP, Math.min(PER_FEATURE_CAP, fit?.weights[j] ?? 0))) - 1) * 100),
+      })),
     };
   });
 }

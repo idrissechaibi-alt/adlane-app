@@ -27,6 +27,8 @@ interface LiveGame {
   home: string;
   away: string;
   x12?: RefOdds['x12'];
+  /** Cotes d'OUVERTURE (avant-match) : servent à savoir qui est le favori. */
+  x12Open?: RefOdds['x12'];
 }
 
 async function getJson(url: string): Promise<any | null> {
@@ -50,6 +52,15 @@ function parseX12(odds: any): RefOdds['x12'] | undefined {
   return home > 1 && draw > 1 && away > 1 ? { home, draw, away } : undefined;
 }
 
+function parseX12Open(odds: any): RefOdds['x12'] | undefined {
+  if (!odds || odds.lineTypeId !== 1 || !Array.isArray(odds.options)) return undefined;
+  const rate = (name: string) => odds.options.find((o: any) => o.name === name)?.originalRate?.decimal;
+  const home = rate('1');
+  const draw = rate('X');
+  const away = rate('2');
+  return home > 1 && draw > 1 && away > 1 ? { home, draw, away } : undefined;
+}
+
 function parseTotal(odds: any): RefOdds['total'] | undefined {
   if (!odds || odds.lineTypeId !== 3 || !Array.isArray(odds.options)) return undefined;
   const line = Number(odds.internalOptionValue);
@@ -66,7 +77,7 @@ async function liveGames(): Promise<LiveGame[]> {
   const data = await getJson(`${BASE}/games/current/?${PARAMS}&sports=1&showOdds=true`);
   const games: LiveGame[] = (data?.games ?? [])
     .filter((g: any) => g?.homeCompetitor?.name && g?.awayCompetitor?.name)
-    .map((g: any) => ({ id: g.id, home: g.homeCompetitor.name, away: g.awayCompetitor.name, x12: parseX12(g.odds) }));
+    .map((g: any) => ({ id: g.id, home: g.homeCompetitor.name, away: g.awayCompetitor.name, x12: parseX12(g.odds), x12Open: parseX12Open(g.odds) }));
   if (games.length > 0) liveCache = { at: Date.now(), games };
   return games.length > 0 ? games : liveCache?.games ?? [];
 }
@@ -112,4 +123,21 @@ export function refOddsForLeg(ref: RefOdds | null, market: string, selection: st
     if (m && Math.abs(Number(m[2].replace(',', '.')) - ref.total.line) < 0.01) return m[1].toLowerCase() === 'plus' ? ref.total.over : ref.total.under;
   }
   return null;
+}
+
+/**
+ * Probabilités avant-match 1X2 d'après les cotes d'OUVERTURE bet365 (marge retirée), pour savoir qui est
+ * le favori. Une seule requête partagée par tous les matchs en direct ; null si la source ne connaît pas le match.
+ */
+export async function getOpeningProbabilities(homeTeam: string, awayTeam: string): Promise<{ home: number; draw: number; away: number } | null> {
+  try {
+    const game = (await liveGames()).find((g) => sameTeams(g.home, homeTeam) && sameTeams(g.away, awayTeam));
+    const o = game?.x12Open;
+    if (!o) return null;
+    const inv = { home: 1 / o.home, draw: 1 / o.draw, away: 1 / o.away };
+    const sum = inv.home + inv.draw + inv.away;
+    return { home: inv.home / sum, draw: inv.draw / sum, away: inv.away / sum };
+  } catch {
+    return null;
+  }
 }

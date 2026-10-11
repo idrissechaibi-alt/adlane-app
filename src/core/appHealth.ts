@@ -19,7 +19,7 @@ import { ensureOddsLoaded, getOddsLearningStatus } from './oddsLearning';
 import { readOddsLoopFile } from './oddsLoop';
 import { ensureLineLimitsLoaded, ensureMarketOffLoaded, getLineLimits, getMarketOffCounts } from './lineLimits';
 import { getStrategyRecords } from './strategies';
-import { ensureDeltaSamplesLoaded, getAllDeltaCorrections, getDeltaReport, getShadowStats } from './deltaLearning';
+import { ensureDeltaSamplesLoaded, getAllDeltaCorrections, getDeltaReport, getShadowStats, getSituationReport } from './deltaLearning';
 import { loadTelegramConfig } from './telegram';
 import {
   readAccuracySnapshots,
@@ -177,6 +177,7 @@ export async function buildAppHealth(): Promise<Record<string, unknown>> {
     teamStats: await section(async () => getTeamStatsStatus()),
     bookieLineMinimums: await section(async () => { await ensureLineLimitsLoaded(); await ensureMarketOffLoaded(); return { limits: getLineLimits(), marketOffReports: getMarketOffCounts() }; }),
     exactDeltas: await section(async () => getDeltaReport().filter((r) => r.verified + r.pending > 0).map((r) => ({ ...r, meanPredicted: Math.round(r.meanPredicted * 10) / 10, meanActual: Math.round(r.meanActual * 10) / 10, meanError: Math.round(r.meanError * 100) / 100, meanAbsError: Math.round(r.meanAbsError * 100) / 100 }))),
+    situationModel: await section(async () => getSituationReport().filter((r) => r.samples > 0)),
     bookieOdds: await section(async () => { await ensureOddsLoaded(); return getOddsLearningStatus(); }),
     oddsAlignment: await section(async () => {
       const f = await readOddsLoopFile(true);

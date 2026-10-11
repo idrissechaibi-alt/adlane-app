@@ -74,6 +74,7 @@ function buildPeriod(p: {
   cornersHome: number; cornersAway: number; cardsHome: number; cardsAway: number;
   foulsHome?: number; foulsAway?: number; onTargetHome?: number; onTargetAway?: number;
   shotsHome?: number; shotsAway?: number; possessionHome?: number; redCards?: number;
+  xgHome?: number; xgAway?: number; bigChancesHome?: number; bigChancesAway?: number;
 }): SofaPeriodStats | null {
   const total = p.cornersHome + p.cornersAway + p.cardsHome + p.cardsAway + (p.foulsHome ?? 0) + (p.foulsAway ?? 0) + (p.onTargetHome ?? 0) + (p.onTargetAway ?? 0);
   if (total === 0) return null; // pas de statistiques publiées : jamais de faux zéro
@@ -93,6 +94,10 @@ function buildPeriod(p: {
     foulsAway: p.foulsAway ?? 0,
     possessionHome: p.possessionHome,
     redCards: p.redCards,
+    xgHome: p.xgHome,
+    xgAway: p.xgAway,
+    bigChancesHome: p.bigChancesHome,
+    bigChancesAway: p.bigChancesAway,
   };
 }
 
@@ -186,6 +191,10 @@ function fotMobPeriod(period: any): SofaPeriodStats | null {
     shotsHome: v('total_shots')[0], shotsAway: v('total_shots')[1],
     possessionHome: values.has('BallPossesion') ? v('BallPossesion')[0] : undefined,
     redCards: values.has('red_cards') ? v('red_cards')[0] + v('red_cards')[1] : undefined,
+    xgHome: values.has('expected_goals') && v('expected_goals')[0] + v('expected_goals')[1] > 0 ? v('expected_goals')[0] : undefined,
+    xgAway: values.has('expected_goals') && v('expected_goals')[0] + v('expected_goals')[1] > 0 ? v('expected_goals')[1] : undefined,
+    bigChancesHome: values.has('big_chance') ? v('big_chance')[0] : undefined,
+    bigChancesAway: values.has('big_chance') ? v('big_chance')[1] : undefined,
   });
 }
 

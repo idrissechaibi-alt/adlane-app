@@ -37,6 +37,7 @@ import {
   writePendingSnapshots,
 } from './learnStore';
 import { maybePlacePaperBets } from './autoLearn';
+import { noteSituation, situationFeatures } from './situation';
 import { loadOmnirouteConfig } from './focusEnrichment';
 import { askOmnirouteLight } from './omniroute';
 import { OmnirouteConfig } from '../types';
@@ -302,6 +303,7 @@ export async function runLiveMarkerTick(liveFixtures: LiveFixture[]): Promise<{ 
   // lignes lues par les fournisseurs IA, qui doivent d'abord prouver leur
   // fiabilité (voir plus bas).
   const sofaCovered = new Set<number>();
+  const featuresByFixture = new Map<number, number[]>();
   // Tous les matchs non couverts par API-Football (réels sans quota restant
   // compris) : LiveScore, puis FotMob/365Scores/ESPN/AllSportsApi pour ce qui
   // manque (liveDataHub.ts).
@@ -316,6 +318,10 @@ export async function runLiveMarkerTick(liveFixtures: LiveFixture[]): Promise<{ 
     const stats = await hubStats(l.homeTeam, l.awayTeam, hubDateKey(), primary, { needFirstHalf: false }).catch(() => primary);
     const all = stats?.all;
     if (!all) return;
+    // Situation du match (momentum, favori, état, rouges, occasions) : relevée ici pour tous les matchs suivis.
+    await noteSituation(l, all);
+    const features = await situationFeatures(l, all).catch(() => null);
+    if (features) featuresByFixture.set(l.fixtureId, features);
     markersByFixture.set(l.fixtureId, {
       shotsOnTargetHome: all.shotsOnTargetHome,
       shotsOnTargetAway: all.shotsOnTargetAway,
@@ -340,13 +346,13 @@ export async function runLiveMarkerTick(liveFixtures: LiveFixture[]): Promise<{ 
     const m = markersByFixture.get(l.fixtureId);
     if (!m) continue;
     if (m.cornersHome != null && m.cornersAway != null) {
-      await recordShadowProjection(l, projectFirstHalfCount('corners_1h', m.cornersHome + m.cornersAway, l.minute));
+      await recordShadowProjection(l, projectFirstHalfCount('corners_1h', m.cornersHome + m.cornersAway, l.minute, featuresByFixture.get(l.fixtureId)));
     }
     if (m.cardsHome != null && m.cardsAway != null) {
-      await recordShadowProjection(l, projectFirstHalfCount('cards_1h', m.cardsHome + m.cardsAway, l.minute));
+      await recordShadowProjection(l, projectFirstHalfCount('cards_1h', m.cardsHome + m.cardsAway, l.minute, featuresByFixture.get(l.fixtureId)));
     }
     const fouls = (m.foulsHome ?? 0) + (m.foulsAway ?? 0);
-    if (fouls > 0) await recordShadowProjection(l, projectFirstHalfCount('fouls_1h', fouls, l.minute));
+    if (fouls > 0) await recordShadowProjection(l, projectFirstHalfCount('fouls_1h', fouls, l.minute, featuresByFixture.get(l.fixtureId)));
   }
   await flushShadowProjections();
 

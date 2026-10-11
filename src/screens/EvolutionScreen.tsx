@@ -26,7 +26,7 @@ import { sendTelegramMessage } from '../core/telegram';
 import { loadOmnirouteConfig } from '../core/focusEnrichment';
 import { getWebCapableRoutes } from '../core/llmRouter';
 import { getHubStatus } from '../api/footballDataAPIs/liveDataHub';
-import { DeltaReportRow, ensureDeltaSamplesLoaded, getDeltaReport } from '../core/deltaLearning';
+import { DeltaReportRow, SituationReportRow, ensureDeltaSamplesLoaded, getDeltaReport, getSituationReport } from '../core/deltaLearning';
 import { OddsLoopFile, updateOddsLoopFile } from '../core/oddsLoop';
 import { ensureOddsLoaded } from '../core/oddsLearning';
 import { getRecentSearchSource, probeAnySearch } from '../core/webSearch';
@@ -80,8 +80,15 @@ export default function EvolutionScreen() {
   const [oddsFile, setOddsFile] = useState<OddsLoopFile | null>(null);
   /** Écarts exacts prédit / réel par compteur (que le pari soit gagné ou non). */
   const [deltaReport, setDeltaReport] = useState<DeltaReportRow[]>([]);
+  /** Effets appris de la situation du match (momentum, favori, état, rouges, occasions). */
+  const [situationReport, setSituationReport] = useState<SituationReportRow[]>([]);
   const refreshOddsFile = () => {
-    ensureDeltaSamplesLoaded().then(() => setDeltaReport(getDeltaReport().filter((r) => r.verified + r.pending > 0))).catch(() => {});
+    ensureDeltaSamplesLoaded()
+      .then(() => {
+        setDeltaReport(getDeltaReport().filter((r) => r.verified + r.pending > 0));
+        setSituationReport(getSituationReport().filter((r) => r.samples > 0));
+      })
+      .catch(() => {});
     ensureOddsLoaded().then(() => updateOddsLoopFile()).then(setOddsFile).catch(() => {});
   };
 
@@ -211,6 +218,33 @@ export default function EvolutionScreen() {
           ))}
         </View>
       ))}
+    </View>
+  );
+
+  const renderSituation = () => (
+    <View style={styles.oddsCard}>
+      <Text style={styles.oddsTitle}>Situation du match : effets appris</Text>
+      <Text style={styles.oddsLine}>
+        Momentum (10 et 20 min), favori, état du match, cartons rouges, qualité des occasions. Les poids sont mesurés sur tes matchs réglés (plafond ±25 % par variable, ±40 % au total). Sur le pipe réel, un compteur n'en tient compte qu'une fois validé sur des matchs de test.
+      </Text>
+      {situationReport.length === 0 && <Text style={styles.oddsLine}>Pas encore de match mesuré avec sa situation.</Text>}
+      {situationReport.map((r) => {
+        const top = [...r.effects].filter((e) => e.pct !== 0).sort((a, b) => Math.abs(b.pct) - Math.abs(a.pct)).slice(0, 3);
+        return (
+          <View key={r.unit} style={{ marginTop: 6 }}>
+            <Text style={styles.oddsWhy}>{r.label}</Text>
+            <Text style={styles.oddsLine}>
+              {r.samples} matchs · {r.samples < 40 ? 'apprentissage en cours (40 minimum)' : r.promoted ? 'validé : actif sur le réel et le fictif' : 'en test sur le fictif seulement'}
+              {r.maeBase != null && r.maeNew != null ? ` · erreur ${r.maeBase.toFixed(2)} → ${r.maeNew.toFixed(2)}` : ''}
+            </Text>
+            {top.map((e) => (
+              <Text key={e.name} style={styles.oddsLine}>
+                ↳ {e.name} : {e.pct > 0 ? '+' : ''}{e.pct} % sur le reste à jouer
+              </Text>
+            ))}
+          </View>
+        );
+      })}
     </View>
   );
 
@@ -479,6 +513,7 @@ export default function EvolutionScreen() {
       {renderWebAccessIndicator()}
       {renderOddsAlignment()}
       {renderExactDeltas()}
+      {renderSituation()}
       {fictionalCounter && (
         <View style={styles.liveCounterRow}>
           <Ionicons name="radio-button-on" size={10} color="#4ade80" />
