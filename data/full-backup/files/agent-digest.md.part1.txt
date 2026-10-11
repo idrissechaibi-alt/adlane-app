@@ -1,0 +1,80 @@
+# Mémoire d'auto-apprentissage — marqueurs observés en direct
+
+Mis à jour : 2026-10-11T18:22:26.159Z
+Corpus : 6826 observations sur 513 ligues / 1 pays.
+
+## Taux de base observés (par fenêtre)
+- `goals>=1@10` : 34.3%
+- `goals>=2@10` : 10.3%
+- `corners>=2@10` : 20.5%
+- `corners>=3@10` : 10.7%
+- `cards>=1@10` : 21.6%
+- `cards>=2@10` : 6.9%
+- `fouls>=3@10` : 22.3%
+- `fouls>=5@10` : 11.1%
+- `goals>=1@25` : 40.9%
+- `goals>=2@25` : 16.5%
+- `corners>=2@25` : 24.1%
+- `corners>=3@25` : 16.2%
+- `cards>=1@25` : 20.7%
+- `cards>=2@25` : 9.1%
+- `fouls>=3@25` : 21.5%
+- `fouls>=5@25` : 18.2%
+
+## Marqueurs les plus informatifs
+
+### Fenêtre 10 minutes
+- `fouls_total>=5` → `fouls>=3` : **40.4%** (×1.81 vs base 22.3%, n=602)
+- `shots_on_target_total>=5` → `goals>=1` : **44.3%** (×1.29 vs base 34.3%, n=158)
+- `shots_on_target_total>=4` → `goals>=1` : **41.7%** (×1.21 vs base 34.3%, n=295)
+- `possession_imbalance>=20` → `goals>=1` : **41.1%** (×1.20 vs base 34.3%, n=280)
+
+### Fenêtre 25 minutes
+- `possession_imbalance>=20` → `fouls>=3` : **38.9%** (×1.81 vs base 21.5%, n=216)
+- `possession_imbalance>=15` → `fouls>=3` : **37.2%** (×1.73 vs base 21.5%, n=360)
+- `possession_imbalance>=10` → `fouls>=3` : **35.7%** (×1.66 vs base 21.5%, n=614)
+- `possession_imbalance>=20` → `corners>=2` : **38.9%** (×1.61 vs base 24.1%, n=216)
+- `possession_imbalance>=10` → `corners>=2` : **35.7%** (×1.48 vs base 24.1%, n=614)
+- `possession_imbalance>=15` → `corners>=2` : **35.0%** (×1.45 vs base 24.1%, n=360)
+- `possession_imbalance>=20` → `goals>=1` : **53.2%** (×1.30 vs base 40.9%, n=216)
+- `possession_imbalance>=15` → `goals>=1` : **48.6%** (×1.19 vs base 40.9%, n=360)
+
+## Fiabilité mesurée du modèle (paris papier, aucun argent engagé)
+- Paris simulés réglés : 466 / 1000
+- Taux de réussite réel : 41.8%
+- Facteur de recalibrage appliqué : ×0.98 (<1 = le modèle était trop optimiste, ses probabilités sont rabotées)
+
+## Couverture élargie via Omniroute (matchs au-delà du quota API-Football)
+- Recoupements avec la vérité terrain API-Football : 78 (accord : 53.8%)
+- Pas encore assez fiable (seuil : 30 recoupements, 80% d'accord) — Omniroute élargit la couverture observée mais n'influence pas encore les probabilités.
+
+## Fiabilité passée du scan en direct 20e/60e minute (par marché, 30 derniers jours, réel + fictif confondus)
+- `Total de buts` : réalisé **65.3%** vs annoncé 66.7% (n=737)
+- `Corners` : réalisé **64.5%** vs annoncé 67.6% (n=640)
+- `Cartons` : réalisé **59.3%** vs annoncé 67.1% (n=435)
+- `Fautes` : réalisé **68.2%** vs annoncé 66.5% (n=362)
+- `Les deux marquent` : réalisé **63.3%** vs annoncé 66.7% (n=330)
+- `Victoire (1X2)` : réalisé **63.2%** vs annoncé 68.1% (n=223)
+- `Buts 1ère mi-temps` : réalisé **60.0%** vs annoncé 60.5% (n=95)
+- `Tirs cadrés (joueur)` : réalisé **80.0%** vs annoncé 68.0% (n=5)
+
+## Fiabilité passée de l'analyse Scouting IA (par marché, 30 derniers jours)
+- `BTTS` : réalisé **66.7%** vs annoncé 56.1% (n=27)
+- `OU_2_5` : réalisé **48.1%** vs annoncé 60.9% (n=27) — l'IA est trop confiante sur ce marché, à corriger.
+- `OU_1_5` : réalisé **77.8%** vs annoncé 72.6% (n=27)
+- `1ere_mi_temps` : réalisé **84.6%** vs annoncé 67.3% (n=26)
+- `mi_temps_1X2` : réalisé **60.0%** vs annoncé 58.0% (n=25)
+- `1X2` : réalisé **47.6%** vs annoncé 56.9% (n=21)
+- `double_chance` : réalisé **100.0%** vs annoncé 81.0% (n=19)
+- `handicap` : réalisé **28.6%** vs annoncé 52.9% (n=7) — l'IA est trop confiante sur ce marché, à corriger.
+- `corners` : réalisé **100.0%** vs annoncé 58.0% (n=2)
+- `cartons` : réalisé **50.0%** vs annoncé 62.5% (n=2) — l'IA est trop confiante sur ce marché, à corriger.
+
+## Périmètre de jeu de l'utilisateur
+- Ligues jouées : Bundesliga, Ligue 1, Primera Division, Serie A, Premier League, La Liga, Championship / FA Cup
+- Marchés joués : OU_2_5, corners, cards, 1ere_mi_temps, fouls, 1X2, shots_on_target, BTTS
+
+## Consigne aux agents
+Ces taux sont empiriques (comptés, pas estimés). Utilise-les comme prior sur les marchés buts, corners et cartons en cours de match.
+Si ton intuition s'écarte fortement d'un taux observé sur gros échantillon, baisse ta confiance.
+N'extrapole jamais une règle dont l'échantillon (n) est faible.
