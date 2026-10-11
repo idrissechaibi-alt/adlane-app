@@ -433,8 +433,8 @@ export function readCumulativeCounts(key: 'paper' | 'fictional'): { total: numbe
 
 export function writePaperBets(bets: PaperBet[]): void {
   bumpCounter('paper', readPaperBets().map((b) => ({ id: b.id, fixtureId: b.fixtureId, settled: b.settled, won: !!b.won })), bets.map((b) => ({ id: b.id, fixtureId: b.fixtureId, settled: b.settled, won: !!b.won })));
-  // Corpus glissant : on garde les 1000 derniers pour ne pas gonfler le fichier.
-  writeText(fileIn('paper-bets.json'), JSON.stringify(bets.slice(-1000)));
+  // Aucun plafond : tout l'historique est conservé (demande explicite).
+  writeText(fileIn('paper-bets.json'), JSON.stringify(bets));
 }
 
 // ==================== NOTES D'ENRICHISSEMENT (matchs suivis) ====================
@@ -637,18 +637,17 @@ export function readInPlayProposals(): InPlayProposal[] {
 }
 
 export function writeInPlayProposals(proposals: InPlayProposal[]): void {
+  // Aucun plafond ni purge (demande explicite : tout l'historique reste visible, même à 23 000 paris).
+  // Seule économie : au-delà de 48 h, le texte d'argumentation est allégé ;
+  // le pari, sa probabilité, son règlement et sa projection restent entiers.
   const cutoff = Date.now() - 48 * 3_600_000;
-  const fresh = proposals.filter((p) => new Date(p.createdAt).getTime() > cutoff);
-
-  // Plafonds séparés : les paris fictifs (tout l'univers européen, une
-  // batterie de paris simples indépendants par marché) sont bien plus
-  // nombreux que les vrais paris (5 grands championnats) — sans ça, un
-  // afflux de paris fictifs finirait par évincer les vrais du plafond commun.
-  const real = fresh.filter((p) => p.real !== false);
-  const fictional = fresh.filter((p) => p.real === false).slice(-2000);
+  const compact = (p: InPlayProposal): InPlayProposal =>
+    new Date(p.createdAt).getTime() > cutoff
+      ? p
+      : { ...p, legs: p.legs.map((l) => ({ ...l, evidence: l.evidence ? l.evidence.slice(0, 120) : l.evidence })) };
   const flat = (list: InPlayProposal[]) => list.filter((p) => p.real === false).map((p) => ({ id: p.id, fixtureId: p.legs[0]?.fixtureId ?? 0, settled: !!p.legs[0]?.settled, won: !!p.legs[0]?.won }));
   bumpCounter('fictional', flat(readInPlayProposals()), flat(proposals));
-  writeText(fileIn('inplay-proposals.json'), JSON.stringify([...real, ...fictional]));
+  writeText(fileIn('inplay-proposals.json'), JSON.stringify(proposals.map(compact)));
 }
 
 // ==================== MODÈLE APPRIS + DIGEST AGENTS ====================
@@ -725,5 +724,5 @@ export function writeScoutingRecords(records: ScoutingRecord[]): void {
   // Corpus glissant : 60 jours suffisent largement pour juger la fiabilité récente.
   const cutoff = Date.now() - 60 * 24 * 3_600_000;
   const fresh = records.filter((r) => new Date(r.analyzedAt).getTime() > cutoff);
-  writeText(fileIn('scouting-records.json'), JSON.stringify(fresh.slice(-1000)));
+  writeText(fileIn('scouting-records.json'), JSON.stringify(fresh));
 }
