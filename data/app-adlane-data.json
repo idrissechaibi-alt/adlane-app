@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-10-11T13:20:44.960Z",
+  "exportedAt": "2026-10-11T13:22:34.458Z",
   "formatVersion": 1,
   "source": "APP adlane",
   "data": {
@@ -4988,9 +4988,9 @@
       "ticksLast24h": 68
     },
     "tickProgress": {
-      "startedAt": "2026-10-11T13:20:41.829Z",
+      "startedAt": "2026-10-11T13:22:30.961Z",
       "step": "scan matinal",
-      "at": "2026-10-11T13:20:41.830Z",
+      "at": "2026-10-11T13:22:30.996Z",
       "stepDurationsSec": {}
     },
     "lastTick": {
@@ -5040,24 +5040,12 @@
       "nightlyReviewPointsCreated": 7
     },
     "lastRealFastTick": {
-      "at": "2026-10-11T13:19:51.061Z",
+      "at": "2026-10-11T13:22:26.631Z",
       "liveFound": 6,
       "fresh": 0,
       "source": "api_football"
     },
     "abortedTicks": [
-      {
-        "startedAt": "2026-10-10T23:18:53.443Z",
-        "step": "marqueurs live",
-        "at": "2026-10-10T23:28:00.129Z",
-        "stepDurationsSec": {
-          "terminé": 573,
-          "scan matinal": 11,
-          "relevé live partagé": 0,
-          "scan en direct 20e/60e": 42,
-          "bilan de minuit": 494
-        }
-      },
       {
         "startedAt": "2026-10-10T23:36:27.945Z",
         "step": "bilan de minuit",
@@ -5200,6 +5188,15 @@
           "relevé live partagé": 0,
           "scan en direct 20e/60e": 83,
           "bilan de minuit": 0
+        }
+      },
+      {
+        "startedAt": "2026-10-11T13:20:41.829Z",
+        "step": "scan en direct 20e/60e",
+        "at": "2026-10-11T13:20:46.187Z",
+        "stepDurationsSec": {
+          "scan matinal": 4,
+          "relevé live partagé": 0
         }
       }
     ],
@@ -5435,12 +5432,12 @@
       ]
     },
     "inPlayProposals": {
-      "real": 85,
+      "real": 86,
       "fictional": 2000,
       "fictionalReviewed": 961,
       "fictionalSettledLegs": 945,
-      "lastCreatedAt": "2026-10-11T13:19:13.284Z",
-      "createdLast24h": 2075
+      "lastCreatedAt": "2026-10-11T13:20:45.491Z",
+      "createdLast24h": 2076
     },
     "predictionOutcomes30d": 3075,
     "marketSeries": {
@@ -5500,7 +5497,7 @@
         {
           "name": "Principal",
           "ok": true,
-          "latencyMs": 340,
+          "latencyMs": 66,
           "readyModels": 27,
           "configuredReady": 12,
           "configuredTotal": 13
@@ -5508,7 +5505,7 @@
         {
           "name": "Omniroute",
           "ok": false,
-          "latencyMs": 74,
+          "latencyMs": 29,
           "readyModels": null,
           "configuredReady": null,
           "configuredTotal": 2,
@@ -5518,9 +5515,16 @@
       "leaderboard": [
         {
           "label": "Principal · allam-2-7b",
-          "ok": 968,
+          "ok": 980,
           "fail": 1014,
-          "avgMs": 346,
+          "avgMs": 344,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · gpt-oss-20b",
+          "ok": 1165,
+          "fail": 121,
+          "avgMs": 2176,
           "coolingDown": false
         },
         {
@@ -5535,13 +5539,6 @@
           "ok": 308,
           "fail": 420,
           "avgMs": 808,
-          "coolingDown": true
-        },
-        {
-          "label": "Principal · gpt-oss-20b",
-          "ok": 1161,
-          "fail": 121,
-          "avgMs": 2886,
           "coolingDown": false
         },
         {
@@ -5553,9 +5550,9 @@
         },
         {
           "label": "Principal · riva-translate-4b-instruct-v2",
-          "ok": 408,
+          "ok": 416,
           "fail": 382,
-          "avgMs": 1555,
+          "avgMs": 1796,
           "coolingDown": false
         },
         {
@@ -5708,7 +5705,7 @@
         "apiFootball-autolearn": 55,
         "sportmonks-autolearn": 13,
         "sofaScore": 0,
-        "sportmonks": 75
+        "sportmonks": 76
       },
       "theOddsApiMonth": {
         "used": 500,
@@ -5724,35 +5721,35 @@
     },
     "sofaScore": null,
     "liveSources": {
+      "LiveScore": {
+        "ok": true,
+        "count": 88,
+        "at": "2026-10-11T13:22:31.025Z"
+      },
       "TheSportsDB": {
         "ok": true,
         "count": 229,
-        "at": "2026-10-11T13:20:42.624Z"
-      },
-      "AllSportsApi": {
-        "ok": true,
-        "count": 1,
-        "at": "2026-10-11T13:20:43.769Z"
-      },
-      "LiveScore": {
-        "ok": true,
-        "count": 89,
-        "at": "2026-10-11T13:20:42.633Z"
-      },
-      "365Scores": {
-        "ok": true,
-        "count": 46,
-        "at": "2026-10-11T13:20:42.780Z"
-      },
-      "FotMob": {
-        "ok": true,
-        "count": 92,
-        "at": "2026-10-11T13:20:43.398Z"
+        "at": "2026-10-11T13:22:31.091Z"
       },
       "ESPN": {
         "ok": true,
         "count": 25,
-        "at": "2026-10-11T13:20:43.701Z"
+        "at": "2026-10-11T13:22:31.628Z"
+      },
+      "AllSportsApi": {
+        "ok": true,
+        "count": 0,
+        "at": "2026-10-11T13:22:32.423Z"
+      },
+      "365Scores": {
+        "ok": true,
+        "count": 46,
+        "at": "2026-10-11T13:22:31.990Z"
+      },
+      "FotMob": {
+        "ok": true,
+        "count": 91,
+        "at": "2026-10-11T13:22:32.027Z"
       }
     },
     "teamStats": {
@@ -6128,7 +6125,7 @@
         }
       ],
       "samples": {
-        "pending": 553,
+        "pending": 577,
         "measured": 1707
       }
     },
