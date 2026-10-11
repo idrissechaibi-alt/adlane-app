@@ -27,7 +27,7 @@ import { loadOmnirouteConfig } from '../core/focusEnrichment';
 import { getWebCapableRoutes } from '../core/llmRouter';
 import { getHubStatus } from '../api/footballDataAPIs/liveDataHub';
 import { ensureDeltaSamplesLoaded } from '../core/deltaLearning';
-import { OddsLoopFile, readOddsLoopFile } from '../core/oddsLoop';
+import { OddsLoopFile, updateOddsLoopFile } from '../core/oddsLoop';
 import { ensureOddsLoaded } from '../core/oddsLearning';
 import { getRecentSearchSource, probeAnySearch } from '../core/webSearch';
 import { getAgentLearningDigest, getAccuracyTrend, AccuracyTrend, buildMarketDayPointsFromPaperBets, buildLearningReport } from '../core/autoLearn';
@@ -79,7 +79,7 @@ export default function EvolutionScreen() {
   /** Fichier de la boucle d'apprentissage des cotes (score d'alignement avec le bookmaker). */
   const [oddsFile, setOddsFile] = useState<OddsLoopFile | null>(null);
   const refreshOddsFile = () => {
-    ensureOddsLoaded().then(() => readOddsLoopFile(true)).then(setOddsFile).catch(() => {});
+    ensureOddsLoaded().then(() => updateOddsLoopFile()).then(setOddsFile).catch(() => {});
   };
 
   const refreshWebAccess = async () => {
@@ -145,6 +145,11 @@ export default function EvolutionScreen() {
   const renderOddsAlignment = () => (
     <View style={styles.oddsCard}>
       <Text style={styles.oddsTitle}>Alignement des cotes avec mon bookmaker</Text>
+      {oddsFile && oddsFile.vsBet365.n > 0 && (
+        <Text style={styles.oddsLine}>
+          Vs bet365 (1X2 et total de buts, lu automatiquement) : score {oddsFile.vsBet365.score} / 100 · écart {oddsFile.vsBet365.meanAbsDeltaPct} % sur {oddsFile.vsBet365.n} cotes
+        </Text>
+      )}
       {oddsFile && oddsFile.score != null ? (
         <>
           <View style={styles.oddsScoreRow}>

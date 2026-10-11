@@ -179,7 +179,7 @@ export async function buildAppHealth(): Promise<Record<string, unknown>> {
     bookieOdds: await section(async () => { await ensureOddsLoaded(); return getOddsLearningStatus(); }),
     oddsAlignment: await section(async () => {
       const f = await readOddsLoopFile(true);
-      return f ? { score: f.score, meanAbsDeltaPct: f.meanAbsDeltaPct, biasPct: f.biasPct, recentScore: f.recentScore, trend: f.trend, scored: f.scored, reasons: f.reasons, history: f.history.slice(-30) } : null;
+      return f ? { score: f.score, meanAbsDeltaPct: f.meanAbsDeltaPct, biasPct: f.biasPct, recentScore: f.recentScore, trend: f.trend, scored: f.scored, vsBet365: f.vsBet365, reasons: f.reasons, history: f.history.slice(-30) } : null;
     }),
     deltaCorrections: await section(async () => {
       await ensureDeltaSamplesLoaded();

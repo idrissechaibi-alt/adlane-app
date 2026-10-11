@@ -24,6 +24,8 @@ import {
 } from './oddsLearning';
 
 const FILE_KEY = '@odds_learning_file';
+const REF_KEY = '@ref_odds_comparisons';
+const REF_MAX = 600;
 const HISTORY_MAX = 300;
 const SCORE_FULL_ERROR = 0.4;
 
@@ -44,6 +46,28 @@ export interface GroupDelta {
   mape: number;
 }
 
+/** Cote de l'app comparée à une cote de référence gratuite (bet365 via 365Scores). */
+export interface RefComparison {
+  ts: string;
+  key: string;
+  market: string;
+  selection: string;
+  minute: number;
+  modelProb: number;
+  /** Cote que le modèle de l'app estimait, sans la cote de référence. */
+  estModel: number;
+  /** Cote bet365 lue à ce moment. */
+  ref: number;
+}
+
+export interface RefAlignment {
+  n: number;
+  score: number | null;
+  meanAbsDeltaPct: number | null;
+  biasPct: number | null;
+  byMarket: GroupDelta[];
+}
+
 export interface OddsLoopFile {
   updatedAt: string;
   observations: number;
@@ -62,6 +86,8 @@ export interface OddsLoopFile {
   byProbability: GroupDelta[];
   /** Pourquoi les cotes de l'app s'écartent encore de celles du bookmaker. */
   reasons: string[];
+  /** Alignement du modèle avec bet365 sur le 1X2 et le total de buts (cotes lues automatiquement). */
+  vsBet365: RefAlignment;
   /** Ce que l'app a appris à ce jour (rythme implicite, réactions, corrections). */
   learned: ReturnType<typeof getOddsLearningStatus> & { residuals: Array<{ key: string; factor: number }> };
   history: AlignmentPoint[];
@@ -127,7 +153,7 @@ function explain(file: Pick<OddsLoopFile, 'bySegment' | 'byMinute' | 'byProbabil
 }
 
 /** Recalcule le fichier de la boucle à partir de toutes les saisies. */
-export function buildOddsLoopFile(previousHistory: AlignmentPoint[] = []): OddsLoopFile {
+export function buildOddsLoopFile(previousHistory: AlignmentPoint[] = [], refs: RefComparison[] = []): OddsLoopFile {
   const all = getAllObservations();
   const scored = all.filter((o) => delta(o) != null).sort((a, b) => a.ts.localeCompare(b.ts));
   const ds = scored.map((o) => delta(o) as number);
@@ -143,7 +169,21 @@ export function buildOddsLoopFile(previousHistory: AlignmentPoint[] = []): OddsL
   const byMinute = group(scored, (o) => MINUTE_LABEL[bucketOf(o.minute)]);
   const byProbability = group(scored, (o) => probBin(o.modelProb));
   const learned = { ...getOddsLearningStatus(), residuals: getResidualCorrections() };
-  const history = mape != null ? [...previousHistory, { n: scored.length, ts: new Date().toISOString(), mape: pct(mape), score: scoreOf(mape), bias: bias != null ? pct(bias) : 0 }].slice(-HISTORY_MAX) : previousHistory;
+  const lastN = previousHistory[previousHistory.length - 1]?.n;
+  const history = mape != null && lastN !== scored.length ? [...previousHistory, { n: scored.length, ts: new Date().toISOString(), mape: pct(mape), score: scoreOf(mape), bias: bias != null ? pct(bias) : 0 }].slice(-HISTORY_MAX) : previousHistory;
+
+  // Alignement avec bet365 : écart (modèle − référence) / référence, plafonné à ±150 %.
+  const rd = refs.map((r) => ({ m: r.market, d: Math.max(-1.5, Math.min(1.5, (r.estModel - r.ref) / r.ref)) }));
+  const refMape = rd.length ? rd.reduce((a, x) => a + Math.abs(x.d), 0) / rd.length : null;
+  const refGroups = new Map<string, number[]>();
+  for (const x of rd) refGroups.set(x.m, [...(refGroups.get(x.m) ?? []), x.d]);
+  const vsBet365: RefAlignment = {
+    n: rd.length,
+    score: refMape != null ? scoreOf(refMape) : null,
+    meanAbsDeltaPct: refMape != null ? pct(refMape) : null,
+    biasPct: rd.length ? pct(rd.reduce((a, x) => a + x.d, 0) / rd.length) : null,
+    byMarket: Array.from(refGroups.entries()).map(([label, ds]) => ({ label: label === '1X2' ? '1X2' : 'total de buts', n: ds.length, bias: pct(ds.reduce((a, b) => a + b, 0) / ds.length), mape: pct(ds.reduce((a, b) => a + Math.abs(b), 0) / ds.length) })),
+  };
 
   const file: OddsLoopFile = {
     updatedAt: new Date().toISOString(),
@@ -158,6 +198,7 @@ export function buildOddsLoopFile(previousHistory: AlignmentPoint[] = []): OddsL
     byMinute,
     byProbability,
     reasons: [],
+    vsBet365,
     learned,
     history,
   };
@@ -180,8 +221,8 @@ export async function readOddsLoopFile(fresh = false): Promise<OddsLoopFile | nu
 
 /** Met à jour le fichier de la boucle (appelé à chaque cote saisie). */
 export async function updateOddsLoopFile(): Promise<OddsLoopFile> {
-  const previous = await readOddsLoopFile();
-  const file = buildOddsLoopFile(previous?.history ?? []);
+  const previous = await readOddsLoopFile(true);
+  const file = buildOddsLoopFile(previous?.history ?? [], await readRefComparisons());
   memoFile = file;
   try {
     await AsyncStorage.setItem(FILE_KEY, JSON.stringify(file));
@@ -195,4 +236,25 @@ export async function updateOddsLoopFile(): Promise<OddsLoopFile> {
 export async function recordOddsAndLearn(proposal: InPlayProposal, odds: number, context?: OddsContext | null): Promise<OddsLoopFile> {
   await recordBookieOdds(proposal, odds, context);
   return updateOddsLoopFile();
+}
+
+async function readRefComparisons(): Promise<RefComparison[]> {
+  try {
+    const raw = await AsyncStorage.getItem(REF_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Garde la comparaison « mon estimation / cote bet365 » (une par pari et par tranche de 10 minutes de temps réel). */
+export async function recordRefComparison(c: Omit<RefComparison, 'ts'>): Promise<void> {
+  const list = await readRefComparisons();
+  const now = Date.now();
+  if (list.some((x) => x.key === c.key && now - Date.parse(x.ts) < 10 * 60_000)) return;
+  try {
+    await AsyncStorage.setItem(REF_KEY, JSON.stringify([...list, { ...c, ts: new Date(now).toISOString() }].slice(-REF_MAX)));
+  } catch {
+    // best-effort
+  }
 }

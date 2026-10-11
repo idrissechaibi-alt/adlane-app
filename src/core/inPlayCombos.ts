@@ -98,6 +98,8 @@ import { hubDateKey, hubKnowsMatch, hubLiveStatus, hubStats } from '../api/footb
 import { StrategyContext, evaluateStrategies, oddsFromExpectedGoals } from './strategies';
 import { SofaPeriodStats } from '../api/footballDataAPIs/sofaScore';
 import { DeltaUnit, LegProjection, describeCorrection, ensureDeltaSamplesLoaded, flushShadowProjections, getDeltaCorrection, projectFullMatchCount, recordShadowProjection, factorForRemaining } from './deltaLearning';
+import { getRefOdds, refOddsForLeg } from '../api/footballDataAPIs/refOdds';
+import { recordRefComparison } from './oddsLoop';
 import { CountInfo, MIN_ESTIMATED_ODDS, OddsContext, ensureOddsLoaded, estimateLegOdds, featuresOf, parseLine, setOddsWatch } from './oddsLearning';
 import { ensureLineLimitsLoaded, ensureMarketOffLoaded, isMarketOff, maxLineFor, minLineFor } from './lineLimits';
 import { atLeastProb, pickHighestOverLine, pickLowestUnderLine } from './countModel';
@@ -1101,7 +1103,9 @@ async function bestLegFor(
       !isMarketOff(live.fixtureId, l.projection?.unit ?? l.market) &&
       l.prob <= REAL_MAX_LEG_PROB
   );
-  const oddsOf = (l: CandidateLeg) =>
+  // Cotes de référence gratuites (bet365 via 365Scores) : 1X2 et total de buts, quand la source les publie.
+  const ref = playable.some((l) => l.market === '1X2' || l.market === 'total_buts') ? await getRefOdds(match.homeTeam, match.awayTeam) : null;
+  const modelOdds = (l: CandidateLeg) =>
     estimateLegOdds(
       l,
       l.projection ? getDeltaCorrection(l.projection.unit).dispersion : 1,
@@ -1114,6 +1118,15 @@ async function bestLegFor(
           })
         : undefined
     ).odds;
+  const oddsOf = (l: CandidateLeg): number => {
+    const model = modelOdds(l);
+    const bet365 = refOddsForLeg(ref, l.market, l.selection);
+    if (bet365 == null) return model;
+    // Vraie cote disponible : elle remplace l'estimation, et l'écart du modèle est mesuré.
+    l.evidence += ` Cote bet365 lue : ${bet365.toFixed(2)} (estimation du modèle : ${model.toFixed(2)}).`;
+    void recordRefComparison({ key: `${live.fixtureId}|${l.selection}`, market: l.market, selection: l.selection, minute: live.minute, modelProb: l.prob, estModel: model, ref: bet365 });
+    return bet365;
+  };
   const withOdds = playable.map((l) => ({ leg: l, odds: oddsOf(l) }));
   // Cote estimée sous le plancher : pas proposé maintenant, mis en attente (rejoué si la cote monte).
   const waiting = withOdds.filter((x) => x.odds < MIN_ESTIMATED_ODDS).sort((a, b) => b.leg.prob - a.leg.prob).slice(0, 4);
