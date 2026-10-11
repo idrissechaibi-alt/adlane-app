@@ -1,4 +1,4 @@
-// Marché « tirs cadrés d'un joueur » (lignes 0.5 et 1.5 au maximum).
+// Marché « tirs cadrés d'un joueur » (« Plus de » 0.5 / 1.5 / 2.5, seules lignes offertes par les bookmakers).
 // Source gratuite : ESPN, relevé joueur par joueur (tirs cadrés / tirs totaux),
 // en direct comme au règlement. Le taux de tir observé est mêlé à un taux a priori
 // par poste (équivalent de 30 minutes de jeu) — un joueur sans tir n'est donc ni
@@ -11,7 +11,6 @@ import { poissonProb } from './poisson';
 /** Tirs cadrés par 90 min d'un titulaire moyen, selon le poste. */
 const PRIOR_SOT_PER_90: Record<string, number> = { F: 0.6, M: 0.28, D: 0.09, G: 0 };
 const PRIOR_WEIGHT_MINUTES = 30;
-const MAX_LINE = 1.5;
 const MATCH_END = 94;
 
 export interface PlayerShotLeg {
@@ -41,11 +40,10 @@ function legsForPlayer(p: HubPlayerShots, elapsed: number, teamName: string): Pl
   const who = `${p.name} (${teamName})`;
   const out: PlayerShotLeg[] = [];
   const need = (line: number) => Math.floor(line) + 1 - p.sot; // tirs encore à marquer pour dépasser la ligne
-  for (const line of [0.5, MAX_LINE]) {
+  // Les bookmakers n'offrent que « Plus de » 0.5 / 1.5 / 2.5 sur ce marché (pas de « Moins de »).
+  for (const line of [0.5, 1.5, 2.5]) {
     const stillNeeded = need(line);
     if (stillNeeded >= 1) out.push({ selection: `Plus de ${line} tir cadré — ${who}`, prob: 1 - cdf(lambda, stillNeeded - 1), evidence });
-    // « Moins de » : possible tant que la ligne n'est pas franchie.
-    if (stillNeeded >= 1) out.push({ selection: `Moins de ${line} tir cadré — ${who}`, prob: cdf(lambda, stillNeeded - 1), evidence });
   }
   return out;
 }
