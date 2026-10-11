@@ -49,6 +49,8 @@ export default function DailyPlanScreen() {
   const [oddsNoteId, setOddsNoteId] = useState<string | null>(null);
   const [oddsNoteInput, setOddsNoteInput] = useState('');
   const [, setOddsVersion] = useState(0);
+  /** Saisie de la ligne minimale réellement proposée (et sa cote) quand la ligne du pari n'existe pas. */
+  const [minLineForm, setMinLineForm] = useState<{ id: string; line: string; odds: string } | null>(null);
   const [placing, setPlacing] = useState(false);
   const [proposalStatus, setProposalStatus] = useState<Record<string, LegStatus>>({});
   const [legStatuses, setLegStatuses] = useState<Record<string, LegStatus[]>>({});
@@ -370,19 +372,50 @@ export default function DailyPlanScreen() {
         await marketOff();
         return;
       }
-      // Total attendu AU MOMENT du signalement (situation actuelle du match), sinon celui du pari.
-      const ctx = await liveLegContext(leg).catch(() => null);
-      const expected = ctx?.count ? ctx.count.done + ctx.count.lambda : leg.projection.expected;
-      await markLineUnavailable(leg.projection.unit, parsed.line, expected);
-      const min = minLineFor(leg.projection.unit, expected);
-      Alert.alert('Noté', min > 0 ? `Dans cette situation, l'app ne proposera plus de ligne sous ${min}.` : 'Noté. Pas assez de signalements pour fixer une limite.');
-      setOddsVersion((v) => v + 1);
+      // La ligne n'existe pas : l'utilisateur donne la ligne minimale réellement proposée et sa cote.
+      setMinLineForm({ id: proposal.id, line: '', odds: '' });
     };
     Alert.alert('Introuvable chez ton bookmaker', 'Que se passe-t-il ?', [
       ...(leg.projection && parsed ? [{ text: "Cette ligne n'existe pas", onPress: () => void lineMissing() }] : []),
       { text: 'Marché non proposé', onPress: () => void marketOff() },
       { text: 'Annuler', style: 'cancel' as const },
     ]);
+  };
+
+  /** Enregistre : la ligne du pari n'existe pas, voici la ligne minimale proposée par le bookmaker et sa cote. */
+  const handleSaveMinLine = async (proposal: InPlayProposal) => {
+    const leg = proposal.legs[0];
+    const parsed = parseLine(leg.selection);
+    if (!minLineForm || !leg.projection || !parsed) return;
+    const line = Number(minLineForm.line.replace(',', '.'));
+    const odds = Number(minLineForm.odds.replace(',', '.'));
+    if (!Number.isFinite(line) || line <= 0) {
+      Alert.alert('Ligne invalide', 'Entre la ligne minimale proposée par ton bookmaker (ex. 2.5).');
+      return;
+    }
+    if (!Number.isFinite(odds) || odds <= 1) {
+      Alert.alert('Cote invalide', 'Entre la cote de cette ligne (supérieure à 1).');
+      return;
+    }
+    try {
+      // Total attendu AU MOMENT de la saisie (situation actuelle du match), sinon celui du pari.
+      const ctx = await liveLegContext(leg).catch(() => null);
+      const expected = ctx?.count ? ctx.count.done + ctx.count.lambda : leg.projection.expected;
+      // 1) La ligne du pari n'existe pas dans cette situation ; 2) la ligne saisie existe.
+      await markLineUnavailable(leg.projection.unit, parsed.line, expected);
+      await markLineAvailable(leg.projection.unit, line, expected);
+      // 3) Sa cote est apprise comme n'importe quelle cote saisie, avec le contexte du moment.
+      const selection = leg.selection.replace(/(plus|moins) de\s+[\d.,]+/i, `$1 de ${line}`);
+      const asked = { ...proposal, id: `${proposal.id}#min`, legs: [{ ...leg, selection }] };
+      const askedCtx = await liveLegContext(asked.legs[0]).catch(() => null);
+      await recordBookieOdds(asked, odds, askedCtx);
+      setMinLineForm(null);
+      setOddsVersion((v) => v + 1);
+      const min = minLineFor(leg.projection.unit, expected);
+      Alert.alert('Noté', `Ligne ${line} à ${odds.toFixed(2)} enregistrée.${min > 0 ? ` Dans cette situation, l'app ne proposera plus de ligne sous ${min}.` : ''}`);
+    } catch (error: any) {
+      Alert.alert('Erreur', `Impossible d'enregistrer : ${error.message}`);
+    }
   };
 
   /** Un pari en direct (simple ou combiné) avec son bouton "Placer". */
@@ -484,6 +517,33 @@ export default function DailyPlanScreen() {
             </View>
           )}
         </View>
+        {minLineForm?.id === proposal.id && (
+          <View style={styles.placeStakeRow}>
+            <TextInput
+              style={styles.stakeInput}
+              value={minLineForm.line}
+              onChangeText={(v) => setMinLineForm({ ...minLineForm, line: v })}
+              placeholder="Ligne minimale (ex 2.5)"
+              placeholderTextColor="#64748b"
+              keyboardType="decimal-pad"
+              autoFocus
+            />
+            <TextInput
+              style={styles.stakeInput}
+              value={minLineForm.odds}
+              onChangeText={(v) => setMinLineForm({ ...minLineForm, odds: v })}
+              placeholder="Sa cote"
+              placeholderTextColor="#64748b"
+              keyboardType="decimal-pad"
+            />
+            <TouchableOpacity style={styles.confirmStakeButton} onPress={() => handleSaveMinLine(proposal)}>
+              <Text style={styles.confirmStakeText}>OK</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.cancelStakeButton} onPress={() => setMinLineForm(null)}>
+              <Ionicons name="close" size={16} color="#94a3b8" />
+            </TouchableOpacity>
+          </View>
+        )}
         {placingId === `live-${proposal.id}` && (
           <View style={styles.placeStakeRow}>
             <TextInput
