@@ -98,7 +98,7 @@ import { hubDateKey, hubKnowsMatch, hubLiveStatus, hubStats } from '../api/footb
 import { StrategyContext, evaluateStrategies, oddsFromExpectedGoals } from './strategies';
 import { SofaPeriodStats } from '../api/footballDataAPIs/sofaScore';
 import { DeltaUnit, LegProjection, describeCorrection, ensureDeltaSamplesLoaded, flushShadowProjections, getDeltaCorrection, projectFullMatchCount, recordShadowProjection, factorForRemaining } from './deltaLearning';
-import { CountInfo, OddsContext, ensureOddsLoaded, featuresOf, legOddsFloorOk, parseLine } from './oddsLearning';
+import { CountInfo, MIN_ESTIMATED_ODDS, OddsContext, ensureOddsLoaded, estimateLegOdds, featuresOf, parseLine, setOddsWatch } from './oddsLearning';
 import { ensureLineLimitsLoaded, ensureMarketOffLoaded, isMarketOff, maxLineFor, minLineFor } from './lineLimits';
 import { atLeastProb, pickHighestOverLine, pickLowestUnderLine } from './countModel';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -1094,26 +1094,43 @@ async function bestLegFor(
   // Paris réels : au plus 75 % (cote juste ≥ 1,33) — au-delà, la cote proposée
   // par les bookmakers est trop faible pour valoir la mise.
   // + cote estimée du bookmaker sous le plancher (apprise des cotes saisies) : écarté.
-  const eligible = rawLegs
-    .filter(
-      (l) =>
-        worthProposing(l) &&
-        // Marché que le bookmaker ne propose pas pour l'instant sur ce match (signalé par l'utilisateur).
-        !isMarketOff(live.fixtureId, l.projection?.unit ?? l.market) &&
-        l.prob <= REAL_MAX_LEG_PROB &&
-        legOddsFloorOk(
-          l,
-          l.projection ? getDeltaCorrection(l.projection.unit).dispersion : 1,
-          live.minute,
-          l.projection
-            ? featuresOf(l.projection.unit, live.minute, l.projection.observed, {
-                goals: live.homeGoals + live.awayGoals,
-                sot: (currentStats?.shotsOnTargetHome ?? 0) + (currentStats?.shotsOnTargetAway ?? 0),
-                reds: 0,
-              })
-            : undefined
-        )
-    )
+  const playable = rawLegs.filter(
+    (l) =>
+      worthProposing(l) &&
+      // Marché que le bookmaker ne propose pas pour l'instant sur ce match (signalé par l'utilisateur).
+      !isMarketOff(live.fixtureId, l.projection?.unit ?? l.market) &&
+      l.prob <= REAL_MAX_LEG_PROB
+  );
+  const oddsOf = (l: CandidateLeg) =>
+    estimateLegOdds(
+      l,
+      l.projection ? getDeltaCorrection(l.projection.unit).dispersion : 1,
+      live.minute,
+      l.projection
+        ? featuresOf(l.projection.unit, live.minute, l.projection.observed, {
+            goals: live.homeGoals + live.awayGoals,
+            sot: (currentStats?.shotsOnTargetHome ?? 0) + (currentStats?.shotsOnTargetAway ?? 0),
+            reds: 0,
+          })
+        : undefined
+    ).odds;
+  const withOdds = playable.map((l) => ({ leg: l, odds: oddsOf(l) }));
+  // Cote estimée sous le plancher : pas proposé maintenant, mis en attente (rejoué si la cote monte).
+  const waiting = withOdds.filter((x) => x.odds < MIN_ESTIMATED_ODDS).sort((a, b) => b.leg.prob - a.leg.prob).slice(0, 4);
+  await setOddsWatch(
+    live.fixtureId,
+    waiting.map((x) => ({
+      homeTeam: match.homeTeam,
+      awayTeam: match.awayTeam,
+      selection: x.leg.selection,
+      prob: x.leg.prob,
+      estimatedOdds: x.odds,
+      minute: live.minute,
+    }))
+  );
+  const eligible = withOdds
+    .filter((x) => x.odds >= MIN_ESTIMATED_ODDS)
+    .map((x) => x.leg)
     .sort((a, b) => b.prob - a.prob);
   const seen = new Set<string>();
   const best: LegWithContext[] = [];

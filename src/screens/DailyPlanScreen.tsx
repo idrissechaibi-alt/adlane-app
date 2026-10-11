@@ -16,7 +16,7 @@ import {
   Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { ensureOddsLoaded, estimateProposalOdds, explainOddsMoves, getObservedOddsList, recordBookieOdds } from '../core/oddsLearning';
+import { MIN_ESTIMATED_ODDS, WatchedBet, ensureOddsLoaded, estimateProposalOdds, explainOddsMoves, getObservedOddsList, readOddsWatch, recordBookieOdds } from '../core/oddsLearning';
 import { liveLegContext, proposalDuplicateKey } from '../core/inPlayCombos';
 import { markLineAvailable, markLineUnavailable, markMarketOff, maxLineFor, minLineFor } from '../core/lineLimits';
 import { parseLine } from '../core/oddsLearning';
@@ -50,6 +50,8 @@ export default function DailyPlanScreen() {
   const [oddsNoteId, setOddsNoteId] = useState<string | null>(null);
   const [oddsNoteInput, setOddsNoteInput] = useState('');
   const [, setOddsVersion] = useState(0);
+  /** Paris dont la cote estimée est sous le plancher : en attente qu'elle monte. */
+  const [oddsWatch, setOddsWatch] = useState<WatchedBet[]>([]);
   /** Saisie de la ligne minimale réellement proposée (et sa cote) quand la ligne du pari n'existe pas. */
   const [minLineForm, setMinLineForm] = useState<{ id: string; line: string; odds: string } | null>(null);
   /** Jambes de combiné signalées « non proposées » par le bookmaker (clé : proposition:numéro de jambe). */
@@ -103,6 +105,7 @@ export default function DailyPlanScreen() {
   };
 
   const loadInPlayProposals = () => {
+    readOddsWatch().then(setOddsWatch).catch(() => {});
     // Journée LOCALE (pas UTC) : après minuit en Algérie, les paris d'hier ne reviennent pas.
     const today = todayLocalDateString();
     // real !== false : les paris fictifs (boucle d'auto-apprentissage, tout
@@ -709,6 +712,27 @@ export default function DailyPlanScreen() {
             {slotLive.map((p) => renderLiveProposal(p, slot.matches.length > 1))}
           </View>
         )}
+
+        {isSelected && (() => {
+          const waiting = oddsWatch.filter((w) =>
+            slot.matches.some(
+              (m) =>
+                namesLikelyMatch(normalizeTeamName(w.homeTeam), normalizeTeamName(m.homeTeam)) &&
+                namesLikelyMatch(normalizeTeamName(w.awayTeam), normalizeTeamName(m.awayTeam))
+            )
+          );
+          return waiting.length > 0 ? (
+            <View style={[styles.halftimeAlertsBox, styles.slotLiveBox]}>
+              <Text style={styles.liveBetLeg}>⏳ En attente d'une cote ≥ {MIN_ESTIMATED_ODDS.toFixed(2)} (proposés dès que la cote monte) :</Text>
+              {waiting.map((w, i) => (
+                <Text key={i} style={styles.liveBetLeg}>
+                  {slot.matches.length > 1 ? `${w.homeTeam} - ${w.awayTeam} : ` : ''}
+                  {w.selection} ({Math.round(w.prob * 100)}%) · cote estimée {w.estimatedOdds.toFixed(2)}
+                </Text>
+              ))}
+            </View>
+          ) : null;
+        })()}
 
         {isSelected && (
           <View style={styles.slotContent}>

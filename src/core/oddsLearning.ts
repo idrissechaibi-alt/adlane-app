@@ -26,8 +26,8 @@ const PRIOR_WEIGHT = 4;
 const FULL_WEIGHT_AT = 6;
 const K_MIN = 0.3;
 const K_MAX = 3;
-/** Cote estimée minimale pour qu'un pari réel soit proposé. */
-export const MIN_ESTIMATED_ODDS = 1.3;
+/** Cote estimée minimale pour qu'un pari réel soit proposé (en dessous : mis en attente, rejoué si la cote monte). */
+export const MIN_ESTIMATED_ODDS = 1.4;
 
 /** Situation d'un pari de comptage à un instant donné. */
 export interface CountInfo {
@@ -398,4 +398,46 @@ export function getReactionStatus(): Array<{ unit: string; pairs: number; effect
     pairs: r.pairs,
     effects: Object.fromEntries(FEATURE_NAMES.map((name, j) => [name, Math.round(r.b[j] * 1000) / 1000])),
   }));
+}
+
+// ---------- Paris en attente d'une cote assez haute ----------
+// Un pari dont la cote estimée est sous le plancher n'est pas proposé : il est gardé
+// ici et réévalué à chaque passage. S'il atteint le plancher (la cote monte avec le
+// match), il est proposé ; sinon il reste « en attente ».
+
+const WATCH_KEY = '@odds_watchlist';
+const WATCH_TTL_MS = 45 * 60_000;
+
+export interface WatchedBet {
+  fixtureId: number;
+  homeTeam: string;
+  awayTeam: string;
+  selection: string;
+  prob: number;
+  estimatedOdds: number;
+  minute: number;
+  ts: number;
+}
+
+/** Remplace la liste d'attente d'un match (appelé à chaque évaluation de ce match). */
+export async function setOddsWatch(fixtureId: number, entries: Omit<WatchedBet, 'fixtureId' | 'ts'>[]): Promise<void> {
+  try {
+    const raw = await AsyncStorage.getItem(WATCH_KEY);
+    const all: WatchedBet[] = raw ? JSON.parse(raw) : [];
+    const now = Date.now();
+    const next = [...all.filter((w) => w.fixtureId !== fixtureId && now - w.ts < WATCH_TTL_MS), ...entries.map((e) => ({ ...e, fixtureId, ts: now }))];
+    await AsyncStorage.setItem(WATCH_KEY, JSON.stringify(next.slice(-60)));
+  } catch {
+    // best-effort
+  }
+}
+
+export async function readOddsWatch(): Promise<WatchedBet[]> {
+  try {
+    const raw = await AsyncStorage.getItem(WATCH_KEY);
+    const now = Date.now();
+    return (raw ? (JSON.parse(raw) as WatchedBet[]) : []).filter((w) => now - w.ts < WATCH_TTL_MS);
+  } catch {
+    return [];
+  }
 }
