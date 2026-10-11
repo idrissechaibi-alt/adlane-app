@@ -15,7 +15,7 @@ import {
 import { Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import MarketTrendChart from '../components/MarketTrendChart';
-import { MarketDayPoint, TRACKED_MARKETS, TrackedMarket, marketLabel, readInPlayProposals, readMarketSeries, readMarketSeriesReal, readMarketSeriesFictional, readPaperBets, readPredictionOutcomes } from '../core/learnStore';
+import { MarketDayPoint, TRACKED_MARKETS, TrackedMarket, marketLabel, readInPlayProposals, readMarketSeries, readMarketSeriesReal, readMarketSeriesFictional, readCumulativeCounts, readPaperBets, readPredictionOutcomes } from '../core/learnStore';
 import { getAllBets, getAllLessons, getAllCalibrations, getDailyReports } from '../database/storage';
 import { computeMarketCalibrations } from '../core/calibration';
 import { generateImprovementReport } from '../core/reporter';
@@ -253,11 +253,12 @@ export default function EvolutionScreen() {
     refreshOddsFile();
     try {
       const bets = readPaperBets();
+      const cum = readCumulativeCounts('paper');
       setPaperBetsSummary({
-        total: bets.length,
-        settled: bets.filter((b) => b.settled).length,
-        matches: new Set(bets.map((b) => b.fixtureId)).size,
-        won: bets.filter((b) => b.settled && b.won).length,
+        total: Math.max(bets.length, cum?.total ?? 0),
+        settled: Math.max(bets.filter((b) => b.settled).length, cum?.settled ?? 0),
+        matches: Math.max(new Set(bets.map((b) => b.fixtureId)).size, cum?.matches ?? 0),
+        won: Math.max(bets.filter((b) => b.settled && b.won).length, cum?.won ?? 0),
       });
       setPaperBetDayPoints(buildMarketDayPointsFromPaperBets(bets));
     } catch (error) {
@@ -288,10 +289,11 @@ export default function EvolutionScreen() {
     }
     try {
       const fictional = readInPlayProposals().filter((p) => p.real === false);
+      const cum = readCumulativeCounts('fictional');
       setFictionalCounter({
-        matches: new Set(fictional.map((p) => p.legs[0]?.fixtureId)).size,
-        placed: fictional.length,
-        won: fictional.filter((p) => p.legs[0]?.settled && p.legs[0]?.won).length,
+        matches: Math.max(new Set(fictional.map((p) => p.legs[0]?.fixtureId)).size, cum?.matches ?? 0),
+        placed: Math.max(fictional.length, cum?.total ?? 0),
+        won: Math.max(fictional.filter((p) => p.legs[0]?.settled && p.legs[0]?.won).length, cum?.won ?? 0),
       });
     } catch (error) {
       console.warn('Compteur de matchs fictifs indisponible:', error);

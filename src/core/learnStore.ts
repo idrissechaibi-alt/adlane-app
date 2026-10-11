@@ -379,7 +379,60 @@ export function readPaperBets(): PaperBet[] {
   }
 }
 
+// ==================== COMPTEURS CUMULÉS ====================
+// Les fichiers sont des fenêtres glissantes (1000 paris du modèle, 2000 paris fictifs, 48 h) : leur
+// taille plafonne. Les compteurs affichés, eux, cumulent tout ce qui a été placé / réglé / gagné.
+
+interface CumulativeCounter { total: number; settled: number; won: number; fixtures: number[] }
+type Counters = { paper: CumulativeCounter; fictional: CumulativeCounter };
+const COUNTER_FIXTURES_MAX = 50_000;
+
+function readCounters(): Partial<Counters> {
+  const content = readTextSafe(fileIn('counters.json'));
+  if (!content) return {};
+  try { return JSON.parse(content); } catch { return {}; }
+}
+
+/** Met à jour un compteur cumulé d'après le changement entre l'ancien et le nouveau contenu du fichier. */
+function bumpCounter(
+  key: keyof Counters,
+  previous: Array<{ id: string; fixtureId: number; settled: boolean; won: boolean }>,
+  next: Array<{ id: string; fixtureId: number; settled: boolean; won: boolean }>
+): void {
+  try {
+    const counters = readCounters();
+    let c = counters[key];
+    if (!c) {
+      // Première fois : on part de ce que le fichier contient déjà.
+      c = { total: previous.length, settled: previous.filter((x) => x.settled).length, won: previous.filter((x) => x.settled && x.won).length, fixtures: Array.from(new Set(previous.map((x) => x.fixtureId))) };
+    }
+    const before = new Map(previous.map((x) => [x.id, x]));
+    const fixtures = new Set(c.fixtures);
+    for (const item of next) {
+      const old = before.get(item.id);
+      if (!old) c.total += 1;
+      if (item.settled && !old?.settled) {
+        c.settled += 1;
+        if (item.won) c.won += 1;
+      }
+      fixtures.add(item.fixtureId);
+    }
+    c.fixtures = Array.from(fixtures).slice(-COUNTER_FIXTURES_MAX);
+    counters[key] = c;
+    writeText(fileIn('counters.json'), JSON.stringify(counters));
+  } catch {
+    // compteur informatif : jamais bloquant
+  }
+}
+
+/** Totaux cumulés (au-delà de la fenêtre glissante des fichiers) ; null si pas encore suivis. */
+export function readCumulativeCounts(key: 'paper' | 'fictional'): { total: number; settled: number; won: number; matches: number } | null {
+  const c = readCounters()[key];
+  return c ? { total: c.total, settled: c.settled, won: c.won, matches: c.fixtures.length } : null;
+}
+
 export function writePaperBets(bets: PaperBet[]): void {
+  bumpCounter('paper', readPaperBets().map((b) => ({ id: b.id, fixtureId: b.fixtureId, settled: b.settled, won: !!b.won })), bets.map((b) => ({ id: b.id, fixtureId: b.fixtureId, settled: b.settled, won: !!b.won })));
   // Corpus glissant : on garde les 1000 derniers pour ne pas gonfler le fichier.
   writeText(fileIn('paper-bets.json'), JSON.stringify(bets.slice(-1000)));
 }
@@ -593,6 +646,8 @@ export function writeInPlayProposals(proposals: InPlayProposal[]): void {
   // afflux de paris fictifs finirait par évincer les vrais du plafond commun.
   const real = fresh.filter((p) => p.real !== false);
   const fictional = fresh.filter((p) => p.real === false).slice(-2000);
+  const flat = (list: InPlayProposal[]) => list.filter((p) => p.real === false).map((p) => ({ id: p.id, fixtureId: p.legs[0]?.fixtureId ?? 0, settled: !!p.legs[0]?.settled, won: !!p.legs[0]?.won }));
+  bumpCounter('fictional', flat(readInPlayProposals()), flat(proposals));
   writeText(fileIn('inplay-proposals.json'), JSON.stringify([...real, ...fictional]));
 }
 
