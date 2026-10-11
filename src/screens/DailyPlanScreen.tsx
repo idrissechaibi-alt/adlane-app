@@ -19,7 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { MIN_ESTIMATED_ODDS, WatchedBet, ensureOddsLoaded, estimateProposalOdds, explainOddsMoves, getObservedOddsList, readOddsWatch } from '../core/oddsLearning';
 import { recordOddsAndLearn } from '../core/oddsLoop';
 import { liveLegContext, proposalDuplicateKey } from '../core/inPlayCombos';
-import { markLineAvailable, markLineUnavailable, markMarketOff, maxLineFor, minLineFor } from '../core/lineLimits';
+import { markLineAvailable, markLineUnavailable, markMarketOff } from '../core/lineLimits';
 import { parseLine } from '../core/oddsLearning';
 import { executeMorningScan, getDailyPlan, checkAndUpdateT90Status, DailyPlan, runMorningScanIfDue, todayLocalDateString } from '../core/scheduler';
 import { buildScheduledMatches, ProposedSlip } from '../core/dailyWorkflow';
@@ -430,16 +430,19 @@ export default function DailyPlanScreen() {
       // Total attendu AU MOMENT de la saisie (situation actuelle du match), sinon celui du pari.
       const ctx = await liveLegContext(leg).catch(() => null);
       const expected = ctx?.count ? ctx.count.done + ctx.count.lambda : leg.projection.expected;
-      // Ligne BASSE : elle existe ; la ligne du pari et celles en dessous, si plus basses, n'existent pas.
+      // Observations CONTEXTUELLES (situation du moment) : les lignes données existent, celles juste au-delà de
+      // tes bornes n'existent pas, et la ligne du pari est notée selon qu'elle tombe dans le menu ou non.
+      // Ce n'est pas une règle générale : le menu du bookmaker change avec le match.
       if (low != null) {
-        await markLineAvailable(unit, low, expected, 'over');
-        if (parsed.line < low) await markLineUnavailable(unit, parsed.line, expected, 'over');
+        await markLineAvailable(unit, low, expected);
+        await markLineUnavailable(unit, low - 1, expected);
       }
-      // Ligne HAUTE : elle existe ; la ligne du pari, si plus haute, n'existe pas.
       if (high != null) {
-        await markLineAvailable(unit, high, expected, 'under');
-        if (parsed.line > high) await markLineUnavailable(unit, parsed.line, expected, 'under');
+        await markLineAvailable(unit, high, expected);
+        await markLineUnavailable(unit, high + 1, expected);
       }
+      if ((low != null && parsed.line < low) || (high != null && parsed.line > high)) await markLineUnavailable(unit, parsed.line, expected);
+      else if (low != null && high != null) await markLineAvailable(unit, parsed.line, expected);
       // Les cotes données sont apprises comme n'importe quelle cote saisie, avec le contexte du moment.
       const learn = async (line: number, odds: number | null, tag: string) => {
         if (odds == null) return;
@@ -452,13 +455,13 @@ export default function DailyPlanScreen() {
       if (high != null) await learn(high, highOdds, 'high');
       setMinLineForm(null);
       setOddsVersion((v) => v + 1);
-      const min = minLineFor(unit, expected);
-      const max = maxLineFor(unit, expected);
+      const around = (l: number) => `${l - expected >= 0 ? '+' : ''}${(l - expected).toFixed(1)}`;
       Alert.alert(
         'Noté',
-        `Lignes enregistrées${low != null ? ` · basse ${low}${lowOdds ? ` à ${lowOdds.toFixed(2)}` : ''}` : ''}${high != null ? ` · haute ${high}${highOdds ? ` à ${highOdds.toFixed(2)}` : ''}` : ''}.` +
-          (min > 0 ? ` Dans cette situation, l'app ne proposera plus de ligne sous ${min}` : '') +
-          (Number.isFinite(max) ? `${min > 0 ? ' ni' : " Dans cette situation, l'app ne proposera plus de ligne"} au-dessus de ${max}.` : min > 0 ? '.' : '')
+        `Pour ce moment du match${ctx ? ` (${ctx.minute}e minute)` : ''}, total attendu par l'app : ${expected.toFixed(1)}.` +
+          (low != null ? `\nLigne basse ${low}${lowOdds ? ` à ${lowOdds.toFixed(2)}` : ''} (${around(low)} par rapport au total attendu).` : '') +
+          (high != null ? `\nLigne haute ${high}${highOdds ? ` à ${highOdds.toFixed(2)}` : ''} (${around(high)}).` : '') +
+          "\nCes lignes servent à comprendre comment ton bookmaker construit son menu et ses cotes. Elles ne bloquent rien : l'app continue de chercher le marché le plus intéressant."
       );
     } catch (error: any) {
       Alert.alert('Erreur', `Impossible d'enregistrer : ${error.message}`);

@@ -101,7 +101,7 @@ import { DeltaUnit, LegProjection, describeCorrection, ensureDeltaSamplesLoaded,
 import { getRefOdds, refOddsForLeg } from '../api/footballDataAPIs/refOdds';
 import { recordRefComparison } from './oddsLoop';
 import { CountInfo, MIN_ESTIMATED_ODDS, OddsContext, ensureOddsLoaded, estimateLegOdds, featuresOf, parseLine, setOddsWatch } from './oddsLearning';
-import { ensureLineLimitsLoaded, ensureMarketOffLoaded, isMarketOff, maxLineFor, minLineFor } from './lineLimits';
+import { ensureLineLimitsLoaded, ensureMarketOffLoaded, isMarketOff, lineAvailability } from './lineLimits';
 import { atLeastProb, pickHighestOverLine, pickLowestUnderLine } from './countModel';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { matchesForDate, isWithinBreakWindow } from './internationalBreak';
@@ -210,6 +210,8 @@ interface CandidateLeg {
   evidence: string;
   /** Valeur projetée de la fenêtre, comparée au réel au règlement. */
   projection?: LegProjection;
+  /** Chance (0-1) que le bookmaker propose cette ligne dans cette situation (indice appris, jamais bloquant). */
+  availability?: number;
 }
 
 /** Buts attendus corrigés par l'écart mesuré sur les matchs réglés. */
@@ -665,17 +667,18 @@ function countMarketLegs(
     // La tendance seule contredit nettement la ligne (< 30 % pour le reste du match) : pas de pari.
     const contradicted = (side: 'over' | 'under', line: number): boolean =>
       trendLambda != null && trendVerdict(side, line, done, trendLambda).blocked;
-    // Lignes proposées par le bookmaker : en dessous de son minimum, le pari n'existe pas.
-    const minLine = minLineFor(unit, done + lambda);
+    // Chance que le bookmaker propose cette ligne dans cette situation (indice contextuel appris de
+    // ses menus, jamais une interdiction) : elle pèse seulement dans le classement des paris.
+    const total = done + lambda;
     const over = pickHighestOverLine(lambda, fano, LINE_PICK_THRESHOLD, done);
-    if (over && over.line >= minLine && over.line - done >= MIN_EVENTS_STILL_NEEDED - 0.5 && !contradicted('over', over.line)) legs.push({ market: spec.market, selection: `Plus de ${over.line} ${spec.noun} ${where}`, prob: over.prob, evidence, projection });
+    if (over && over.line - done >= MIN_EVENTS_STILL_NEEDED - 0.5 && !contradicted('over', over.line)) {
+      const av = lineAvailability(unit, over.line, total);
+      if (av.p >= 0.15) legs.push({ market: spec.market, selection: `Plus de ${over.line} ${spec.noun} ${where}`, prob: over.prob, evidence, projection, availability: av.p });
+    }
     const under = pickLowestUnderLine(lambda, fano, LINE_PICK_THRESHOLD, done);
-    if (under) {
-      // « Moins de » sous le minimum du bookmaker : la ligne existante la plus basse (plus sûre).
-      const line = Math.max(under.line, minLine > 0 ? Math.ceil(minLine - 0.5) + 0.5 : 0);
-      const prob = line === under.line ? under.prob : 1 - atLeastProb(lambda, fano, Math.floor(line) + 1 - done);
-      // « Moins de » au-dessus du maximum proposé par le bookmaker : ligne inexistante.
-      if (prob >= LINE_PICK_THRESHOLD && line <= maxLineFor(unit, done + lambda) && !contradicted('under', line)) legs.push({ market: spec.market, selection: `Moins de ${line} ${spec.noun} ${where}`, prob, evidence, projection });
+    if (under && !contradicted('under', under.line)) {
+      const av = lineAvailability(unit, under.line, total);
+      if (av.p >= 0.15) legs.push({ market: spec.market, selection: `Moins de ${under.line} ${spec.noun} ${where}`, prob: under.prob, evidence, projection, availability: av.p });
     }
   }
   return legs;
@@ -1141,10 +1144,12 @@ async function bestLegFor(
       minute: live.minute,
     }))
   );
+  // Le marché le plus OPTIMAL d'abord : probabilité × cote estimée × chance que le bookmaker le propose
+  // (à probabilité égale, la meilleure cote ; une ligne probablement absente passe derrière).
   const eligible = withOdds
     .filter((x) => x.odds >= MIN_ESTIMATED_ODDS)
-    .map((x) => x.leg)
-    .sort((a, b) => b.prob - a.prob);
+    .sort((a, b) => b.leg.prob * b.odds * (b.leg.availability ?? 1) - a.leg.prob * a.odds * (a.leg.availability ?? 1))
+    .map((x) => x.leg);
   const seen = new Set<string>();
   const best: LegWithContext[] = [];
   for (const leg of eligible) {

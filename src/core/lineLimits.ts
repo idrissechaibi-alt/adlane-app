@@ -1,36 +1,36 @@
-// Lignes que le bookmaker PROPOSE réellement — selon la situation du match.
+// Lignes que le bookmaker PROPOSE — des indices contextuels, pas une règle.
 //
-// Il n'offre pas toutes les lignes, et pas toujours les mêmes : « Plus de 1.5
-// cartons » existe parfois et pas d'autres fois. Une ligne n'est proposée que
-// si elle reste proche du total attendu (le bookmaker écarte celles qui sont
-// trop faciles). On apprend donc un ÉCART MAXIMAL entre le total attendu et la
-// ligne, par compteur, au lieu d'un minimum fixe :
-//   ligne proposée  <=>  total attendu − ligne ≤ écart maximal.
+// Le bookmaker n'offre pas toutes les lignes, et son menu change avec le match (score,
+// minute, compteur déjà joué) : une ligne qui existe à la 30e peut disparaître à la 67e.
+// Chaque saisie de l'utilisateur est donc une observation datée par sa situation : la
+// position de la ligne par rapport au TOTAL ATTENDU à ce moment-là (ligne − total attendu),
+// et si elle existait. L'app s'en sert pour comprendre comment le bookmaker construit son
+// menu, et pour estimer la CHANCE qu'une ligne soit proposée dans une situation voisine —
+// jamais pour l'interdire. Un marché peu susceptible d'exister reçoit seulement moins de
+// poids dans le classement ; le but reste de proposer le marché le plus optimal.
 //
-// Chaque « Ligne introuvable » (écart observé trop grand) et chaque cote donnée
-// (écart observé acceptable) affine cet écart. Les valeurs de départ viennent
-// des exemples de l'utilisateur : cartons du match, 1.5 absent pour ~4 attendus,
-// 2.5 présent ; fautes du match, 17.5 absent pour ~24 attendues, 18.5 présent.
+// Valeurs de départ (exemples de l'utilisateur) : cartons du match, 1.5 absent pour ~4
+// attendus, 2.5 présent ; fautes du match, 17.5 absent pour ~24 attendues, 18.5 présent.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const KEY = '@bookie_line_availability';
-const MAX_OBS = 400;
+const KEY = '@bookie_line_availability_v2';
+const OLD_KEY = '@bookie_line_availability';
+const MAX_OBS = 600;
 
 interface LineObs {
   unit: string;
-  /** 'over' : écart = total attendu − ligne (ligne trop basse) ; 'under' : écart = ligne − total attendu (ligne trop haute). */
-  side?: 'over' | 'under';
-  gap: number;
+  /** Ligne − total attendu au moment de l'observation (négatif : sous le total attendu). */
+  off: number;
   available: boolean;
   ts?: string;
 }
 
 const SEED: LineObs[] = [
-  { unit: 'cards_ft', gap: 2.5, available: false },
-  { unit: 'cards_ft', gap: 1.5, available: true },
-  { unit: 'fouls_ft', gap: 6.5, available: false },
-  { unit: 'fouls_ft', gap: 5.5, available: true },
+  { unit: 'cards_ft', off: -2.5, available: false },
+  { unit: 'cards_ft', off: -1.5, available: true },
+  { unit: 'fouls_ft', off: -6.5, available: false },
+  { unit: 'fouls_ft', off: -5.5, available: true },
 ];
 
 let observations: LineObs[] = [...SEED];
@@ -42,29 +42,62 @@ export async function ensureLineLimitsLoaded(): Promise<void> {
   try {
     const raw = await AsyncStorage.getItem(KEY);
     if (raw) observations = [...SEED, ...(JSON.parse(raw) as LineObs[])];
+    else {
+      // Reprise des observations de l'ancienne version (écart selon le côté du pari).
+      const old = await AsyncStorage.getItem(OLD_KEY);
+      if (old) {
+        const converted = (JSON.parse(old) as Array<{ unit: string; side?: 'over' | 'under'; gap: number; available: boolean; ts?: string }>).map((o) => ({
+          unit: o.unit,
+          off: (o.side ?? 'over') === 'over' ? -o.gap : o.gap,
+          available: o.available,
+          ts: o.ts,
+        }));
+        observations = [...SEED, ...converted];
+      }
+    }
   } catch {
     // les valeurs de départ suffisent
   }
 }
 
-/** Écart maximal total attendu − ligne pour que la ligne existe (Infinity = aucune limite connue). */
-export function maxGapFor(unit: string, side: 'over' | 'under' = 'over'): number {
-  const mine = observations.filter((o) => o.unit === unit && (o.side ?? 'over') === side);
-  if (mine.length === 0) return Number.POSITIVE_INFINITY;
-  const unavailable = mine.filter((o) => !o.available).map((o) => o.gap);
-  const available = mine.filter((o) => o.available).map((o) => o.gap);
-  if (unavailable.length === 0) return Number.POSITIVE_INFINITY;
-  const lowestUnavailable = Math.min(...unavailable);
-  // Entre le plus grand écart vu proposé et le plus petit écart vu introuvable.
-  const highestAvailable = available.length ? Math.max(...available.filter((g) => g < lowestUnavailable), -Infinity) : -Infinity;
-  return Number.isFinite(highestAvailable) ? (highestAvailable + lowestUnavailable) / 2 : lowestUnavailable - 0.5;
+/**
+ * Chance (0-1) qu'une ligne soit proposée par le bookmaker, d'après ce qu'il a montré dans des situations
+ * voisines. Règles de bon sens d'abord : une ligne plus éloignée du total attendu qu'une ligne vue
+ * absente est absente ; une ligne plus éloignée qu'une ligne vue présente l'est aussi (même côté).
+ * Sinon, moyenne des observations proches, avec un a priori favorable (0,8) : sans information, on ne
+ * pénalise rien.
+ */
+export function lineAvailability(unit: string, line: number, expectedTotal: number): { p: number; n: number } {
+  const off = line - expectedTotal;
+  const mine = observations.filter((o) => o.unit === unit);
+  if (mine.length === 0) return { p: 1, n: 0 };
+  const sameSide = mine.filter((o) => Math.sign(o.off) === Math.sign(off) || o.off === 0);
+  const farther = (o: LineObs) => Math.abs(o.off) >= Math.abs(off);
+  const nearer = (o: LineObs) => Math.abs(o.off) <= Math.abs(off);
+  const absentFartherOrEqual = sameSide.some((o) => !o.available && nearer(o));
+  const presentFartherOut = sameSide.some((o) => o.available && farther(o));
+  // « absent plus près du total attendu » => ma ligne, plus éloignée encore, l'est aussi.
+  if (absentFartherOrEqual && !presentFartherOut) return { p: 0.08, n: sameSide.length };
+  if (presentFartherOut && !absentFartherOrEqual) return { p: 0.95, n: sameSide.length };
+  // Conflit ou aucune règle : observations voisines (±1,0), pondérées par la proximité.
+  let w = 0;
+  let a = 0;
+  for (const o of mine) {
+    const d = Math.abs(o.off - off);
+    if (d > 1) continue;
+    const k = 1 - d;
+    w += k;
+    if (o.available) a += k;
+  }
+  return { p: (a + 0.8 * 1) / (w + 1), n: Math.round(w) };
 }
 
-/** Plus petite ligne X.5 que le bookmaker propose pour ce compteur et ce total attendu (0 = aucune limite). */
-export function minLineFor(unit: string, expectedTotal: number): number {
-  const gap = maxGapFor(unit);
-  if (!Number.isFinite(gap)) return 0;
-  return Math.max(0, Math.ceil(expectedTotal - gap - 0.5) + 0.5);
+/** Plage de lignes que le bookmaker semble proposer autour du total attendu (diagnostic). */
+export function offeredRange(unit: string): { lowOffset: number | null; highOffset: number | null } {
+  const mine = observations.filter((o) => o.unit === unit);
+  const lows = mine.filter((o) => o.off < 0 && o.available).map((o) => o.off);
+  const highs = mine.filter((o) => o.off > 0 && o.available).map((o) => o.off);
+  return { lowOffset: lows.length ? Math.min(...lows) : null, highOffset: highs.length ? Math.max(...highs) : null };
 }
 
 async function save(): Promise<void> {
@@ -75,41 +108,29 @@ async function save(): Promise<void> {
   }
 }
 
-async function record(unit: string, line: number, expectedTotal: number, available: boolean, side: 'over' | 'under'): Promise<void> {
+async function record(unit: string, line: number, expectedTotal: number, available: boolean): Promise<void> {
   await ensureLineLimitsLoaded();
-  const gap = side === 'over' ? expectedTotal - line : line - expectedTotal;
-  observations.push({ unit, side, gap: Math.round(gap * 100) / 100, available, ts: new Date().toISOString() });
+  observations.push({ unit, off: Math.round((line - expectedTotal) * 100) / 100, available, ts: new Date().toISOString() });
   await save();
 }
 
-/**
- * Plus grande ligne X.5 que le bookmaker propose pour un « Moins de » sur ce compteur et ce
- * total attendu (Infinity = aucune limite connue) : au-dessus, la ligne est trop facile.
- */
-export function maxLineFor(unit: string, expectedTotal: number): number {
-  const gap = maxGapFor(unit, 'under');
-  if (!Number.isFinite(gap)) return Number.POSITIVE_INFINITY;
-  return Math.floor(expectedTotal + gap - 0.5) + 0.5;
+/** Cette ligne n'existait pas chez le bookmaker dans la situation actuelle. */
+export function markLineUnavailable(unit: string, line: number, expectedTotal: number): Promise<void> {
+  return record(unit, line, expectedTotal, false);
 }
 
-/**
- * « Cette ligne n'existe pas chez mon bookmaker » dans la situation actuelle.
- * side 'over' : ligne trop basse (minimum) ; side 'under' : ligne trop haute (maximum).
- */
-export function markLineUnavailable(unit: string, line: number, expectedTotal: number, side: 'over' | 'under' = 'over'): Promise<void> {
-  return record(unit, line, expectedTotal, false, side);
+/** Cette ligne existait (une cote a été donnée) dans la situation actuelle. */
+export function markLineAvailable(unit: string, line: number, expectedTotal: number): Promise<void> {
+  return record(unit, line, expectedTotal, true);
 }
 
-/** Une cote a été donnée pour cette ligne : elle existe dans la situation actuelle. */
-export function markLineAvailable(unit: string, line: number, expectedTotal: number, side: 'over' | 'under' = 'over'): Promise<void> {
-  return record(unit, line, expectedTotal, true, side);
-}
-
-export function getLineLimits(): Record<string, { maxGapOver: number | null; maxGapUnder: number | null; observations: number }> {
+export function getLineLimits(): Record<string, { lowestSeenOffset: number | null; highestSeenOffset: number | null; observations: number }> {
   const units = [...new Set(observations.map((o) => o.unit))];
-  const r = (g: number) => (Number.isFinite(g) ? Math.round(g * 100) / 100 : null);
   return Object.fromEntries(
-    units.map((u) => [u, { maxGapOver: r(maxGapFor(u, 'over')), maxGapUnder: r(maxGapFor(u, 'under')), observations: observations.filter((o) => o.unit === u && o.ts).length }])
+    units.map((u) => {
+      const r = offeredRange(u);
+      return [u, { lowestSeenOffset: r.lowOffset, highestSeenOffset: r.highOffset, observations: observations.filter((o) => o.unit === u && o.ts).length }];
+    })
   );
 }
 
