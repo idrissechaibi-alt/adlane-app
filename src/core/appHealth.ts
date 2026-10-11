@@ -10,6 +10,7 @@ import { remainingBudget } from './requestBudget';
 import { estimateExpectedGoalsFromMarket } from './poisson';
 import { getNativeBackgroundTickStats, readAbortedTicks, readLastRealFastTick, readLastTickDiagnostics, readTickProgress } from './backgroundTasks';
 import { loadOmnirouteConfig } from './focusEnrichment';
+import { probeBackupSources } from '../api/footballDataAPIs/backupOdds';
 import { checkAllProviders, getRouteLeaderboard, getWebCapableRoutes } from './llmRouter';
 import { getRecentSearchSource, getWorkingSearchProviders } from './webSearch';
 import { getSofaStatus } from '../api/footballDataAPIs/sofaScore';
@@ -174,6 +175,7 @@ export async function buildAppHealth(): Promise<Record<string, unknown>> {
     })),
     sofaScore: await section(async () => getSofaStatus()),
     liveSources: await section(async () => getHubStatus()),
+    backupOddsSources: await section(async () => probeBackupSources()),
     teamStats: await section(async () => getTeamStatsStatus()),
     bookieLineMinimums: await section(async () => { await ensureLineLimitsLoaded(); await ensureMarketOffLoaded(); return { limits: getLineLimits(), marketOffReports: getMarketOffCounts() }; }),
     exactDeltas: await section(async () => getDeltaReport().filter((r) => r.verified + r.pending > 0).map((r) => ({ ...r, meanPredicted: Math.round(r.meanPredicted * 10) / 10, meanActual: Math.round(r.meanActual * 10) / 10, meanError: Math.round(r.meanError * 100) / 100, meanAbsError: Math.round(r.meanAbsError * 100) / 100 }))),

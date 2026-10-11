@@ -101,6 +101,7 @@ import { StrategyContext, evaluateStrategies, oddsFromExpectedGoals } from './st
 import { SofaPeriodStats } from '../api/footballDataAPIs/sofaScore';
 import { DeltaUnit, LegProjection, describeCorrection, ensureDeltaSamplesLoaded, flushShadowProjections, getDeltaCorrection, projectFullMatchCount, recordShadowProjection, factorForRemaining, situationMultiplier } from './deltaLearning';
 import { getRefOdds, legLineOffered, refOddsForLeg } from '../api/footballDataAPIs/refOdds';
+import { backupTotalGoalsOdds } from '../api/footballDataAPIs/backupOdds';
 import { recordRefComparison } from './oddsLoop';
 import { CountInfo, MIN_ESTIMATED_ODDS, OddsContext, ensureOddsLoaded, estimateLegOdds, featuresOf, parseLine, setOddsWatch } from './oddsLearning';
 import { ensureLineLimitsLoaded, ensureMarketOffLoaded, isMarketOff, lineAvailability } from './lineLimits';
@@ -1174,7 +1175,14 @@ async function bestLegFor(
     void recordRefComparison({ key: `${live.fixtureId}|${l.selection}`, market: l.market, selection: l.selection, minute: live.minute, modelProb: l.prob, estModel: model, ref: bet365 });
     return bet365;
   };
-  const withOdds = playable.map((l) => ({ leg: l, odds: oddsOf(l) }));
+  // Secours : ni bet365 (MoviOdds, 365Scores) ne propose ce pari — cote juste Bet Better (sans marge, réduite de 7 %) pour un total de buts.
+  const backup = new Map<CandidateLeg, number>();
+  for (const l of playable) {
+    if (l.market !== 'total_buts' || refOddsForLeg(ref, l.market, l.selection) != null) continue;
+    const b = await backupTotalGoalsOdds(match.homeTeam, match.awayTeam, l.selection).catch(() => null);
+    if (b) backup.set(l, Math.round(b.fairOdds * 0.93 * 100) / 100);
+  }
+  const withOdds = playable.map((l) => ({ leg: l, odds: backup.get(l) ?? oddsOf(l) }));
   // Plancher de cote : sous 1,40 estimé, le pari n'est PAS proposé. Il est gardé en attente (affiché dans le
   // créneau) et réévalué à chaque passage : s'il atteint 1,40 avec l'évolution du match, il est proposé.
   const waiting = withOdds.filter((x) => x.odds < MIN_ESTIMATED_ODDS).sort((a, b) => b.leg.prob - a.leg.prob).slice(0, 4);
