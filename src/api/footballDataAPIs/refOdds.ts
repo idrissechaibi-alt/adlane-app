@@ -8,15 +8,33 @@
 
 import { namesLikelyMatch, normalizeTeamName } from '../../core/teamNameMatch';
 
+// Autre source gratuite sans clé (liste public-apis) : MoviOdds, le tableau bet365 complet — buts, corners,
+// cartons, BTTS, tirs cadrés joueur… avec les lignes réellement proposées et leurs cotes en direct.
+const MOVI_URL = 'https://moviodds.com/odds?in_play=1&groups=1777,10565,421,17,5,16,441,10160,50197,1781,50554,177906';
+const MOVI_TTL_MS = 40_000;
+
 const BASE = 'https://webws.365scores.com/web';
 const PARAMS = 'appTypeId=5&langId=1&timezoneName=UTC&userCountryId=1';
 const TIMEOUT_MS = 12_000;
 const LIVE_TTL_MS = 45_000;
 const DETAIL_TTL_MS = 60_000;
 
+/** Une cote du tableau bet365 de MoviOdds (marché identifié par son numéro de groupe). */
+export interface BoardQuote {
+  group: string;
+  /** Over / Under / Exactly, ou le nom du joueur pour les marchés joueur. */
+  side: string | null;
+  line: number | null;
+  /** Oui / Non, nom d'équipe, « 1+ »… */
+  label: string | null;
+  odds: number;
+}
+
 export interface RefOdds {
   gameId: number;
-  source: 'bet365 (365Scores)';
+  source: 'bet365 (365Scores)' | 'bet365 (MoviOdds)';
+  /** Toutes les cotes ouvertes (non suspendues) que bet365 propose en ce moment sur le match, par marché. */
+  board?: BoardQuote[];
   x12?: { home: number; draw: number; away: number };
   total?: { line: number; under: number; over: number };
   fetchedAt: number;
@@ -88,8 +106,51 @@ function sameTeams(a: string, b: string): boolean {
   return x === y || namesLikelyMatch(x, y);
 }
 
-/** Cotes bet365 d'un match en direct (1X2 et total de buts), ou null si la source ne le connaît pas. */
+interface MoviMatch { home: string; away: string; id: string; board: BoardQuote[] }
+let moviCache: { at: number; matches: MoviMatch[] } | null = null;
+
+async function moviMatches(): Promise<MoviMatch[]> {
+  if (moviCache && Date.now() - moviCache.at < MOVI_TTL_MS) return moviCache.matches;
+  const data = await getJson(MOVI_URL);
+  if (!data?.matches) return moviCache?.matches ?? [];
+  const matches: MoviMatch[] = data.matches
+    .filter((m: any) => m?.in_play && m.home && m.away)
+    .map((m: any) => ({
+      id: String(m.id),
+      home: m.home,
+      away: m.away,
+      board: (m.quotes ?? [])
+        .filter((q: any) => !q.suspended && q.odds_dec > 1)
+        .map((q: any): BoardQuote => {
+          const raw = q.line != null && Number.isFinite(Number(q.line)) ? Number(q.line) : null;
+          // Corners « à 3 issues » (Plus de 9 / Exactement 9 / Moins de 9, ligne entière) : Plus de 9 gagne à 10+, soit « Plus de 9.5 » ;
+          // Moins de 9 gagne à 8-, soit « Moins de 8.5 ». Ramené aux lignes en .5 de l'app.
+          const threeWay = ['16', '10160', '50197'].includes(String(q.group_id)) && raw != null && Number.isInteger(raw);
+          const side = String(q.side ?? '').toLowerCase();
+          const line = threeWay ? (side === 'over' ? raw! + 0.5 : side === 'under' ? raw! - 0.5 : null) : raw;
+          return {
+          group: String(q.group_id),
+          side: q.side ?? null,
+          line,
+          label: q.label ?? q.n2 ?? null,
+          odds: Math.round(q.odds_dec * 100) / 100,
+        };
+        }),
+    }));
+  moviCache = { at: Date.now(), matches };
+  return matches;
+}
+
+/** Cotes bet365 d'un match en direct (1X2, buts, corners, cartons, BTTS, tirs cadrés joueur…), ou null si aucune source ne le connaît. */
 export async function getRefOdds(homeTeam: string, awayTeam: string): Promise<RefOdds | null> {
+  const [scores, movi] = await Promise.all([getRefOdds365(homeTeam, awayTeam), moviMatches().then((ms) => ms.find((m) => sameTeams(m.home, homeTeam) && sameTeams(m.away, awayTeam))).catch(() => undefined)]);
+  if (!movi || movi.board.length === 0) return scores;
+  return scores
+    ? { ...scores, board: movi.board }
+    : { gameId: Number(movi.id) || 0, source: 'bet365 (MoviOdds)', board: movi.board, fetchedAt: Date.now() };
+}
+
+async function getRefOdds365(homeTeam: string, awayTeam: string): Promise<RefOdds | null> {
   try {
     const game = (await liveGames()).find((g) => sameTeams(g.home, homeTeam) && sameTeams(g.away, awayTeam));
     if (!game) return null;
@@ -110,9 +171,59 @@ export async function getRefOdds(homeTeam: string, awayTeam: string): Promise<Re
   }
 }
 
-/** Cote de référence pour une jambe 1X2 ou « total de buts » dont la ligne est celle proposée par la source. */
+const GOAL_GROUPS = ['421', '17'];
+const CORNER_GROUPS_FT = ['16', '441'];
+
+function legShape(selection: string): { side: 'over' | 'under' | null; line: number | null; firstHalf: boolean } {
+  const m = selection.match(/^(plus|moins) de ([\d.,]+)/i);
+  return {
+    side: m ? (m[1].toLowerCase() === 'plus' ? 'over' : 'under') : null,
+    line: m ? Number(m[2].replace(',', '.')) : null,
+    firstHalf: /1[èe]re mi-temps/i.test(selection),
+  };
+}
+
+/** Groupes du tableau bet365 qui portent ce marché (null = marché absent du tableau). */
+function groupsFor(market: string, selection: string): string[] | null {
+  const { firstHalf } = legShape(selection);
+  if (market === 'total_buts') return GOAL_GROUPS;
+  if (market === 'corners') return firstHalf ? ['10160'] : CORNER_GROUPS_FT;
+  if (market === 'cartons') return firstHalf ? null : ['1781'];
+  return null;
+}
+
+const normName = (x: string) => normalizeTeamName(x);
+
+/**
+ * Cote bet365 d'une jambe — lue sur le tableau MoviOdds quand il la propose (même ligne, même côté), sinon
+ * sur 365Scores (1X2 / total à la ligne affichée). null = bet365 ne propose pas cette cote en ce moment.
+ */
 export function refOddsForLeg(ref: RefOdds | null, market: string, selection: string): number | null {
   if (!ref) return null;
+  const board = ref.board ?? [];
+  const { side, line } = legShape(selection);
+
+  if (board.length > 0) {
+    const groups = groupsFor(market, selection);
+    if (groups && side && line != null) {
+      const q = board.find((b) => groups.includes(b.group) && b.line != null && Math.abs(b.line - line) < 0.01 && b.side?.toLowerCase() === side);
+      if (q) return q.odds;
+    }
+    if (market === 'btts') {
+      const wantNo = /\(non\)|ne marque pas/i.test(selection);
+      const q = board.find((b) => b.group === '10565' && b.label?.toLowerCase() === (wantNo ? 'no' : 'yes'));
+      if (q) return q.odds;
+    }
+    if (market === 'tirs_cadres' && line != null) {
+      const who = /—\s*(.+?)\s*\(/.exec(selection)?.[1];
+      if (who) {
+        const want = normName(who);
+        const q = board.find((b) => (b.group === '50554' || b.group === '177906') && b.line === line && b.side && (normName(b.side) === want || normName(b.side).includes(want) || want.includes(normName(b.side))));
+        if (q) return q.odds;
+      }
+    }
+  }
+
   if (market === '1X2' && ref.x12) {
     if (/domicile|^1\b/i.test(selection)) return ref.x12.home;
     if (/ext[ée]rieur|^2\b/i.test(selection)) return ref.x12.away;
@@ -123,6 +234,22 @@ export function refOddsForLeg(ref: RefOdds | null, market: string, selection: st
     if (m && Math.abs(Number(m[2].replace(',', '.')) - ref.total.line) < 0.01) return m[1].toLowerCase() === 'plus' ? ref.total.over : ref.total.under;
   }
   return null;
+}
+
+/**
+ * La ligne de cette jambe est-elle proposée par bet365 en ce moment ? true / false d'après le tableau réel
+ * (au moins 2 lignes ouvertes sur ce marché, pour ne pas confondre « marché fermé » et « ligne absente ») ;
+ * null quand le tableau ne permet pas de trancher.
+ */
+export function legLineOffered(ref: RefOdds | null, market: string, selection: string): boolean | null {
+  const board = ref?.board;
+  if (!board || board.length === 0) return null;
+  const groups = groupsFor(market, selection);
+  const { side, line } = legShape(selection);
+  if (!groups || !side || line == null) return null;
+  const lines = new Set(board.filter((b) => groups.includes(b.group) && b.line != null && (b.side?.toLowerCase() === 'over' || b.side?.toLowerCase() === 'under')).map((b) => b.line as number));
+  if (lines.size < 2) return null;
+  return [...lines].some((l) => Math.abs(l - line) < 0.01);
 }
 
 /**

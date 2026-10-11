@@ -100,7 +100,7 @@ import { playerShotLegs } from './playerShots';
 import { StrategyContext, evaluateStrategies, oddsFromExpectedGoals } from './strategies';
 import { SofaPeriodStats } from '../api/footballDataAPIs/sofaScore';
 import { DeltaUnit, LegProjection, describeCorrection, ensureDeltaSamplesLoaded, flushShadowProjections, getDeltaCorrection, projectFullMatchCount, recordShadowProjection, factorForRemaining, situationMultiplier } from './deltaLearning';
-import { getRefOdds, refOddsForLeg } from '../api/footballDataAPIs/refOdds';
+import { getRefOdds, legLineOffered, refOddsForLeg } from '../api/footballDataAPIs/refOdds';
 import { recordRefComparison } from './oddsLoop';
 import { CountInfo, MIN_ESTIMATED_ODDS, OddsContext, ensureOddsLoaded, estimateLegOdds, featuresOf, parseLine, setOddsWatch } from './oddsLearning';
 import { ensureLineLimitsLoaded, ensureMarketOffLoaded, isMarketOff, lineAvailability } from './lineLimits';
@@ -1141,15 +1141,17 @@ async function bestLegFor(
   // Paris réels : au plus 75 % (cote juste ≥ 1,33) — au-delà, la cote proposée
   // par les bookmakers est trop faible pour valoir la mise.
   // + cote estimée du bookmaker sous le plancher (apprise des cotes saisies) : écarté.
+  // Tableau bet365 réel (MoviOdds, sans clé) + 365Scores : cotes et lignes réellement proposées sur CE match.
+  const ref = rawLegs.length > 0 ? await getRefOdds(match.homeTeam, match.awayTeam) : null;
   const playable = rawLegs.filter(
     (l) =>
       worthProposing(l) &&
       // Marché que le bookmaker ne propose pas pour l'instant sur ce match (signalé par l'utilisateur).
       !isMarketOff(live.fixtureId, l.projection?.unit ?? l.market) &&
+      // Ligne absente du tableau bet365 en ce moment : ce pari n'existe pas chez lui.
+      legLineOffered(ref, l.market, l.selection) !== false &&
       l.prob <= REAL_MAX_LEG_PROB
   );
-  // Cotes de référence gratuites (bet365 via 365Scores) : 1X2 et total de buts, quand la source les publie.
-  const ref = playable.some((l) => l.market === '1X2' || l.market === 'total_buts') ? await getRefOdds(match.homeTeam, match.awayTeam) : null;
   const modelOdds = (l: CandidateLeg) =>
     estimateLegOdds(
       l,
