@@ -376,7 +376,8 @@ export default function DailyPlanScreen() {
   const renderLiveProposal = (proposal: InPlayProposal) => {
     const played = placedBetIds.has(`live-${proposal.id}`);
     const status = proposalStatus[proposal.id] ?? 'pending';
-    const minuteLabel = proposal.kind === 'minute60' ? '60e' : proposal.kind === 'halftime' ? 'Mi-temps' : '20e';
+    // Anciens paris de stratégie pris à la pause et enregistrés « 60e » : minute réelle < 55 → Mi-temps.
+    const minuteLabel = proposal.kind === 'halftime' || (proposal.kind === 'minute60' && proposal.minute != null && proposal.minute < 55) ? 'Mi-temps' : proposal.kind === 'minute60' ? '60e' : '20e';
     const confidence = Math.round(proposal.combinedProb * 100);
     const first = proposal.legs[0];
     return (

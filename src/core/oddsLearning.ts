@@ -305,7 +305,7 @@ export function legOddsFloorOk(leg: Parameters<typeof estimateLegOdds>[0], fano:
 
 /** Cote estimée affichée sur la carte d'une proposition (situation à sa création). */
 export function estimateProposalOdds(proposal: InPlayProposal): { odds: number; observations: number } {
-  const minute = proposal.kind === 'minute60' ? 60 : 20;
+  const minute = proposal.minute ?? (proposal.kind === 'minute60' ? 60 : proposal.kind === 'halftime' ? 45 : 20);
   if (proposal.legs.length === 1) {
     const leg = proposal.legs[0];
     return estimateLegOdds(leg, leg.projection ? getDeltaCorrection(leg.projection.unit as DeltaUnit).dispersion : 1, minute);

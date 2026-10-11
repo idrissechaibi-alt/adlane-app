@@ -898,7 +898,7 @@ function selectionSlug(selection: string): string {
 }
 
 function buildProposalFromItems(
-  kind: 'minute20' | 'minute60',
+  kind: 'minute20' | 'minute60' | 'halftime',
   items: LegWithContext[],
   window: string,
   real: boolean
@@ -1544,7 +1544,8 @@ function strategyProposals(
     oddsFromMarket: Boolean(marketOdds),
     xg,
   };
-  const kind: 'minute20' | 'minute60' = live.statusShort === '1H' ? 'minute20' : 'minute60';
+  // À la pause, un pari de stratégie est « Mi-temps », pas « 60e » : seuls les vrais scans de la 55e-70e minute portent ce nom.
+  const kind: 'minute20' | 'minute60' | 'halftime' = live.statusShort === '1H' ? 'minute20' : live.statusShort === 'HT' ? 'halftime' : 'minute60';
   const out: InPlayProposal[] = [];
   for (const bet of evaluateStrategies(ctx, real)) {
     const key = `${live.fixtureId}-strat-${bet.strategyId}`;
