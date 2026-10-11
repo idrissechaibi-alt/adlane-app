@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-10-11T19:00:08.825Z",
+  "exportedAt": "2026-10-11T19:02:18.168Z",
   "formatVersion": 1,
   "source": "APP adlane",
   "data": {
@@ -5062,14 +5062,10 @@
       "ticksLast24h": 70
     },
     "tickProgress": {
-      "startedAt": "2026-10-11T18:59:36.622Z",
-      "step": "scan en direct 20e/60e",
-      "at": "2026-10-11T18:59:37.564Z",
-      "stepDurationsSec": {
-        "terminé": 83,
-        "scan matinal": 1,
-        "relevé live partagé": 0
-      }
+      "startedAt": "2026-10-11T19:02:13.110Z",
+      "step": "scan matinal",
+      "at": "2026-10-11T19:02:13.115Z",
+      "stepDurationsSec": {}
     },
     "lastTick": {
       "startedAt": "2026-10-11T18:56:36.605Z",
@@ -5120,36 +5116,13 @@
       "nightlyReviewPointsCreated": 8
     },
     "lastRealFastTick": {
-      "at": "2026-10-11T18:59:37.532Z",
+      "at": "2026-10-11T19:01:57.685Z",
       "liveFound": 2,
-      "fresh": 0,
+      "fresh": 3,
       "source": "sources_live_gratuites",
       "apiFootballError": "quota du jour atteint (réserve gardée pour le règlement)"
     },
     "abortedTicks": [
-      {
-        "startedAt": "2026-10-11T14:02:21.726Z",
-        "step": "marqueurs live",
-        "at": "2026-10-11T14:03:59.907Z",
-        "stepDurationsSec": {
-          "terminé": 215,
-          "scan matinal": 7,
-          "relevé live partagé": 0,
-          "scan en direct 20e/60e": 41,
-          "bilan de minuit": 51
-        }
-      },
-      {
-        "startedAt": "2026-10-11T14:13:13.584Z",
-        "step": "bilan de minuit",
-        "at": "2026-10-11T14:13:43.903Z",
-        "stepDurationsSec": {
-          "terminé": 135,
-          "scan matinal": 1,
-          "relevé live partagé": 0,
-          "scan en direct 20e/60e": 29
-        }
-      },
       {
         "startedAt": "2026-10-11T14:31:02.112Z",
         "step": "compositions T-90",
@@ -5274,6 +5247,24 @@
           "scan en direct 20e/60e": 25,
           "bilan de minuit": 840
         }
+      },
+      {
+        "startedAt": "2026-10-11T18:59:36.622Z",
+        "step": "marqueurs live",
+        "at": "2026-10-11T19:01:31.587Z",
+        "stepDurationsSec": {
+          "terminé": 83,
+          "scan matinal": 1,
+          "relevé live partagé": 0,
+          "scan en direct 20e/60e": 114,
+          "bilan de minuit": 0
+        }
+      },
+      {
+        "startedAt": "2026-10-11T19:02:09.787Z",
+        "step": "scan matinal",
+        "at": "2026-10-11T19:02:09.793Z",
+        "stepDurationsSec": {}
       }
     ],
     "strategies": [
@@ -5515,12 +5506,12 @@
       ]
     },
     "inPlayProposals": {
-      "real": 120,
-      "fictional": 2154,
+      "real": 123,
+      "fictional": 2167,
       "fictionalReviewed": 1647,
       "fictionalSettledLegs": 1540,
-      "lastCreatedAt": "2026-10-11T18:56:37.825Z",
-      "createdLast24h": 2229
+      "lastCreatedAt": "2026-10-11T19:01:56.053Z",
+      "createdLast24h": 2243
     },
     "predictionOutcomes30d": 5972,
     "marketSeries": {
@@ -5580,21 +5571,28 @@
         {
           "name": "Principal",
           "ok": true,
-          "latencyMs": 140,
-          "readyModels": 27,
-          "configuredReady": 12,
+          "latencyMs": 104,
+          "readyModels": 26,
+          "configuredReady": 11,
           "configuredTotal": 13
         },
         {
           "name": "Omniroute",
           "ok": true,
-          "latencyMs": 2472,
-          "readyModels": 845,
+          "latencyMs": 2053,
+          "readyModels": 846,
           "configuredReady": 2,
           "configuredTotal": 2
         }
       ],
       "leaderboard": [
+        {
+          "label": "Omniroute · Clodiko",
+          "ok": 2112,
+          "fail": 173,
+          "avgMs": 1594,
+          "coolingDown": false
+        },
         {
           "label": "Principal · allam-2-7b",
           "ok": 1300,
@@ -5603,18 +5601,11 @@
           "coolingDown": true
         },
         {
-          "label": "Omniroute · Clodiko",
-          "ok": 2105,
-          "fail": 172,
-          "avgMs": 2530,
-          "coolingDown": false
-        },
-        {
           "label": "Principal · qwen3.8-27b",
           "ok": 308,
           "fail": 471,
           "avgMs": 808,
-          "coolingDown": true
+          "coolingDown": false
         },
         {
           "label": "Principal · gpt-oss-120b",
@@ -5624,24 +5615,24 @@
           "coolingDown": true
         },
         {
-          "label": "Principal · nemotron-3-super-120b",
-          "ok": 872,
-          "fail": 269,
-          "avgMs": 5576,
-          "coolingDown": false
-        },
-        {
           "label": "Principal · diffusiongemma-26b-a4b-it",
           "ok": 479,
-          "fail": 433,
+          "fail": 437,
           "avgMs": 5030,
-          "coolingDown": false
+          "coolingDown": true
         },
         {
           "label": "Principal · riva-translate-4b-instruct-v2",
-          "ok": 552,
-          "fail": 450,
-          "avgMs": 6973,
+          "ok": 554,
+          "fail": 451,
+          "avgMs": 5646,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · nemotron-3-super-120b",
+          "ok": 875,
+          "fail": 270,
+          "avgMs": 9179,
           "coolingDown": false
         },
         {
@@ -5674,7 +5665,7 @@
     },
     "dailyPlan": {
       "date": "2026-10-11",
-      "generatedAt": "2026-10-11T18:10:41.495Z",
+      "generatedAt": "2026-10-11T19:01:54.837Z",
       "matches": [
         {
           "match": "Como 1907 - AS Roma",
@@ -5737,14 +5728,14 @@
           "hasOdds": false
         },
         {
-          "match": "Liverpool FC - Manchester City FC",
-          "league": "Premier League",
+          "match": "SC Freiburg - FC Schalke 04",
+          "league": "Bundesliga",
           "kickoff": "2026-10-11T15:30:00Z",
           "hasOdds": false
         },
         {
-          "match": "SC Freiburg - FC Schalke 04",
-          "league": "Bundesliga",
+          "match": "Liverpool FC - Manchester City FC",
+          "league": "Premier League",
           "kickoff": "2026-10-11T15:30:00Z",
           "hasOdds": false
         },
@@ -5761,14 +5752,14 @@
           "hasOdds": false
         },
         {
-          "match": "Cagliari Calcio - Juventus FC",
-          "league": "Serie A",
+          "match": "ES Troyes AC - Olympique de Marseille",
+          "league": "Ligue 1",
           "kickoff": "2026-10-11T18:45:00Z",
           "hasOdds": false
         },
         {
-          "match": "ES Troyes AC - Olympique de Marseille",
-          "league": "Ligue 1",
+          "match": "Cagliari Calcio - Juventus FC",
+          "league": "Serie A",
           "kickoff": "2026-10-11T18:45:00Z",
           "hasOdds": false
         },
@@ -5782,9 +5773,9 @@
     },
     "apiUsageToday": {
       "countsToday": {
-        "footballData": 62,
+        "footballData": 65,
         "apiFootball": 100,
-        "theOddsApi": 269,
+        "theOddsApi": 279,
         "perplexity": 1,
         "apiFootball-autolearn": 55,
         "sportmonks-autolearn": 18,
@@ -5805,46 +5796,46 @@
     },
     "sofaScore": null,
     "liveSources": {
-      "FotMob": {
+      "LiveScore": {
         "ok": true,
-        "count": 35,
-        "at": "2026-10-11T19:00:08.398Z"
+        "count": 49,
+        "at": "2026-10-11T19:02:13.186Z"
       },
       "TheSportsDB": {
         "ok": true,
+        "count": 46,
+        "at": "2026-10-11T19:02:13.186Z"
+      },
+      "FotMob": {
+        "ok": true,
         "count": 43,
-        "at": "2026-10-11T19:00:07.786Z"
-      },
-      "LiveScore": {
-        "ok": true,
-        "count": 50,
-        "at": "2026-10-11T19:00:07.646Z"
-      },
-      "ESPN": {
-        "ok": true,
-        "count": 14,
-        "at": "2026-10-11T18:59:18.345Z"
-      },
-      "365Scores": {
-        "ok": true,
-        "count": 35,
-        "at": "2026-10-11T19:00:08.043Z"
+        "at": "2026-10-11T19:02:13.737Z"
       },
       "AllSportsApi": {
         "ok": true,
         "count": 0,
-        "at": "2026-10-11T18:59:18.686Z"
+        "at": "2026-10-11T19:02:15.414Z"
+      },
+      "365Scores": {
+        "ok": true,
+        "count": 54,
+        "at": "2026-10-11T19:02:14.050Z"
+      },
+      "ESPN": {
+        "ok": true,
+        "count": 17,
+        "at": "2026-10-11T19:02:14.895Z"
       }
     },
     "teamStats": {
       "indexUpdatedAt": "2026-10-10T23:38:04Z",
       "teamsInIndex": 111,
-      "summariesCached": 31,
-      "lookups": 38,
-      "withTrend": 0,
-      "unknownTeams": 38,
-      "lastTrendAt": null,
-      "lastUnknown": "12 de Octubre SD - 24 de Setiembre VP"
+      "summariesCached": 33,
+      "lookups": 1,
+      "withTrend": 1,
+      "unknownTeams": 0,
+      "lastTrendAt": "2026-10-11T19:02:17.132Z",
+      "lastUnknown": null
     },
     "bookieLineMinimums": {
       "limits": {
@@ -5885,7 +5876,7 @@
         "unit": "corners_1h",
         "label": "Corners 1ère mi-temps",
         "verified": 325,
-        "pending": 386,
+        "pending": 388,
         "meanPredicted": 4.6,
         "meanActual": 4.6,
         "meanError": -0.01,
@@ -5913,7 +5904,7 @@
         "unit": "cards_1h",
         "label": "Cartons 1ère mi-temps",
         "verified": 324,
-        "pending": 383,
+        "pending": 384,
         "meanPredicted": 1.4,
         "meanActual": 1.4,
         "meanError": 0.02,
@@ -5941,7 +5932,7 @@
         "unit": "goals_1h",
         "label": "Buts à la pause",
         "verified": 458,
-        "pending": 237,
+        "pending": 238,
         "meanPredicted": 1.3,
         "meanActual": 1.3,
         "meanError": 0,
@@ -5969,7 +5960,7 @@
         "unit": "goals_ft",
         "label": "Buts en fin de match",
         "verified": 536,
-        "pending": 255,
+        "pending": 256,
         "meanPredicted": 3.1,
         "meanActual": 3,
         "meanError": -0.08,
@@ -5997,7 +5988,7 @@
         "unit": "corners_ft",
         "label": "Corners sur le match",
         "verified": 319,
-        "pending": 108,
+        "pending": 110,
         "meanPredicted": 8.8,
         "meanActual": 9.1,
         "meanError": 0.35,
@@ -6025,7 +6016,7 @@
         "unit": "cards_ft",
         "label": "Cartons sur le match",
         "verified": 308,
-        "pending": 99,
+        "pending": 101,
         "meanPredicted": 3.7,
         "meanActual": 4,
         "meanError": 0.22,
@@ -6479,231 +6470,9 @@
     "bookieOdds": {
       "observations": 72,
       "withContext": 71,
-      "reactions": [
-        {
-          "unit": "goals_ft",
-          "pairs": 5,
-          "effects": {
-            "rythme du compteur": -0.122,
-            "buts": -0.154,
-            "tirs cadrés": -0.04,
-            "cartons rouges": 0,
-            "temps écoulé": -0.005
-          }
-        },
-        {
-          "unit": "cards_ft",
-          "pairs": 4,
-          "effects": {
-            "rythme du compteur": -0.08,
-            "buts": -0.14,
-            "tirs cadrés": 0.022,
-            "cartons rouges": 0,
-            "temps écoulé": -0.11
-          }
-        },
-        {
-          "unit": "corners_1h",
-          "pairs": 1,
-          "effects": {
-            "rythme du compteur": 0,
-            "buts": 0,
-            "tirs cadrés": 0,
-            "cartons rouges": 0,
-            "temps écoulé": 0
-          }
-        },
-        {
-          "unit": "corners_ft",
-          "pairs": 2,
-          "effects": {
-            "rythme du compteur": 0,
-            "buts": 0,
-            "tirs cadrés": 0,
-            "cartons rouges": 0,
-            "temps écoulé": 0
-          }
-        }
-      ],
-      "countMultipliers": [
-        {
-          "key": "cards_ft|b",
-          "n": 5,
-          "k": 1.16
-        },
-        {
-          "key": "cards_ft|*",
-          "n": 12,
-          "k": 1.05
-        },
-        {
-          "key": "fouls_ft|b",
-          "n": 5,
-          "k": 1.06
-        },
-        {
-          "key": "fouls_ft|*",
-          "n": 9,
-          "k": 1.06
-        },
-        {
-          "key": "corners_ft|b",
-          "n": 4,
-          "k": 1.82
-        },
-        {
-          "key": "corners_ft|*",
-          "n": 11,
-          "k": 1.67
-        },
-        {
-          "key": "corners_ft|c",
-          "n": 3,
-          "k": 1.23
-        },
-        {
-          "key": "goals_ft|c",
-          "n": 2,
-          "k": 1.91
-        },
-        {
-          "key": "goals_ft|*",
-          "n": 12,
-          "k": 1.68
-        },
-        {
-          "key": "goals_ft|a",
-          "n": 4,
-          "k": 1.68
-        },
-        {
-          "key": "cards_ft|a",
-          "n": 6,
-          "k": 0.94
-        },
-        {
-          "key": "goals_ft|b",
-          "n": 6,
-          "k": 1.63
-        },
-        {
-          "key": "corners_ft|a",
-          "n": 4,
-          "k": 2.03
-        },
-        {
-          "key": "cards_ft|c",
-          "n": 1,
-          "k": 1.09
-        },
-        {
-          "key": "corners_1h|a",
-          "n": 4,
-          "k": 1.25
-        },
-        {
-          "key": "corners_1h|*",
-          "n": 4,
-          "k": 1.25
-        },
-        {
-          "key": "fouls_ft|c",
-          "n": 2,
-          "k": 0.97
-        },
-        {
-          "key": "fouls_ft|a",
-          "n": 2,
-          "k": 1.42
-        }
-      ],
-      "ratios": [
-        {
-          "key": "total_buts|over|ft|b",
-          "n": 7,
-          "ratio": 0.992
-        },
-        {
-          "key": "total_buts|over|ft|*",
-          "n": 14,
-          "ratio": 0.956
-        },
-        {
-          "key": "total_buts|under|ft|b",
-          "n": 3,
-          "ratio": 0.894
-        },
-        {
-          "key": "total_buts|under|ft|*",
-          "n": 5,
-          "ratio": 0.886
-        },
-        {
-          "key": "total_buts|over|ft|c",
-          "n": 5,
-          "ratio": 0.498
-        },
-        {
-          "key": "total_buts|under|ft|c",
-          "n": 2,
-          "ratio": 0.923
-        },
-        {
-          "key": "corners|over|ft|b",
-          "n": 1,
-          "ratio": 1.01
-        },
-        {
-          "key": "corners|over|ft|*",
-          "n": 1,
-          "ratio": 1.01
-        },
-        {
-          "key": "total_buts|over|ft|a",
-          "n": 2,
-          "ratio": 0.948
-        },
-        {
-          "key": "combo|b",
-          "n": 1,
-          "ratio": 0.936
-        },
-        {
-          "key": "combo|*",
-          "n": 1,
-          "ratio": 0.936
-        },
-        {
-          "key": "buts_1ere_mt|under|1h|b",
-          "n": 1,
-          "ratio": 0.908
-        },
-        {
-          "key": "buts_1ere_mt|under|1h|*",
-          "n": 1,
-          "ratio": 0.908
-        },
-        {
-          "key": "1X2|yes|ft|c",
-          "n": 1,
-          "ratio": 0.879
-        },
-        {
-          "key": "1X2|yes|ft|*",
-          "n": 1,
-          "ratio": 0.879
-        },
-        {
-          "key": "btts|under|ft|b",
-          "n": 1,
-          "ratio": 0.889
-        },
-        {
-          "key": "btts|under|ft|*",
-          "n": 1,
-          "ratio": 0.889
-        }
-      ]
+      "reactions": [],
+      "countMultipliers": [],
+      "ratios": []
     },
     "oddsAlignment": {
       "score": 0,
