@@ -46,6 +46,7 @@ import { buildFictionalMarketStats, formatFictionalDigestMessage } from './daily
 import { readMatchTimelines, MatchSample } from './fictionalProgram';
 import { isSyntheticFixtureId } from './halftimeMonitor';
 import { hubFinalResult, hubLiveStatus, hubStats } from '../api/footballDataAPIs/liveDataHub';
+import { liveLegVerdict } from './liveBetStatus';
 import { DeltaUnit, invalidateDeltaCache, settleShadowProjections } from './deltaLearning';
 import { fetchSofaEvent, fetchSofaStats, getSofaEventId } from '../api/footballDataAPIs/sofaScore';
 
@@ -297,12 +298,6 @@ function extractFinalResultFromTimeline(timeline: MatchSample[]): FinalResult | 
     htHome: lastFirstHalf?.homeGoals ?? 0,
     htAway: lastFirstHalf?.awayGoals ?? 0,
   };
-}
-
-/** Le match est-il en cours (1ère MT, pause, 2e MT) d'après les sources live ? */
-async function isLiveNow(homeTeam: string, awayTeam: string): Promise<boolean> {
-  const live = await hubLiveStatus(homeTeam, awayTeam).catch(() => null);
-  return !!live && ['1H', 'HT', '2H'].includes(live.statusShort);
 }
 
 async function fetchFinalResultsViaOmniroute(
@@ -743,29 +738,8 @@ export async function runNightlyReviewIfDue(): Promise<number> {
       }
     }
 
-    // Jamais de recherche IA pour un match encore en cours ou démarré il y a moins
-    // de 4 h : un modèle de langage peut « trouver » un score final qui n'existe pas
-    // (un pari annoncé réussi alors que le match était à 0-0).
-    const oldestAllowed = Date.now() - 4 * 3_600_000;
-    const ageByFixture = new Map<number, number>();
-    for (const p of unreviewedDayProposals) for (const l of p.legs) ageByFixture.set(l.fixtureId, Math.min(ageByFixture.get(l.fixtureId) ?? Infinity, Date.parse(p.createdAt)));
-    const unresolvedLegs: typeof allLegs = [];
-    for (const l of allLegs) {
-      if (finals.has(l.fixtureId)) continue;
-      if ((ageByFixture.get(l.fixtureId) ?? 0) > oldestAllowed) continue;
-      if (await isLiveNow(l.homeTeam, l.awayTeam)) continue;
-      unresolvedLegs.push(l);
-    }
-    if (unresolvedLegs.length > 0) {
-      const omnirouteConfig = await loadOmnirouteConfig();
-      if (omnirouteConfig) {
-        const omnirouteFinals = await fetchFinalResultsViaOmniroute(
-          omnirouteConfig,
-          unresolvedLegs.slice(0, OMNIROUTE_FINAL_RESULT_MAX_PER_PASS)
-        );
-        for (const [fixtureId, result] of omnirouteFinals) finals.set(fixtureId, result);
-      }
-    }
+    // Aucune recherche par IA : les résultats viennent uniquement des sources de données
+    // (API-Football, puis les 6 sources live gratuites).
 
     // Chaque jambe réglée part aussi dans le corpus d'expertise empirique :
     // c'est lui qu'autoLearn synthétise marché par marché, et que chaque
@@ -773,15 +747,23 @@ export async function runNightlyReviewIfDue(): Promise<number> {
     // écriture, un match qui se termine n'apprend rien à l'app.
     const settledOutcomes: PredictionOutcome[] = [];
 
-    // Défense : un match encore en cours n'a pas de résultat final, d'où qu'il vienne.
-    for (const l of allLegs) {
-      if (finals.has(l.fixtureId) && (await isLiveNow(l.homeTeam, l.awayTeam))) finals.delete(l.fixtureId);
-    }
-    // Réparation : jambes déjà « réglées » à tort alors que leur match se joue encore.
+    // Règlement EN COURS DE MATCH : une jambe dont le verdict est déjà certain d'après
+    // les sources live gratuites (ligne franchie) est réglée tout de suite. Une jambe
+    // réglée à tort sur un match qui se joue encore (le live ne la confirme pas) est
+    // remise en jeu.
     for (const p of allProposals) {
-      if (!p.createdAt.startsWith(day) || !p.legs.some((l) => l.settled)) continue;
+      if (!p.createdAt.startsWith(day)) continue;
       for (const l of p.legs) {
-        if (l.settled && (await isLiveNow(l.homeTeam, l.awayTeam))) {
+        if (finals.has(l.fixtureId)) continue; // match terminé : le règlement final s'en charge
+        const live = await hubLiveStatus(l.homeTeam, l.awayTeam).catch(() => null);
+        if (!live || !['1H', 'HT', '2H'].includes(live.statusShort)) continue;
+        const verdict = await liveLegVerdict(l, day).catch(() => 'pending' as const);
+        if (verdict !== 'pending') {
+          if (!l.settled || l.won !== (verdict === 'won')) {
+            l.settled = true;
+            l.won = verdict === 'won';
+          }
+        } else if (l.settled) {
           l.settled = false;
           l.won = undefined;
           if (l.projection) l.projection.actual = undefined;
