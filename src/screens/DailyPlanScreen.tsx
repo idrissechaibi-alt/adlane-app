@@ -16,7 +16,8 @@ import {
   Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { MIN_ESTIMATED_ODDS, WatchedBet, ensureOddsLoaded, estimateProposalOdds, explainOddsMoves, getObservedOddsList, readOddsWatch, recordBookieOdds } from '../core/oddsLearning';
+import { MIN_ESTIMATED_ODDS, WatchedBet, ensureOddsLoaded, estimateProposalOdds, explainOddsMoves, getObservedOddsList, readOddsWatch } from '../core/oddsLearning';
+import { recordOddsAndLearn } from '../core/oddsLoop';
 import { liveLegContext, proposalDuplicateKey } from '../core/inPlayCombos';
 import { markLineAvailable, markLineUnavailable, markMarketOff, maxLineFor, minLineFor } from '../core/lineLimits';
 import { parseLine } from '../core/oddsLearning';
@@ -280,7 +281,7 @@ export default function DailyPlanScreen() {
         updatedAt: now,
       };
       await saveBet(bet);
-      await recordBookieOdds(proposal, odds, proposal.legs.length === 1 ? await liveLegContext(proposal.legs[0]) : null).catch(() => {});
+      await recordOddsAndLearn(proposal, odds, proposal.legs.length === 1 ? await liveLegContext(proposal.legs[0]) : null).catch(() => {});
       setPlacedBetIds((prev) => new Set(prev).add(bet.id));
       setPlacingId(null);
       setStakeInput('');
@@ -340,7 +341,7 @@ export default function DailyPlanScreen() {
     try {
       // Minute, score et compteur au moment de la saisie : la cote du 30e et celle du 67e comptent toutes les deux.
       const context = proposal.legs.length === 1 ? await liveLegContext(proposal.legs[0]) : null;
-      await recordBookieOdds(proposal, odds, context);
+      await recordOddsAndLearn(proposal, odds, context);
       // La ligne a une cote chez le bookmaker : elle existe.
       const leg = proposal.legs.length === 1 ? proposal.legs[0] : null;
       const parsed = leg ? parseLine(leg.selection) : null;
@@ -431,7 +432,7 @@ export default function DailyPlanScreen() {
       const selection = leg.selection.replace(/(plus|moins) de\s+[\d.,]+/i, `$1 de ${line}`);
       const asked = { ...proposal, id: `${proposal.id}#min${legIndex}`, combinedProb: leg.prob, legs: [{ ...leg, selection }] };
       const askedCtx = await liveLegContext(asked.legs[0]).catch(() => null);
-      await recordBookieOdds(asked, odds, askedCtx);
+      await recordOddsAndLearn(asked, odds, askedCtx);
       setMinLineForm(null);
       setOddsVersion((v) => v + 1);
       const min = minLineFor(leg.projection.unit, expected);

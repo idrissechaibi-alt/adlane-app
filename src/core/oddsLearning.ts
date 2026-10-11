@@ -99,11 +99,16 @@ export interface OddsObservation {
   features?: number[];
   /** Multiplicateur du rythme du modèle qui redonne 1/cote (comptages). */
   k?: number;
+  /** Cote que l'app estimait AVANT cette saisie (sans / avec la correction des écarts résiduels). */
+  estRaw?: number;
+  estFinal?: number;
+  /** Clé de la correction résiduelle (compteur ou segment). */
+  residKey?: string;
   label: string;
 }
 
 let memo: OddsObservation[] | null = null;
-let cache: { at: number; reaction: Map<string, { b: number[]; meanF: number[]; pairs: number }>; k: Map<string, { k: number; n: number }>; ratio: Map<string, { ratio: number; n: number }>; globalRatio: { ratio: number; n: number } } | null = null;
+let cache: { at: number; resid: Map<string, number>; reaction: Map<string, { b: number[]; meanF: number[]; pairs: number }>; k: Map<string, { k: number; n: number }>; ratio: Map<string, { ratio: number; n: number }>; globalRatio: { ratio: number; n: number } } | null = null;
 
 async function load(): Promise<OddsObservation[]> {
   if (memo) return memo;
@@ -234,6 +239,25 @@ function fitReactions(obs: OddsObservation[]): Map<string, { b: number[]; meanF:
   return out;
 }
 
+/**
+ * Correction RÉSIDUELLE : après tout le reste, la cote estimée reste souvent d'un certain pourcentage
+ * au-dessus ou en dessous de la vraie. On mesure ln(cote réelle / cote estimée brute) par compteur
+ * ou segment (médiane des 60 dernières saisies, atténuée vers 0 quand elles sont peu nombreuses).
+ */
+function fitResiduals(obs: OddsObservation[]): Map<string, number> {
+  const groups = new Map<string, number[]>();
+  for (const o of obs) {
+    if (o.estRaw == null || !o.residKey) continue;
+    groups.set(o.residKey, [...(groups.get(o.residKey) ?? []), Math.log(o.odds / Math.max(1.01, o.estRaw))]);
+  }
+  const out = new Map<string, number>();
+  for (const [key, list] of groups) {
+    const recent = list.slice(-60);
+    out.set(key, (median(recent) * recent.length) / (recent.length + 4));
+  }
+  return out;
+}
+
 function build() {
   if (cache && Date.now() - cache.at < 60_000) return cache;
   const obs = memo ?? [];
@@ -258,18 +282,18 @@ function build() {
     return { ratio: (median(list) * n + PRIOR_RATIO * PRIOR_WEIGHT) / (n + PRIOR_WEIGHT), n };
   };
   for (const [key, list] of ratioGroups) ratio.set(key, shrink(list));
-  cache = { at: Date.now(), reaction: fitReactions(obs), k, ratio, globalRatio: allRatios.length ? shrink(allRatios) : { ratio: PRIOR_RATIO, n: 0 } };
+  cache = { at: Date.now(), resid: fitResiduals(obs), reaction: fitReactions(obs), k, ratio, globalRatio: allRatios.length ? shrink(allRatios) : { ratio: PRIOR_RATIO, n: 0 } };
   return cache;
 }
 
 /** Cote estimée d'un pari de comptage : le rythme du modèle corrigé de ce que le bookmaker a montré. */
-export function estimateCountOdds(c: CountInfo, minute: number | undefined, features?: number[]): { odds: number; observations: number } {
+export function estimateCountOdds(c: CountInfo, minute: number | undefined, features?: number[]): { odds: number; raw: number; observations: number } {
   const b = build();
   const bucket = bucketOf(minute);
   const learned = b.k.get(`${c.unit}|${bucket}`) ?? b.k.get(`${c.unit}|*`);
   const p = sideProb(c);
   const prior = PRIOR_RATIO / Math.max(0.05, p);
-  if (!learned) return { odds: Math.max(1.01, prior), observations: 0 };
+  if (!learned) return { odds: Math.max(1.01, prior * Math.exp(b.resid.get(`c:${c.unit}`) ?? 0)), raw: Math.max(1.01, prior), observations: 0 };
   const w = Math.min(1, learned.n / FULL_WEIGHT_AT);
   // Réaction apprise du bookmaker : le rythme implicite se déplace selon ce qui a changé dans le match.
   const react = features ? b.reaction.get(c.unit) : undefined;
@@ -279,15 +303,17 @@ export function estimateCountOdds(c: CountInfo, minute: number | undefined, feat
     k = Math.min(K_MAX, Math.max(K_MIN, learned.k * Math.exp(shift)));
   }
   const learnedOdds = 1 / Math.max(0.05, sideProb(c, k));
-  return { odds: Math.max(1.01, learnedOdds * w + prior * (1 - w)), observations: learned.n };
+  const raw = Math.max(1.01, learnedOdds * w + prior * (1 - w));
+  return { odds: Math.max(1.01, raw * Math.exp(b.resid.get(`c:${c.unit}`) ?? 0)), raw, observations: learned.n };
 }
 
 /** Cote estimée d'un pari hors comptage (1X2, BTTS…), d'après le rapport cote × probabilité. */
-export function estimateBookieOdds(segment: string, prob: number, minute?: number): { odds: number; observations: number } {
+export function estimateBookieOdds(segment: string, prob: number, minute?: number): { odds: number; raw: number; observations: number } {
   const b = build();
   const hit = b.ratio.get(`${segment}|${bucketOf(minute)}`) ?? b.ratio.get(`${segment}|*`);
   const ratio = hit ? (hit.ratio * Math.min(1, hit.n / FULL_WEIGHT_AT) + b.globalRatio.ratio * (1 - Math.min(1, hit.n / FULL_WEIGHT_AT))) : b.globalRatio.ratio;
-  return { odds: Math.max(1.01, ratio / Math.max(0.05, prob)), observations: hit?.n ?? 0 };
+  const raw = Math.max(1.01, ratio / Math.max(0.05, prob));
+  return { odds: Math.max(1.01, raw * Math.exp(b.resid.get(`s:${segment}`) ?? 0)), raw, observations: hit?.n ?? 0 };
 }
 
 /** Jambe candidate : comptage si sa projection le permet, sinon rapport par segment. */
@@ -296,7 +322,7 @@ export function estimateLegOdds(
   fano: number,
   minute: number | undefined,
   features?: number[]
-): { odds: number; observations: number } {
+): { odds: number; raw: number; observations: number } {
   const parsed = parseLine(leg.selection);
   if (leg.projection && parsed && /^(corners|cards|fouls|goals)_/.test(leg.projection.unit)) {
     return estimateCountOdds(
@@ -314,7 +340,7 @@ export function legOddsFloorOk(leg: Parameters<typeof estimateLegOdds>[0], fano:
 }
 
 /** Cote estimée affichée sur la carte d'une proposition (situation à sa création). */
-export function estimateProposalOdds(proposal: InPlayProposal): { odds: number; observations: number } {
+export function estimateProposalOdds(proposal: InPlayProposal): { odds: number; raw: number; observations: number } {
   const minute = proposal.minute ?? (proposal.kind === 'minute60' ? 60 : proposal.kind === 'halftime' ? 45 : 20);
   if (proposal.legs.length === 1) {
     const leg = proposal.legs[0];
@@ -329,6 +355,11 @@ export async function recordBookieOdds(proposal: InPlayProposal, odds: number, c
   const count = proposal.legs.length === 1 ? context?.count : undefined;
   const modelProb = count ? sideProb(count) : proposal.combinedProb;
   const k = count ? solveK(count, Math.min(0.98, 1 / odds)) : null;
+  // Estimation faite AVANT d'apprendre de cette saisie : c'est elle qu'on compare à la vraie cote.
+  const features =
+    count && context ? featuresOf(count.unit, context.minute, count.done, context.stats ? { goals: context.stats.goalsHome + context.stats.goalsAway, sot: context.stats.sot, reds: context.stats.reds } : undefined) : undefined;
+  const est = count ? estimateCountOdds(count, context?.minute, features) : estimateBookieOdds(proposalSegment(proposal), proposal.combinedProb, context?.minute);
+  const residKey = count ? `c:${count.unit}` : `s:${proposalSegment(proposal)}`;
   const entry: OddsObservation = {
     id: `${proposal.id}@${Date.now()}`,
     proposalId: proposal.id,
@@ -341,8 +372,11 @@ export async function recordBookieOdds(proposal: InPlayProposal, odds: number, c
     goalsNow: context?.goalsNow,
     count,
     stats: context?.stats,
-    features: count && context ? featuresOf(count.unit, context.minute, count.done, context.stats ? { goals: context.stats.goalsHome + context.stats.goalsAway, sot: context.stats.sot, reds: context.stats.reds } : undefined) : undefined,
+    features,
     k: k ?? undefined,
+    estRaw: est.raw,
+    estFinal: est.odds,
+    residKey,
     label: proposal.legs.map((l) => l.selection).join(' + '),
   };
   if (first?.fixtureId == null) return;
@@ -453,4 +487,12 @@ export async function readOddsWatch(): Promise<WatchedBet[]> {
   } catch {
     return [];
   }
+}
+
+export function getAllObservations(): OddsObservation[] {
+  return memo ?? [];
+}
+
+export function getResidualCorrections(): Array<{ key: string; factor: number }> {
+  return Array.from(build().resid.entries()).map(([key, v]) => ({ key, factor: Math.round(Math.exp(v) * 1000) / 1000 }));
 }

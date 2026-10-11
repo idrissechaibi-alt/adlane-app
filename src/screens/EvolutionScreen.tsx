@@ -27,6 +27,8 @@ import { loadOmnirouteConfig } from '../core/focusEnrichment';
 import { getWebCapableRoutes } from '../core/llmRouter';
 import { getHubStatus } from '../api/footballDataAPIs/liveDataHub';
 import { ensureDeltaSamplesLoaded } from '../core/deltaLearning';
+import { OddsLoopFile, readOddsLoopFile } from '../core/oddsLoop';
+import { ensureOddsLoaded } from '../core/oddsLearning';
 import { getRecentSearchSource, probeAnySearch } from '../core/webSearch';
 import { getAgentLearningDigest, getAccuracyTrend, AccuracyTrend, buildMarketDayPointsFromPaperBets, buildLearningReport } from '../core/autoLearn';
 
@@ -73,6 +75,12 @@ export default function EvolutionScreen() {
   const [searchProviders, setSearchProviders] = useState<string[]>([]);
 
   const [liveSources, setLiveSources] = useState<Awaited<ReturnType<typeof getHubStatus>>>({});
+
+  /** Fichier de la boucle d'apprentissage des cotes (score d'alignement avec le bookmaker). */
+  const [oddsFile, setOddsFile] = useState<OddsLoopFile | null>(null);
+  const refreshOddsFile = () => {
+    ensureOddsLoaded().then(() => readOddsLoopFile(true)).then(setOddsFile).catch(() => {});
+  };
 
   const refreshWebAccess = async () => {
     try {
@@ -134,8 +142,49 @@ export default function EvolutionScreen() {
     );
   };
 
+  const renderOddsAlignment = () => (
+    <View style={styles.oddsCard}>
+      <Text style={styles.oddsTitle}>Alignement des cotes avec mon bookmaker</Text>
+      {oddsFile && oddsFile.score != null ? (
+        <>
+          <View style={styles.oddsScoreRow}>
+            <Text style={styles.oddsScore}>{oddsFile.score}<Text style={styles.oddsScoreUnit}> / 100</Text></Text>
+            <View style={styles.oddsScoreSide}>
+              <Text style={styles.oddsLine}>Écart moyen : {oddsFile.meanAbsDeltaPct} % ({oddsFile.scored} cotes comparées)</Text>
+              <Text style={styles.oddsLine}>
+                Biais : {oddsFile.biasPct != null && oddsFile.biasPct > 0 ? '+' : ''}{oddsFile.biasPct} % ({oddsFile.biasPct != null && oddsFile.biasPct > 0 ? 'mes cotes trop hautes' : 'mes cotes trop basses'})
+              </Text>
+              <Text style={styles.oddsLine}>Récent : {oddsFile.recentScore} / 100 · {oddsFile.trend}</Text>
+            </View>
+          </View>
+          {oddsFile.history.length > 1 && (
+            <View style={styles.oddsBars}>
+              {oddsFile.history.slice(-30).map((h, i) => (
+                <View key={i} style={[styles.oddsBar, { height: 4 + h.score * 0.36 }]} />
+              ))}
+            </View>
+          )}
+          {oddsFile.bySegment.slice(0, 5).map((g) => (
+            <Text key={g.label} style={styles.oddsLine}>
+              • {g.label} : {g.bias > 0 ? '+' : ''}{g.bias} % (écart {g.mape} %, {g.n} cotes)
+            </Text>
+          ))}
+          <Text style={styles.oddsWhy}>Pourquoi l'écart existe :</Text>
+          {oddsFile.reasons.map((r, i) => (
+            <Text key={i} style={styles.oddsLine}>– {r}</Text>
+          ))}
+        </>
+      ) : (
+        <Text style={styles.oddsLine}>
+          Aucune cote comparée pour l'instant. Donne la cote de ton bookmaker sur les paris du Planning (« Donner la cote ») : l'app compare à chaque fois sa propre estimation à la tienne, mesure l'écart et s'en sert pour coter comme lui.
+        </Text>
+      )}
+    </View>
+  );
+
   const refreshLiveCounters = () => {
     void refreshWebAccess();
+    refreshOddsFile();
     try {
       const bets = readPaperBets();
       setPaperBetsSummary({
@@ -396,6 +445,7 @@ export default function EvolutionScreen() {
   const renderCalibrationView = () => (
     <View>
       {renderWebAccessIndicator()}
+      {renderOddsAlignment()}
       {fictionalCounter && (
         <View style={styles.liveCounterRow}>
           <Ionicons name="radio-button-on" size={10} color="#4ade80" />
@@ -868,6 +918,16 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
   },
+  oddsCard: { backgroundColor: '#1e293b', borderRadius: 10, padding: 12, marginHorizontal: 16, marginBottom: 12, borderWidth: 1, borderColor: '#334155' },
+  oddsTitle: { color: '#f8fafc', fontSize: 14, fontWeight: '700', marginBottom: 8 },
+  oddsScoreRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 8 },
+  oddsScore: { color: '#a78bfa', fontSize: 34, fontWeight: '800' },
+  oddsScoreUnit: { fontSize: 14, fontWeight: '600', color: '#94a3b8' },
+  oddsScoreSide: { flex: 1, minWidth: 0 },
+  oddsLine: { color: '#cbd5e1', fontSize: 12, marginTop: 3, lineHeight: 17 },
+  oddsWhy: { color: '#f8fafc', fontSize: 12, fontWeight: '700', marginTop: 8 },
+  oddsBars: { flexDirection: 'row', alignItems: 'flex-end', gap: 2, height: 42, marginVertical: 6 },
+  oddsBar: { width: 5, backgroundColor: '#8b5cf6', borderRadius: 2 },
   paperBetsBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',

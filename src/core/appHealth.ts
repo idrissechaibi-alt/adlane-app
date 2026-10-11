@@ -16,6 +16,7 @@ import { getSofaStatus } from '../api/footballDataAPIs/sofaScore';
 import { getHubStatus } from '../api/footballDataAPIs/liveDataHub';
 import { getTeamStatsStatus } from './teamStats';
 import { ensureOddsLoaded, getOddsLearningStatus } from './oddsLearning';
+import { readOddsLoopFile } from './oddsLoop';
 import { ensureLineLimitsLoaded, ensureMarketOffLoaded, getLineLimits, getMarketOffCounts } from './lineLimits';
 import { getStrategyRecords } from './strategies';
 import { ensureDeltaSamplesLoaded, getAllDeltaCorrections, getShadowStats } from './deltaLearning';
@@ -176,6 +177,10 @@ export async function buildAppHealth(): Promise<Record<string, unknown>> {
     teamStats: await section(async () => getTeamStatsStatus()),
     bookieLineMinimums: await section(async () => { await ensureLineLimitsLoaded(); await ensureMarketOffLoaded(); return { limits: getLineLimits(), marketOffReports: getMarketOffCounts() }; }),
     bookieOdds: await section(async () => { await ensureOddsLoaded(); return getOddsLearningStatus(); }),
+    oddsAlignment: await section(async () => {
+      const f = await readOddsLoopFile(true);
+      return f ? { score: f.score, meanAbsDeltaPct: f.meanAbsDeltaPct, biasPct: f.biasPct, recentScore: f.recentScore, trend: f.trend, scored: f.scored, reasons: f.reasons, history: f.history.slice(-30) } : null;
+    }),
     deltaCorrections: await section(async () => {
       await ensureDeltaSamplesLoaded();
       return { corrections: getAllDeltaCorrections(), samples: getShadowStats() };
