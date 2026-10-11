@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-10-11T23:12:14.297Z",
+  "exportedAt": "2026-10-11T23:12:19.386Z",
   "formatVersion": 1,
   "source": "APP adlane",
   "data": {
@@ -5173,11 +5173,12 @@
       "ticksLast24h": 65
     },
     "tickProgress": {
-      "startedAt": "2026-10-11T23:12:11.248Z",
-      "step": "scan matinal",
-      "at": "2026-10-11T23:12:11.252Z",
+      "startedAt": "2026-10-11T23:12:17.784Z",
+      "step": "scan en direct 20e/60e",
+      "at": "2026-10-11T23:12:18.323Z",
       "stepDurationsSec": {
-        "terminé": 380
+        "scan matinal": 1,
+        "relevé live partagé": 0
       }
     },
     "lastTick": {
@@ -5228,21 +5229,12 @@
       "nightlyReviewPointsCreated": 8
     },
     "lastRealFastTick": {
-      "at": "2026-10-11T23:04:34.425Z",
+      "at": "2026-10-11T23:12:18.313Z",
       "liveFound": 0,
       "fresh": 0,
       "source": "api_football"
     },
     "abortedTicks": [
-      {
-        "startedAt": "2026-10-11T14:36:10.841Z",
-        "step": "scan en direct 20e/60e",
-        "at": "2026-10-11T14:37:45.913Z",
-        "stepDurationsSec": {
-          "scan matinal": 95,
-          "relevé live partagé": 0
-        }
-      },
       {
         "startedAt": "2026-10-11T14:39:13.786Z",
         "step": "marqueurs live",
@@ -5370,6 +5362,16 @@
           "scan matinal": 5,
           "relevé live partagé": 0,
           "scan en direct 20e/60e": 73
+        }
+      },
+      {
+        "startedAt": "2026-10-11T23:12:11.248Z",
+        "step": "scan en direct 20e/60e",
+        "at": "2026-10-11T23:12:12.546Z",
+        "stepDurationsSec": {
+          "terminé": 380,
+          "scan matinal": 1,
+          "relevé live partagé": 0
         }
       }
     ],
@@ -5677,7 +5679,7 @@
         {
           "name": "Principal",
           "ok": true,
-          "latencyMs": 79,
+          "latencyMs": 145,
           "readyModels": 27,
           "configuredReady": 12,
           "configuredTotal": 13
@@ -5685,7 +5687,7 @@
         {
           "name": "Omniroute",
           "ok": true,
-          "latencyMs": 1557,
+          "latencyMs": 38,
           "readyModels": 830,
           "configuredReady": 2,
           "configuredTotal": 2
@@ -5701,9 +5703,9 @@
         },
         {
           "label": "Omniroute · Clodiko",
-          "ok": 2290,
+          "ok": 2291,
           "fail": 174,
-          "avgMs": 1574,
+          "avgMs": 1540,
           "coolingDown": false
         },
         {
@@ -5879,14 +5881,14 @@
     },
     "apiUsageToday": {
       "countsToday": {
-        "footballData": 69,
+        "footballData": 70,
         "apiFootball": 102,
         "theOddsApi": 291,
         "perplexity": 1,
         "apiFootball-autolearn": 55,
         "sportmonks-autolearn": 22,
         "sofaScore": 0,
-        "sportmonks": 152
+        "sportmonks": 153
       },
       "theOddsApiMonth": {
         "used": 500,
@@ -5902,46 +5904,46 @@
     },
     "sofaScore": null,
     "liveSources": {
-      "TheSportsDB": {
-        "ok": true,
-        "count": 23,
-        "at": "2026-10-11T23:12:11.442Z"
-      },
       "LiveScore": {
         "ok": true,
         "count": 22,
-        "at": "2026-10-11T23:12:11.564Z"
+        "at": "2026-10-11T23:12:17.797Z"
       },
-      "ESPN": {
+      "TheSportsDB": {
         "ok": true,
-        "count": 5,
-        "at": "2026-10-11T23:12:11.752Z"
+        "count": 23,
+        "at": "2026-10-11T23:12:17.800Z"
       },
       "FotMob": {
         "ok": true,
         "count": 22,
-        "at": "2026-10-11T23:12:11.765Z"
+        "at": "2026-10-11T23:12:17.824Z"
       },
-      "AllSportsApi": {
+      "ESPN": {
         "ok": true,
-        "count": 0,
-        "at": "2026-10-11T23:12:11.563Z"
+        "count": 5,
+        "at": "2026-10-11T23:12:17.861Z"
       },
       "365Scores": {
         "ok": true,
         "count": 26,
-        "at": "2026-10-11T23:12:11.574Z"
+        "at": "2026-10-11T23:12:18.078Z"
+      },
+      "AllSportsApi": {
+        "ok": true,
+        "count": 0,
+        "at": "2026-10-11T23:12:18.126Z"
       }
     },
     "teamStats": {
-      "indexUpdatedAt": "2026-10-10T23:38:04Z",
-      "teamsInIndex": 111,
+      "indexUpdatedAt": null,
+      "teamsInIndex": 0,
       "summariesCached": 36,
-      "lookups": 27,
+      "lookups": 0,
       "withTrend": 0,
-      "unknownTeams": 27,
+      "unknownTeams": 0,
       "lastTrendAt": null,
-      "lastUnknown": "Ciudad de Bolivar - San Telmo"
+      "lastUnknown": null
     },
     "bookieLineMinimums": {
       "limits": {
