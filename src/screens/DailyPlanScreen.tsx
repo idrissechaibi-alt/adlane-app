@@ -431,7 +431,7 @@ export default function DailyPlanScreen() {
   };
 
   /** Un pari en direct (simple ou combiné) avec son bouton "Placer". */
-  const renderLiveProposal = (proposal: InPlayProposal) => {
+  const renderLiveProposal = (proposal: InPlayProposal, showMatch = true) => {
     const played = placedBetIds.has(`live-${proposal.id}`);
     const status = proposalStatus[proposal.id] ?? 'pending';
     // Anciens paris de stratégie pris à la pause et enregistrés « 60e » : minute réelle < 55 → Mi-temps.
@@ -440,6 +440,12 @@ export default function DailyPlanScreen() {
     const first = proposal.legs[0];
     return (
       <View key={proposal.id} style={styles.liveBetRow}>
+        {/* Créneau à plusieurs matchs : le match concerné est nommé (un combiné nomme ses matchs jambe par jambe). */}
+        {showMatch && proposal.legs.length === 1 && (
+          <Text style={styles.liveBetMatch}>
+            {first.homeTeam} - {first.awayTeam}
+          </Text>
+        )}
         <Text style={styles.liveBetTitle}>
           {minuteLabel} · {proposal.legs.length === 1 ? first.selection : `Combiné ${proposal.legs.length} matchs`} — {confidence}%
         </Text>
@@ -666,7 +672,7 @@ export default function DailyPlanScreen() {
               <Ionicons name="flash" size={18} color="#a78bfa" />
               <Text style={styles.halftimeAlertsTitle}>Paris en direct ({slotLive.length})</Text>
             </View>
-            {slotLive.map(renderLiveProposal)}
+            {slotLive.map((p) => renderLiveProposal(p, slot.matches.length > 1))}
           </View>
         )}
 
@@ -885,7 +891,7 @@ export default function DailyPlanScreen() {
               <Ionicons name="flash" size={18} color="#a78bfa" />
               <Text style={styles.halftimeAlertsTitle}>Autres paris en direct ({orphanLive.length})</Text>
             </View>
-            {orphanLive.map(renderLiveProposal)}
+            {orphanLive.map((p) => renderLiveProposal(p, true))}
           </View>
         )}
 
@@ -1233,6 +1239,12 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderTopWidth: 1,
     borderTopColor: 'rgba(167, 139, 250, 0.2)',
+  },
+  liveBetMatch: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#c4b5fd',
+    marginBottom: 2,
   },
   liveBetTitle: { color: '#ede9fe', fontSize: 14, fontWeight: '600' },
   liveBetLeg: { color: '#c4b5fd', fontSize: 12, marginTop: 2 },
