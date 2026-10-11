@@ -1162,17 +1162,25 @@ async function bestLegFor(
     return bet365;
   };
   const withOdds = playable.map((l) => ({ leg: l, odds: oddsOf(l) }));
-  // Cote estimée sous le plancher : le pari est PROPOSÉ quand même, avec la cote minimale à obtenir pour le poser
-  // (attendre que la cote monte). Plus de liste d'attente séparée : un plancher sec ne laissait plus rien passer.
-  await setOddsWatch(live.fixtureId, []);
+  // Plancher de cote : sous 1,40 estimé, le pari n'est PAS proposé. Il est gardé en attente (affiché dans le
+  // créneau) et réévalué à chaque passage : s'il atteint 1,40 avec l'évolution du match, il est proposé.
+  const waiting = withOdds.filter((x) => x.odds < MIN_ESTIMATED_ODDS).sort((a, b) => b.leg.prob - a.leg.prob).slice(0, 4);
+  await setOddsWatch(
+    live.fixtureId,
+    waiting.map((x) => ({
+      homeTeam: match.homeTeam,
+      awayTeam: match.awayTeam,
+      selection: x.leg.selection,
+      prob: x.leg.prob,
+      estimatedOdds: x.odds,
+      minute: live.minute,
+    }))
+  );
   // Le marché le plus OPTIMAL d'abord : probabilité × cote estimée × chance que le bookmaker le propose
   // (à probabilité égale, la meilleure cote ; une ligne probablement absente passe derrière).
   const eligible = withOdds
-    .map((x) => {
-      if (x.odds < MIN_ESTIMATED_ODDS) x.leg.waitForOdds = { min: MIN_ESTIMATED_ODDS, estimated: x.odds };
-      return x;
-    })
-    .sort((a, b) => b.leg.prob * Math.max(b.odds, MIN_ESTIMATED_ODDS * 0.9) * (b.leg.availability ?? 1) - a.leg.prob * Math.max(a.odds, MIN_ESTIMATED_ODDS * 0.9) * (a.leg.availability ?? 1))
+    .filter((x) => x.odds >= MIN_ESTIMATED_ODDS)
+    .sort((a, b) => b.leg.prob * b.odds * (b.leg.availability ?? 1) - a.leg.prob * a.odds * (a.leg.availability ?? 1))
     .map((x) => x.leg);
   const seen = new Set<string>();
   const best: LegWithContext[] = [];
