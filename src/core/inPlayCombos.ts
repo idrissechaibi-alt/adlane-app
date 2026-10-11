@@ -98,6 +98,7 @@ import { hubDateKey, hubKnowsMatch, hubLiveStatus, hubStats } from '../api/footb
 import { StrategyContext, evaluateStrategies, oddsFromExpectedGoals } from './strategies';
 import { SofaPeriodStats } from '../api/footballDataAPIs/sofaScore';
 import { DeltaUnit, LegProjection, describeCorrection, ensureDeltaSamplesLoaded, flushShadowProjections, getDeltaCorrection, projectFullMatchCount, recordShadowProjection, factorForRemaining } from './deltaLearning';
+import { ensureOddsLoaded, oddsFloorOk, oddsSegment } from './oddsLearning';
 import { atLeastProb, pickHighestOverLine, pickLowestUnderLine } from './countModel';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { matchesForDate, isWithinBreakWindow } from './internationalBreak';
@@ -1066,6 +1067,7 @@ async function bestLegFor(
 ): Promise<LegWithContext[]> {
   const match = matchRefOfScheduled(scheduled);
   const preMatchExpectedGoals = { home: scheduled.expectedHomeGoals, away: scheduled.expectedAwayGoals };
+  await ensureOddsLoaded();
   const currentStats = await fetchRealLiveStats(live);
   // Corners et cartons déjà comptés (sources live gratuites) : sans eux, le
   // pipe réel ne pouvait proposer que des marchés de buts.
@@ -1079,7 +1081,10 @@ async function bestLegFor(
   // marché (et par fenêtre 1ère MT / match).
   // Paris réels : au plus 75 % (cote juste ≥ 1,33) — au-delà, la cote proposée
   // par les bookmakers est trop faible pour valoir la mise.
-  const eligible = rawLegs.filter((l) => worthProposing(l) && l.prob <= REAL_MAX_LEG_PROB).sort((a, b) => b.prob - a.prob);
+  // + cote estimée du bookmaker sous le plancher (apprise des cotes saisies) : écarté.
+  const eligible = rawLegs
+    .filter((l) => worthProposing(l) && l.prob <= REAL_MAX_LEG_PROB && oddsFloorOk(oddsSegment(l.market, l.selection), l.prob))
+    .sort((a, b) => b.prob - a.prob);
   const seen = new Set<string>();
   const best: LegWithContext[] = [];
   for (const leg of eligible) {

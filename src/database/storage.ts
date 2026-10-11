@@ -10,10 +10,37 @@ const DB_NAME = 'app_adlane.db';
 
 let db: SQLite.SQLiteDatabase | null = null;
 
+const isLockError = (e: unknown) => /locked|busy/i.test(String((e as { message?: string })?.message ?? e));
+
+/** Nouvelle tentative quand la base est verrouillée par un autre accès (tâche de fond, autre écran). */
+async function retryLocked<T>(fn: () => Promise<T>): Promise<T> {
+  let lastError: unknown;
+  for (let i = 0; i < 6; i++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      if (!isLockError(error)) throw error;
+      await new Promise((r) => setTimeout(r, 250 * (i + 1)));
+    }
+  }
+  throw lastError;
+}
+
 export async function initDatabase(): Promise<void> {
   if (db) return;
   try {
     db = await SQLite.openDatabaseAsync(DB_NAME);
+    // Écritures concurrentes (tâche de fond + écran) : mode WAL et attente de 10 s
+    // avant d'abandonner, plus nouvelle tentative autour des écritures.
+    await db.execAsync('PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 10000;').catch(() => {});
+    const raw = db;
+    const origRun = raw.runAsync.bind(raw);
+    const origExec = raw.execAsync.bind(raw);
+    const origTxn = raw.withExclusiveTransactionAsync.bind(raw);
+    raw.runAsync = ((...args: Parameters<typeof origRun>) => retryLocked(() => origRun(...args))) as typeof raw.runAsync;
+    raw.execAsync = ((...args: Parameters<typeof origExec>) => retryLocked(() => origExec(...args))) as typeof raw.execAsync;
+    raw.withExclusiveTransactionAsync = ((...args: Parameters<typeof origTxn>) => retryLocked(() => origTxn(...args))) as typeof raw.withExclusiveTransactionAsync;
     await db.execAsync(`
       CREATE TABLE IF NOT EXISTS bets (
         id TEXT PRIMARY KEY, version INTEGER, date TEXT, creneau_utc TEXT, creneau_display TEXT,

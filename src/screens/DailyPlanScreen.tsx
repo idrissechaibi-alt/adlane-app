@@ -15,6 +15,7 @@ import {
   Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { ensureOddsLoaded, estimateBookieOdds, getObservedOdds, proposalSegment, recordBookieOdds } from '../core/oddsLearning';
 import { executeMorningScan, getDailyPlan, checkAndUpdateT90Status, DailyPlan, runMorningScanIfDue, todayLocalDateString } from '../core/scheduler';
 import { buildScheduledMatches, ProposedSlip } from '../core/dailyWorkflow';
 import { InPlayProposal, readInPlayProposals } from '../core/learnStore';
@@ -41,6 +42,10 @@ export default function DailyPlanScreen() {
   const [placingId, setPlacingId] = useState<string | null>(null);
   const [stakeInput, setStakeInput] = useState('');
   const [oddsInput, setOddsInput] = useState('');
+  /** Saisie d'une cote vue chez le bookmaker, SANS placer le pari (apprentissage des cotes). */
+  const [oddsNoteId, setOddsNoteId] = useState<string | null>(null);
+  const [oddsNoteInput, setOddsNoteInput] = useState('');
+  const [, setOddsVersion] = useState(0);
   const [placing, setPlacing] = useState(false);
   const [proposalStatus, setProposalStatus] = useState<Record<string, LegStatus>>({});
   const [legStatuses, setLegStatuses] = useState<Record<string, LegStatus[]>>({});
@@ -66,6 +71,7 @@ export default function DailyPlanScreen() {
     loadDailyPlan();
     loadInPlayProposals();
     loadPlacedBets();
+    ensureOddsLoaded().then(() => setOddsVersion((v) => v + 1)).catch(() => {});
 
     // Vérifier T-90 toutes les 30 secondes, et relire les alertes mi-temps
     // au même rythme (le moniteur tourne en tâche de fond dans App.tsx).
@@ -249,6 +255,7 @@ export default function DailyPlanScreen() {
         updatedAt: now,
       };
       await saveBet(bet);
+      await recordBookieOdds(proposal, odds).catch(() => {});
       setPlacedBetIds((prev) => new Set(prev).add(bet.id));
       setPlacingId(null);
       setStakeInput('');
@@ -298,6 +305,23 @@ export default function DailyPlanScreen() {
     }
   };
 
+  /** Enregistre la cote vue chez le bookmaker pour ce pari, sans le placer. */
+  const handleSaveBookieOdds = async (proposal: InPlayProposal) => {
+    const odds = Number(oddsNoteInput.replace(',', '.'));
+    if (!Number.isFinite(odds) || odds <= 1) {
+      Alert.alert('Cote invalide', 'Entre la cote affichée chez ton bookmaker (supérieure à 1).');
+      return;
+    }
+    try {
+      await recordBookieOdds(proposal, odds);
+      setOddsNoteId(null);
+      setOddsNoteInput('');
+      setOddsVersion((v) => v + 1);
+    } catch (error: any) {
+      Alert.alert('Erreur', `Impossible d'enregistrer la cote : ${error.message}`);
+    }
+  };
+
   /** Un pari en direct (simple ou combiné) avec son bouton "Placer". */
   const renderLiveProposal = (proposal: InPlayProposal) => {
     const played = placedBetIds.has(`live-${proposal.id}`);
@@ -342,6 +366,47 @@ export default function DailyPlanScreen() {
             >
               <Text style={styles.placeBetButtonText}>Placer</Text>
             </TouchableOpacity>
+          )}
+        </View>
+        {(() => {
+          const observed = getObservedOdds(proposal.id);
+          const est = estimateBookieOdds(proposalSegment(proposal), proposal.combinedProb);
+          return (
+            <Text style={styles.liveBetLeg}>
+              {observed ? `Cote bookie saisie : ${observed.odds.toFixed(2)} · ` : ''}cote estimée ≈ {est.odds.toFixed(2)}
+              {est.observations > 0 ? ` (${est.observations} cotes apprises)` : ''}
+            </Text>
+          );
+        })()}
+        <View style={styles.liveBetStatusRow}>
+          {oddsNoteId !== proposal.id ? (
+            <TouchableOpacity
+              style={styles.liveBetPlaceButton}
+              onPress={() => {
+                setOddsNoteInput(getObservedOdds(proposal.id)?.odds.toFixed(2) ?? '');
+                setOddsNoteId(proposal.id);
+              }}
+            >
+              <Text style={styles.placeBetButtonText}>{getObservedOdds(proposal.id) ? 'Modifier la cote' : 'Donner la cote'}</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.placeStakeRow}>
+              <TextInput
+                style={styles.stakeInput}
+                value={oddsNoteInput}
+                onChangeText={setOddsNoteInput}
+                placeholder="Cote chez ton bookie"
+                placeholderTextColor="#64748b"
+                keyboardType="decimal-pad"
+                autoFocus
+              />
+              <TouchableOpacity style={styles.confirmStakeButton} onPress={() => handleSaveBookieOdds(proposal)}>
+                <Text style={styles.confirmStakeText}>OK</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.cancelStakeButton} onPress={() => { setOddsNoteId(null); setOddsNoteInput(''); }}>
+                <Ionicons name="close" size={16} color="#94a3b8" />
+              </TouchableOpacity>
+            </View>
           )}
         </View>
         {placingId === `live-${proposal.id}` && (
