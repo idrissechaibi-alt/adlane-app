@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-10-11T15:13:03.517Z",
+  "exportedAt": "2026-10-11T15:13:30.873Z",
   "formatVersion": 1,
   "source": "APP adlane",
   "data": {
@@ -5062,12 +5062,10 @@
       "ticksLast24h": 73
     },
     "tickProgress": {
-      "startedAt": "2026-10-11T15:13:00.719Z",
+      "startedAt": "2026-10-11T15:13:28.755Z",
       "step": "scan matinal",
-      "at": "2026-10-11T15:13:00.805Z",
-      "stepDurationsSec": {
-        "terminé": 516
-      }
+      "at": "2026-10-11T15:13:28.757Z",
+      "stepDurationsSec": {}
     },
     "lastTick": {
       "startedAt": "2026-10-11T15:00:02.683Z",
@@ -5118,25 +5116,13 @@
       "nightlyReviewPointsCreated": 7
     },
     "lastRealFastTick": {
-      "at": "2026-10-11T15:00:03.410Z",
-      "liveFound": 6,
+      "at": "2026-10-11T15:13:26.474Z",
+      "liveFound": 4,
       "fresh": 0,
       "source": "sources_live_gratuites",
       "apiFootballError": "quota du jour atteint (réserve gardée pour le règlement)"
     },
     "abortedTicks": [
-      {
-        "startedAt": "2026-10-11T11:58:46.973Z",
-        "step": "marqueurs live",
-        "at": "2026-10-11T12:02:05.384Z",
-        "stepDurationsSec": {
-          "terminé": 43,
-          "scan matinal": 1,
-          "relevé live partagé": 0,
-          "scan en direct 20e/60e": 197,
-          "bilan de minuit": 0
-        }
-      },
       {
         "startedAt": "2026-10-11T13:00:43.214Z",
         "step": "scan matinal",
@@ -5286,6 +5272,16 @@
           "relevé live partagé": 0,
           "scan en direct 20e/60e": 39,
           "bilan de minuit": 131
+        }
+      },
+      {
+        "startedAt": "2026-10-11T15:13:00.719Z",
+        "step": "scan en direct 20e/60e",
+        "at": "2026-10-11T15:13:26.596Z",
+        "stepDurationsSec": {
+          "terminé": 516,
+          "scan matinal": 26,
+          "relevé live partagé": 0
         }
       }
     ],
@@ -5586,7 +5582,7 @@
         {
           "name": "Principal",
           "ok": true,
-          "latencyMs": 296,
+          "latencyMs": 110,
           "readyModels": 27,
           "configuredReady": 12,
           "configuredTotal": 13
@@ -5594,7 +5590,7 @@
         {
           "name": "Omniroute",
           "ok": false,
-          "latencyMs": 205,
+          "latencyMs": 109,
           "readyModels": null,
           "configuredReady": null,
           "configuredTotal": 2,
@@ -5602,20 +5598,6 @@
         }
       ],
       "leaderboard": [
-        {
-          "label": "Principal · diffusiongemma-26b-a4b-it",
-          "ok": 371,
-          "fail": 367,
-          "avgMs": 689,
-          "coolingDown": false
-        },
-        {
-          "label": "Principal · gpt-oss-20b",
-          "ok": 1314,
-          "fail": 125,
-          "avgMs": 2128,
-          "coolingDown": false
-        },
         {
           "label": "Principal · nemotron-3-super-120b",
           "ok": 799,
@@ -5626,29 +5608,36 @@
         {
           "label": "Omniroute · Clodiko",
           "ok": 1916,
-          "fail": 166,
+          "fail": 167,
           "avgMs": 2487,
-          "coolingDown": false
+          "coolingDown": true
         },
         {
           "label": "Principal · qwen3.8-27b",
           "ok": 308,
-          "fail": 439,
+          "fail": 441,
           "avgMs": 808,
-          "coolingDown": false
+          "coolingDown": true
         },
         {
           "label": "Principal · gpt-oss-120b",
           "ok": 258,
-          "fail": 392,
+          "fail": 393,
           "avgMs": 826,
-          "coolingDown": false
+          "coolingDown": true
         },
         {
           "label": "Principal · ising-calibration-1.5-31b",
           "ok": 88,
           "fail": 88,
           "avgMs": 1389,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · diffusiongemma-26b-a4b-it",
+          "ok": 372,
+          "fail": 368,
+          "avgMs": 1481,
           "coolingDown": false
         },
         {
@@ -5663,6 +5652,13 @@
           "ok": 504,
           "fail": 431,
           "avgMs": 1974,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · gpt-oss-20b",
+          "ok": 1318,
+          "fail": 125,
+          "avgMs": 4922,
           "coolingDown": false
         },
         {
@@ -5794,7 +5790,7 @@
         "apiFootball-autolearn": 55,
         "sportmonks-autolearn": 14,
         "sofaScore": 0,
-        "sportmonks": 98
+        "sportmonks": 99
       },
       "theOddsApiMonth": {
         "used": 500,
@@ -5810,46 +5806,46 @@
     },
     "sofaScore": null,
     "liveSources": {
+      "LiveScore": {
+        "ok": true,
+        "count": 100,
+        "at": "2026-10-11T15:13:29.497Z"
+      },
       "TheSportsDB": {
         "ok": true,
         "count": 164,
-        "at": "2026-10-11T15:13:01.571Z"
+        "at": "2026-10-11T15:13:29.499Z"
+      },
+      "365Scores": {
+        "ok": true,
+        "count": 62,
+        "at": "2026-10-11T15:13:29.630Z"
       },
       "AllSportsApi": {
         "ok": true,
         "count": 5,
-        "at": "2026-10-11T15:13:02.884Z"
-      },
-      "LiveScore": {
-        "ok": true,
-        "count": 100,
-        "at": "2026-10-11T15:13:02.127Z"
+        "at": "2026-10-11T15:13:30.787Z"
       },
       "FotMob": {
         "ok": true,
         "count": 102,
-        "at": "2026-10-11T15:13:02.125Z"
-      },
-      "365Scores": {
-        "ok": true,
-        "count": 65,
-        "at": "2026-10-11T15:13:02.197Z"
+        "at": "2026-10-11T15:13:29.838Z"
       },
       "ESPN": {
         "ok": true,
         "count": 15,
-        "at": "2026-10-11T15:13:02.772Z"
+        "at": "2026-10-11T15:13:30.483Z"
       }
     },
     "teamStats": {
-      "indexUpdatedAt": "2026-10-10T23:38:04Z",
-      "teamsInIndex": 111,
+      "indexUpdatedAt": null,
+      "teamsInIndex": 0,
       "summariesCached": 23,
-      "lookups": 53,
-      "withTrend": 2,
-      "unknownTeams": 51,
-      "lastTrendAt": "2026-10-11T15:00:29.984Z",
-      "lastUnknown": "Al Feiha - Al Riyadh"
+      "lookups": 0,
+      "withTrend": 0,
+      "unknownTeams": 0,
+      "lastTrendAt": null,
+      "lastUnknown": null
     },
     "bookieLineMinimums": {
       "limits": {
@@ -5887,103 +5883,98 @@
       {
         "unit": "corners_1h",
         "label": "Corners 1ère mi-temps",
-        "verified": 307,
-        "pending": 350,
-        "meanPredicted": 4.6,
-        "meanActual": 4.5,
-        "meanError": -0.16,
-        "meanAbsError": 1.8,
-        "bigMisses": 20,
+        "verified": 25,
+        "pending": 130,
+        "meanPredicted": 3.9,
+        "meanActual": 4.2,
+        "meanError": 0.31,
+        "meanAbsError": 1.17,
+        "bigMisses": 1,
         "worst": [
           {
-            "match": "Gwangju FC - Ulsan Hyundai",
-            "predicted": 19.4,
-            "actual": 2
-          },
-          {
-            "match": "Independiente del Valle - Aucas",
-            "predicted": 10.3,
-            "actual": 0
-          },
-          {
-            "match": "Maccabi Tel Aviv - Bnei Sakhnin",
-            "predicted": 17.2,
+            "match": "Piast Gliwice - Widzew Łódź",
+            "predicted": 4,
             "actual": 9
+          },
+          {
+            "match": "Manchester United FC - Tottenham Hotspur FC",
+            "predicted": 3.8,
+            "actual": 1
+          },
+          {
+            "match": "St. Pauli - Karlsruher SC",
+            "predicted": 2.5,
+            "actual": 5
           }
         ]
       },
       {
         "unit": "cards_1h",
         "label": "Cartons 1ère mi-temps",
-        "verified": 307,
-        "pending": 350,
-        "meanPredicted": 1.4,
-        "meanActual": 1.4,
-        "meanError": 0.02,
-        "meanAbsError": 0.92,
-        "bigMisses": 7,
+        "verified": 21,
+        "pending": 102,
+        "meanPredicted": 1,
+        "meanActual": 1.5,
+        "meanError": 0.49,
+        "meanAbsError": 1.03,
+        "bigMisses": 1,
         "worst": [
           {
-            "match": "FC Krasnodar - Zenit St. Petersburg",
-            "predicted": 10.7,
+            "match": "Liaoning Tieren - Wuhan Three Towns",
+            "predicted": 1.1,
             "actual": 5
           },
           {
-            "match": "Port FC - Pattani FC",
-            "predicted": 0.5,
-            "actual": 5
+            "match": "Guangdong GZ-Power - Jiangxi Dingnan United",
+            "predicted": 0.8,
+            "actual": 3
           },
           {
-            "match": "Tigre - Banfield",
-            "predicted": 0.7,
-            "actual": 5
+            "match": "Grasshopper - Young Boys",
+            "predicted": 1.7,
+            "actual": 3
           }
         ]
       },
       {
         "unit": "goals_1h",
         "label": "Buts à la pause",
-        "verified": 365,
-        "pending": 298,
-        "meanPredicted": 1.3,
-        "meanActual": 1.3,
-        "meanError": 0.02,
-        "meanAbsError": 0.69,
-        "bigMisses": 5,
+        "verified": 21,
+        "pending": 28,
+        "meanPredicted": 0.6,
+        "meanActual": 0.3,
+        "meanError": -0.23,
+        "meanAbsError": 0.63,
+        "bigMisses": 0,
         "worst": [
           {
-            "match": "Rohda Raalte - Rkav Volendam",
-            "predicted": 3.4,
-            "actual": 8
+            "match": "St.Pauli II - HSC Hannover",
+            "predicted": 0.6,
+            "actual": 2
           },
           {
-            "match": "RoPS - JJK Jyvaskyla",
-            "predicted": 1.5,
-            "actual": 5
+            "match": "Freiburg II - Freiberg",
+            "predicted": 0.6,
+            "actual": 2
           },
           {
-            "match": "Gwangju FC - Ulsan Hyundai",
-            "predicted": 0.7,
-            "actual": 4
+            "match": "Liaoning Tieren - Wuhan Three Towns",
+            "predicted": 1.1,
+            "actual": 0
           }
         ]
       },
       {
         "unit": "goals_ft",
         "label": "Buts en fin de match",
-        "verified": 391,
-        "pending": 342,
-        "meanPredicted": 3.1,
-        "meanActual": 3,
-        "meanError": -0.05,
-        "meanAbsError": 1.44,
-        "bigMisses": 27,
+        "verified": 150,
+        "pending": 217,
+        "meanPredicted": 2.9,
+        "meanActual": 3.1,
+        "meanError": 0.22,
+        "meanAbsError": 1.27,
+        "bigMisses": 9,
         "worst": [
-          {
-            "match": "AIK - Brommapojkarna",
-            "predicted": 2.8,
-            "actual": 11
-          },
           {
             "match": "Bochum II - SV Roedinghausen",
             "predicted": 3.3,
@@ -5993,61 +5984,66 @@
             "match": "Bochum II - SV Rödinghausen",
             "predicted": 4.2,
             "actual": 11
+          },
+          {
+            "match": "St.Pauli II - HSC Hannover",
+            "predicted": 2,
+            "actual": 7
           }
         ]
       },
       {
         "unit": "corners_ft",
         "label": "Corners sur le match",
-        "verified": 213,
-        "pending": 169,
-        "meanPredicted": 9.1,
-        "meanActual": 9.2,
-        "meanError": 0.1,
-        "meanAbsError": 1.79,
-        "bigMisses": 3,
+        "verified": 58,
+        "pending": 141,
+        "meanPredicted": 8.7,
+        "meanActual": 9.8,
+        "meanError": 1.17,
+        "meanAbsError": 2.43,
+        "bigMisses": 5,
         "worst": [
+          {
+            "match": "St. Pauli - Karlsruher SC",
+            "predicted": 4.1,
+            "actual": 15
+          },
           {
             "match": "Standard Liege - Royal Charleroi SC",
             "predicted": 3.6,
             "actual": 14
           },
           {
-            "match": "Hammarby IF - Djurgaarden",
-            "predicted": 14.2,
-            "actual": 7
-          },
-          {
-            "match": "KACM - Ittihad Tanger",
-            "predicted": 2,
-            "actual": 9
+            "match": "Piast Gliwice - Widzew Łódź",
+            "predicted": 8.7,
+            "actual": 19
           }
         ]
       },
       {
         "unit": "cards_ft",
         "label": "Cartons sur le match",
-        "verified": 210,
-        "pending": 111,
-        "meanPredicted": 3.5,
-        "meanActual": 3.9,
-        "meanError": 0.33,
-        "meanAbsError": 1.43,
-        "bigMisses": 15,
+        "verified": 51,
+        "pending": 72,
+        "meanPredicted": 3.3,
+        "meanActual": 3.8,
+        "meanError": 0.46,
+        "meanAbsError": 1.48,
+        "bigMisses": 5,
         "worst": [
-          {
-            "match": "Ofk Malzenice - Inter Bratislava",
-            "predicted": 14.3,
-            "actual": 6
-          },
-          {
-            "match": "Paysandu - Rentistas",
-            "predicted": 7.9,
-            "actual": 14
-          },
           {
             "match": "Liaoning Tieren - Wuhan Three Towns",
             "predicted": 2.2,
+            "actual": 8
+          },
+          {
+            "match": "Guangdong GZ-Power - Jiangxi Dingnan United",
+            "predicted": 1.9,
+            "actual": 7
+          },
+          {
+            "match": "Genoa CFC - ACF Fiorentina",
+            "predicted": 3.2,
             "actual": 8
           }
         ]
@@ -6055,253 +6051,67 @@
       {
         "unit": "fouls_1h",
         "label": "Fautes 1ère mi-temps",
-        "verified": 272,
-        "pending": 83,
-        "meanPredicted": 12,
-        "meanActual": 11.7,
-        "meanError": -0.33,
-        "meanAbsError": 3.14,
-        "bigMisses": 8,
+        "verified": 21,
+        "pending": 58,
+        "meanPredicted": 10.6,
+        "meanActual": 11.6,
+        "meanError": 0.99,
+        "meanAbsError": 2.14,
+        "bigMisses": 1,
         "worst": [
           {
-            "match": "FC Krasnodar - Zenit St. Petersburg",
-            "predicted": 35.7,
-            "actual": 17
+            "match": "Liaoning Tieren - Wuhan Three Towns",
+            "predicted": 8.2,
+            "actual": 18
           },
           {
-            "match": "Hapoel Ironi Kiryat Shmona - Hapoel Tel Aviv",
-            "predicted": 39.2,
-            "actual": 21
+            "match": "St. Pauli - Karlsruher SC",
+            "predicted": 6.3,
+            "actual": 11
           },
           {
-            "match": "RB Leipzig - Eintracht Frankfurt",
-            "predicted": 30.7,
-            "actual": 16
+            "match": "Hertha Berlin - Greuther Furth",
+            "predicted": 8.5,
+            "actual": 5
           }
         ]
       },
       {
         "unit": "fouls_ft",
         "label": "Fautes sur le match",
-        "verified": 120,
-        "pending": 55,
-        "meanPredicted": 23.9,
-        "meanActual": 24.1,
-        "meanError": 0.11,
-        "meanAbsError": 3.14,
+        "verified": 20,
+        "pending": 31,
+        "meanPredicted": 23.6,
+        "meanActual": 23.7,
+        "meanError": 0.04,
+        "meanAbsError": 3.77,
         "bigMisses": 1,
         "worst": [
           {
-            "match": "Sonnenhof Grossaspach - Waldhof Mannheim",
-            "predicted": 10.6,
-            "actual": 24
-          },
-          {
-            "match": "Rosenborg - Sandefjord",
-            "predicted": 41.1,
-            "actual": 30
+            "match": "St. Pauli - Karlsruher SC",
+            "predicted": 13.4,
+            "actual": 27
           },
           {
             "match": "Akhmat Grozny - Baltika",
             "predicted": 25.9,
             "actual": 36
+          },
+          {
+            "match": "Guangdong GZ-Power - Jiangxi Dingnan United",
+            "predicted": 30.2,
+            "actual": 21
           }
         ]
       }
     ],
+    "situationModel": [],
     "bookieOdds": {
       "observations": 56,
       "withContext": 55,
-      "reactions": [
-        {
-          "unit": "goals_ft",
-          "pairs": 5,
-          "effects": {
-            "rythme du compteur": -0.122,
-            "buts": -0.154,
-            "tirs cadrés": -0.04,
-            "cartons rouges": 0,
-            "temps écoulé": -0.005
-          }
-        },
-        {
-          "unit": "cards_ft",
-          "pairs": 3,
-          "effects": {
-            "rythme du compteur": -0.081,
-            "buts": 0,
-            "tirs cadrés": 0.052,
-            "cartons rouges": 0,
-            "temps écoulé": -0.076
-          }
-        },
-        {
-          "unit": "corners_1h",
-          "pairs": 1,
-          "effects": {
-            "rythme du compteur": 0,
-            "buts": 0,
-            "tirs cadrés": 0,
-            "cartons rouges": 0,
-            "temps écoulé": 0
-          }
-        },
-        {
-          "unit": "corners_ft",
-          "pairs": 2,
-          "effects": {
-            "rythme du compteur": 0,
-            "buts": 0,
-            "tirs cadrés": 0,
-            "cartons rouges": 0,
-            "temps écoulé": 0
-          }
-        }
-      ],
-      "countMultipliers": [
-        {
-          "key": "cards_ft|b",
-          "n": 4,
-          "k": 1.08
-        },
-        {
-          "key": "cards_ft|*",
-          "n": 10,
-          "k": 1
-        },
-        {
-          "key": "fouls_ft|b",
-          "n": 1,
-          "k": 1.04
-        },
-        {
-          "key": "fouls_ft|*",
-          "n": 3,
-          "k": 1.04
-        },
-        {
-          "key": "corners_ft|b",
-          "n": 3,
-          "k": 1.67
-        },
-        {
-          "key": "corners_ft|*",
-          "n": 9,
-          "k": 1.67
-        },
-        {
-          "key": "corners_ft|c",
-          "n": 3,
-          "k": 1.23
-        },
-        {
-          "key": "goals_ft|c",
-          "n": 2,
-          "k": 1.91
-        },
-        {
-          "key": "goals_ft|*",
-          "n": 12,
-          "k": 1.68
-        },
-        {
-          "key": "goals_ft|a",
-          "n": 4,
-          "k": 1.68
-        },
-        {
-          "key": "cards_ft|a",
-          "n": 5,
-          "k": 0.91
-        },
-        {
-          "key": "goals_ft|b",
-          "n": 6,
-          "k": 1.63
-        },
-        {
-          "key": "corners_ft|a",
-          "n": 3,
-          "k": 2.2
-        },
-        {
-          "key": "cards_ft|c",
-          "n": 1,
-          "k": 1.09
-        },
-        {
-          "key": "corners_1h|a",
-          "n": 2,
-          "k": 1.46
-        },
-        {
-          "key": "corners_1h|*",
-          "n": 2,
-          "k": 1.46
-        },
-        {
-          "key": "fouls_ft|c",
-          "n": 2,
-          "k": 0.97
-        }
-      ],
-      "ratios": [
-        {
-          "key": "total_buts|over|ft|b",
-          "n": 7,
-          "ratio": 0.992
-        },
-        {
-          "key": "total_buts|over|ft|*",
-          "n": 13,
-          "ratio": 0.951
-        },
-        {
-          "key": "total_buts|under|ft|b",
-          "n": 3,
-          "ratio": 0.894
-        },
-        {
-          "key": "total_buts|under|ft|*",
-          "n": 5,
-          "ratio": 0.886
-        },
-        {
-          "key": "total_buts|over|ft|c",
-          "n": 5,
-          "ratio": 0.498
-        },
-        {
-          "key": "total_buts|under|ft|c",
-          "n": 2,
-          "ratio": 0.923
-        },
-        {
-          "key": "corners|over|ft|b",
-          "n": 1,
-          "ratio": 1.01
-        },
-        {
-          "key": "corners|over|ft|*",
-          "n": 1,
-          "ratio": 1.01
-        },
-        {
-          "key": "total_buts|over|ft|a",
-          "n": 1,
-          "ratio": 0.943
-        },
-        {
-          "key": "combo|b",
-          "n": 1,
-          "ratio": 0.936
-        },
-        {
-          "key": "combo|*",
-          "n": 1,
-          "ratio": 0.936
-        }
-      ]
+      "reactions": [],
+      "countMultipliers": [],
+      "ratios": []
     },
     "oddsAlignment": {
       "score": 0,
