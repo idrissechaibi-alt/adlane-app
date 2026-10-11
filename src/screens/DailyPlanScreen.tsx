@@ -414,11 +414,11 @@ export default function DailyPlanScreen() {
     const lowOdds = minLineForm.lowOdds.trim() ? num(minLineForm.lowOdds) : null;
     const highOdds = minLineForm.highOdds.trim() ? num(minLineForm.highOdds) : null;
     if (low == null && high == null) {
-      Alert.alert('Ligne manquante', 'Entre au moins la ligne basse ou la ligne haute proposée par ton bookmaker (ex. 2.5).');
+      Alert.alert('Ligne manquante', 'Entre au moins la ligne min ou la ligne max proposée par ton bookmaker (ex. 2.5).');
       return;
     }
     if ((low != null && (!Number.isFinite(low) || low <= 0)) || (high != null && (!Number.isFinite(high) || high <= 0)) || (low != null && high != null && low > high)) {
-      Alert.alert('Lignes invalides', 'La ligne basse doit être inférieure ou égale à la ligne haute (ex. 2.5 et 6.5).');
+      Alert.alert('Lignes invalides', 'La ligne min doit être inférieure ou égale à la ligne max (ex. 2.5 et 6.5).');
       return;
     }
     if ((lowOdds != null && (!Number.isFinite(lowOdds) || lowOdds <= 1)) || (highOdds != null && (!Number.isFinite(highOdds) || highOdds <= 1))) {
@@ -459,8 +459,8 @@ export default function DailyPlanScreen() {
       Alert.alert(
         'Noté',
         `Pour ce moment du match${ctx ? ` (${ctx.minute}e minute)` : ''}, total attendu par l'app : ${expected.toFixed(1)}.` +
-          (low != null ? `\nLigne basse ${low}${lowOdds ? ` à ${lowOdds.toFixed(2)}` : ''} (${around(low)} par rapport au total attendu).` : '') +
-          (high != null ? `\nLigne haute ${high}${highOdds ? ` à ${highOdds.toFixed(2)}` : ''} (${around(high)}).` : '') +
+          (low != null ? `\n${parsed.side === 'under' ? 'Moins' : 'Plus'} de ${low} (ligne min)${lowOdds ? ` à ${lowOdds.toFixed(2)}` : ''} (${around(low)} par rapport au total attendu).` : '') +
+          (high != null ? `\n${parsed.side === 'under' ? 'Moins' : 'Plus'} de ${high}${highOdds ? ` à ${highOdds.toFixed(2)}` : ''} (ligne max, ${around(high)}).` : '') +
           "\nCes lignes servent à comprendre comment ton bookmaker construit son menu et ses cotes. Elles ne bloquent rien : l'app continue de chercher le marché le plus intéressant."
       );
     } catch (error: any) {
@@ -595,13 +595,16 @@ export default function DailyPlanScreen() {
         </View>
         {minLineForm?.id.startsWith(`${proposal.id}:`) && (
           <View>
-            <Text style={styles.liveBetLeg}>Lignes proposées par ton bookmaker pour ce marché (une seule suffit) :</Text>
+            {(() => {
+              const sideLabel = parseLine(proposal.legs[Number(minLineForm.id.split(':').pop()) || 0].selection)?.side === 'under' ? 'Moins de' : 'Plus de';
+              return <Text style={styles.liveBetLeg}>Ton bookmaker, côté « {sideLabel} » : ligne MIN et ligne MAX avec leur cote (une seule suffit) :</Text>;
+            })()}
             <View style={styles.placeStakeRow}>
               <TextInput
                 style={styles.stakeInput}
                 value={minLineForm.low}
                 onChangeText={(v) => setMinLineForm({ ...minLineForm, low: v })}
-                placeholder="Ligne BASSE (ex 2.5)"
+                placeholder={`${parseLine(proposal.legs[Number(minLineForm.id.split(':').pop()) || 0].selection)?.side === 'under' ? 'Moins' : 'Plus'} de MIN (ex 2.5)`}
                 placeholderTextColor="#64748b"
                 keyboardType="decimal-pad"
                 autoFocus
@@ -620,7 +623,7 @@ export default function DailyPlanScreen() {
                 style={styles.stakeInput}
                 value={minLineForm.high}
                 onChangeText={(v) => setMinLineForm({ ...minLineForm, high: v })}
-                placeholder="Ligne HAUTE (ex 6.5)"
+                placeholder={`${parseLine(proposal.legs[Number(minLineForm.id.split(':').pop()) || 0].selection)?.side === 'under' ? 'Moins' : 'Plus'} de MAX (ex 6.5)`}
                 placeholderTextColor="#64748b"
                 keyboardType="decimal-pad"
               />
