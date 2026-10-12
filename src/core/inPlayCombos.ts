@@ -979,6 +979,34 @@ function buildProposalFromItems(
  * pouvoir lire le message et savoir IMMÉDIATEMENT quoi jouer, sans avoir à
  * déchiffrer la structure du message.
  */
+/**
+ * Réservation d'un pari avant son envoi : même match + mêmes sélections + même moment (20e, 60e, mi-temps) = une seule fois,
+ * gardée 24 h et persistée (survit aux redémarrages et aux deux tâches qui tournent en parallèle).
+ */
+const CLAIMED_KEY = '@claimed_picks';
+let claimed: Map<string, number> | null = null;
+let claimedLoading: Promise<void> | null = null;
+
+async function claimPick(p: InPlayProposal): Promise<boolean> {
+  if (!claimed) {
+    claimedLoading ??= (async () => {
+      try {
+        claimed = new Map(Object.entries(JSON.parse((await AsyncStorage.getItem(CLAIMED_KEY)) ?? '{}')));
+      } catch {
+        claimed = new Map();
+      }
+    })();
+    await claimedLoading;
+  }
+  const key = p.legs.map((l) => `${normalizeTeamName(l.homeTeam)}|${normalizeTeamName(l.awayTeam)}|${l.selection}`).sort().join('+') + `|${p.kind}`;
+  const now = Date.now();
+  for (const [k, at] of claimed!) if (now - at > 24 * 3_600_000) claimed!.delete(k);
+  if (claimed!.has(key)) return false;
+  claimed!.set(key, now);
+  AsyncStorage.setItem(CLAIMED_KEY, JSON.stringify(Object.fromEntries(claimed!))).catch(() => {});
+  return true;
+}
+
 async function notifyProposal(proposal: InPlayProposal): Promise<void> {
   const emoji = proposal.kind === 'minute20' ? '⚡' : '⏱️';
 
@@ -1275,7 +1303,11 @@ async function processRealSlotCheckpoint(
     const enriched = await formulateWithOmniroute(items, checkpointLabel);
     const proposal = buildProposalFromItems(kind, enriched, label ? `${window} · ${label}` : window, true);
     if (!proposal) return;
+    // Un même pari n'est JAMAIS envoyé deux fois (deux passages simultanés, relances à chaque minute) : réservation avant l'envoi,
+    // et enregistrement immédiat (un passage coupé en route ne le fait pas renvoyer).
+    if (!(await claimPick(proposal))) return;
     fresh.push(proposal);
+    appendInPlayProposals([proposal]);
     for (const item of items) alreadyProposed.add(`${item.fixtureId}-${kind}`);
     await notifyProposal(proposal);
   };
@@ -1780,7 +1812,9 @@ export async function runRealInPlayTick(liveFixtures: LiveFixture[]): Promise<nu
         const xg = correctedGoals({ home: scheduled.expectedHomeGoals, away: scheduled.expectedAwayGoals }, 'goals_ft');
         const odds = scheduled.odds?.home > 1 && scheduled.odds?.away > 1 ? { home: scheduled.odds.home, away: scheduled.odds.away } : null;
         for (const proposal of strategyProposals(live, matchRefOfScheduled(scheduled), free?.all, xg, odds, true, alreadyProposed)) {
+          if (!(await claimPick(proposal))) continue;
           fresh.push(proposal);
+          appendInPlayProposals([proposal]);
           await notifyProposal(proposal);
         }
       }
