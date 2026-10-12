@@ -16,6 +16,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { namesLikelyMatch, normalizeTeamName } from './teamNameMatch';
+import { ensureTeamLiveLessonsLoaded, teamLiveNote } from './matchDigest';
 import { poissonProb } from './poisson';
 
 const BASE_URL = 'https://raw.githubusercontent.com/idrissechaibi-alt/adlane-app/main/data/team-stats';
@@ -261,6 +262,7 @@ function rate(team: TeamSummary, venue: 'home' | 'away', key: TrendKey): [number
 export async function getMatchTrend(homeTeam: string, awayTeam: string): Promise<MatchTrend | null> {
   try {
     usage.lookups++;
+    await ensureTeamLiveLessonsLoaded();
     const index = await loadIndex();
     if (!index) return null;
     const hTeam = findTeam(index, homeTeam);
@@ -402,6 +404,8 @@ export function describeMatchTrend(trend: MatchTrend): string {
     `- ${line(trend.awayTeam, trend.samples.away, trend.rates.away)}\n` +
     `- Total attendu pour ce match d'après ces tendances : ${exp.join(', ')}.` +
     teamNotes(trend.homeTeam, trend.insights.home, trend.recent.home) +
-    teamNotes(trend.awayTeam, trend.insights.away, trend.recent.away)
+    teamNotes(trend.awayTeam, trend.insights.away, trend.recent.away) +
+    teamLiveNote(trend.homeTeam) +
+    teamLiveNote(trend.awayTeam)
   );
 }

@@ -10,6 +10,7 @@ import { InPlayProposal, readInPlayProposals, readMarketSeries, marketLabel } fr
 import { buildFictionalMarketStats, formatFictionalDigestMessage } from './dailyDigest';
 import { readOddsLoopFile } from './oddsLoop';
 import { getDeltaReport, getSituationReport } from './deltaLearning';
+import { getPatternLessons, getTodaysMatchLessons } from './matchDigest';
 
 export type EveningPart = 'bilan' | 'cotes' | 'lecons' | 'stats';
 export const EVENING_PARTS: EveningPart[] = ['bilan', 'cotes', 'lecons', 'stats'];
@@ -93,6 +94,14 @@ async function leconsMessage(day: string): Promise<string> {
     lines.push('Effets de la situation du match appris :');
     for (const r of sit.slice(0, 4)) lines.push(`• ${r.label} (${r.samples} matchs${r.promoted ? ', activé' : ', pas encore activé'}) : ${r.effects.slice(0, 3).map((e) => `${e.name} ${e.pct >= 0 ? '+' : ''}${e.pct} %`).join(', ') || 'aucun effet net'}`);
     lines.push('');
+  }
+  try {
+    const matches = await getTodaysMatchLessons(day);
+    if (matches.length) lines.push('Matchs suivis minute par minute aujourd\'hui :', ...matches.slice(0, 10).map((m) => `• ${m}`), '');
+    const patterns = await getPatternLessons();
+    if (patterns.length) lines.push('Motifs appris (cumul, versés dans la boucle) :', ...patterns.map((m) => `• ${m}`), '');
+  } catch {
+    // lecture impossible : on s'en passe
   }
   const series = readMarketSeries().filter((p) => p.date === day);
   if (series.length) lines.push('Fiabilité du jour par marché :', ...series.filter((p) => p.predictions >= 5).sort((a, b) => b.predictions - a.predictions).slice(0, 7).map((p) => `• ${marketLabel(p.market)} : ${p.correct}/${p.predictions} (${Math.round(p.hitRate * 100)} % réel pour ${Math.round(p.meanPredicted * 100)} % annoncé)`));

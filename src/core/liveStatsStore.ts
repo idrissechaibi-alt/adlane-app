@@ -57,3 +57,33 @@ export async function getLiveStatsScanStatus(): Promise<{ lastScan: typeof lastS
   }
   return { lastScan, todaySamples: counts };
 }
+
+/** Relevés bruts d'un jour (tous les matchs). */
+export async function readLiveStatsDay(day: string): Promise<Record<string, LiveStatsSample[]>> {
+  try {
+    return JSON.parse((await AsyncStorage.getItem(`${KEY_PREFIX}${day}`)) ?? '{}');
+  } catch {
+    return {};
+  }
+}
+
+/** Retire les relevés bruts d'un match (une fois digérés en un résumé compact). */
+export async function removeLiveStatsMatch(day: string, matchKey: string): Promise<void> {
+  try {
+    const store = await readLiveStatsDay(day);
+    delete store[matchKey];
+    if (Object.keys(store).length === 0) await AsyncStorage.removeItem(`${KEY_PREFIX}${day}`);
+    else await AsyncStorage.setItem(`${KEY_PREFIX}${day}`, JSON.stringify(store));
+  } catch {
+    // best-effort
+  }
+}
+
+/** Jours de relevés bruts encore présents (les plus anciens sont digérés puis supprimés). */
+export async function listLiveStatsDays(): Promise<string[]> {
+  try {
+    return (await AsyncStorage.getAllKeys()).filter((k) => k.startsWith(KEY_PREFIX)).map((k) => k.slice(KEY_PREFIX.length)).sort();
+  } catch {
+    return [];
+  }
+}

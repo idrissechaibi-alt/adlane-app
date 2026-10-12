@@ -98,6 +98,7 @@ import { mapWithConcurrency } from './concurrency';
 import { hubDateKey, hubKnowsMatch, hubLiveStatus, hubStats } from '../api/footballDataAPIs/liveDataHub';
 import { playerShotLegs } from './playerShots';
 import { appendLiveStatsSample, noteLiveStatsScan } from './liveStatsStore';
+import { digestFinishedMatches } from './matchDigest';
 import { StrategyContext, evaluateStrategies, oddsFromExpectedGoals } from './strategies';
 import { SofaPeriodStats } from '../api/footballDataAPIs/sofaScore';
 import { DeltaUnit, LegProjection, PLAUSIBLE_MAX, describeCorrection, ensureDeltaSamplesLoaded, flushShadowProjections, getDeltaCorrection, projectFullMatchCount, recordShadowProjection, factorForRemaining, situationMultiplier } from './deltaLearning';
@@ -1745,6 +1746,8 @@ export async function runLiveStatsScan(liveFixtures: LiveFixture[]): Promise<num
     if (ok) recorded++;
   });
   noteLiveStatsScan(live.length, '6 sources gratuites');
+  // Fin de scan d'un match : analyse des relevés, leçons vers la boucle d'apprentissage et le fichier des équipes, relevés bruts compactés.
+  await digestFinishedMatches(new Set(live.map((f) => `${f.homeTeam} - ${f.awayTeam}`))).catch(() => 0);
   return recorded;
 }
 
