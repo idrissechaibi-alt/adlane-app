@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-10-12T03:35:25.933Z",
+  "exportedAt": "2026-10-12T03:59:00.368Z",
   "formatVersion": 1,
   "source": "APP adlane",
   "data": {
@@ -5181,39 +5181,40 @@
   },
   "health": {
     "nativeBackgroundTicks": {
-      "lastTickAt": "2026-10-12T03:35:12.823Z",
+      "lastTickAt": "2026-10-12T03:58:47.294Z",
       "ticksLast24h": 62
     },
     "tickProgress": {
-      "startedAt": "2026-10-12T03:35:13.088Z",
-      "step": "scan matinal",
-      "at": "2026-10-12T03:35:13.098Z",
+      "startedAt": "2026-10-12T03:58:47.490Z",
+      "step": "relevé live partagé",
+      "at": "2026-10-12T03:58:49.083Z",
       "stepDurationsSec": {
-        "terminé": 953
+        "terminé": 1113,
+        "scan matinal": 2
       }
     },
     "lastTick": {
-      "startedAt": "2026-10-12T03:17:24.976Z",
-      "finishedAt": "2026-10-12T03:19:20.527Z",
-      "durationSec": 116,
+      "startedAt": "2026-10-12T03:35:13.088Z",
+      "finishedAt": "2026-10-12T03:40:14.310Z",
+      "durationSec": 301,
       "stepDurationsSec": {
-        "terminé": 974,
-        "scan matinal": 1,
-        "relevé live partagé": 0,
-        "scan en direct 20e/60e": 60,
-        "bilan de minuit": 6,
+        "terminé": 953,
+        "scan matinal": 13,
+        "relevé live partagé": 51,
+        "scan en direct 20e/60e": 219,
+        "bilan de minuit": 10,
         "marqueurs live": 0,
-        "programme fictif": 45,
+        "programme fictif": 2,
         "univers du jour": 1,
         "compositions T-90": 0,
         "bilan Scouting": 0,
-        "consolidation apprentissage": 3,
+        "consolidation apprentissage": 4,
         "enrichissement matchs suivis": 0,
         "vérification accès internet des modèles": 0
       },
       "universeSize": 0,
       "omnirouteConfigured": true,
-      "fictionalProgramSize": 338,
+      "fictionalProgramSize": 339,
       "fictionalProgramFromFeed": false,
       "fictionalMatchesAhead": 280,
       "fictionalNextKickoffUtc": "2026-10-12T04:00:00Z",
@@ -5223,32 +5224,17 @@
         "country": "Écosse",
         "attempts": [
           {
-            "model": "Principal · gpt-oss-120b",
-            "outcome": "erreur",
-            "detail": "HTTP 429 : All models exhausted: 1 route checked (1 rate-limited or on cooldown). Add more API keys or wait for rate limits to reset. 5 models skipped: no key configured for their platform."
-          },
-          {
             "model": "Principal · allam-2-7b",
-            "outcome": "erreur",
-            "detail": "HTTP 429 : All models exhausted: 1 route checked (1 rate-limited or on cooldown). Add more API keys or wait for rate limits to reset."
-          },
-          {
-            "model": "Omniroute · Clodiko",
-            "outcome": "erreur",
-            "detail": "réponse vide après les recherches"
-          },
-          {
-            "model": "Omniroute · Maximus appus",
-            "outcome": "erreur",
-            "detail": "réponse vide après les recherches"
+            "outcome": "exploitable",
+            "detail": "{\"matches\": [\n  {\"home_team\": \"null\", \"away_team\": \"null\", \"competition\": \"null\", \"kickoff_utc\": \"2026-10-12T12:00:00Z\"},\n  {\"home_team\": \"null\", \"away_team\": \"null\", \"competition\": \"null\", \"kickoff_u"
           }
         ]
       },
       "fictionalSportmonksMatches": 1,
       "fictionalSofascoreMatches": 271,
-      "fictionalOmnirouteMatches": 73,
+      "fictionalOmnirouteMatches": 74,
       "liveFixturesFound": 0,
-      "fictionalLiveFixturesFound": 3,
+      "fictionalLiveFixturesFound": 0,
       "liveFixturesSource": "api_football",
       "liveMarkerObserved": 0,
       "liveMarkerClosed": 0,
@@ -5265,7 +5251,7 @@
       "nightlyReviewPointsCreated": 15
     },
     "lastRealFastTick": {
-      "at": "2026-10-12T03:17:25.684Z",
+      "at": "2026-10-12T03:58:49.065Z",
       "liveFound": 0,
       "fresh": 0,
       "source": "api_football"
@@ -5570,7 +5556,7 @@
       }
     },
     "model": {
-      "updatedAt": "2026-10-12T03:19:20.441Z",
+      "updatedAt": "2026-10-12T03:40:14.218Z",
       "totalRows": 7419,
       "markerRules": 13,
       "paperBets": {
@@ -5647,8 +5633,8 @@
     "inPlayProposals": {
       "real": 134,
       "fictional": 3172,
-      "fictionalReviewed": 3059,
-      "fictionalSettledLegs": 2669,
+      "fictionalReviewed": 3061,
+      "fictionalSettledLegs": 2671,
       "lastCreatedAt": "2026-10-12T03:00:06.348Z",
       "createdLast24h": 3242
     },
@@ -5710,54 +5696,54 @@
         {
           "name": "Principal",
           "ok": true,
-          "latencyMs": 225,
-          "readyModels": 27,
-          "configuredReady": 12,
+          "latencyMs": 211,
+          "readyModels": 28,
+          "configuredReady": 13,
           "configuredTotal": 13
         },
         {
           "name": "Omniroute",
           "ok": true,
-          "latencyMs": 4113,
-          "readyModels": 836,
+          "latencyMs": 2924,
+          "readyModels": 837,
           "configuredReady": 2,
           "configuredTotal": 2
         }
       ],
       "leaderboard": [
         {
-          "label": "Omniroute · Clodiko",
-          "ok": 2602,
-          "fail": 175,
-          "avgMs": 1914,
+          "label": "Omniroute · Maximus appus",
+          "ok": 874,
+          "fail": 13,
+          "avgMs": 2822,
           "coolingDown": false
         },
         {
           "label": "Principal · allam-2-7b",
-          "ok": 1510,
-          "fail": 1387,
-          "avgMs": 699,
+          "ok": 1516,
+          "fail": 1393,
+          "avgMs": 1097,
           "coolingDown": false
         },
         {
-          "label": "Omniroute · Maximus appus",
-          "ok": 860,
-          "fail": 13,
-          "avgMs": 2931,
+          "label": "Omniroute · Clodiko",
+          "ok": 2620,
+          "fail": 175,
+          "avgMs": 2805,
           "coolingDown": false
         },
         {
           "label": "Principal · qwen3.8-27b",
           "ok": 308,
-          "fail": 539,
+          "fail": 541,
           "avgMs": 808,
           "coolingDown": false
         },
         {
           "label": "Principal · gpt-oss-120b",
-          "ok": 339,
-          "fail": 515,
-          "avgMs": 1000,
+          "ok": 343,
+          "fail": 518,
+          "avgMs": 1302,
           "coolingDown": false
         },
         {
@@ -5835,13 +5821,13 @@
     "apiUsageToday": {
       "countsToday": {
         "footballData": 1,
-        "apiFootball": 13,
+        "apiFootball": 14,
         "theOddsApi": 1,
         "perplexity": 0,
-        "apiFootball-autolearn": 12,
+        "apiFootball-autolearn": 13,
         "sportmonks-autolearn": 4,
         "sofaScore": 0,
-        "sportmonks": 16
+        "sportmonks": 17
       },
       "theOddsApiMonth": {
         "used": 500,
@@ -5851,41 +5837,41 @@
       }
     },
     "apiFootballBudget": {
-      "usedToday": 13,
-      "autolearnUsedToday": 12,
-      "autolearnRemaining": 58
+      "usedToday": 14,
+      "autolearnUsedToday": 13,
+      "autolearnRemaining": 57
     },
     "sofaScore": null,
     "liveSources": {
       "LiveScore": {
         "ok": true,
         "count": 0,
-        "at": "2026-10-12T03:35:13.486Z"
+        "at": "2026-10-12T03:58:48.005Z"
       },
       "TheSportsDB": {
         "ok": true,
         "count": 0,
-        "at": "2026-10-12T03:35:13.486Z"
+        "at": "2026-10-12T03:58:47.920Z"
       },
       "FotMob": {
         "ok": true,
         "count": 0,
-        "at": "2026-10-12T03:35:13.906Z"
+        "at": "2026-10-12T03:58:47.918Z"
       },
       "ESPN": {
         "ok": true,
         "count": 0,
-        "at": "2026-10-12T03:35:13.887Z"
+        "at": "2026-10-12T03:58:48.298Z"
       },
       "365Scores": {
         "ok": true,
         "count": 0,
-        "at": "2026-10-12T03:35:24.577Z"
+        "at": "2026-10-12T03:58:48.164Z"
       },
       "AllSportsApi": {
         "ok": true,
         "count": 0,
-        "at": "2026-10-12T03:35:13.673Z"
+        "at": "2026-10-12T03:58:48.021Z"
       }
     },
     "backupOddsSources": {
@@ -5895,7 +5881,7 @@
       },
       "fanLine": {
         "fixtures": 20,
-        "soccer": 0
+        "soccer": 1
       },
       "oddsmagnet": {
         "httpStatus": null
@@ -6268,9 +6254,9 @@
       {
         "unit": "goals_1h",
         "label": "Buts à la pause",
-        "samples": 123,
-        "maeBase": 0.6643559238224018,
-        "maeNew": 0.6503768961138178,
+        "samples": 124,
+        "maeBase": 0.6707530918247377,
+        "maeNew": 0.6554559225029785,
         "promoted": false,
         "effects": [
           {
@@ -7269,7 +7255,7 @@
         }
       ],
       "samples": {
-        "pending": 42,
+        "pending": 40,
         "measured": 2636
       }
     },
