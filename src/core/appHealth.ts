@@ -13,6 +13,7 @@ import { loadOmnirouteConfig } from './focusEnrichment';
 import { ensureRefCorrections } from './oddsLoop';
 import { getRefCorrections } from './oddsLearning';
 import { readTeamStatsUsageLog } from './teamStats';
+import { getLiveStatsScanStatus } from './liveStatsStore';
 import { probeBackupSources } from '../api/footballDataAPIs/backupOdds';
 import { checkAllProviders, getRouteLeaderboard, getWebCapableRoutes } from './llmRouter';
 import { getRecentSearchSource, getWorkingSearchProviders } from './webSearch';
@@ -179,6 +180,7 @@ export async function buildAppHealth(): Promise<Record<string, unknown>> {
     })),
     sofaScore: await section(async () => getSofaStatus()),
     liveSources: await section(async () => getHubStatus()),
+    liveStatsScan: await section(async () => getLiveStatsScanStatus()),
     backupOddsSources: await section(async () => probeBackupSources()),
     teamStats: await section(async () => getTeamStatsStatus()),
     teamStatsUsageLog: await section(async () => (await readTeamStatsUsageLog()).slice(-25)),

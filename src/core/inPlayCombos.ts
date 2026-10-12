@@ -97,6 +97,7 @@ import { OmnirouteConfig } from '../types';
 import { mapWithConcurrency } from './concurrency';
 import { hubDateKey, hubKnowsMatch, hubLiveStatus, hubStats } from '../api/footballDataAPIs/liveDataHub';
 import { playerShotLegs } from './playerShots';
+import { appendLiveStatsSample, noteLiveStatsScan } from './liveStatsStore';
 import { StrategyContext, evaluateStrategies, oddsFromExpectedGoals } from './strategies';
 import { SofaPeriodStats } from '../api/footballDataAPIs/sofaScore';
 import { DeltaUnit, LegProjection, PLAUSIBLE_MAX, describeCorrection, ensureDeltaSamplesLoaded, flushShadowProjections, getDeltaCorrection, projectFullMatchCount, recordShadowProjection, factorForRemaining, situationMultiplier } from './deltaLearning';
@@ -1714,8 +1715,42 @@ export function proposalDuplicateKey(p: InPlayProposal): string | null {
  * planning, aux checkpoints 20e et 60e. Léger (quelques matchs), il tourne
  * toutes les 2 minutes indépendamment du tour complet.
  */
+/**
+ * Scan des statistiques de CHAQUE match réel en cours (appelé chaque minute) auprès des 6 sources gratuites :
+ * un relevé par match, gardé minute par minute (score, tirs, corners, cartons, fautes, possession, xG, rouges).
+ * Il alimente aussi le momentum et les variables de situation, indépendamment des checkpoints 20e / 60e.
+ */
+export async function runLiveStatsScan(liveFixtures: LiveFixture[]): Promise<number> {
+  const live = liveFixtures.filter((f) => ['1H', 'HT', '2H'].includes(f.statusShort));
+  let recorded = 0;
+  await mapWithConcurrency(live, 4, async (f) => {
+    const free = await fetchFreeLiveStats(f).catch(() => undefined);
+    const a = free?.all;
+    if (!a) return;
+    const ok = await appendLiveStatsSample(`${f.homeTeam} - ${f.awayTeam}`, {
+      ts: new Date().toISOString(),
+      minute: f.minute,
+      status: f.statusShort,
+      home: f.homeGoals,
+      away: f.awayGoals,
+      shots: a.shotsTotalHome + a.shotsTotalAway,
+      sot: a.shotsOnTargetHome + a.shotsOnTargetAway,
+      corners: a.corners,
+      cards: a.cards,
+      fouls: a.fouls || undefined,
+      possessionHome: a.possessionHome ?? undefined,
+      xg: a.xgHome != null && a.xgAway != null ? Math.round((a.xgHome + a.xgAway) * 100) / 100 : undefined,
+      reds: a.redCards ?? undefined,
+    });
+    if (ok) recorded++;
+  });
+  noteLiveStatsScan(live.length, '6 sources gratuites');
+  return recorded;
+}
+
 export async function runRealInPlayTick(liveFixtures: LiveFixture[]): Promise<number> {
   await ensureDeltaSamplesLoaded();
+  await runLiveStatsScan(liveFixtures).catch(() => 0);
   const existingReal = readInPlayProposals().filter((p) => p.real !== false);
   const alreadyProposed = new Set([
     ...existingReal.filter((p) => !p.strategy).flatMap((p) => p.legs.map((l) => `${l.fixtureId}-${p.kind}`)),
