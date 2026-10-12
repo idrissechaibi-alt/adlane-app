@@ -13,6 +13,18 @@ import { mapWithConcurrency } from './concurrency';
 
 export type DeltaUnit = 'corners_1h' | 'cards_1h' | 'fouls_1h' | 'goals_1h' | 'goals_ft' | 'corners_ft' | 'cards_ft' | 'fouls_ft';
 
+/**
+ * Maximum réaliste d'un compteur sur la fenêtre (au-delà : relevé aberrant ou projection folle).
+ * Sert à écarter les relevés incohérents avant d'apprendre, et à plafonner chaque projection.
+ */
+export const PLAUSIBLE_MAX: Record<DeltaUnit, number> = {
+  corners_1h: 12, cards_1h: 7, fouls_1h: 24, goals_1h: 6,
+  goals_ft: 12, corners_ft: 24, cards_ft: 14, fouls_ft: 45,
+};
+
+export const isPlausible = (unit: DeltaUnit, ...values: Array<number | undefined>): boolean =>
+  values.every((v) => v == null || (Number.isFinite(v) && v >= 0 && v <= PLAUSIBLE_MAX[unit]));
+
 export interface LegProjection {
   unit: DeltaUnit;
   /** Valeur finale projetée pour la fenêtre (déjà compté + attendu). */
@@ -70,6 +82,8 @@ function compute(): Map<DeltaUnit, DeltaCorrection> {
   const seen = new Set<string>();
   const add = (fixtureId: number, p: LegProjection) => {
     if (p.actual == null) return;
+    // Relevé ou projection aberrants (19 corners prédits en 1ère MT…) : ne servent pas à apprendre.
+    if (!isPlausible(p.unit, p.actual, p.observed, p.expected)) return;
     // Un même match/fenêtre ne compte qu'une fois (plusieurs lignes possibles).
     const key = `${fixtureId}|${p.unit}`;
     if (seen.has(key)) return;
@@ -328,7 +342,9 @@ export async function settleShadowProjections(deadline = Infinity): Promise<numb
         : s.unit === 'fouls_ft' ? result.foulsFT
         : s.unit === 'goals_1h' ? result.htHome + result.htAway
         : result.goalsHome + result.goalsAway;
-      if (actual != null) {
+      if (actual != null && !isPlausible(s.unit, actual)) {
+        s.tries = SHADOW_MAX_TRIES; // valeur réelle aberrante de la source : écartée
+      } else if (actual != null) {
         s.actual = actual;
         settled++;
       } else {
@@ -385,6 +401,7 @@ export function getDeltaReport(): DeltaReportRow[] {
     const key = `${fixtureId}|${p.unit}`;
     if (seen.has(key)) return;
     seen.add(key);
+    if (!isPlausible(p.unit, p.actual, p.expected)) return;
     entries.push({ unit: p.unit, predicted: p.expected, actual: p.actual, match, key });
   };
   for (const sh of shadowCache) push(sh.fixtureId, sh, `${sh.homeTeam} - ${sh.awayTeam}`);
@@ -436,6 +453,10 @@ export const SITUATION_FEATURES = [
   'écart de buts',
   'cartons rouges',
   'qualité des occasions',
+  // Météo du stade (Open-Meteo) — ajoutée en fin de vecteur : les échantillons plus anciens (9 variables) restent valables.
+  'pluie',
+  'vent',
+  'chaleur ou froid',
 ];
 const PER_FEATURE_CAP = Math.log(1.25);
 const TOTAL_CAP = Math.log(1.4);
@@ -494,13 +515,13 @@ function fitSituation(): Map<DeltaUnit, SituationFit> {
   const byUnit = new Map<DeltaUnit, Array<{ f: number[]; baseRem: number; actRem: number; at: number }>>();
   const seen = new Set<string>();
   const add = (fixtureId: number, p: LegProjection, at: number) => {
-    if (p.actual == null || !p.features || p.features.length !== SITUATION_FEATURES.length) return;
+    if (p.actual == null || !p.features || p.features.length > SITUATION_FEATURES.length || p.features.length < 9 || !isPlausible(p.unit, p.actual, p.observed, p.expected)) return;
     const key = `${fixtureId}|${p.unit}`;
     if (seen.has(key)) return;
     seen.add(key);
     const baseRem = Math.max(0, p.expected - p.observed) / (p.situationUsed ?? 1);
     const list = byUnit.get(p.unit) ?? [];
-    list.push({ f: p.features, baseRem, actRem: Math.max(0, p.actual - p.observed), at });
+    list.push({ f: [...p.features, ...new Array(SITUATION_FEATURES.length - p.features.length).fill(0)], baseRem, actRem: Math.max(0, p.actual - p.observed), at });
     byUnit.set(p.unit, list);
   };
   for (const sh of shadowCache) add(sh.fixtureId, sh, sh.at);

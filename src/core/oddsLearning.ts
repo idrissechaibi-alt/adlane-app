@@ -321,7 +321,29 @@ export function estimateBookieOdds(segment: string, prob: number, minute?: numbe
 }
 
 /** Jambe candidate : comptage si sa projection le permet, sinon rapport par segment. */
+/** Correction apprise des cotes bet365 lues en ligne (par marché/côté/fenêtre) : ratio réel / estimé, jamais appliqué à une vraie cote. */
+let refCorrections = new Map<string, number>();
+export function setRefCorrections(map: Map<string, number>): void {
+  refCorrections = map;
+}
+export function getRefCorrections(): Array<{ key: string; factor: number }> {
+  return [...refCorrections.entries()].map(([key, factor]) => ({ key, factor: Math.round(factor * 1000) / 1000 }));
+}
+
 export function estimateLegOdds(
+  leg: { market: TrackedMarket; selection: string; prob: number; projection?: { unit: string; observed: number; expected: number } },
+  fano: number,
+  minute: number | undefined,
+  features?: number[],
+  options: { noRefCorrection?: boolean } = {}
+): { odds: number; raw: number; observations: number } {
+  const base = estimateLegOddsBase(leg, fano, minute, features);
+  if (options.noRefCorrection) return base;
+  const factor = refCorrections.get(oddsSegment(leg.market, leg.selection));
+  return factor ? { ...base, odds: Math.round(base.odds * factor * 100) / 100 } : base;
+}
+
+function estimateLegOddsBase(
   leg: { market: TrackedMarket; selection: string; prob: number; projection?: { unit: string; observed: number; expected: number } },
   fano: number,
   minute: number | undefined,

@@ -28,6 +28,7 @@ import { syntheticFixtureId } from './halftimeMonitor';
 import { registerSofaEvents } from '../api/footballDataAPIs/sofaScore';
 import { getDailyPlan, runMorningScanIfDue } from './scheduler';
 import { reconcileScoutingAnalyses } from './scoutingReview';
+import { runWatchdog } from './watchdog';
 import { refreshDueLineups } from './lineupRefresh';
 import { readLearnedModel } from './learnStore';
 import { namesLikelyMatch, normalizeTeamName } from './teamNameMatch';
@@ -330,6 +331,8 @@ export async function readLastRealFastTick(): Promise<unknown> {
 }
 
 export const AUTOLEARN_TASK_NAME = 'adlane-autolearn-tick';
+/** Seconde tâche native : fictif et apprentissage (lent), pour que le réel ne soit jamais retardé. */
+export const AUTOLEARN_SLOW_TASK_NAME = 'adlane-autolearn-slow-tick';
 const MINIMUM_INTERVAL_MINUTES = 15; // plancher Android, inutile de descendre
 
 const NATIVE_BG_TICK_LOG_KEY = '@native_bg_tick_log';
@@ -448,7 +451,7 @@ export interface AutoLearnTickDiagnostics {
  * "quelque chose bloque en amont", plutôt que de laisser deviner face à un
  * compteur qui reste silencieusement à 0.
  */
-export async function runAutoLearnTick(): Promise<AutoLearnTickDiagnostics> {
+export async function runAutoLearnTick(mode: TickMode = 'all'): Promise<AutoLearnTickDiagnostics> {
   // Trois déclencheurs indépendants appellent cette fonction (tâche native
   // en arrière-plan, boucle de premier plan toutes les 3 min, bouton
   // "Forcer le scan") : sans ce verrou, deux tours pouvaient tourner en
@@ -460,19 +463,30 @@ export async function runAutoLearnTick(): Promise<AutoLearnTickDiagnostics> {
   // vol est simplement réutilisé — jamais de double exécution simultanée.
   // Un tour resté accroché (requête qui ne rend jamais la main) ne doit pas
   // bloquer tous les suivants : au-delà de STALE_TICK_MS, on en relance un.
-  if (inFlightTick && Date.now() - inFlightStartedAt < STALE_TICK_MS) return inFlightTick;
+  const existing = inFlightTicks[mode];
+  if (existing && Date.now() - inFlightStartedAt[mode] < STALE_TICK_MS) return existing;
 
-  const tick = runAutoLearnTickLocked();
-  inFlightTick = tick;
-  inFlightStartedAt = Date.now();
+  // Les deux tâches (rapide / lente) partagent l'état du diagnostic : jamais deux tours en même temps, l'un attend l'autre.
+  const tick = tickChain.catch(() => {}).then(() => runAutoLearnTickLocked(mode));
+  inFlightTicks[mode] = tick;
+  inFlightStartedAt[mode] = Date.now();
+  tickChain = tick;
   tick.finally(() => {
-    if (inFlightTick === tick) inFlightTick = null;
+    if (inFlightTicks[mode] === tick) inFlightTicks[mode] = undefined;
   }).catch(() => {});
   return tick;
 }
 
-let inFlightTick: Promise<AutoLearnTickDiagnostics> | null = null;
-let inFlightStartedAt = 0;
+/**
+ * 'fast' : paris RÉELS d'abord (scan réel, bilan, bilan du soir) — court, jamais retardé par le fictif.
+ * 'slow' : fictif, marqueurs, programme, apprentissage, enrichissement.
+ * 'all'  : tout, comme avant (app ouverte, bouton « Forcer le scan »).
+ */
+export type TickMode = 'all' | 'fast' | 'slow';
+
+const inFlightTicks: Partial<Record<TickMode, Promise<AutoLearnTickDiagnostics>>> = {};
+const inFlightStartedAt: Record<TickMode, number> = { all: 0, fast: 0, slow: 0 };
+let tickChain: Promise<unknown> = Promise.resolve();
 const STALE_TICK_MS = 25 * 60_000;
 
 const TICK_PROGRESS_KEY = '@autolearn_tick_progress';
@@ -532,7 +546,9 @@ export async function readAbortedTicks(): Promise<unknown[]> {
   }
 }
 
-async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
+async function runAutoLearnTickLocked(mode: TickMode): Promise<AutoLearnTickDiagnostics> {
+  const doFast = mode !== 'slow';
+  const doSlow = mode !== 'fast';
   await recordAbortedPreviousTick();
   // Scan matinal automatique (7h locales) : voir runMorningScanIfDue pour le
   // principe de déclenchement (premier tour après l'heure cible, idempotent).
@@ -540,13 +556,15 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
   // Paris réels d'abord : quelques matchs, à ne jamais faire attendre derrière
   // les 500 matchs fictifs.
   // Paris mis en attente quand la base était verrouillée : écrits dès qu'elle se libère.
-  await flushPendingBets().catch(() => {});
   await markTickStep('scan matinal');
-  await runRealFastTick();
-  try {
-    await runMorningScanIfDue();
-  } catch (error: any) {
-    console.warn('[Tâche de fond] Scan matinal automatique échoué:', error.message);
+  if (doFast) {
+    await flushPendingBets().catch(() => {});
+    await runRealFastTick();
+    try {
+      await runMorningScanIfDue();
+    } catch (error: any) {
+      console.warn('[Tâche de fond] Scan matinal automatique échoué:', error.message);
+    }
   }
 
   // Ordre : ce qui produit des paris et règle les résultats d'abord. Android
@@ -567,7 +585,7 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
   let sofaScoreConfirmedMatches: number | null | undefined;
   let sportmonksError: string | undefined;
   try {
-    const result = await runInPlayComboTick(liveFixtures, shared.fictionalFixtures);
+    const result = await runInPlayComboTick(doFast ? liveFixtures : [], doSlow ? shared.fictionalFixtures : []);
     freshInPlayProposals = result.freshProposals;
     intlBreak = result.intlBreak;
     sportmonksConfirmedMatches = result.sportmonksConfirmedMatches;
@@ -585,19 +603,22 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
   await markTickStep('bilan de minuit');
   let nightlyReviewPointsCreated: number | undefined;
   let nightlyReviewError: string | undefined;
-  try {
-    nightlyReviewPointsCreated = await runNightlyReviewIfDue();
-  } catch (error: any) {
-    nightlyReviewError = error?.message || 'erreur inconnue';
-    console.warn('[Tâche de fond] Bilan de minuit échoué:', error.message);
+  if (doFast) {
+    try {
+      nightlyReviewPointsCreated = await runNightlyReviewIfDue();
+    } catch (error: any) {
+      nightlyReviewError = error?.message || 'erreur inconnue';
+      console.warn('[Tâche de fond] Bilan de minuit échoué:', error.message);
+    }
+    // Bilan unique du soir (23h30 locales), jamais plus d'un par jour.
+    await sendEveningDigestIfDue().catch((error: any) => console.warn('[Tâche de fond] Bilan du soir échoué:', error?.message));
+    await runWatchdog().catch(() => {});
   }
-  // Bilan unique du soir (23h30 locales), jamais plus d'un par jour.
-  await sendEveningDigestIfDue().catch((error: any) => console.warn('[Tâche de fond] Bilan du soir échoué:', error?.message));
 
   await markTickStep('marqueurs live');
   let liveMarkerObserved = 0;
   let liveMarkerClosed = 0;
-  try {
+  if (doSlow) try {
     const result = await runLiveMarkerTick([...liveFixtures, ...shared.fictionalFixtures]);
     liveMarkerObserved = result.observed;
     liveMarkerClosed = result.closed;
@@ -626,7 +647,7 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
   let fictionalSofascoreMatches = 0;
   let fictionalOmnirouteMatches = 0;
   let fictionalSportmonksError: string | undefined;
-  try {
+  if (doSlow) try {
     const omnirouteConfig = await loadOmnirouteConfig();
     omnirouteConfigured = Boolean(omnirouteConfig);
     const program = await ensureFictionalDailyProgram(omnirouteConfig);
@@ -652,7 +673,7 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
   // (20e/60e minute), pas seulement du Planning du Jour.
   await markTickStep('univers du jour');
   let universeSize = 0;
-  try {
+  if (doSlow) try {
     const model = readLearnedModel();
     const universe = await ensureDailyUniverse(model?.focusLeagues ?? []);
     universeSize = universe.length;
@@ -663,7 +684,7 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
   // Compositions confirmées à T-90 (recherche Google/Omniroute, gratuit) :
   // débloque le placement direct des paris du Planning dès que l'info est là.
   await markTickStep('compositions T-90');
-  try {
+  if (doSlow) try {
     // Recherche web des compositions : bornée à 90 s (27 min mesurées le 10/10).
     await Promise.race([refreshDueLineups(), new Promise((resolve) => setTimeout(resolve, 90_000))]);
   } catch (error: any) {
@@ -674,21 +695,21 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
   // score final réel, AVANT de consolider le digest : la fiabilité mesurée
   // doit être à jour pour la prochaine analyse.
   await markTickStep('bilan Scouting');
-  try {
+  if (doSlow) try {
     await reconcileScoutingAnalyses();
   } catch (error: any) {
     console.warn('[Tâche de fond] Bilan Scouting vs réalité échoué:', error.message);
   }
 
   await markTickStep('consolidation apprentissage');
-  try {
+  if (doSlow) try {
     await consolidateLearning();
   } catch (error: any) {
     console.warn('[Tâche de fond] Consolidation échouée:', error.message);
   }
 
   await markTickStep('enrichissement matchs suivis');
-  try {
+  if (doSlow) try {
     // Étape IA facultative : sautée quand le tour est déjà long, pour que le
     // scan en direct et le bilan passent sans retard.
     if (Date.now() - Date.parse(currentTickStartedAt) < 5 * 60_000) await enrichFocusMatches();
@@ -727,7 +748,7 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
   // Détection quotidienne des modèles avec accès internet (voir llmRouter),
   // après tout le reste pour ne jamais retarder le scan lui-même.
   await markTickStep('vérification accès internet des modèles');
-  try {
+  if (doSlow) try {
     const config = await loadOmnirouteConfig();
     if (config) {
       await autoProbeWebCapability(config);
@@ -737,18 +758,29 @@ async function runAutoLearnTickLocked(): Promise<AutoLearnTickDiagnostics> {
     console.warn('[Tâche de fond] Vérification accès internet échouée:', error?.message);
   }
   await markTickStep('terminé');
-  await saveLastTickDiagnostics(diagnostics);
+  await saveLastTickDiagnostics(diagnostics, mode);
   return diagnostics;
 }
 
 const LAST_TICK_DIAGNOSTICS_KEY = '@last_autolearn_tick_diagnostics';
+/** Tour rapide (réel) : durée et étapes, séparés du tour lent pour ne pas écraser son diagnostic. */
+const LAST_FAST_TICK_KEY = '@last_fast_tick_diagnostics';
+
+export async function readLastFastTick(): Promise<unknown> {
+  try {
+    const raw = await AsyncStorage.getItem(LAST_FAST_TICK_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
 
 /** Dernier tour terminé, quel qu'en soit le déclencheur — relu par
  * appHealth.ts pour la sauvegarde GitHub. Best-effort, jamais bloquant. */
-async function saveLastTickDiagnostics(diagnostics: AutoLearnTickDiagnostics): Promise<void> {
+async function saveLastTickDiagnostics(diagnostics: AutoLearnTickDiagnostics, mode: TickMode = 'all'): Promise<void> {
   try {
     await AsyncStorage.setItem(
-      LAST_TICK_DIAGNOSTICS_KEY,
+      mode === 'fast' ? LAST_FAST_TICK_KEY : LAST_TICK_DIAGNOSTICS_KEY,
       JSON.stringify({
         startedAt: currentTickStartedAt,
         finishedAt: new Date().toISOString(),
@@ -774,30 +806,39 @@ export async function readLastTickDiagnostics(): Promise<
 TaskManager.defineTask(AUTOLEARN_TASK_NAME, async () => {
   await recordNativeBackgroundTick();
   try {
-    await runAutoLearnTick();
+    await runAutoLearnTick('fast');
     return BackgroundTask.BackgroundTaskResult.Success;
   } catch (error) {
-    console.error('[Tâche de fond] Échec du tour:', error);
+    console.error('[Tâche de fond] Échec du tour rapide:', error);
+    return BackgroundTask.BackgroundTaskResult.Failed;
+  }
+});
+
+TaskManager.defineTask(AUTOLEARN_SLOW_TASK_NAME, async () => {
+  try {
+    await runAutoLearnTick('slow');
+    return BackgroundTask.BackgroundTaskResult.Success;
+  } catch (error) {
+    console.error('[Tâche de fond] Échec du tour lent:', error);
     return BackgroundTask.BackgroundTaskResult.Failed;
   }
 });
 
 export async function registerBackgroundAutoLearn(): Promise<void> {
-  try {
-    const alreadyRegistered = await TaskManager.isTaskRegisteredAsync(AUTOLEARN_TASK_NAME);
-    if (alreadyRegistered) return;
-
-    await BackgroundTask.registerTaskAsync(AUTOLEARN_TASK_NAME, {
-      minimumInterval: MINIMUM_INTERVAL_MINUTES,
-    });
-  } catch (error: any) {
-    console.warn('[Tâche de fond] Enregistrement impossible:', error.message);
+  for (const name of [AUTOLEARN_TASK_NAME, AUTOLEARN_SLOW_TASK_NAME]) {
+    try {
+      if (await TaskManager.isTaskRegisteredAsync(name)) continue;
+      await BackgroundTask.registerTaskAsync(name, { minimumInterval: MINIMUM_INTERVAL_MINUTES });
+    } catch (error: any) {
+      console.warn('[Tâche de fond] Enregistrement impossible:', error.message);
+    }
   }
 }
 
 export async function unregisterBackgroundAutoLearn(): Promise<void> {
   try {
     await BackgroundTask.unregisterTaskAsync(AUTOLEARN_TASK_NAME);
+    await BackgroundTask.unregisterTaskAsync(AUTOLEARN_SLOW_TASK_NAME).catch(() => {});
   } catch (error: any) {
     console.warn('[Tâche de fond] Désinscription impossible:', error.message);
   }

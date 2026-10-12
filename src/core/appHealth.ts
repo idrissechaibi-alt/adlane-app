@@ -8,8 +8,11 @@ import { getAPIConfig, getAllRequestCounts, getQuotaUsage, getRequestCount } fro
 import { getDailyPlan } from './scheduler';
 import { remainingBudget } from './requestBudget';
 import { estimateExpectedGoalsFromMarket } from './poisson';
-import { getNativeBackgroundTickStats, readAbortedTicks, readLastRealFastTick, readLastTickDiagnostics, readTickProgress } from './backgroundTasks';
+import { getNativeBackgroundTickStats, readAbortedTicks, readLastFastTick, readLastRealFastTick, readLastTickDiagnostics, readTickProgress } from './backgroundTasks';
 import { loadOmnirouteConfig } from './focusEnrichment';
+import { ensureRefCorrections } from './oddsLoop';
+import { getRefCorrections } from './oddsLearning';
+import { readTeamStatsUsageLog } from './teamStats';
 import { probeBackupSources } from '../api/footballDataAPIs/backupOdds';
 import { checkAllProviders, getRouteLeaderboard, getWebCapableRoutes } from './llmRouter';
 import { getRecentSearchSource, getWorkingSearchProviders } from './webSearch';
@@ -60,6 +63,7 @@ export async function buildAppHealth(): Promise<Record<string, unknown>> {
     nativeBackgroundTicks: await section(getNativeBackgroundTickStats),
     tickProgress: await section(readTickProgress),
     lastTick: await section(readLastTickDiagnostics),
+    lastFastTick: await section(() => readLastFastTick()),
     lastRealFastTick: await section(readLastRealFastTick),
     abortedTicks: await section(readAbortedTicks),
     strategies: await section(() => getStrategyRecords()),
@@ -177,9 +181,11 @@ export async function buildAppHealth(): Promise<Record<string, unknown>> {
     liveSources: await section(async () => getHubStatus()),
     backupOddsSources: await section(async () => probeBackupSources()),
     teamStats: await section(async () => getTeamStatsStatus()),
+    teamStatsUsageLog: await section(async () => (await readTeamStatsUsageLog()).slice(-25)),
     bookieLineMinimums: await section(async () => { await ensureLineLimitsLoaded(); await ensureMarketOffLoaded(); return { limits: getLineLimits(), marketOffReports: getMarketOffCounts() }; }),
     exactDeltas: await section(async () => getDeltaReport().filter((r) => r.verified + r.pending > 0).map((r) => ({ ...r, meanPredicted: Math.round(r.meanPredicted * 10) / 10, meanActual: Math.round(r.meanActual * 10) / 10, meanError: Math.round(r.meanError * 100) / 100, meanAbsError: Math.round(r.meanAbsError * 100) / 100 }))),
     situationModel: await section(async () => getSituationReport().filter((r) => r.samples > 0)),
+    refCorrections: await section(async () => { await ensureRefCorrections(); return getRefCorrections(); }),
     bookieOdds: await section(async () => { await ensureOddsLoaded(); return getOddsLearningStatus(); }),
     oddsAlignment: await section(async () => {
       const f = await readOddsLoopFile(true);

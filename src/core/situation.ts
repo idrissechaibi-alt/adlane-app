@@ -8,6 +8,7 @@
 // déséquilibre entre les deux équipes sur 15 minutes (domination). Les relevés sont pris à chaque lecture
 // des statistiques live ; un match relevé rarement a simplement un momentum neutre (0), jamais inventé.
 
+import { weatherFeatures } from './weather';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { SofaPeriodStats } from '../api/footballDataAPIs/sofaScore';
 import { getOpeningProbabilities } from '../api/footballDataAPIs/refOdds';
@@ -169,5 +170,6 @@ export async function situationFeatures(live: LiveLike, all: SofaPeriodStats | n
   else if (all.shotsOnTargetHome + all.shotsOnTargetAway > 0) quality = clamp(((all.shotsOnTargetHome + all.shotsOnTargetAway) / live.minute) * 90 / 8 - 1, -1, 2);
 
   const features = [intensity(10), intensity(20), momentum, fav.strength, favTrailing * (fav.strength > 0 ? 1 : 0), favLeading * (fav.strength > 0 ? 1 : 0), goalDiff, reds, quality];
-  return features.length === SITUATION_FEATURES.length ? features : null;
+  const full = [...features, ...(await weatherFeatures(live.homeTeam, live.awayTeam).catch(() => [0, 0, 0] as [number, number, number]))];
+  return full.length === SITUATION_FEATURES.length ? full : null;
 }

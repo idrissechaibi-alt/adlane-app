@@ -20,12 +20,14 @@ import {
   getAllObservations,
   getOddsLearningStatus,
   getResidualCorrections,
+  oddsSegment,
   recordBookieOdds,
+  setRefCorrections,
 } from './oddsLearning';
 
 const FILE_KEY = '@odds_learning_file';
 const REF_KEY = '@ref_odds_comparisons';
-const REF_MAX = 600;
+const REF_MAX = 50_000; // aucun plafond pratique : tout l'historique des cotes lues en ligne est gardé
 const HISTORY_MAX = 300;
 const SCORE_FULL_ERROR = 0.4;
 
@@ -257,4 +259,29 @@ export async function recordRefComparison(c: Omit<RefComparison, 'ts'>): Promise
   } catch {
     // best-effort
   }
+}
+
+/**
+ * Apprend des cotes bet365 lues en ligne : pour chaque marché/côté/fenêtre, rapport moyen (géométrique) cote réelle / cote estimée,
+ * ramené vers 1 quand les mesures sont peu nombreuses, borné à [0,6 ; 1,6]. Appliqué aux estimations des paris dont bet365 ne
+ * donne pas la cote ; les cotes que vous saisissez à la main continuent de compléter l'apprentissage.
+ */
+export async function ensureRefCorrections(): Promise<void> {
+  const refs = await readRefComparisons();
+  const bySeg = new Map<string, number[]>();
+  for (const r of refs) {
+    if (!(r.ref > 1) || !(r.estModel > 1)) continue;
+    const seg = oddsSegment(r.market as any, r.selection);
+    const list = bySeg.get(seg) ?? [];
+    list.push(Math.log(r.ref / r.estModel));
+    bySeg.set(seg, list);
+  }
+  const out = new Map<string, number>();
+  for (const [seg, logs] of bySeg) {
+    if (logs.length < 5) continue;
+    const mean = logs.reduce((a, b) => a + b, 0) / logs.length;
+    const weight = logs.length / (logs.length + 10);
+    out.set(seg, Math.min(1.6, Math.max(0.6, Math.exp(mean * weight))));
+  }
+  setRefCorrections(out);
 }

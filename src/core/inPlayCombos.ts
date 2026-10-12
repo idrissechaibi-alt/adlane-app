@@ -99,10 +99,10 @@ import { hubDateKey, hubKnowsMatch, hubLiveStatus, hubStats } from '../api/footb
 import { playerShotLegs } from './playerShots';
 import { StrategyContext, evaluateStrategies, oddsFromExpectedGoals } from './strategies';
 import { SofaPeriodStats } from '../api/footballDataAPIs/sofaScore';
-import { DeltaUnit, LegProjection, describeCorrection, ensureDeltaSamplesLoaded, flushShadowProjections, getDeltaCorrection, projectFullMatchCount, recordShadowProjection, factorForRemaining, situationMultiplier } from './deltaLearning';
+import { DeltaUnit, LegProjection, PLAUSIBLE_MAX, describeCorrection, ensureDeltaSamplesLoaded, flushShadowProjections, getDeltaCorrection, projectFullMatchCount, recordShadowProjection, factorForRemaining, situationMultiplier } from './deltaLearning';
 import { getRefOdds, legLineOffered, refOddsForLeg } from '../api/footballDataAPIs/refOdds';
 import { backupTotalGoalsOdds } from '../api/footballDataAPIs/backupOdds';
-import { recordRefComparison } from './oddsLoop';
+import { ensureRefCorrections, recordRefComparison } from './oddsLoop';
 import { CountInfo, MIN_ESTIMATED_ODDS, OddsContext, ensureOddsLoaded, estimateLegOdds, featuresOf, parseLine, setOddsWatch } from './oddsLearning';
 import { ensureLineLimitsLoaded, ensureMarketOffLoaded, isMarketOff, lineAvailability } from './lineLimits';
 import { atLeastProb, pickHighestOverLine, pickLowestUnderLine } from './countModel';
@@ -671,6 +671,8 @@ function countMarketLegs(
       continue;
     }
     const done = spec.count ?? 0;
+    // Compteur aberrant : jamais de pari dessus.
+    if (done > PLAUSIBLE_MAX[unit]) continue;
     // Tendance des deux équipes (fichier de stats match par match) : ce qu'elles
     // produisent et concèdent récemment corrige le rythme attendu du reste.
     const trendTotal = trend?.expected[`${spec.key}_${window}` as TrendKey];
@@ -684,7 +686,8 @@ function countMarketLegs(
     const factor = factorForRemaining(fix, rawLambda);
     // Situation du match (momentum, favori, état, rouges, occasions) : effet appris, plafonné.
     const sitMult = situationMultiplier(unit, situation?.features, situation?.real ?? false);
-    const lambda = rawLambda * factor * sitMult;
+    // Projection plafonnée au maximum réaliste de la fenêtre (done + reste ne dépasse jamais le record plausible).
+    const lambda = Math.min(rawLambda * factor * sitMult, Math.max(0, PLAUSIBLE_MAX[unit] - done));
     const fano = fix.dispersion;
     const projection: LegProjection = { unit, observed: done, expected: done + lambda, factorUsed: factor, features: situation?.features ?? undefined, situationUsed: sitMult };
     const evidence =
@@ -1153,7 +1156,8 @@ async function bestLegFor(
       legLineOffered(ref, l.market, l.selection) !== false &&
       l.prob <= REAL_MAX_LEG_PROB
   );
-  const modelOdds = (l: CandidateLeg) =>
+  await ensureRefCorrections().catch(() => {});
+  const modelOdds = (l: CandidateLeg, noRefCorrection = false) =>
     estimateLegOdds(
       l,
       l.projection ? getDeltaCorrection(l.projection.unit).dispersion : 1,
@@ -1164,7 +1168,8 @@ async function bestLegFor(
             sot: (currentStats?.shotsOnTargetHome ?? 0) + (currentStats?.shotsOnTargetAway ?? 0),
             reds: 0,
           })
-        : undefined
+        : undefined,
+      { noRefCorrection }
     ).odds;
   const oddsOf = (l: CandidateLeg): number => {
     const model = modelOdds(l);
@@ -1172,7 +1177,7 @@ async function bestLegFor(
     if (bet365 == null) return model;
     // Vraie cote disponible : elle remplace l'estimation, et l'écart du modèle est mesuré.
     l.evidence += ` Cote bet365 lue : ${bet365.toFixed(2)} (estimation du modèle : ${model.toFixed(2)}).`;
-    void recordRefComparison({ key: `${live.fixtureId}|${l.selection}`, market: l.market, selection: l.selection, minute: live.minute, modelProb: l.prob, estModel: model, ref: bet365 });
+    void recordRefComparison({ key: `${live.fixtureId}|${l.selection}`, market: l.market, selection: l.selection, minute: live.minute, modelProb: l.prob, estModel: modelOdds(l, true), ref: bet365 });
     return bet365;
   };
   // Secours : ni bet365 (MoviOdds, 365Scores) ne propose ce pari — cote juste Bet Better (sans marge, réduite de 7 %) pour un total de buts.

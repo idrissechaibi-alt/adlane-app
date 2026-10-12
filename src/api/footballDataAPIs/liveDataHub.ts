@@ -859,6 +859,23 @@ export async function hubPlayerShots(homeTeam: string, awayTeam: string, dateKey
   }
 }
 
+/** Ville du stade (ESPN, gratuit) : sert à la météo du match. */
+export async function hubVenueCity(homeTeam: string, awayTeam: string, dateKey: string): Promise<string | null> {
+  try {
+    let matches = (await findEverywhere(homeTeam, awayTeam, dateKey, dateKey === utcDay())).filter((m) => m.provider === 'ESPN');
+    if (matches.length === 0) {
+      const live = await hubLiveEvents().catch(() => [] as HubMatch[]);
+      const m = findInList(live.filter((x) => x.provider === 'ESPN'), { homeTeam, awayTeam });
+      if (m) matches = [m];
+    }
+    if (!matches[0]) return null;
+    const d = await getJson(`${ESPN}/summary?event=${matches[0].ref}`);
+    return d?.gameInfo?.venue?.address?.city ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /** État de chaque source au dernier relevé en direct (diagnostic / écran). */
 export async function getHubStatus(): Promise<Record<string, { ok: boolean; count?: number; error?: string; at: string }>> {
   if (Object.keys(status).length > 0) return status;

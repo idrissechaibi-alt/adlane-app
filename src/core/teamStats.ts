@@ -83,6 +83,30 @@ export interface MatchTrend {
 /** Compteurs de diagnostic (appHealth) : prouvent que le fichier est chargé et réellement utilisé. */
 const usage = { lookups: 0, withTrend: 0, unknownTeams: 0, lastTrendAt: null as string | null, lastUnknown: null as string | null };
 
+/** Derniers essais (persistés : survivent aux redémarrages de la tâche de fond) — preuve que les tendances servent bien sur les matchs réels. */
+const USAGE_KEY = '@team_stats_usage_log';
+type UsageEntry = { at: string; match: string; result: 'tendance' | 'équipe inconnue' | 'peu de matchs' };
+let usageLog: UsageEntry[] | null = null;
+
+async function logUsage(match: string, result: UsageEntry['result']): Promise<void> {
+  try {
+    if (!usageLog) usageLog = JSON.parse((await AsyncStorage.getItem(USAGE_KEY)) ?? '[]');
+    usageLog!.push({ at: new Date().toISOString(), match, result });
+    usageLog = usageLog!.slice(-60);
+    await AsyncStorage.setItem(USAGE_KEY, JSON.stringify(usageLog));
+  } catch {
+    // diagnostic best-effort
+  }
+}
+
+export async function readTeamStatsUsageLog(): Promise<UsageEntry[]> {
+  try {
+    return JSON.parse((await AsyncStorage.getItem(USAGE_KEY)) ?? '[]');
+  } catch {
+    return [];
+  }
+}
+
 let indexMemo: { at: number; index: TeamIndex } | null = null;
 let summariesMemo: Record<string, TeamSummary> | null = null;
 
@@ -244,10 +268,14 @@ export async function getMatchTrend(homeTeam: string, awayTeam: string): Promise
     if (!hTeam || !aTeam || hTeam.id === aTeam.id) {
       usage.unknownTeams++;
       usage.lastUnknown = `${homeTeam} - ${awayTeam}`;
+      void logUsage(`${homeTeam} - ${awayTeam}`, 'équipe inconnue');
       return null;
     }
     const [h, a] = await Promise.all([ensureSummary(hTeam), ensureSummary(aTeam)]);
-    if (!h || !a || h.n.all < MIN_MATCHES || a.n.all < MIN_MATCHES) return null;
+    if (!h || !a || h.n.all < MIN_MATCHES || a.n.all < MIN_MATCHES) {
+      void logUsage(`${homeTeam} - ${awayTeam}`, 'peu de matchs');
+      return null;
+    }
 
     const expected: Partial<Record<TrendKey, number>> = {};
     const rates: MatchTrend['rates'] = { home: {}, away: {} };
@@ -275,6 +303,7 @@ export async function getMatchTrend(homeTeam: string, awayTeam: string): Promise
         : undefined;
     if (Object.keys(expected).length === 0 && !goals) return null;
     usage.withTrend++;
+    void logUsage(`${homeTeam} - ${awayTeam}`, 'tendance');
     usage.lastTrendAt = new Date().toISOString();
     return { homeTeam: h.name, awayTeam: a.name, expected, goals, samples: { home: h.n.all, away: a.n.all }, insights: { home: h.insights ?? [], away: a.insights ?? [] }, recent: { home: h.recent ?? [], away: a.recent ?? [] }, rates };
   } catch {
