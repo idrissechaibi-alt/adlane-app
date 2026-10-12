@@ -60,6 +60,32 @@ export async function getLiveStatsScanStatus(): Promise<{ lastScan: typeof lastS
   return { lastScan, todaySamples: counts };
 }
 
+/**
+ * Buts marqués avant la pause d'après nos relevés minute par minute (ou le résumé du match s'il est déjà digéré) :
+ * { goals, certain }. certain = on a vu la 2e mi-temps ou la pause (donc « 0 but » est fiable) ;
+ * un but vu avant la 45e est toujours certain.
+ */
+export async function getHalfTimeGoals(matchKey: string): Promise<{ goals: number; certain: boolean } | null> {
+  const day = dayKey();
+  const raw = (await readLiveStatsDay(day))[matchKey];
+  if (raw && raw.length > 0) {
+    const first = raw.filter((x) => x.minute <= 45 && x.status === '1H');
+    const maxGoals = first.reduce((m, x) => Math.max(m, x.home + x.away), 0);
+    const seenAfter = raw.some((x) => x.status === 'HT' || x.status === '2H' || x.minute > 45);
+    if (maxGoals > 0) return { goals: maxGoals, certain: true };
+    if (seenAfter && first.length > 0) return { goals: 0, certain: true };
+    return first.length > 0 ? { goals: 0, certain: false } : null;
+  }
+  try {
+    const digests = JSON.parse((await AsyncStorage.getItem('@match_digests')) ?? '{}');
+    const d = digests[`${day}|${matchKey}`];
+    if (d) return { goals: d.goals.filter((g: [number, string]) => g[0] <= 45).length, certain: true };
+  } catch {
+    // pas de résumé
+  }
+  return null;
+}
+
 /** Relevés bruts d'un jour (tous les matchs). */
 export async function readLiveStatsDay(day: string): Promise<Record<string, LiveStatsSample[]>> {
   try {

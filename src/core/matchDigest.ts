@@ -42,6 +42,8 @@ interface TeamLive {
   own?: { shots: number; sot: number; corners: number; cards: number; fouls: number };
   conceded?: { shots: number; sot: number; corners: number; cards: number; fouls: number };
   homeMatches?: number;
+  /** Minutes des buts de la saison déjà versées depuis le fichier des stats. */
+  seeded?: boolean;
   lessons: string[];
 }
 
@@ -209,16 +211,32 @@ export async function ensureTeamLiveLessonsLoaded(): Promise<void> {
   if (!teamMemo) teamMemo = await readJson<Record<string, TeamLive>>(TEAM_KEY, {});
 }
 
+/**
+ * Amorce le profil d'une équipe avec TOUTE sa saison (fichier des stats, toutes compétitions) : minutes des buts marqués et
+ * encaissés. Le profil ne repart donc pas de zéro : le suivi minute par minute vient s'y ajouter, match après match.
+ */
+export async function seedTeamTiming(team: string, goalsForMin: number[], goalsAgainstMin: number[]): Promise<void> {
+  await ensureTeamLiveLessonsLoaded();
+  const k = normalizeTeamName(team);
+  const store = teamMemo!;
+  const t = (store[k] ??= { name: team, n: 0, goalsForMin: [], goalsAgainstMin: [], corners: 0, cards: 0, fouls: 0, shots: 0, lessons: [] });
+  if (t.seeded) return;
+  t.seeded = true;
+  t.goalsForMin = [...goalsForMin, ...t.goalsForMin].slice(-TEAM_GOALS_KEPT);
+  t.goalsAgainstMin = [...goalsAgainstMin, ...t.goalsAgainstMin].slice(-TEAM_GOALS_KEPT);
+  await AsyncStorage.setItem(TEAM_KEY, JSON.stringify(store)).catch(() => {});
+}
+
 export function teamLiveNote(team: string): string {
   const t = teamMemo?.[normalizeTeamName(team)];
-  if (!t || t.n < 2) return '';
+  if (!t || (t.n < 2 && t.goalsForMin.length < 4)) return '';
   const early = t.goalsForMin.filter((m) => m <= 30).length;
   const late = t.goalsAgainstMin.filter((m) => m >= 70).length;
-  const split = t.own && t.conceded ? `produit ${(t.own.corners / t.n).toFixed(1)} corners, ${(t.own.cards / t.n).toFixed(1)} cartons, ${(t.own.sot / t.n).toFixed(1)} tirs cadrés et en concède ${(t.conceded.corners / t.n).toFixed(1)}, ${(t.conceded.cards / t.n).toFixed(1)}, ${(t.conceded.sot / t.n).toFixed(1)} par match` : `${(t.corners / t.n).toFixed(1)} corners, ${(t.cards / t.n).toFixed(1)} cartons (match entier) par match`;
-  const parts = [`${t.n} matchs suivis minute par minute : ${split}`];
+  const split = t.n < 2 ? '' : t.own && t.conceded ? `produit ${(t.own.corners / t.n).toFixed(1)} corners, ${(t.own.cards / t.n).toFixed(1)} cartons, ${(t.own.sot / t.n).toFixed(1)} tirs cadrés et en concède ${(t.conceded.corners / t.n).toFixed(1)}, ${(t.conceded.cards / t.n).toFixed(1)}, ${(t.conceded.sot / t.n).toFixed(1)} par match` : `${(t.corners / t.n).toFixed(1)} corners, ${(t.cards / t.n).toFixed(1)} cartons (match entier) par match`;
+  const parts = t.n >= 2 ? [`${t.n} matchs suivis minute par minute : ${split}`] : [];
   if (t.goalsForMin.length >= 4) parts.push(`${Math.round((early / t.goalsForMin.length) * 100)} % de ses buts avant la 30e`);
   if (t.goalsAgainstMin.length >= 4) parts.push(`${Math.round((late / t.goalsAgainstMin.length) * 100)} % de ses buts encaissés après la 70e`);
-  return `\n- Suivi en direct ${t.name} : ${parts.join(' ; ')}. Dernière leçon : ${last(t.lessons) ?? '—'}`;
+  return `\n- Suivi en direct ${t.name} : ${parts.join(' ; ')}. ${last(t.lessons) ? `Dernière leçon : ${last(t.lessons)}` : ''}`;
 }
 
 /**

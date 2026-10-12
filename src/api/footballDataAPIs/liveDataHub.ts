@@ -859,6 +859,25 @@ export async function hubPlayerShots(homeTeam: string, awayTeam: string, dateKey
   }
 }
 
+/** Buts marqués en 1ère mi-temps d'après les événements ESPN (minute de chaque but) ; null si ESPN ne connaît pas le match. */
+export async function hubFirstHalfGoals(homeTeam: string, awayTeam: string, dateKey: string): Promise<number | null> {
+  try {
+    let matches = (await findEverywhere(homeTeam, awayTeam, dateKey, dateKey === utcDay())).filter((m) => m.provider === 'ESPN');
+    if (matches.length === 0) {
+      const live = await hubLiveEvents().catch(() => [] as HubMatch[]);
+      const m = findInList(live.filter((x) => x.provider === 'ESPN'), { homeTeam, awayTeam });
+      if (m) matches = [m];
+    }
+    if (!matches[0]) return null;
+    const d = await getJson(`${ESPN}/summary?event=${matches[0].ref}`);
+    const events: any[] = d?.keyEvents ?? [];
+    if (events.length === 0) return null;
+    return events.filter((e) => e.scoringPlay && Number(e.period?.number) === 1).length;
+  } catch {
+    return null;
+  }
+}
+
 /** Ville du stade (ESPN, gratuit) : sert à la météo du match. */
 export async function hubVenueCity(homeTeam: string, awayTeam: string, dateKey: string): Promise<string | null> {
   try {

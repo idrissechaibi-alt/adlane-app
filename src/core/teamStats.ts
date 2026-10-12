@@ -16,7 +16,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { namesLikelyMatch, normalizeTeamName } from './teamNameMatch';
-import { ensureTeamLiveLessonsLoaded, teamLiveNote } from './matchDigest';
+import { ensureTeamLiveLessonsLoaded, seedTeamTiming, teamLiveNote } from './matchDigest';
 import { poissonProb } from './poisson';
 
 const BASE_URL = 'https://raw.githubusercontent.com/idrissechaibi-alt/adlane-app/main/data/team-stats';
@@ -180,6 +180,7 @@ interface RawMatch {
   date: string;
   goals: { for: number; against: number };
   halftime: { for: number; against: number };
+  goalMinutes?: { for: number[]; against: number[] };
   stats: Record<string, Record<string, [number, number]>>;
 }
 
@@ -219,7 +220,7 @@ function averages(matches: RawMatch[]): Averages {
 
 async function ensureSummary(team: IndexTeam): Promise<TeamSummary | null> {
   const summaries = await loadSummaries();
-  const sig = `${team.lastMatch}|${team.matches}|${team.analysisVersion ?? 0}`;
+  const sig = `${team.lastMatch}|${team.matches}|${team.analysisVersion ?? 0}|timing1`;
   const known = summaries[String(team.id)];
   if (known && known.sig === sig) return known;
 
@@ -240,6 +241,12 @@ async function ensureSummary(team: IndexTeam): Promise<TeamSummary | null> {
     insights: (file.analysis?.insights ?? []).slice(0, 12),
     recent: (file.analysis?.recent ?? []).slice(-3).map((r) => `${r.date} ${r.home ? 'vs' : '@'} ${r.opponent} — ${r.note}`),
   };
+  // Minutes des buts de TOUTE la saison (toutes compétitions) versées au profil live : il ne repart pas de zéro.
+  void seedTeamTiming(
+    team.name,
+    file.matches.flatMap((m) => m.goalMinutes?.for ?? []),
+    file.matches.flatMap((m) => m.goalMinutes?.against ?? [])
+  ).catch(() => {});
   summaries[String(team.id)] = summary;
   AsyncStorage.setItem(SUMMARIES_KEY, JSON.stringify(summaries)).catch(() => {});
   return summary;
