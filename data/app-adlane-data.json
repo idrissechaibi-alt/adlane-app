@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-10-12T20:37:51.830Z",
+  "exportedAt": "2026-10-12T20:58:55.893Z",
   "formatVersion": 1,
   "source": "APP adlane",
   "data": {
@@ -5551,19 +5551,20 @@
   },
   "health": {
     "nativeBackgroundTicks": {
-      "lastTickAt": "2026-10-12T20:15:33.322Z",
-      "ticksLast24h": 70
+      "lastTickAt": "2026-10-12T20:53:36.920Z",
+      "ticksLast24h": 73
     },
     "tickProgress": {
       "startedAt": "2026-10-12T20:23:52.489Z",
-      "step": "marqueurs live",
-      "at": "2026-10-12T20:37:43.368Z",
+      "step": "programme fictif",
+      "at": "2026-10-12T20:37:47.897Z",
       "stepDurationsSec": {
         "terminé": 0,
         "scan matinal": 3,
         "relevé live partagé": 0,
         "scan en direct 20e/60e": 828,
-        "bilan de minuit": 0
+        "bilan de minuit": 0,
+        "marqueurs live": 5
       }
     },
     "lastTick": {
@@ -5669,7 +5670,7 @@
       "nightlyReviewPointsCreated": 16
     },
     "lastRealFastTick": {
-      "at": "2026-10-12T20:27:17.524Z",
+      "at": "2026-10-12T20:37:46.697Z",
       "liveFound": 3,
       "fresh": 0,
       "source": "api_football"
@@ -5986,20 +5987,20 @@
       }
     ],
     "paperBets": {
-      "total": 2043,
+      "total": 2056,
       "settled": 1090,
       "won": 469,
-      "lastPlacedAt": "2026-10-12T20:12:52.427Z",
+      "lastPlacedAt": "2026-10-12T20:37:47.841Z",
       "lastSettledAt": "2026-10-12T20:04:45.687Z",
-      "placedLast24h": 612,
+      "placedLast24h": 625,
       "settledLast24h": 381
     },
     "trainingRows": {
-      "last14Days": 7714,
-      "lastClosedAt": "2026-10-12T20:12:52.412Z",
+      "last14Days": 7723,
+      "lastClosedAt": "2026-10-12T20:37:47.807Z",
       "bySource": {
-        "api_football": 3872,
-        "omniroute": 3842
+        "api_football": 3879,
+        "omniroute": 3844
       }
     },
     "model": {
@@ -6083,7 +6084,7 @@
       "fictionalReviewed": 3562,
       "fictionalSettledLegs": 3185,
       "lastCreatedAt": "2026-10-12T20:24:45.683Z",
-      "createdLast24h": 1240
+      "createdLast24h": 1231
     },
     "predictionOutcomes30d": 6722,
     "marketSeries": {
@@ -6143,16 +6144,16 @@
         {
           "name": "Principal",
           "ok": true,
-          "latencyMs": 1404,
-          "readyModels": 27,
+          "latencyMs": 51,
+          "readyModels": 26,
           "configuredReady": 12,
           "configuredTotal": 13
         },
         {
           "name": "Omniroute",
           "ok": true,
-          "latencyMs": 3281,
-          "readyModels": 847,
+          "latencyMs": 2073,
+          "readyModels": 848,
           "configuredReady": 2,
           "configuredTotal": 2
         }
@@ -6160,58 +6161,58 @@
       "leaderboard": [
         {
           "label": "Omniroute · Clodiko",
-          "ok": 5261,
+          "ok": 5342,
           "fail": 234,
-          "avgMs": 3829,
+          "avgMs": 1555,
           "coolingDown": false
         },
         {
           "label": "Principal · allam-2-7b",
-          "ok": 2171,
-          "fail": 2148,
-          "avgMs": 2168,
-          "coolingDown": false
-        },
-        {
-          "label": "Principal · gpt-oss-120b",
-          "ok": 535,
-          "fail": 873,
-          "avgMs": 1398,
-          "coolingDown": false
-        },
-        {
-          "label": "Principal · qwen3.8-27b",
-          "ok": 545,
-          "fail": 848,
-          "avgMs": 2746,
-          "coolingDown": false
-        },
-        {
-          "label": "Principal · gpt-oss-20b",
-          "ok": 1848,
-          "fail": 172,
-          "avgMs": 10057,
-          "coolingDown": false
-        },
-        {
-          "label": "Principal · diffusiongemma-26b-a4b-it",
-          "ok": 685,
-          "fail": 811,
-          "avgMs": 4834,
+          "ok": 2191,
+          "fail": 2168,
+          "avgMs": 385,
           "coolingDown": false
         },
         {
           "label": "Principal · auto",
-          "ok": 2334,
+          "ok": 2339,
           "fail": 221,
-          "avgMs": 11312,
+          "avgMs": 2567,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · gpt-oss-120b",
+          "ok": 536,
+          "fail": 887,
+          "avgMs": 1376,
+          "coolingDown": true
+        },
+        {
+          "label": "Principal · qwen3.8-27b",
+          "ok": 545,
+          "fail": 864,
+          "avgMs": 2746,
+          "coolingDown": true
+        },
+        {
+          "label": "Principal · gpt-oss-20b",
+          "ok": 1873,
+          "fail": 172,
+          "avgMs": 13862,
           "coolingDown": false
         },
         {
           "label": "Principal · nemotron-3.5-content-safety",
-          "ok": 981,
-          "fail": 902,
-          "avgMs": 14174,
+          "ok": 997,
+          "fail": 918,
+          "avgMs": 9150,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · diffusiongemma-26b-a4b-it",
+          "ok": 689,
+          "fail": 815,
+          "avgMs": 12086,
           "coolingDown": false
         },
         {
@@ -6265,9 +6266,9 @@
     },
     "apiUsageToday": {
       "countsToday": {
-        "footballData": 115,
+        "footballData": 116,
         "apiFootball": 95,
-        "theOddsApi": 331,
+        "theOddsApi": 332,
         "perplexity": 1,
         "apiFootball-autolearn": 55,
         "sportmonks-autolearn": 17,
@@ -6290,45 +6291,43 @@
     "liveSources": {
       "LiveScore": {
         "ok": true,
-        "count": 22,
-        "at": "2026-10-12T20:37:45.115Z"
+        "count": 14,
+        "at": "2026-10-12T20:58:52.651Z"
       },
       "TheSportsDB": {
         "ok": true,
-        "count": 21,
-        "at": "2026-10-12T20:37:44.930Z"
+        "count": 16,
+        "at": "2026-10-12T20:58:51.561Z"
       },
       "ESPN": {
         "ok": true,
-        "count": 15,
-        "at": "2026-10-12T20:37:45.115Z"
+        "count": 9,
+        "at": "2026-10-12T20:58:51.529Z"
       },
       "AllSportsApi": {
         "ok": true,
         "count": 0,
-        "at": "2026-10-12T20:37:45.711Z"
+        "at": "2026-10-12T20:58:54.088Z"
       },
       "FotMob": {
         "ok": true,
-        "count": 21,
-        "at": "2026-10-12T20:37:45.159Z"
+        "count": 13,
+        "at": "2026-10-12T20:58:52.827Z"
       },
       "365Scores": {
         "ok": true,
-        "count": 23,
-        "at": "2026-10-12T20:37:45.659Z"
+        "count": 14,
+        "at": "2026-10-12T20:58:51.606Z"
       }
     },
     "liveStatsScan": {
       "lastScan": {
-        "at": "2026-10-12T20:37:46.428Z",
-        "matches": 3,
+        "at": "2026-10-12T20:58:53.102Z",
+        "matches": 1,
         "sources": "6 sources gratuites"
       },
       "todaySamples": {
-        "Levante - Sevilla": 13,
-        "Coventry - Newcastle": 8,
-        "Torino FC - Udinese Calcio": 1
+        "Levante UD - Sevilla FC": 1
       }
     },
     "backupOddsSources": {
@@ -6338,7 +6337,7 @@
       },
       "fanLine": {
         "fixtures": 20,
-        "soccer": 6
+        "soccer": 2
       },
       "oddsmagnet": {
         "httpStatus": null
