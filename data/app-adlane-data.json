@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-10-12T02:59:09.824Z",
+  "exportedAt": "2026-10-12T03:35:25.933Z",
   "formatVersion": 1,
   "source": "APP adlane",
   "data": {
@@ -5181,33 +5181,33 @@
   },
   "health": {
     "nativeBackgroundTicks": {
-      "lastTickAt": "2026-10-12T02:58:59.542Z",
+      "lastTickAt": "2026-10-12T03:35:12.823Z",
       "ticksLast24h": 62
     },
     "tickProgress": {
-      "startedAt": "2026-10-12T02:58:59.864Z",
+      "startedAt": "2026-10-12T03:35:13.088Z",
       "step": "scan matinal",
-      "at": "2026-10-12T02:58:59.908Z",
+      "at": "2026-10-12T03:35:13.098Z",
       "stepDurationsSec": {
-        "terminé": 1377
+        "terminé": 953
       }
     },
     "lastTick": {
-      "startedAt": "2026-10-12T02:35:01.481Z",
-      "finishedAt": "2026-10-12T02:36:02.648Z",
-      "durationSec": 61,
+      "startedAt": "2026-10-12T03:17:24.976Z",
+      "finishedAt": "2026-10-12T03:19:20.527Z",
+      "durationSec": 116,
       "stepDurationsSec": {
-        "terminé": 178,
-        "scan matinal": 0,
+        "terminé": 974,
+        "scan matinal": 1,
         "relevé live partagé": 0,
-        "scan en direct 20e/60e": 54,
-        "bilan de minuit": 0,
+        "scan en direct 20e/60e": 60,
+        "bilan de minuit": 6,
         "marqueurs live": 0,
-        "programme fictif": 1,
+        "programme fictif": 45,
         "univers du jour": 1,
         "compositions T-90": 0,
         "bilan Scouting": 0,
-        "consolidation apprentissage": 4,
+        "consolidation apprentissage": 3,
         "enrichissement matchs suivis": 0,
         "vérification accès internet des modèles": 0
       },
@@ -5215,18 +5215,13 @@
       "omnirouteConfigured": true,
       "fictionalProgramSize": 338,
       "fictionalProgramFromFeed": false,
-      "fictionalMatchesAhead": 281,
-      "fictionalNextKickoffUtc": "2026-10-12T03:00:00Z",
+      "fictionalMatchesAhead": 280,
+      "fictionalNextKickoffUtc": "2026-10-12T04:00:00Z",
       "fictionalCountriesTried": 30,
       "fictionalCountriesTotal": 60,
       "fictionalLastTrace": {
-        "country": "Indonésie",
+        "country": "Écosse",
         "attempts": [
-          {
-            "model": "Omniroute · Maximus appus",
-            "outcome": "erreur",
-            "detail": "réponse vide après les recherches"
-          },
           {
             "model": "Principal · gpt-oss-120b",
             "outcome": "erreur",
@@ -5234,8 +5229,18 @@
           },
           {
             "model": "Principal · allam-2-7b",
-            "outcome": "exploitable",
-            "detail": "{\"matches\": [\n  {\"home_team\": \"Bali U21\", \"away_team\": \"Jakarta U21\", \"competition\": \"U21 Championship\", \"kickoff_utc\": \"2026-10-12T07:00:00+07:00\"},\n  {\"home_team\": \"Jakarta U21\", \"away_team\": \"Bandu"
+            "outcome": "erreur",
+            "detail": "HTTP 429 : All models exhausted: 1 route checked (1 rate-limited or on cooldown). Add more API keys or wait for rate limits to reset."
+          },
+          {
+            "model": "Omniroute · Clodiko",
+            "outcome": "erreur",
+            "detail": "réponse vide après les recherches"
+          },
+          {
+            "model": "Omniroute · Maximus appus",
+            "outcome": "erreur",
+            "detail": "réponse vide après les recherches"
           }
         ]
       },
@@ -5243,11 +5248,11 @@
       "fictionalSofascoreMatches": 271,
       "fictionalOmnirouteMatches": 73,
       "liveFixturesFound": 0,
-      "fictionalLiveFixturesFound": 5,
+      "fictionalLiveFixturesFound": 3,
       "liveFixturesSource": "api_football",
       "liveMarkerObserved": 0,
       "liveMarkerClosed": 0,
-      "freshInPlayProposals": 12,
+      "freshInPlayProposals": 0,
       "intlBreak": {
         "withinWindow": false,
         "matchesScheduledToday": 0,
@@ -5257,10 +5262,10 @@
       },
       "sportmonksConfirmedMatches": 0,
       "sofaScoreConfirmedMatches": null,
-      "nightlyReviewPointsCreated": 0
+      "nightlyReviewPointsCreated": 15
     },
     "lastRealFastTick": {
-      "at": "2026-10-12T02:35:01.868Z",
+      "at": "2026-10-12T03:17:25.684Z",
       "liveFound": 0,
       "fresh": 0,
       "source": "api_football"
@@ -5485,16 +5490,16 @@
       {
         "id": "mt-cartons-plus2",
         "name": "2 cartons ou plus en 2e MT (match déjà tendu)",
-        "settled": 60,
+        "settled": 61,
         "won": 53,
-        "hitRate": 0.8833333333333333,
-        "meanPredicted": 0.8237806492978278,
+        "hitRate": 0.8688524590163934,
+        "meanPredicted": 0.8242935348284646,
         "suspended": false,
         "fictional": {
-          "settled": 59,
+          "settled": 60,
           "won": 52,
-          "hitRate": 0.8813559322033898,
-          "meanPredicted": 0.825166761997791
+          "hitRate": 0.8666666666666667,
+          "meanPredicted": 0.8256650937422723
         },
         "realPaused": false
       },
@@ -5565,7 +5570,7 @@
       }
     },
     "model": {
-      "updatedAt": "2026-10-12T02:36:02.524Z",
+      "updatedAt": "2026-10-12T03:19:20.441Z",
       "totalRows": 7419,
       "markerRules": 13,
       "paperBets": {
@@ -5583,52 +5588,52 @@
       "marketExpertise": [
         {
           "market": "total_buts",
-          "samples": 1863,
-          "hitRate": 0.651,
+          "samples": 1880,
+          "hitRate": 0.649,
           "meanPredicted": 0.662,
-          "calibrationFactor": 0.983
-        },
-        {
-          "market": "corners",
-          "samples": 1292,
-          "hitRate": 0.665,
-          "meanPredicted": 0.676,
-          "calibrationFactor": 0.983
-        },
-        {
-          "market": "cartons",
-          "samples": 944,
-          "hitRate": 0.613,
-          "meanPredicted": 0.659,
-          "calibrationFactor": 0.93
-        },
-        {
-          "market": "btts",
-          "samples": 733,
-          "hitRate": 0.643,
-          "meanPredicted": 0.654,
           "calibrationFactor": 0.982
         },
         {
+          "market": "corners",
+          "samples": 1301,
+          "hitRate": 0.664,
+          "meanPredicted": 0.676,
+          "calibrationFactor": 0.982
+        },
+        {
+          "market": "cartons",
+          "samples": 956,
+          "hitRate": 0.614,
+          "meanPredicted": 0.659,
+          "calibrationFactor": 0.932
+        },
+        {
+          "market": "btts",
+          "samples": 739,
+          "hitRate": 0.64,
+          "meanPredicted": 0.655,
+          "calibrationFactor": 0.978
+        },
+        {
           "market": "fautes",
-          "samples": 636,
-          "hitRate": 0.695,
+          "samples": 640,
+          "hitRate": 0.691,
           "meanPredicted": 0.69,
-          "calibrationFactor": 1.008
+          "calibrationFactor": 1.001
         },
         {
           "market": "1X2",
-          "samples": 518,
+          "samples": 521,
           "hitRate": 0.62,
           "meanPredicted": 0.695,
           "calibrationFactor": 0.892
         },
         {
           "market": "buts_1ere_mt",
-          "samples": 172,
-          "hitRate": 0.541,
+          "samples": 174,
+          "hitRate": 0.534,
           "meanPredicted": 0.612,
-          "calibrationFactor": 0.883
+          "calibrationFactor": 0.873
         },
         {
           "market": "tirs_cadres",
@@ -5641,17 +5646,17 @@
     },
     "inPlayProposals": {
       "real": 134,
-      "fictional": 3171,
-      "fictionalReviewed": 2979,
-      "fictionalSettledLegs": 2616,
-      "lastCreatedAt": "2026-10-12T02:35:05.996Z",
-      "createdLast24h": 3241
+      "fictional": 3172,
+      "fictionalReviewed": 3059,
+      "fictionalSettledLegs": 2669,
+      "lastCreatedAt": "2026-10-12T03:00:06.348Z",
+      "createdLast24h": 3242
     },
-    "predictionOutcomes30d": 6167,
+    "predictionOutcomes30d": 6220,
     "marketSeries": {
-      "combined": 25,
+      "combined": 26,
       "real": 16,
-      "fictional": 25,
+      "fictional": 26,
       "lastDate": "2026-10-12"
     },
     "accuracySnapshots": [
@@ -5705,7 +5710,7 @@
         {
           "name": "Principal",
           "ok": true,
-          "latencyMs": 119,
+          "latencyMs": 225,
           "readyModels": 27,
           "configuredReady": 12,
           "configuredTotal": 13
@@ -5713,7 +5718,7 @@
         {
           "name": "Omniroute",
           "ok": true,
-          "latencyMs": 1926,
+          "latencyMs": 4113,
           "readyModels": 836,
           "configuredReady": 2,
           "configuredTotal": 2
@@ -5721,38 +5726,38 @@
       ],
       "leaderboard": [
         {
-          "label": "Omniroute · Maximus appus",
-          "ok": 848,
-          "fail": 13,
-          "avgMs": 1634,
+          "label": "Omniroute · Clodiko",
+          "ok": 2602,
+          "fail": 175,
+          "avgMs": 1914,
           "coolingDown": false
         },
         {
           "label": "Principal · allam-2-7b",
-          "ok": 1502,
-          "fail": 1377,
-          "avgMs": 1183,
+          "ok": 1510,
+          "fail": 1387,
+          "avgMs": 699,
           "coolingDown": false
         },
         {
-          "label": "Omniroute · Clodiko",
-          "ok": 2574,
-          "fail": 175,
-          "avgMs": 3048,
+          "label": "Omniroute · Maximus appus",
+          "ok": 860,
+          "fail": 13,
+          "avgMs": 2931,
           "coolingDown": false
         },
         {
           "label": "Principal · qwen3.8-27b",
           "ok": 308,
-          "fail": 535,
+          "fail": 539,
           "avgMs": 808,
           "coolingDown": false
         },
         {
           "label": "Principal · gpt-oss-120b",
-          "ok": 336,
-          "fail": 510,
-          "avgMs": 1055,
+          "ok": 339,
+          "fail": 515,
+          "avgMs": 1000,
           "coolingDown": false
         },
         {
@@ -5830,13 +5835,13 @@
     "apiUsageToday": {
       "countsToday": {
         "footballData": 1,
-        "apiFootball": 11,
+        "apiFootball": 13,
         "theOddsApi": 1,
         "perplexity": 0,
-        "apiFootball-autolearn": 10,
-        "sportmonks-autolearn": 3,
+        "apiFootball-autolearn": 12,
+        "sportmonks-autolearn": 4,
         "sofaScore": 0,
-        "sportmonks": 13
+        "sportmonks": 16
       },
       "theOddsApiMonth": {
         "used": 500,
@@ -5846,41 +5851,41 @@
       }
     },
     "apiFootballBudget": {
-      "usedToday": 11,
-      "autolearnUsedToday": 10,
-      "autolearnRemaining": 60
+      "usedToday": 13,
+      "autolearnUsedToday": 12,
+      "autolearnRemaining": 58
     },
     "sofaScore": null,
     "liveSources": {
       "LiveScore": {
         "ok": true,
-        "count": 3,
-        "at": "2026-10-12T02:59:00.335Z"
+        "count": 0,
+        "at": "2026-10-12T03:35:13.486Z"
       },
       "TheSportsDB": {
         "ok": true,
-        "count": 4,
-        "at": "2026-10-12T02:59:00.286Z"
+        "count": 0,
+        "at": "2026-10-12T03:35:13.486Z"
       },
       "FotMob": {
         "ok": true,
-        "count": 3,
-        "at": "2026-10-12T02:59:00.306Z"
+        "count": 0,
+        "at": "2026-10-12T03:35:13.906Z"
       },
       "ESPN": {
         "ok": true,
-        "count": 1,
-        "at": "2026-10-12T02:59:00.590Z"
+        "count": 0,
+        "at": "2026-10-12T03:35:13.887Z"
       },
       "365Scores": {
         "ok": true,
-        "count": 4,
-        "at": "2026-10-12T02:35:01.782Z"
+        "count": 0,
+        "at": "2026-10-12T03:35:24.577Z"
       },
       "AllSportsApi": {
         "ok": true,
         "count": 0,
-        "at": "2026-10-12T02:59:00.595Z"
+        "at": "2026-10-12T03:35:13.673Z"
       }
     },
     "backupOddsSources": {
@@ -5900,9 +5905,9 @@
       "indexUpdatedAt": "2026-10-11T21:47:53Z",
       "teamsInIndex": 111,
       "summariesCached": 36,
-      "lookups": 21,
+      "lookups": 22,
       "withTrend": 0,
-      "unknownTeams": 21,
+      "unknownTeams": 22,
       "lastTrendAt": null,
       "lastUnknown": "Antigua GFC - Coban Imperial"
     },
@@ -5945,8 +5950,8 @@
       {
         "unit": "corners_1h",
         "label": "Corners 1ère mi-temps",
-        "verified": 299,
-        "pending": 383,
+        "verified": 302,
+        "pending": 380,
         "meanPredicted": 4.3,
         "meanActual": 4.6,
         "meanError": 0.35,
@@ -5973,8 +5978,8 @@
       {
         "unit": "cards_1h",
         "label": "Cartons 1ère mi-temps",
-        "verified": 296,
-        "pending": 377,
+        "verified": 299,
+        "pending": 374,
         "meanPredicted": 1.3,
         "meanActual": 1.5,
         "meanError": 0.13,
@@ -6001,8 +6006,8 @@
       {
         "unit": "goals_1h",
         "label": "Buts à la pause",
-        "verified": 502,
-        "pending": 217,
+        "verified": 505,
+        "pending": 214,
         "meanPredicted": 1.3,
         "meanActual": 1.3,
         "meanError": -0.02,
@@ -6029,12 +6034,12 @@
       {
         "unit": "goals_ft",
         "label": "Buts en fin de match",
-        "verified": 611,
-        "pending": 235,
+        "verified": 618,
+        "pending": 228,
         "meanPredicted": 3,
         "meanActual": 2.9,
-        "meanError": -0.08,
-        "meanAbsError": 1.29,
+        "meanError": -0.07,
+        "meanAbsError": 1.3,
         "bigMisses": 27,
         "worst": [
           {
@@ -6057,11 +6062,11 @@
       {
         "unit": "corners_ft",
         "label": "Corners sur le match",
-        "verified": 385,
-        "pending": 101,
+        "verified": 388,
+        "pending": 98,
         "meanPredicted": 8.7,
         "meanActual": 9.1,
-        "meanError": 0.41,
+        "meanError": 0.43,
         "meanAbsError": 2.13,
         "bigMisses": 18,
         "worst": [
@@ -6085,8 +6090,8 @@
       {
         "unit": "cards_ft",
         "label": "Cartons sur le match",
-        "verified": 368,
-        "pending": 94,
+        "verified": 371,
+        "pending": 91,
         "meanPredicted": 4,
         "meanActual": 4.2,
         "meanError": 0.21,
@@ -6113,12 +6118,12 @@
       {
         "unit": "fouls_1h",
         "label": "Fautes 1ère mi-temps",
-        "verified": 277,
-        "pending": 53,
+        "verified": 280,
+        "pending": 50,
         "meanPredicted": 10.9,
         "meanActual": 11.8,
-        "meanError": 0.9,
-        "meanAbsError": 2.62,
+        "meanError": 0.87,
+        "meanAbsError": 2.61,
         "bigMisses": 10,
         "worst": [
           {
@@ -6171,9 +6176,9 @@
       {
         "unit": "corners_1h",
         "label": "Corners 1ère mi-temps",
-        "samples": 96,
-        "maeBase": 1.6805375997474827,
-        "maeNew": 1.693667015720017,
+        "samples": 99,
+        "maeBase": 1.6064543775503901,
+        "maeNew": 1.5983720270581094,
         "promoted": false,
         "effects": [
           {
@@ -6182,15 +6187,15 @@
           },
           {
             "name": "intensité récente 20 min",
-            "pct": 0
+            "pct": 1
           },
           {
             "name": "momentum (une équipe domine)",
-            "pct": -8
+            "pct": -7
           },
           {
             "name": "force du favori",
-            "pct": 10
+            "pct": 9
           },
           {
             "name": "favori mené",
@@ -6217,34 +6222,34 @@
       {
         "unit": "cards_1h",
         "label": "Cartons 1ère mi-temps",
-        "samples": 95,
-        "maeBase": 0.7339587590612582,
-        "maeNew": 0.7315586195262308,
+        "samples": 98,
+        "maeBase": 0.6989590114722184,
+        "maeNew": 0.6987763446701469,
         "promoted": false,
         "effects": [
           {
             "name": "intensité récente 10 min",
-            "pct": -3
+            "pct": -1
           },
           {
             "name": "intensité récente 20 min",
-            "pct": 15
+            "pct": 8
           },
           {
             "name": "momentum (une équipe domine)",
-            "pct": 6
+            "pct": 3
           },
           {
             "name": "force du favori",
-            "pct": -10
+            "pct": -7
           },
           {
             "name": "favori mené",
-            "pct": 6
+            "pct": 5
           },
           {
             "name": "favori devant",
-            "pct": -8
+            "pct": -9
           },
           {
             "name": "écart de buts",
@@ -6256,16 +6261,16 @@
           },
           {
             "name": "qualité des occasions",
-            "pct": -20
+            "pct": -18
           }
         ]
       },
       {
         "unit": "goals_1h",
         "label": "Buts à la pause",
-        "samples": 120,
-        "maeBase": 0.6571808569634466,
-        "maeNew": 0.643421006229688,
+        "samples": 123,
+        "maeBase": 0.6643559238224018,
+        "maeNew": 0.6503768961138178,
         "promoted": false,
         "effects": [
           {
@@ -6274,7 +6279,7 @@
           },
           {
             "name": "intensité récente 20 min",
-            "pct": 2
+            "pct": 1
           },
           {
             "name": "momentum (une équipe domine)",
@@ -6282,11 +6287,11 @@
           },
           {
             "name": "force du favori",
-            "pct": -16
+            "pct": -17
           },
           {
             "name": "favori mené",
-            "pct": -5
+            "pct": -1
           },
           {
             "name": "favori devant",
@@ -6294,7 +6299,7 @@
           },
           {
             "name": "écart de buts",
-            "pct": 3
+            "pct": 5
           },
           {
             "name": "cartons rouges",
@@ -6309,18 +6314,18 @@
       {
         "unit": "goals_ft",
         "label": "Buts en fin de match",
-        "samples": 214,
-        "maeBase": 1.276030381423964,
-        "maeNew": 1.2641770541180497,
+        "samples": 219,
+        "maeBase": 1.2271104939771347,
+        "maeNew": 1.2001736634011753,
         "promoted": false,
         "effects": [
           {
             "name": "intensité récente 10 min",
-            "pct": 7
+            "pct": 6
           },
           {
             "name": "intensité récente 20 min",
-            "pct": -19
+            "pct": -17
           },
           {
             "name": "momentum (une équipe domine)",
@@ -6328,11 +6333,11 @@
           },
           {
             "name": "force du favori",
-            "pct": -16
+            "pct": -17
           },
           {
             "name": "favori mené",
-            "pct": 1
+            "pct": 5
           },
           {
             "name": "favori devant",
@@ -6340,7 +6345,7 @@
           },
           {
             "name": "écart de buts",
-            "pct": -6
+            "pct": -5
           },
           {
             "name": "cartons rouges",
@@ -6348,25 +6353,25 @@
           },
           {
             "name": "qualité des occasions",
-            "pct": 5
+            "pct": 4
           }
         ]
       },
       {
         "unit": "corners_ft",
         "label": "Corners sur le match",
-        "samples": 212,
-        "maeBase": 2.4493208918784166,
-        "maeNew": 2.472181611661445,
+        "samples": 217,
+        "maeBase": 2.330841255595609,
+        "maeNew": 2.3830910632925786,
         "promoted": false,
         "effects": [
           {
             "name": "intensité récente 10 min",
-            "pct": -12
+            "pct": -11
           },
           {
             "name": "intensité récente 20 min",
-            "pct": 7
+            "pct": 6
           },
           {
             "name": "momentum (une équipe domine)",
@@ -6374,11 +6379,11 @@
           },
           {
             "name": "force du favori",
-            "pct": 6
+            "pct": 5
           },
           {
             "name": "favori mené",
-            "pct": -3
+            "pct": 0
           },
           {
             "name": "favori devant",
@@ -6386,7 +6391,7 @@
           },
           {
             "name": "écart de buts",
-            "pct": -9
+            "pct": -8
           },
           {
             "name": "cartons rouges",
@@ -6394,25 +6399,25 @@
           },
           {
             "name": "qualité des occasions",
-            "pct": -7
+            "pct": -6
           }
         ]
       },
       {
         "unit": "cards_ft",
         "label": "Cartons sur le match",
-        "samples": 203,
-        "maeBase": 1.7650649026851615,
-        "maeNew": 1.7904139183271734,
+        "samples": 208,
+        "maeBase": 1.8559454169452125,
+        "maeNew": 1.9026137743179814,
         "promoted": false,
         "effects": [
           {
             "name": "intensité récente 10 min",
-            "pct": 10
+            "pct": 8
           },
           {
             "name": "intensité récente 20 min",
-            "pct": 4
+            "pct": 2
           },
           {
             "name": "momentum (une équipe domine)",
@@ -6420,15 +6425,15 @@
           },
           {
             "name": "force du favori",
-            "pct": 10
+            "pct": 13
           },
           {
             "name": "favori mené",
-            "pct": -1
+            "pct": 0
           },
           {
             "name": "favori devant",
-            "pct": 13
+            "pct": 12
           },
           {
             "name": "écart de buts",
@@ -6440,21 +6445,21 @@
           },
           {
             "name": "qualité des occasions",
-            "pct": 0
+            "pct": 1
           }
         ]
       },
       {
         "unit": "fouls_1h",
         "label": "Fautes 1ère mi-temps",
-        "samples": 89,
-        "maeBase": 2.0381980591654467,
-        "maeNew": 1.847333148902179,
+        "samples": 92,
+        "maeBase": 1.8277740037734187,
+        "maeNew": 1.7357426287107944,
         "promoted": true,
         "effects": [
           {
             "name": "intensité récente 10 min",
-            "pct": -8
+            "pct": -7
           },
           {
             "name": "intensité récente 20 min",
@@ -6462,15 +6467,15 @@
           },
           {
             "name": "momentum (une équipe domine)",
-            "pct": -4
+            "pct": -9
           },
           {
             "name": "force du favori",
-            "pct": 10
+            "pct": 11
           },
           {
             "name": "favori mené",
-            "pct": 13
+            "pct": 11
           },
           {
             "name": "favori devant",
@@ -6482,20 +6487,20 @@
           },
           {
             "name": "cartons rouges",
-            "pct": -11
+            "pct": -10
           },
           {
             "name": "qualité des occasions",
-            "pct": -13
+            "pct": -12
           }
         ]
       },
       {
         "unit": "fouls_ft",
         "label": "Fautes sur le match",
-        "samples": 117,
-        "maeBase": 3.2749117711409506,
-        "maeNew": 3.2153204077569892,
+        "samples": 119,
+        "maeBase": 2.9655596926726613,
+        "maeNew": 2.958561203685363,
         "promoted": false,
         "effects": [
           {
@@ -6504,7 +6509,7 @@
           },
           {
             "name": "intensité récente 20 min",
-            "pct": -2
+            "pct": -1
           },
           {
             "name": "momentum (une équipe domine)",
@@ -6512,11 +6517,11 @@
           },
           {
             "name": "force du favori",
-            "pct": 7
+            "pct": 6
           },
           {
             "name": "favori mené",
-            "pct": 1
+            "pct": -1
           },
           {
             "name": "favori devant",
@@ -7064,165 +7069,165 @@
       "corrections": [
         {
           "unit": "corners_1h",
-          "factor": 1.0733056932901555,
-          "samples": 299,
-          "meanDelta": 0.3507736842832604,
-          "meanAbsDelta": 1.70359330221517,
-          "dispersion": 1.464649654419266,
+          "factor": 1.076068424573639,
+          "samples": 302,
+          "meanDelta": 0.3541763904273772,
+          "meanAbsDelta": 1.6957284044610224,
+          "dispersion": 1.4528731547489149,
           "bins": [
             {
               "upTo": 1.7645502645502644,
-              "factor": 1.853802786314031,
-              "samples": 99
+              "factor": 1.852813156551544,
+              "samples": 100
             },
             {
-              "upTo": 2.7619047619047614,
-              "factor": 1.1114069811859575,
-              "samples": 100
+              "upTo": 2.6718346253229974,
+              "factor": 1.1270399469587395,
+              "samples": 101
             },
             {
               "upTo": null,
-              "factor": 0.7682901703960975,
-              "samples": 100
+              "factor": 0.7652563365810121,
+              "samples": 101
             }
           ]
         },
         {
           "unit": "cards_1h",
-          "factor": 1.2509536493076499,
-          "samples": 296,
-          "meanDelta": 0.13258230948523364,
-          "meanAbsDelta": 0.8939622777263156,
-          "dispersion": 1.1938558142079467,
+          "factor": 1.2495693656973392,
+          "samples": 299,
+          "meanDelta": 0.13026522906201526,
+          "meanAbsDelta": 0.8900628966689774,
+          "dispersion": 1.1913448439928565,
           "bins": [
             {
               "upTo": 0.5555555555555556,
-              "factor": 1.7542412526143158,
-              "samples": 98
+              "factor": 1.6732005012387503,
+              "samples": 99
             },
             {
               "upTo": 0.7234042553191489,
-              "factor": 1.6116065613574067,
-              "samples": 99
+              "factor": 1.656725638791387,
+              "samples": 100
             },
             {
               "upTo": null,
-              "factor": 0.8748950901706815,
-              "samples": 99
+              "factor": 0.8757076593749891,
+              "samples": 100
             }
           ]
         },
         {
           "unit": "fouls_1h",
-          "factor": 1.0211274504846397,
-          "samples": 277,
-          "meanDelta": 0.8992354440171763,
-          "meanAbsDelta": 2.6195961476394864,
-          "dispersion": 1.4342949981170052,
+          "factor": 1.0185904260469543,
+          "samples": 280,
+          "meanDelta": 0.8748525209362596,
+          "meanAbsDelta": 2.6062773036669387,
+          "dispersion": 1.4375451159824195,
           "bins": [
             {
-              "upTo": 5.037037037037037,
-              "factor": 1.2213358439628261,
-              "samples": 92
+              "upTo": 4.888888888888889,
+              "factor": 1.1999220938072763,
+              "samples": 93
             },
             {
               "upTo": 6.712962962962961,
-              "factor": 1.1491106489503071,
-              "samples": 92
+              "factor": 1.147847742783016,
+              "samples": 93
             },
             {
               "upTo": null,
-              "factor": 0.8440233587940059,
-              "samples": 93
+              "factor": 0.8494454258091734,
+              "samples": 94
             }
           ]
         },
         {
           "unit": "corners_ft",
-          "factor": 1.05847324855081,
+          "factor": 1.055007100017346,
           "samples": 400,
-          "meanDelta": 0.3701823559105493,
-          "meanAbsDelta": 2.0835471624315876,
-          "dispersion": 1.7776205621117116,
+          "meanDelta": 0.3384581320691528,
+          "meanAbsDelta": 2.0771086543619024,
+          "dispersion": 1.7756053837399726,
           "bins": [
             {
-              "upTo": 3.0202020202020203,
-              "factor": 1.396487830674119,
+              "upTo": 3.0025839793281643,
+              "factor": 1.4016262181437884,
               "samples": 133
             },
             {
               "upTo": 4.2564102564102555,
-              "factor": 1.124554254646624,
+              "factor": 1.1291477958124965,
               "samples": 133
             },
             {
               "upTo": null,
-              "factor": 0.8997047339250911,
+              "factor": 0.8872983921212079,
               "samples": 134
             }
           ]
         },
         {
           "unit": "cards_ft",
-          "factor": 1.6530554446331853,
-          "samples": 388,
-          "meanDelta": 0.26033438191968516,
-          "meanAbsDelta": 1.5851549611731424,
-          "dispersion": 1.7241540812942138,
+          "factor": 1.645223494566315,
+          "samples": 395,
+          "meanDelta": 0.25178432332561645,
+          "meanAbsDelta": 1.5754476167954579,
+          "dispersion": 1.686866670564719,
           "bins": [
             {
               "upTo": 0.9822222222222221,
-              "factor": 2.6063424408957574,
-              "samples": 129
+              "factor": 2.5941146628433374,
+              "samples": 131
             },
             {
-              "upTo": 1.502222222222222,
-              "factor": 2.042052748032965,
-              "samples": 129
+              "upTo": 1.5022222222222221,
+              "factor": 2.0230899370476068,
+              "samples": 132
             },
             {
               "upTo": null,
-              "factor": 1.1823798103603445,
-              "samples": 130
+              "factor": 1.1811469376956063,
+              "samples": 132
             }
           ]
         },
         {
           "unit": "fouls_ft",
-          "factor": 1.1421751507557492,
-          "samples": 221,
-          "meanDelta": 0.3722788797602891,
-          "meanAbsDelta": 2.8926485810051243,
-          "dispersion": 1.1122366561460986,
+          "factor": 1.1377128915580135,
+          "samples": 223,
+          "meanDelta": 0.3269933001332093,
+          "meanAbsDelta": 2.9086522999975366,
+          "dispersion": 1.1237628887847098,
           "bins": [
             {
-              "upTo": 7.780303030303029,
-              "factor": 1.2875193859312337,
-              "samples": 73
+              "upTo": 7.822222222222223,
+              "factor": 1.2853198407714133,
+              "samples": 74
             },
             {
               "upTo": 10.166666666666668,
-              "factor": 1.1053647639444517,
+              "factor": 1.097762220396189,
               "samples": 74
             },
             {
               "upTo": null,
-              "factor": 1.0956418346956989,
-              "samples": 74
+              "factor": 1.0915309391596686,
+              "samples": 75
             }
           ]
         },
         {
           "unit": "goals_1h",
-          "factor": 1.2732723554391554,
+          "factor": 1.2745573237073486,
           "samples": 400,
-          "meanDelta": -0.022433492938066978,
-          "meanAbsDelta": 0.6975296088101349,
-          "dispersion": 1.0292462313517228,
+          "meanDelta": -0.021409145158653057,
+          "meanAbsDelta": 0.6983528837231116,
+          "dispersion": 1.0301147169568992,
           "bins": [
             {
               "upTo": 0.5247980769230767,
-              "factor": 1.4398976098910528,
+              "factor": 1.4455427050719636,
               "samples": 133
             },
             {
@@ -7239,15 +7244,15 @@
         },
         {
           "unit": "goals_ft",
-          "factor": 1.3111165823038964,
+          "factor": 1.3177417085872711,
           "samples": 400,
-          "meanDelta": 0.001491699155869246,
-          "meanAbsDelta": 1.3920686376594111,
-          "dispersion": 1.217467979072572,
+          "meanDelta": 0.014013463612777131,
+          "meanAbsDelta": 1.3932307398074066,
+          "dispersion": 1.209620285218988,
           "bins": [
             {
               "upTo": 1.7628000000000001,
-              "factor": 1.5158004199560542,
+              "factor": 1.538830715546527,
               "samples": 133
             },
             {
@@ -7264,8 +7269,8 @@
         }
       ],
       "samples": {
-        "pending": 70,
-        "measured": 2619
+        "pending": 42,
+        "measured": 2636
       }
     },
     "configured": {
