@@ -1742,6 +1742,10 @@ export async function runLiveStatsScan(liveFixtures: LiveFixture[]): Promise<num
       possessionHome: a.possessionHome ?? undefined,
       xg: a.xgHome != null && a.xgAway != null ? Math.round((a.xgHome + a.xgAway) * 100) / 100 : undefined,
       reds: a.redCards ?? undefined,
+      side: {
+        h: [a.shotsTotalHome, a.shotsOnTargetHome, a.cornersHome, a.cardsHome ?? 0, a.foulsHome ?? 0],
+        a: [a.shotsTotalAway, a.shotsOnTargetAway, a.cornersAway, a.cardsAway ?? 0, a.foulsAway ?? 0],
+      },
     });
     if (ok) recorded++;
   });

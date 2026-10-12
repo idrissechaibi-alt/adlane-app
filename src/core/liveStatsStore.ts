@@ -18,6 +18,8 @@ export interface LiveStatsSample {
   possessionHome?: number;
   xg?: number;
   reds?: number;
+  /** Détail par équipe (domicile / extérieur) : tirs, cadrés, corners, cartons, fautes. */
+  side?: { h: [number, number, number, number, number]; a: [number, number, number, number, number] };
 }
 
 const KEY_PREFIX = '@real_live_stats_';

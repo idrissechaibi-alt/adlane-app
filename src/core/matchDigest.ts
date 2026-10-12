@@ -21,6 +21,8 @@ export interface MatchDigest {
   score: [number, number];
   goals: Array<[number, 'h' | 'a']>;
   totals: { shots: number; sot: number; corners: number; cards: number; fouls: number; reds: number };
+  /** Détail par équipe : [tirs, cadrés, corners, cartons, fautes] (domicile / extérieur). */
+  sides?: { h: number[]; a: number[] };
   /** Par tranche de 15 min : [corners, cartons, tirs]. */
   periods: Array<[number, number, number]>;
   lessons: string[];
@@ -36,6 +38,10 @@ interface TeamLive {
   cards: number;
   fouls: number;
   shots: number;
+  /** Ce que l'équipe PRODUIT et CONCÈDE par match (corners, cartons, tirs cadrés), plus matchs à domicile. */
+  own?: { shots: number; sot: number; corners: number; cards: number; fouls: number };
+  conceded?: { shots: number; sot: number; corners: number; cards: number; fouls: number };
+  homeMatches?: number;
   lessons: string[];
 }
 
@@ -82,6 +88,7 @@ function analyse(day: string, match: string, raw: LiveStatsSample[]): MatchDiges
     fouls: val(s, (x) => x.fouls),
     reds: val(s, (x) => x.reds),
   };
+  const lastSide = [...s].reverse().find((x) => x.side)?.side;
   const periods: MatchDigest['periods'] = PERIODS.map(() => [0, 0, 0]);
   for (let i = 1; i < s.length; i++) {
     const idx = PERIODS.findIndex((p) => s[i].minute <= p);
@@ -118,7 +125,7 @@ function analyse(day: string, match: string, raw: LiveStatsSample[]): MatchDiges
   const second = periods.slice(3).reduce((a, p) => a + p[0], 0);
   if (totals.corners >= 6 && second / Math.max(1, totals.corners) >= 0.65) lessons.push(`Corners surtout en 2e mi-temps (${second}/${totals.corners}).`);
   if (totals.cards >= 4 && periods.slice(3).reduce((a, p) => a + p[1], 0) / totals.cards >= 0.75) lessons.push(`Cartons surtout en 2e mi-temps (${totals.cards} au total).`);
-  return { day, match, score: [final.home, final.away], goals, totals, periods, lessons, key };
+  return { day, match, score: [final.home, final.away], goals, totals, sides: lastSide ? { h: lastSide.h, a: lastSide.a } : undefined, periods, lessons, key };
 }
 
 function teamsOf(match: string): [string, string] | null {
@@ -141,6 +148,16 @@ async function updateTeams(d: MatchDigest): Promise<void> {
     t.cards += d.totals.cards;
     t.fouls += d.totals.fouls;
     t.shots += d.totals.shots;
+    if (d.sides) {
+      const mineS = idx === 0 ? d.sides.h : d.sides.a;
+      const theirS = idx === 0 ? d.sides.a : d.sides.h;
+      const zero = () => ({ shots: 0, sot: 0, corners: 0, cards: 0, fouls: 0 });
+      const o = (t.own ??= zero());
+      const c = (t.conceded ??= zero());
+      [o.shots, o.sot, o.corners, o.cards, o.fouls] = [o.shots + mineS[0], o.sot + mineS[1], o.corners + mineS[2], o.cards + mineS[3], o.fouls + mineS[4]];
+      [c.shots, c.sot, c.corners, c.cards, c.fouls] = [c.shots + theirS[0], c.sot + theirS[1], c.corners + theirS[2], c.cards + theirS[3], c.fouls + theirS[4]];
+    }
+    if (idx === 0) t.homeMatches = (t.homeMatches ?? 0) + 1;
     const mine = d.score[idx];
     const theirs = d.score[1 - idx];
     t.lessons = [...t.lessons, `${d.day} ${d.match} ${d.score[0]}-${d.score[1]} : ${d.lessons.join(' ') || `${mine}-${theirs}, ${d.totals.corners} corners, ${d.totals.cards} cartons.`}`].slice(-TEAM_LESSONS_KEPT);
@@ -197,7 +214,8 @@ export function teamLiveNote(team: string): string {
   if (!t || t.n < 2) return '';
   const early = t.goalsForMin.filter((m) => m <= 30).length;
   const late = t.goalsAgainstMin.filter((m) => m >= 70).length;
-  const parts = [`${t.n} matchs suivis minute par minute : ${(t.corners / t.n).toFixed(1)} corners, ${(t.cards / t.n).toFixed(1)} cartons, ${(t.shots / t.n).toFixed(0)} tirs par match`];
+  const split = t.own && t.conceded ? `produit ${(t.own.corners / t.n).toFixed(1)} corners, ${(t.own.cards / t.n).toFixed(1)} cartons, ${(t.own.sot / t.n).toFixed(1)} tirs cadrés et en concède ${(t.conceded.corners / t.n).toFixed(1)}, ${(t.conceded.cards / t.n).toFixed(1)}, ${(t.conceded.sot / t.n).toFixed(1)} par match` : `${(t.corners / t.n).toFixed(1)} corners, ${(t.cards / t.n).toFixed(1)} cartons (match entier) par match`;
+  const parts = [`${t.n} matchs suivis minute par minute : ${split}`];
   if (t.goalsForMin.length >= 4) parts.push(`${Math.round((early / t.goalsForMin.length) * 100)} % de ses buts avant la 30e`);
   if (t.goalsAgainstMin.length >= 4) parts.push(`${Math.round((late / t.goalsAgainstMin.length) * 100)} % de ses buts encaissés après la 70e`);
   return `\n- Suivi en direct ${t.name} : ${parts.join(' ; ')}. Dernière leçon : ${last(t.lessons) ?? '—'}`;
