@@ -23,7 +23,7 @@ import { runInPlayComboTick, runRealInPlayTick, InternationalBreakTickDiagnostic
 import { runNightlyReviewIfDue, sendEveningDigestIfDue } from './dailyReview';
 import { autoProbeWebCapability } from './llmRouter';
 import { getRecentSearchSource, probeAnySearch } from './webSearch';
-import { hubLiveEvents } from '../api/footballDataAPIs/liveDataHub';
+import { hubLiveEvents, hubLiveStatus } from '../api/footballDataAPIs/liveDataHub';
 import { syntheticFixtureId } from './halftimeMonitor';
 import { registerSofaEvents } from '../api/footballDataAPIs/sofaScore';
 import { getDailyPlan, runMorningScanIfDue } from './scheduler';
@@ -238,6 +238,30 @@ async function hasRealMatchInLiveWindow(): Promise<boolean> {
 let realLiveMemo: { at: number; value: Omit<SharedLiveFixturesResult, 'fictionalFixtures'> } | null = null;
 const REAL_LIVE_MEMO_MS = 45_000;
 
+/**
+ * Recoupe chaque match avec les sources live gratuites : score = le plus avancé (un score ne redescend jamais),
+ * minute = celle de la source. Un match que les sources ne donnent pas en cours est écarté quand le relevé vient du
+ * cache (périmé possible) ; un relevé API-Football tout frais est gardé tel quel.
+ */
+async function reconcileWithLiveSources(fixtures: LiveFixture[], fromCache: boolean): Promise<LiveFixture[]> {
+  const out: LiveFixture[] = [];
+  for (const f of fixtures) {
+    const hub = await hubLiveStatus(f.homeTeam, f.awayTeam).catch(() => null);
+    if (hub && ['1H', 'HT', '2H'].includes(hub.statusShort)) {
+      out.push({
+        ...f,
+        homeGoals: Math.max(f.homeGoals, hub.homeGoals),
+        awayGoals: Math.max(f.awayGoals, hub.awayGoals),
+        minute: hub.minute > 0 ? hub.minute : f.minute,
+        statusShort: hub.statusShort,
+      });
+    } else if (!fromCache) {
+      out.push(f);
+    }
+  }
+  return out;
+}
+
 async function fetchRealLiveFixturesShared(): Promise<Omit<SharedLiveFixturesResult, 'fictionalFixtures'>> {
   if (realLiveMemo && Date.now() - realLiveMemo.at < REAL_LIVE_MEMO_MS) return realLiveMemo.value;
   const apiConfig = await getAPIConfig();
@@ -249,8 +273,10 @@ async function fetchRealLiveFixturesShared(): Promise<Omit<SharedLiveFixturesRes
   // premier plan repasse toutes les 3 min, et une requête par passage
   // épuisait le quota du jour en une vingtaine de minutes d'app ouverte.
   const cached = await readCachedLiveFixtures();
+  let fromCache = false;
   if (cached) {
     fixtures = cached;
+    fromCache = true;
   } else if (!(await hasRealMatchInLiveWindow())) {
     // Aucun match du planning réel (5 grands championnats) ne peut être en
     // cours : pas de requête API-Football (quota gardé pour les heures de match).
@@ -286,6 +312,11 @@ async function fetchRealLiveFixturesShared(): Promise<Omit<SharedLiveFixturesRes
     fixtures = [...fixtures, ...missing];
     if (missing.length === fixtures.length) source = 'sources_live_gratuites';
   }
+
+  // Contrôle de cohérence AVANT tout pari : le score et la minute viennent des sources live gratuites (6 sources croisées).
+  // Un relevé en cache dont la minute avance à l'horloge mais dont le score est resté celui du début (0-0 à la 15e
+  // alors que c'était 2-0 depuis la 8e) ne doit jamais produire un pick.
+  fixtures = await reconcileWithLiveSources(fixtures, fromCache);
 
   const value = { fixtures, source, apiFootballError };
   realLiveMemo = { at: Date.now(), value };

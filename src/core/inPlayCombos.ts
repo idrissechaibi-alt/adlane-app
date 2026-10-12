@@ -1264,6 +1264,12 @@ async function processRealSlotCheckpoint(
   if (perMatchLegs.length === 0) return;
 
   const emit = async (items: LegWithContext[], label: string) => {
+    // Dernier contrôle avant d'envoyer : le score des sources live gratuites doit être celui sur lequel le pari a été calculé
+    // (un but tombé entre-temps change tout). Sources muettes : on n'envoie pas non plus un pari sur un score invérifiable.
+    for (const item of items) {
+      const hub = await hubLiveStatus(item.match.homeTeam, item.match.awayTeam).catch(() => null);
+      if (!hub || hub.homeGoals !== item.live.homeGoals || hub.awayGoals !== item.live.awayGoals) return;
+    }
     const enriched = await formulateWithOmniroute(items, checkpointLabel);
     const proposal = buildProposalFromItems(kind, enriched, label ? `${window} · ${label}` : window, true);
     if (!proposal) return;
