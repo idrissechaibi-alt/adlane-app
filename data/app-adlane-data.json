@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-10-12T15:42:36.731Z",
+  "exportedAt": "2026-10-12T16:11:33.261Z",
   "formatVersion": 1,
   "source": "APP adlane",
   "data": {
@@ -5185,31 +5185,23 @@
       "ticksLast24h": 60
     },
     "tickProgress": {
-      "startedAt": "2026-10-12T15:42:23.429Z",
-      "step": "compositions T-90",
-      "at": "2026-10-12T15:42:23.782Z",
+      "startedAt": "2026-10-12T16:11:15.959Z",
+      "step": "terminé",
+      "at": "2026-10-12T16:11:15.976Z",
       "stepDurationsSec": {
-        "bilan de minuit": 0,
+        "consolidation apprentissage": 1,
         "scan matinal": 0,
-        "relevé live partagé": 0,
-        "scan en direct 20e/60e": 0
+        "enrichissement matchs suivis": 0,
+        "vérification accès internet des modèles": 0
       }
     },
     "lastTick": {
-      "startedAt": "2026-10-12T11:09:49.938Z",
-      "finishedAt": "2026-10-12T11:24:58.237Z",
-      "durationSec": 908,
+      "startedAt": "2026-10-12T16:11:15.959Z",
+      "finishedAt": "2026-10-12T16:11:15.977Z",
+      "durationSec": 0,
       "stepDurationsSec": {
-        "scan matinal": 1,
-        "relevé live partagé": 0,
-        "scan en direct 20e/60e": 312,
-        "bilan de minuit": 0,
-        "marqueurs live": 30,
-        "programme fictif": 559,
-        "univers du jour": 2,
-        "compositions T-90": 0,
-        "bilan Scouting": 0,
-        "consolidation apprentissage": 4,
+        "consolidation apprentissage": 1,
+        "scan matinal": 0,
         "enrichissement matchs suivis": 0,
         "vérification accès internet des modèles": 0
       },
@@ -5217,34 +5209,23 @@
       "omnirouteConfigured": true,
       "fictionalProgramSize": 370,
       "fictionalProgramFromFeed": false,
-      "fictionalMatchesAhead": 262,
-      "fictionalNextKickoffUtc": "2026-10-12T11:30:00.000Z",
-      "fictionalCountriesTried": 31,
+      "fictionalMatchesAhead": 170,
+      "fictionalNextKickoffUtc": "2026-10-12T15:45:00.000Z",
+      "fictionalCountriesTried": 27,
       "fictionalCountriesTotal": 60,
       "fictionalLastTrace": {
-        "country": "Australie",
-        "attempts": [
-          {
-            "model": "Principal · allam-2-7b",
-            "outcome": "erreur",
-            "detail": "Cannot read property 'generalAnalysis' of null"
-          },
-          {
-            "model": "Omniroute · Maximus appus",
-            "outcome": "erreur",
-            "detail": "réponse vide après les recherches"
-          }
-        ]
+        "country": "Équateur",
+        "attempts": []
       },
       "fictionalSportmonksMatches": 1,
       "fictionalSofascoreMatches": 275,
       "fictionalOmnirouteMatches": 105,
       "liveFixturesFound": 0,
-      "fictionalLiveFixturesFound": 8,
+      "fictionalLiveFixturesFound": 14,
       "liveFixturesSource": "api_football",
-      "liveMarkerObserved": 6,
-      "liveMarkerClosed": 2,
-      "freshInPlayProposals": 15,
+      "liveMarkerObserved": 8,
+      "liveMarkerClosed": 6,
+      "freshInPlayProposals": 12,
       "intlBreak": {
         "withinWindow": false,
         "matchesScheduledToday": 0,
@@ -5254,7 +5235,7 @@
       },
       "sportmonksConfirmedMatches": 0,
       "sofaScoreConfirmedMatches": null,
-      "nightlyReviewPointsCreated": 0
+      "nightlyReviewPointsCreated": 15
     },
     "lastRealFastTick": {
       "at": "2026-10-12T15:42:23.437Z",
@@ -5263,18 +5244,6 @@
       "source": "api_football"
     },
     "abortedTicks": [
-      {
-        "startedAt": "2026-10-11T18:59:36.622Z",
-        "step": "marqueurs live",
-        "at": "2026-10-11T19:01:31.587Z",
-        "stepDurationsSec": {
-          "terminé": 83,
-          "scan matinal": 1,
-          "relevé live partagé": 0,
-          "scan en direct 20e/60e": 114,
-          "bilan de minuit": 0
-        }
-      },
       {
         "startedAt": "2026-10-11T19:02:09.787Z",
         "step": "scan matinal",
@@ -5412,6 +5381,20 @@
           "bilan de minuit": 0,
           "marqueurs live": 104
         }
+      },
+      {
+        "startedAt": "2026-10-12T15:42:23.429Z",
+        "step": "bilan Scouting",
+        "at": "2026-10-12T16:11:15.408Z",
+        "stepDurationsSec": {
+          "bilan de minuit": 0,
+          "scan matinal": 0,
+          "relevé live partagé": 0,
+          "scan en direct 20e/60e": 0,
+          "compositions T-90": 4,
+          "marqueurs live": 1728,
+          "programme fictif": 0
+        }
       }
     ],
     "strategies": [
@@ -5482,16 +5465,16 @@
       {
         "id": "mt-peu-de-buts-2e",
         "name": "Au plus 1 but en 2e MT (peu de tirs cadrés malgré les corners)",
-        "settled": 67,
+        "settled": 68,
         "won": 36,
-        "hitRate": 0.5373134328358209,
-        "meanPredicted": 0.5720125246655612,
+        "hitRate": 0.5294117647058824,
+        "meanPredicted": 0.5717031582698339,
         "suspended": false,
         "fictional": {
-          "settled": 63,
+          "settled": 64,
           "won": 33,
-          "hitRate": 0.5238095238095238,
-          "meanPredicted": 0.5724600776177745
+          "hitRate": 0.515625,
+          "meanPredicted": 0.5721243828074358
         },
         "realPaused": false
       },
@@ -5561,32 +5544,32 @@
       }
     ],
     "paperBets": {
-      "total": 1708,
-      "settled": 889,
-      "won": 357,
-      "lastPlacedAt": "2026-10-12T13:30:27.511Z",
-      "lastSettledAt": "2026-10-12T02:26:21.208Z",
-      "placedLast24h": 1535,
-      "settledLast24h": 847
+      "total": 1709,
+      "settled": 921,
+      "won": 371,
+      "lastPlacedAt": "2026-10-12T16:11:15.369Z",
+      "lastSettledAt": "2026-10-12T16:11:15.930Z",
+      "placedLast24h": 1378,
+      "settledLast24h": 819
     },
     "trainingRows": {
-      "last14Days": 7450,
-      "lastClosedAt": "2026-10-12T13:30:27.508Z",
+      "last14Days": 7465,
+      "lastClosedAt": "2026-10-12T16:11:15.367Z",
       "bySource": {
-        "api_football": 3681,
-        "omniroute": 3769
+        "api_football": 3689,
+        "omniroute": 3776
       }
     },
     "model": {
-      "updatedAt": "2026-10-12T11:24:58.147Z",
-      "totalRows": 7438,
-      "markerRules": 13,
+      "updatedAt": "2026-10-12T16:11:15.966Z",
+      "totalRows": 7465,
+      "markerRules": 12,
       "paperBets": {
-        "total": 1691,
-        "settled": 889,
-        "won": 357,
-        "hitRate": 0.4015748031496063,
-        "calibrationFactor": 0.9577115357247998
+        "total": 1709,
+        "settled": 921,
+        "won": 371,
+        "hitRate": 0.4028230184581976,
+        "calibrationFactor": 0.9613302073329097
       },
       "omnirouteTrust": {
         "samples": 78,
@@ -5596,52 +5579,52 @@
       "marketExpertise": [
         {
           "market": "total_buts",
-          "samples": 1883,
+          "samples": 1925,
           "hitRate": 0.649,
           "meanPredicted": 0.661,
-          "calibrationFactor": 0.982
+          "calibrationFactor": 0.983
         },
         {
           "market": "corners",
-          "samples": 1302,
-          "hitRate": 0.664,
-          "meanPredicted": 0.676,
-          "calibrationFactor": 0.982
+          "samples": 1319,
+          "hitRate": 0.666,
+          "meanPredicted": 0.677,
+          "calibrationFactor": 0.985
         },
         {
           "market": "cartons",
-          "samples": 956,
-          "hitRate": 0.614,
+          "samples": 967,
+          "hitRate": 0.615,
           "meanPredicted": 0.659,
-          "calibrationFactor": 0.932
+          "calibrationFactor": 0.934
         },
         {
           "market": "btts",
-          "samples": 741,
-          "hitRate": 0.64,
-          "meanPredicted": 0.654,
+          "samples": 757,
+          "hitRate": 0.639,
+          "meanPredicted": 0.655,
           "calibrationFactor": 0.977
         },
         {
           "market": "fautes",
-          "samples": 640,
-          "hitRate": 0.691,
+          "samples": 644,
+          "hitRate": 0.689,
           "meanPredicted": 0.69,
-          "calibrationFactor": 1.001
+          "calibrationFactor": 0.999
         },
         {
           "market": "1X2",
-          "samples": 521,
-          "hitRate": 0.62,
-          "meanPredicted": 0.695,
+          "samples": 528,
+          "hitRate": 0.619,
+          "meanPredicted": 0.694,
           "calibrationFactor": 0.892
         },
         {
           "market": "buts_1ere_mt",
-          "samples": 174,
-          "hitRate": 0.534,
+          "samples": 181,
+          "hitRate": 0.536,
           "meanPredicted": 0.612,
-          "calibrationFactor": 0.873
+          "calibrationFactor": 0.876
         },
         {
           "market": "tirs_cadres",
@@ -5655,12 +5638,12 @@
     "inPlayProposals": {
       "real": 134,
       "fictional": 3331,
-      "fictionalReviewed": 3096,
-      "fictionalSettledLegs": 2724,
+      "fictionalReviewed": 3180,
+      "fictionalSettledLegs": 2781,
       "lastCreatedAt": "2026-10-12T13:27:05.480Z",
-      "createdLast24h": 2261
+      "createdLast24h": 2055
     },
-    "predictionOutcomes30d": 6256,
+    "predictionOutcomes30d": 6330,
     "marketSeries": {
       "combined": 26,
       "real": 16,
@@ -5706,9 +5689,9 @@
       },
       {
         "date": "2026-10-12",
-        "hitRate": 0.4015748031496063,
-        "total": 889,
-        "won": 357
+        "hitRate": 0.4028230184581976,
+        "total": 921,
+        "won": 371
       }
     ],
     "lastNightlyReview": "2026-10-11",
@@ -5717,64 +5700,55 @@
       "checks": [
         {
           "name": "Principal",
-          "ok": false,
-          "latencyMs": 10016,
-          "readyModels": null,
-          "configuredReady": null,
-          "configuredTotal": 13,
-          "error": "fetch failed: Fetch request has been canceled"
+          "ok": true,
+          "latencyMs": 10696,
+          "readyModels": 28,
+          "configuredReady": 13,
+          "configuredTotal": 13
         },
         {
           "name": "Omniroute",
-          "ok": false,
-          "latencyMs": 10016,
-          "readyModels": null,
-          "configuredReady": null,
-          "configuredTotal": 2,
-          "error": "fetch failed: Fetch request has been canceled"
+          "ok": true,
+          "latencyMs": 13023,
+          "readyModels": 847,
+          "configuredReady": 2,
+          "configuredTotal": 2
         }
       ],
       "leaderboard": [
         {
           "label": "Principal · gpt-oss-120b",
           "ok": 437,
-          "fail": 652,
+          "fail": 671,
           "avgMs": 1401,
-          "coolingDown": false
-        },
-        {
-          "label": "Omniroute · Maximus appus",
-          "ok": 1522,
-          "fail": 52,
-          "avgMs": 6539,
-          "coolingDown": true
-        },
-        {
-          "label": "Principal · allam-2-7b",
-          "ok": 1663,
-          "fail": 1616,
-          "avgMs": 3799,
-          "coolingDown": true
-        },
-        {
-          "label": "Principal · qwen3.8-27b",
-          "ok": 497,
-          "fail": 683,
-          "avgMs": 5562,
-          "coolingDown": false
-        },
-        {
-          "label": "Principal · diffusiongemma-26b-a4b-it",
-          "ok": 538,
-          "fail": 535,
-          "avgMs": 26619,
           "coolingDown": true
         },
         {
           "label": "Principal · auto",
-          "ok": 1475,
-          "fail": 83,
-          "avgMs": 89151,
+          "ok": 1487,
+          "fail": 86,
+          "avgMs": 10549,
+          "coolingDown": false
+        },
+        {
+          "label": "Omniroute · Clodiko",
+          "ok": 3289,
+          "fail": 187,
+          "avgMs": 11837,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · allam-2-7b",
+          "ok": 1681,
+          "fail": 1645,
+          "avgMs": 12133,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · diffusiongemma-26b-a4b-it",
+          "ok": 548,
+          "fail": 548,
+          "avgMs": 18421,
           "coolingDown": false
         },
         {
@@ -5782,6 +5756,13 @@
           "ok": 1152,
           "fail": 287,
           "avgMs": 84728,
+          "coolingDown": false
+        },
+        {
+          "label": "Omniroute · Maximus appus",
+          "ok": 1537,
+          "fail": 54,
+          "avgMs": 132022,
           "coolingDown": false
         },
         {
@@ -5847,11 +5828,11 @@
         "footballData": 3,
         "apiFootball": 34,
         "theOddsApi": 3,
-        "perplexity": 0,
+        "perplexity": 1,
         "apiFootball-autolearn": 31,
-        "sportmonks-autolearn": 12,
+        "sportmonks-autolearn": 13,
         "sofaScore": 0,
-        "sportmonks": 50
+        "sportmonks": 52
       },
       "theOddsApiMonth": {
         "used": 500,
@@ -5869,33 +5850,33 @@
     "liveSources": {
       "TheSportsDB": {
         "ok": true,
-        "count": 27,
-        "at": "2026-10-12T15:42:23.432Z"
+        "count": 32,
+        "at": "2026-10-12T16:11:17.170Z"
       },
       "FotMob": {
         "ok": true,
-        "count": 20,
-        "at": "2026-10-12T15:42:24.212Z"
+        "count": 28,
+        "at": "2026-10-12T16:11:17.170Z"
       },
       "LiveScore": {
         "ok": true,
-        "count": 20,
-        "at": "2026-10-12T15:42:23.433Z"
+        "count": 21,
+        "at": "2026-10-12T16:11:17.163Z"
       },
       "AllSportsApi": {
-        "ok": false,
-        "error": "fetch failed: java.net.ConnectException: Failed to connect to apiv2.allsportsapi.com/57.128.202.69:443",
-        "at": "2026-10-12T15:42:22.854Z"
+        "ok": true,
+        "count": 0,
+        "at": "2026-10-12T16:11:17.185Z"
       },
       "ESPN": {
         "ok": true,
-        "count": 4,
-        "at": "2026-10-12T15:42:23.626Z"
+        "count": 3,
+        "at": "2026-10-12T16:11:17.184Z"
       },
       "365Scores": {
         "ok": true,
-        "count": 31,
-        "at": "2026-10-12T15:42:23.554Z"
+        "count": 32,
+        "at": "2026-10-12T16:11:17.302Z"
       }
     },
     "backupOddsSources": {
@@ -5905,7 +5886,7 @@
       },
       "fanLine": {
         "fixtures": 20,
-        "soccer": 9
+        "soccer": 12
       },
       "oddsmagnet": {
         "httpStatus": null
@@ -5915,11 +5896,11 @@
       "indexUpdatedAt": "2026-10-11T21:47:53Z",
       "teamsInIndex": 111,
       "summariesCached": 36,
-      "lookups": 30,
+      "lookups": 34,
       "withTrend": 1,
-      "unknownTeams": 29,
+      "unknownTeams": 33,
       "lastTrendAt": "2026-10-12T13:26:57.223Z",
-      "lastUnknown": "Nejmeh SC - Tadamon"
+      "lastUnknown": "USM Khenchela - CS Constantine"
     },
     "bookieLineMinimums": {
       "limits": {
@@ -6016,8 +5997,8 @@
       {
         "unit": "goals_1h",
         "label": "Buts à la pause",
-        "verified": 511,
-        "pending": 228,
+        "verified": 507,
+        "pending": 229,
         "meanPredicted": 1.3,
         "meanActual": 1.3,
         "meanError": -0.01,
@@ -6044,8 +6025,8 @@
       {
         "unit": "goals_ft",
         "label": "Buts en fin de match",
-        "verified": 625,
-        "pending": 244,
+        "verified": 621,
+        "pending": 245,
         "meanPredicted": 3,
         "meanActual": 2.9,
         "meanError": -0.07,
@@ -6073,7 +6054,7 @@
         "unit": "corners_ft",
         "label": "Corners sur le match",
         "verified": 384,
-        "pending": 99,
+        "pending": 102,
         "meanPredicted": 8.7,
         "meanActual": 9.2,
         "meanError": 0.41,
@@ -6100,10 +6081,10 @@
       {
         "unit": "cards_ft",
         "label": "Cartons sur le match",
-        "verified": 365,
-        "pending": 92,
+        "verified": 364,
+        "pending": 95,
         "meanPredicted": 4,
-        "meanActual": 4.1,
+        "meanActual": 4.2,
         "meanError": 0.17,
         "meanAbsError": 1.55,
         "bigMisses": 24,
@@ -6157,7 +6138,7 @@
         "unit": "fouls_ft",
         "label": "Fautes sur le match",
         "verified": 209,
-        "pending": 21,
+        "pending": 22,
         "meanPredicted": 24.6,
         "meanActual": 24.9,
         "meanError": 0.28,
@@ -7179,21 +7160,21 @@
         },
         {
           "unit": "cards_ft",
-          "factor": 1.6319663584163129,
-          "samples": 389,
-          "meanDelta": 0.2147702138547154,
-          "meanAbsDelta": 1.5711911126926366,
-          "dispersion": 1.6905139086372196,
+          "factor": 1.6300510380790687,
+          "samples": 388,
+          "meanDelta": 0.21196377954120993,
+          "meanAbsDelta": 1.5718806085307748,
+          "dispersion": 1.675267815251874,
           "bins": [
             {
-              "upTo": 0.9822222222222221,
-              "factor": 2.5966838664715164,
+              "upTo": 0.9822222222222222,
+              "factor": 2.5954988088645727,
               "samples": 129
             },
             {
               "upTo": 1.5022222222222221,
-              "factor": 1.9941486800247752,
-              "samples": 130
+              "factor": 1.9879136794702859,
+              "samples": 129
             },
             {
               "upTo": null,
@@ -7279,8 +7260,8 @@
         }
       ],
       "samples": {
-        "pending": 44,
-        "measured": 2609
+        "pending": 53,
+        "measured": 2600
       }
     },
     "configured": {
