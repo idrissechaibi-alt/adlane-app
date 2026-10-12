@@ -651,7 +651,7 @@ function countMarketLegs(
 
   const specs = [
     { key: 'corners' as const, market: 'corners' as const, noun: 'corners', typical: TYPICAL_CORNERS_PER_MINUTE, count: observed.corners, pace: observed.cornersPerMinute },
-    { key: 'cards' as const, market: 'cartons' as const, noun: 'cartons', typical: TYPICAL_CARDS_PER_MINUTE, count: observed.cards, pace: observed.cardsPerMinute },
+    { key: 'cards' as const, market: 'cartons' as const, noun: 'cartons jaunes', typical: TYPICAL_CARDS_PER_MINUTE, count: observed.cards, pace: observed.cardsPerMinute },
     // Fautes : une source qui ne les publie pas renvoie 0 — inexploitable.
     { key: 'fouls' as const, market: 'fautes' as const, noun: 'fautes', typical: TYPICAL_FOULS_PER_MINUTE, count: observed.fouls ? observed.fouls : undefined, pace: undefined },
   ];

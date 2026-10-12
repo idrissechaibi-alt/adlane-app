@@ -138,7 +138,7 @@ export const MARKET_TITLES: Record<string, string> = {
   OU_2_5: 'Total de buts (plus / moins de X buts)',
   '1ere_mi_temps': 'But en 1ère mi-temps',
   corners: 'Corners',
-  cards: 'Cartons',
+  cards: 'Cartons jaunes',
   fouls: 'Fautes',
   shots_on_target: 'Tirs cadrés (joueur)',
   saves: 'Arrêts du gardien',

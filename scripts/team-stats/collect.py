@@ -155,7 +155,8 @@ def _cards(m, period):
     y, r = _stat(m, period, 'yellow_cards'), _stat(m, period, 'red_cards')
     if not y:
         return None
-    return [y[0] + (r[0] if r else 0), y[1] + (r[1] if r else 0)]
+    # Cartons JAUNES seulement : c'est le marché des bookmakers (les rouges ne comptent pas).
+    return [y[0], y[1]]
 
 
 def _result(m):

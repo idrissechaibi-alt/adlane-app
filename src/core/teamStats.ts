@@ -200,8 +200,8 @@ function valuesOf(m: RawMatch, key: TrendKey): [number, number] | undefined {
     case 'goals_1h': return [m.halftime.for, m.halftime.against];
     case 'corners_ft': return pairOf(m.stats.ft, 'corners');
     case 'corners_1h': return pairOf(m.stats.h1, 'corners');
-    case 'cards_ft': return pairOf(m.stats.ft, 'yellow_cards', 'red_cards');
-    case 'cards_1h': return pairOf(m.stats.h1, 'yellow_cards', 'red_cards');
+    case 'cards_ft': return pairOf(m.stats.ft, 'yellow_cards');
+    case 'cards_1h': return pairOf(m.stats.h1, 'yellow_cards');
     case 'fouls_ft': return pairOf(m.stats.ft, 'fouls_committed');
     case 'fouls_1h': return pairOf(m.stats.h1, 'fouls_committed');
     case 'xg_ft': return pairOf(m.stats.ft, 'expected_goals_xg');

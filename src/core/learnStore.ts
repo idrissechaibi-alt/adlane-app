@@ -41,7 +41,7 @@ export const TRACKED_MARKETS = [
   { key: 'btts', label: 'Les deux marquent' },
   { key: 'buts_1ere_mt', label: 'Buts 1ère mi-temps' },
   { key: 'corners', label: 'Corners' },
-  { key: 'cartons', label: 'Cartons' },
+  { key: 'cartons', label: 'Cartons jaunes' },
   { key: 'fautes', label: 'Fautes' },
   { key: 'tirs_cadres', label: 'Tirs cadrés (joueur)' },
 ] as const;

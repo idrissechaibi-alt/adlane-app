@@ -624,8 +624,9 @@ function parsePeriod(period: any): SofaPeriodStats | null {
   if (sum(corners) + sum(yellow) + sum(red) + sum(fouls) + sum(onTarget) + sum(shots) === 0) return null;
 
   // SofaScore omet une statistique à zéro (ex. aucun carton rouge) : absente = 0.
-  const cardsHome = (yellow?.home ?? 0) + (red?.home ?? 0);
-  const cardsAway = (yellow?.away ?? 0) + (red?.away ?? 0);
+  // Cartons JAUNES seulement : les bookmakers ne proposent pas de marché « cartons » avec les rouges.
+  const cardsHome = yellow?.home ?? 0;
+  const cardsAway = yellow?.away ?? 0;
   return {
     corners: (corners?.home ?? 0) + (corners?.away ?? 0),
     cards: cardsHome + cardsAway,
@@ -819,8 +820,8 @@ function liveScorePeriod(home: any, away: any): SofaPeriodStats | null {
   const n = (v: unknown) => Number(v ?? 0) || 0;
   const cornersHome = n(home.Cos);
   const cornersAway = n(away.Cos);
-  const cardsHome = n(home.Ycs) + n(home.Rcs) + n(home.YRcs);
-  const cardsAway = n(away.Ycs) + n(away.Rcs) + n(away.YRcs);
+  const cardsHome = n(home.Ycs);
+  const cardsAway = n(away.Ycs);
   const foulsHome = n(home.Fls);
   const foulsAway = n(away.Fls);
   const onTargetHome = n(home.Shon);

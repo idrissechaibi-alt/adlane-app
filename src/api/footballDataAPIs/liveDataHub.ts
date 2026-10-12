@@ -185,7 +185,7 @@ function fotMobPeriod(period: any): SofaPeriodStats | null {
   const v = (k: string) => values.get(k) ?? [0, 0];
   return buildPeriod({
     cornersHome: v('corners')[0], cornersAway: v('corners')[1],
-    cardsHome: v('yellow_cards')[0] + v('red_cards')[0], cardsAway: v('yellow_cards')[1] + v('red_cards')[1],
+    cardsHome: v('yellow_cards')[0], cardsAway: v('yellow_cards')[1], // cartons JAUNES seulement : c'est le marché des bookmakers
     foulsHome: v('fouls')[0], foulsAway: v('fouls')[1],
     onTargetHome: v('ShotsOnTarget')[0], onTargetAway: v('ShotsOnTarget')[1],
     shotsHome: v('total_shots')[0], shotsAway: v('total_shots')[1],
@@ -300,7 +300,7 @@ const scores365: Provider = {
       stats: {
         all: buildPeriod({
           cornersHome: corners[0], cornersAway: corners[1],
-          cardsHome: yellow[0] + red[0], cardsAway: yellow[1] + red[1],
+          cardsHome: yellow[0], cardsAway: yellow[1],
           foulsHome: fouls[0], foulsAway: fouls[1],
           onTargetHome: onTarget[0], onTargetAway: onTarget[1],
           shotsHome: shots[0], shotsAway: shots[1],
@@ -384,7 +384,7 @@ const espn: Provider = {
       stats: {
         all: homeT && awayT ? buildPeriod({
           cornersHome: stat(homeT, 'wonCorners'), cornersAway: stat(awayT, 'wonCorners'),
-          cardsHome: stat(homeT, 'yellowCards') + stat(homeT, 'redCards'), cardsAway: stat(awayT, 'yellowCards') + stat(awayT, 'redCards'),
+          cardsHome: stat(homeT, 'yellowCards'), cardsAway: stat(awayT, 'yellowCards'),
           foulsHome: stat(homeT, 'foulsCommitted'), foulsAway: stat(awayT, 'foulsCommitted'),
           onTargetHome: stat(homeT, 'shotsOnTarget'), onTargetAway: stat(awayT, 'shotsOnTarget'),
           shotsHome: stat(homeT, 'totalShots'), shotsAway: stat(awayT, 'totalShots'),
@@ -513,7 +513,7 @@ const allSports: Provider = {
     };
     const cards: any[] = Array.isArray(x?.cards) ? x.cards : [];
     const count = (side: 'home' | 'away', firstHalf: boolean) =>
-      cards.filter((c) => (c.home_fault ? 'home' : c.away_fault ? 'away' : c.info) === side && (!firstHalf || num(c.time) <= 45)).length;
+      cards.filter((c) => !/red/i.test(String(c.card ?? c.type ?? '')) && (c.home_fault ? 'home' : c.away_fault ? 'away' : c.info) === side && (!firstHalf || num(c.time) <= 45)).length;
     const corners = pair('Corners');
     const onTarget = pair('On Target');
     return {
