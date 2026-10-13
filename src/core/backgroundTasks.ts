@@ -29,6 +29,7 @@ import { registerSofaEvents } from '../api/footballDataAPIs/sofaScore';
 import { getDailyPlan, runMorningScanIfDue } from './scheduler';
 import { reconcileScoutingAnalyses } from './scoutingReview';
 import { runWatchdog } from './watchdog';
+import { learnAlias, loadLearnedAliases } from './teamAliasStore';
 import { refreshDueLineups } from './lineupRefresh';
 import { readLearnedModel } from './learnStore';
 import { namesLikelyMatch, normalizeTeamName } from './teamNameMatch';
@@ -192,16 +193,31 @@ async function fetchRealLiveFromFreeSources(): Promise<LiveFixture[]> {
   const plan = await getDailyPlan();
   if (!plan) return [];
   const planned = plan.slots.flatMap((slot) => slot.matches as Array<{ homeTeam: string; awayTeam: string; leagueName?: string }>);
+  await loadLearnedAliases();
   const live = await hubLiveEvents();
   const dateKey = new Date().toISOString().slice(0, 10);
   const out: LiveFixture[] = [];
   const unmatched: string[] = [];
+  const same = (a: string, b: string) => namesLikelyMatch(normalizeTeamName(a), normalizeTeamName(b));
   for (const m of planned) {
-    const hit = live.find(
-      (e) =>
-        namesLikelyMatch(normalizeTeamName(e.homeTeam), normalizeTeamName(m.homeTeam)) &&
-        namesLikelyMatch(normalizeTeamName(e.awayTeam), normalizeTeamName(m.awayTeam))
-    );
+    let hit = live.find((e) => same(e.homeTeam, m.homeTeam) && same(e.awayTeam, m.awayTeam));
+    if (!hit) {
+      // Repli par le CONTEXTE : une équipe reconnue + une minute de jeu cohérente avec l'heure du coup d'envoi. Le nom de
+      // l'autre équipe est alors mémorisé (alias appris) : la prochaine fois, le nom suffit, pour toutes les sources.
+      const elapsed = (Date.now() - Date.parse((m as any).kickoff_utc)) / 60_000;
+      const candidates = live.filter(
+        (e) => (same(e.homeTeam, m.homeTeam) !== same(e.awayTeam, m.awayTeam) || (same(e.homeTeam, m.homeTeam) && same(e.awayTeam, m.awayTeam))) &&
+          e.minute >= Math.max(1, elapsed - 24) && e.minute <= elapsed + 3
+      );
+      const byHome = candidates.filter((e) => same(e.homeTeam, m.homeTeam) && !same(e.awayTeam, m.awayTeam));
+      const byAway = candidates.filter((e) => same(e.awayTeam, m.awayTeam) && !same(e.homeTeam, m.homeTeam));
+      const found = byHome.length === 1 ? byHome[0] : byAway.length === 1 ? byAway[0] : undefined;
+      if (found) {
+        hit = found;
+        if (byHome.length === 1) await learnAlias(m.awayTeam, found.awayTeam);
+        else await learnAlias(m.homeTeam, found.homeTeam);
+      }
+    }
     if (!hit) {
       // Match du planning censé être en cours (coup d'envoi il y a 5 à 110 min) mais introuvable chez les sources : à signaler.
       const minutes = (Date.now() - Date.parse((m as any).kickoff_utc)) / 60_000;
@@ -596,6 +612,7 @@ async function runAutoLearnTickLocked(mode: TickMode): Promise<AutoLearnTickDiag
   const doFast = mode !== 'slow';
   const doSlow = mode !== 'fast';
   await recordAbortedPreviousTick();
+  await loadLearnedAliases();
   // Scan matinal automatique (7h locales) : voir runMorningScanIfDue pour le
   // principe de déclenchement (premier tour après l'heure cible, idempotent).
   currentTickStartedAt = new Date().toISOString();

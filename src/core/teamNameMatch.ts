@@ -15,6 +15,8 @@ const ALIAS_GROUPS: string[][] = [
   ['Slavia Prague', 'SK Slavia Praha', 'Slavia Praha'],
   ['Inter Milan', 'FC Internazionale Milano', 'Internazionale', 'Inter'],
   ['AC Milan', 'Milan'],
+  ['Paris FC'],
+  ['Inter Miami', 'Inter Miami CF'],
   ['Bayern Munich', 'FC Bayern München', 'Bayern Munchen', 'Bayern'],
   ['PSV Eindhoven', 'PSV'],
   ['Paris Saint-Germain', 'Paris Saint Germain', 'PSG'],
@@ -69,6 +71,16 @@ const ALIAS_GROUPS: string[][] = [
 
 const aliasMap = new Map<string, string>();
 let aliasReady = false;
+/** Alias appris à l'usage (deux noms vus sur le même match) : fournis par teamAliasStore, jamais saisis à la main. */
+let learned = new Map<string, string>();
+export function setLearnedAliases(map: Map<string, string>): void {
+  learned = map;
+}
+
+let canonSet: Set<string> | null = null;
+function canonicals(): Set<string> {
+  return (canonSet ??= new Set(aliasMap.values()));
+}
 
 function buildAliases(): void {
   aliasReady = true;
@@ -81,7 +93,8 @@ function buildAliases(): void {
 export function normalizeTeamName(name: string): string {
   if (!aliasReady) buildAliases();
   const base = baseNormalize(name);
-  return aliasMap.get(base) ?? base;
+  const fixed = aliasMap.get(base) ?? base;
+  return learned.get(fixed) ?? fixed;
 }
 
 function baseNormalize(name: string): string {
@@ -113,6 +126,9 @@ function baseNormalize(name: string): string {
  */
 export function namesLikelyMatch(normalizedA: string, normalizedB: string): boolean {
   if (normalizedA === normalizedB) return true;
+  // Deux équipes DISTINCTES de la liste (AC Milan / Inter Milan, Paris FC / Paris Saint-Germain) ne se confondent jamais.
+  if (!aliasReady) buildAliases();
+  if (canonicals().has(normalizedA) && canonicals().has(normalizedB)) return false;
   if (normalizedA.length < 4 || normalizedB.length < 4) return false;
 
   // 1) Inclusion de sous-chaîne : couvre les cas où le nom court est un
@@ -129,5 +145,45 @@ export function namesLikelyMatch(normalizedA: string, normalizedB: string): bool
   if (shorter.length === 1 && shorter[0].length < 4) return false; // mot unique trop générique
 
   const longerSet = new Set(longer);
-  return shorter.every((token) => longerSet.has(token));
+  if (shorter.every((token) => longerSet.has(token))) return true;
+
+  // 3) Graphies différentes d'une même ville (München/Munich, Praha/Prague…), sigles de statut (SK, FK, KV…) et
+  // proximité d'écriture : on compare les mots « utiles » après synonymes, puis une distance d'édition.
+  const core = (tokens: string[]) => tokens.map((t) => SYNONYMS[t] ?? t).filter((t) => t.length > 1 && !STATUS_TOKENS.has(t));
+  const ca = core(tokensA);
+  const cb = core(tokensB);
+  if (ca.length > 0 && cb.length > 0) {
+    const [sh, lo] = ca.length <= cb.length ? [ca, cb] : [cb, ca];
+    const loSet = new Set(lo);
+    if (sh.every((t) => loSet.has(t) || lo.some((l) => l.length >= 5 && t.length >= 5 && (l.startsWith(t) || t.startsWith(l))))) return true;
+    const ja = ca.join(' ');
+    const jb = cb.join(' ');
+    if (ja.length >= 6 && jb.length >= 6 && similarity(ja, jb) >= 0.84) return true;
+  }
+  return false;
+}
+
+/** Mots qui ne distinguent pas deux clubs (statut juridique, sigles). */
+const STATUS_TOKENS = new Set(['sk', 'fk', 'kv', 'sv', 'tsv', 'vfb', 'vfl', 'fsv', 'bsc', 'gnk', 'nk', 'afc', 'rsc', 'de', 'la', 'le', 'du', 'of', 'the', 'and']);
+
+/** Graphies de villes selon la langue de la source. */
+const SYNONYMS: Record<string, string> = {
+  munchen: 'munich', praha: 'prague', wien: 'vienna', koln: 'cologne', koeln: 'cologne', torino: 'turin', milano: 'milan',
+  lisboa: 'lisbon', genova: 'genoa', firenze: 'florence', napoli: 'naples', zurich: 'zurich', kobenhavn: 'copenhagen',
+  beograd: 'belgrade', moskva: 'moscow', bucuresti: 'bucharest', warszawa: 'warsaw', athina: 'athens', kyiv: 'kiev',
+  internazionale: 'inter', hotspur: 'tottenham', wanderers: 'wolves', monchengladbach: 'gladbach',
+};
+
+function similarity(a: string, b: string): number {
+  if (a === b) return 1;
+  const m = a.length;
+  const n = b.length;
+  const dp = Array.from({ length: m + 1 }, (_, i) => [i, ...new Array(n).fill(0)]);
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+  }
+  return 1 - dp[m][n] / Math.max(m, n);
 }
