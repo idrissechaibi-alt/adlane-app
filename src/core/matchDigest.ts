@@ -252,7 +252,9 @@ export async function digestFinishedMatches(liveKeys: Set<string>, idleMinutes =
     for (const [match, samples] of Object.entries(store)) {
       const lastSample = last(samples);
       const idle = (Date.now() - Date.parse(lastSample.ts)) / 60_000;
-      const finished = day < today || (!liveKeys.has(match) && idle >= idleMinutes);
+      // Terminé = jour passé, OU plus en direct depuis assez longtemps : 6 min seulement si le dernier relevé est tardif (≥ 80e),
+      // sinon 25 min — une app restée fermée ou une source muette quelques minutes ne doit pas faire croire à un match fini.
+      const finished = day < today || (!liveKeys.has(match) && (idle >= 25 || (idle >= idleMinutes && lastSample.minute >= 80)));
       if (!finished) continue;
       const d = analyse(day, match, samples);
       if (d) {
