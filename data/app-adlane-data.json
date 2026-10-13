@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-10-13T14:43:33.434Z",
+  "exportedAt": "2026-10-13T15:27:13.671Z",
   "formatVersion": 1,
   "source": "APP adlane",
   "data": {
@@ -5563,19 +5563,22 @@
   },
   "health": {
     "nativeBackgroundTicks": {
-      "lastTickAt": "2026-10-13T14:40:58.613Z",
-      "ticksLast24h": 61
+      "lastTickAt": "2026-10-13T14:49:43.363Z",
+      "ticksLast24h": 63
     },
     "tickProgress": {
       "startedAt": "2026-10-13T14:38:18.759Z",
-      "step": "marqueurs live",
-      "at": "2026-10-13T14:43:27.781Z",
+      "step": "compositions T-90",
+      "at": "2026-10-13T15:27:08.185Z",
       "stepDurationsSec": {
         "terminé": 901,
         "scan matinal": 0,
         "relevé live partagé": 1,
         "scan en direct 20e/60e": 308,
-        "bilan de minuit": 0
+        "bilan de minuit": 0,
+        "marqueurs live": 373,
+        "programme fictif": 2247,
+        "univers du jour": 1
       }
     },
     "lastTick": {
@@ -5691,7 +5694,7 @@
       "nightlyReviewPointsCreated": 16
     },
     "lastRealFastTick": {
-      "at": "2026-10-13T14:19:34.735Z",
+      "at": "2026-10-13T15:27:08.451Z",
       "liveFound": 0,
       "fresh": 0,
       "source": "api_football"
@@ -6004,20 +6007,20 @@
       }
     ],
     "paperBets": {
-      "total": 2248,
+      "total": 2300,
       "settled": 1181,
       "won": 503,
-      "lastPlacedAt": "2026-10-13T14:17:35.225Z",
+      "lastPlacedAt": "2026-10-13T14:49:40.495Z",
       "lastSettledAt": "2026-10-13T14:19:33.076Z",
-      "placedLast24h": 540,
+      "placedLast24h": 592,
       "settledLast24h": 292
     },
     "trainingRows": {
-      "last14Days": 7854,
-      "lastClosedAt": "2026-10-13T14:17:35.208Z",
+      "last14Days": 7896,
+      "lastClosedAt": "2026-10-13T14:49:40.490Z",
       "bySource": {
-        "api_football": 3931,
-        "omniroute": 3923
+        "api_football": 3955,
+        "omniroute": 3941
       }
     },
     "model": {
@@ -6161,7 +6164,7 @@
         {
           "name": "Principal",
           "ok": true,
-          "latencyMs": 68,
+          "latencyMs": 66,
           "readyModels": 28,
           "configuredReady": 13,
           "configuredTotal": 13
@@ -6169,8 +6172,8 @@
         {
           "name": "Omniroute",
           "ok": true,
-          "latencyMs": 2007,
-          "readyModels": 841,
+          "latencyMs": 2440,
+          "readyModels": 847,
           "configuredReady": 2,
           "configuredTotal": 2
         }
@@ -6178,37 +6181,30 @@
       "leaderboard": [
         {
           "label": "Principal · allam-2-7b",
-          "ok": 2606,
-          "fail": 2650,
-          "avgMs": 1238,
+          "ok": 2611,
+          "fail": 2655,
+          "avgMs": 756,
           "coolingDown": false
         },
         {
           "label": "Principal · qwen3.8-27b",
-          "ok": 642,
+          "ok": 646,
           "fail": 1045,
-          "avgMs": 930,
-          "coolingDown": true
-        },
-        {
-          "label": "Omniroute · Clodiko",
-          "ok": 6864,
-          "fail": 235,
-          "avgMs": 5256,
+          "avgMs": 1140,
           "coolingDown": false
         },
         {
           "label": "Principal · gpt-oss-120b",
           "ok": 685,
-          "fail": 1041,
+          "fail": 1043,
           "avgMs": 1646,
           "coolingDown": true
         },
         {
           "label": "Principal · diffusiongemma-26b-a4b-it",
-          "ok": 936,
-          "fail": 1100,
-          "avgMs": 8173,
+          "ok": 938,
+          "fail": 1102,
+          "avgMs": 4527,
           "coolingDown": false
         },
         {
@@ -6227,9 +6223,9 @@
         },
         {
           "label": "Principal · gpt-oss-20b",
-          "ok": 2312,
+          "ok": 2313,
           "fail": 211,
-          "avgMs": 76306,
+          "avgMs": 54405,
           "coolingDown": false
         },
         {
@@ -6245,6 +6241,13 @@
           "fail": 124,
           "avgMs": 53779,
           "coolingDown": false
+        },
+        {
+          "label": "Omniroute · Maximus appus",
+          "ok": 1719,
+          "fail": 60,
+          "avgMs": 153374,
+          "coolingDown": false
         }
       ],
       "webCapable": [],
@@ -6253,14 +6256,8 @@
     },
     "dailyPlan": {
       "date": "2026-10-13",
-      "generatedAt": "2026-10-13T11:32:07.311Z",
+      "generatedAt": "2026-10-13T14:43:31.611Z",
       "matches": [
-        {
-          "match": "Sabah FK - SK Slavia Praha",
-          "league": "UEFA Champions League",
-          "kickoff": "2026-10-13T16:45:00Z",
-          "hasOdds": false
-        },
         {
           "match": "Racing Club de Lens - Sporting Clube de Portugal",
           "league": "UEFA Champions League",
@@ -6268,19 +6265,19 @@
           "hasOdds": false
         },
         {
-          "match": "Galatasaray SK - FC Barcelona",
+          "match": "Sabah FK - SK Slavia Praha",
+          "league": "UEFA Champions League",
+          "kickoff": "2026-10-13T16:45:00Z",
+          "hasOdds": false
+        },
+        {
+          "match": "Viking FK - FC Bayern München",
           "league": "UEFA Champions League",
           "kickoff": "2026-10-13T19:00:00Z",
           "hasOdds": false
         },
         {
-          "match": "Arsenal FC - Lille OSC",
-          "league": "UEFA Champions League",
-          "kickoff": "2026-10-13T19:00:00Z",
-          "hasOdds": false
-        },
-        {
-          "match": "RB Leipzig - PSV",
+          "match": "FC Internazionale Milano - Club Brugge KV",
           "league": "UEFA Champions League",
           "kickoff": "2026-10-13T19:00:00Z",
           "hasOdds": false
@@ -6298,13 +6295,19 @@
           "hasOdds": false
         },
         {
-          "match": "Viking FK - FC Bayern München",
+          "match": "Arsenal FC - Lille OSC",
           "league": "UEFA Champions League",
           "kickoff": "2026-10-13T19:00:00Z",
           "hasOdds": false
         },
         {
-          "match": "FC Internazionale Milano - Club Brugge KV",
+          "match": "RB Leipzig - PSV",
+          "league": "UEFA Champions League",
+          "kickoff": "2026-10-13T19:00:00Z",
+          "hasOdds": false
+        },
+        {
+          "match": "Galatasaray SK - FC Barcelona",
           "league": "UEFA Champions League",
           "kickoff": "2026-10-13T19:00:00Z",
           "hasOdds": false
@@ -6314,10 +6317,10 @@
     "apiUsageToday": {
       "countsToday": {
         "footballData": 4,
-        "apiFootball": 19,
+        "apiFootball": 21,
         "theOddsApi": 4,
         "perplexity": 1,
-        "apiFootball-autolearn": 17,
+        "apiFootball-autolearn": 19,
         "sportmonks-autolearn": 7,
         "sofaScore": 1,
         "sportmonks": 35
@@ -6330,46 +6333,46 @@
       }
     },
     "apiFootballBudget": {
-      "usedToday": 19,
-      "autolearnUsedToday": 17,
-      "autolearnRemaining": 53
+      "usedToday": 21,
+      "autolearnUsedToday": 19,
+      "autolearnRemaining": 51
     },
     "sofaScore": null,
     "liveSources": {
       "FotMob": {
         "ok": true,
-        "count": 17,
-        "at": "2026-10-13T14:43:28.582Z"
+        "count": 18,
+        "at": "2026-10-13T15:27:08.190Z"
       },
       "365Scores": {
         "ok": true,
         "count": 38,
-        "at": "2026-10-13T14:43:28.649Z"
+        "at": "2026-10-13T15:27:08.345Z"
       },
       "TheSportsDB": {
         "ok": true,
         "count": 18,
-        "at": "2026-10-13T14:43:28.539Z"
+        "at": "2026-10-13T15:27:08.234Z"
       },
       "ESPN": {
         "ok": true,
-        "count": 1,
-        "at": "2026-10-13T14:43:28.597Z"
+        "count": 4,
+        "at": "2026-10-13T15:27:08.327Z"
       },
       "LiveScore": {
         "ok": true,
         "count": 16,
-        "at": "2026-10-13T14:43:28.825Z"
+        "at": "2026-10-13T15:27:08.252Z"
       },
       "AllSportsApi": {
         "ok": true,
         "count": 0,
-        "at": "2026-10-13T14:43:28.661Z"
+        "at": "2026-10-13T15:27:08.242Z"
       }
     },
     "liveStatsScan": {
       "lastScan": {
-        "at": "2026-10-13T14:43:28.835Z",
+        "at": "2026-10-13T15:27:08.363Z",
         "matches": 0,
         "sources": "6 sources gratuites"
       },
@@ -6382,7 +6385,7 @@
       },
       "fanLine": {
         "fixtures": 20,
-        "soccer": 6
+        "soccer": 11
       },
       "oddsmagnet": {
         "httpStatus": null
