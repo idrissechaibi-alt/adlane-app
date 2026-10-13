@@ -1,7 +1,7 @@
 # Mémoire d'auto-apprentissage — marqueurs observés en direct
 
-Mis à jour : 2026-10-13T21:08:08.961Z
-Corpus : 8421 observations sur 581 ligues / 1 pays.
+Mis à jour : 2026-10-13T22:18:28.647Z
+Corpus : 8431 observations sur 581 ligues / 1 pays.
 
 ## Taux de base observés (par fenêtre)
 - `goals>=1@10` : 36.5%
@@ -32,13 +32,12 @@ Corpus : 8421 observations sur 581 ligues / 1 pays.
 ### Fenêtre 25 minutes
 - `possession_imbalance>=20` → `fouls>=3` : **36.1%** (×1.71 vs base 21.1%, n=294)
 - `possession_imbalance>=20` → `corners>=2` : **38.4%** (×1.47 vs base 26.2%, n=294)
-- `possession_imbalance>=10` → `corners>=2` : **35.0%** (×1.34 vs base 26.2%, n=854)
 - `fouls_total>=12` → `goals>=1` : **54.5%** (×1.24 vs base 44.0%, n=55)
 - `possession_imbalance>=20` → `goals>=1` : **54.4%** (×1.24 vs base 44.0%, n=294)
 - `fouls_total>=8` → `goals>=1` : **53.1%** (×1.21 vs base 44.0%, n=162)
 
 ## Fiabilité mesurée du modèle (paris papier, aucun argent engagé)
-- Paris simulés réglés : 1557 / 2846
+- Paris simulés réglés : 1558 / 2846
 - Taux de réussite réel : 40.2%
 - Facteur de recalibrage appliqué : ×0.96 (<1 = le modèle était trop optimiste, ses probabilités sont rabotées)
 
@@ -47,13 +46,13 @@ Corpus : 8421 observations sur 581 ligues / 1 pays.
 - Pas encore assez fiable (seuil : 30 recoupements, 80% d'accord) — Omniroute élargit la couverture observée mais n'influence pas encore les probabilités.
 
 ## Fiabilité passée du scan en direct 20e/60e minute (par marché, 30 derniers jours, réel + fictif confondus)
-- `Total de buts` : réalisé **64.1%** vs annoncé 66.1% (n=1570)
-- `Corners` : réalisé **68.2%** vs annoncé 68.4% (n=1243)
-- `Cartons jaunes` : réalisé **62.9%** vs annoncé 66.1% (n=1035)
-- `Fautes` : réalisé **67.6%** vs annoncé 69.4% (n=673)
-- `Les deux marquent` : réalisé **62.2%** vs annoncé 66.1% (n=651)
-- `Victoire (1X2)` : réalisé **63.4%** vs annoncé 68.2% (n=476)
-- `Buts 1ère mi-temps` : réalisé **54.0%** vs annoncé 60.8% (n=174)
+- `Total de buts` : réalisé **64.4%** vs annoncé 66.0% (n=1667)
+- `Corners` : réalisé **67.5%** vs annoncé 68.4% (n=1278)
+- `Cartons jaunes` : réalisé **63.8%** vs annoncé 65.8% (n=1111)
+- `Fautes` : réalisé **65.7%** vs annoncé 69.5% (n=697)
+- `Les deux marquent` : réalisé **63.1%** vs annoncé 66.0% (n=680)
+- `Victoire (1X2)` : réalisé **63.2%** vs annoncé 68.2% (n=519)
+- `Buts 1ère mi-temps` : réalisé **53.7%** vs annoncé 60.8% (n=175)
 - `Tirs cadrés (joueur)` : réalisé **56.3%** vs annoncé 71.0% (n=32) — trop confiant sur ce marché, à corriger.
 
 ## Fiabilité passée de l'analyse Scouting IA (par marché, 30 derniers jours)
