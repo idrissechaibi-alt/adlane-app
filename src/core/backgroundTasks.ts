@@ -195,13 +195,19 @@ async function fetchRealLiveFromFreeSources(): Promise<LiveFixture[]> {
   const live = await hubLiveEvents();
   const dateKey = new Date().toISOString().slice(0, 10);
   const out: LiveFixture[] = [];
+  const unmatched: string[] = [];
   for (const m of planned) {
     const hit = live.find(
       (e) =>
         namesLikelyMatch(normalizeTeamName(e.homeTeam), normalizeTeamName(m.homeTeam)) &&
         namesLikelyMatch(normalizeTeamName(e.awayTeam), normalizeTeamName(m.awayTeam))
     );
-    if (!hit) continue;
+    if (!hit) {
+      // Match du planning censé être en cours (coup d'envoi il y a 5 à 110 min) mais introuvable chez les sources : à signaler.
+      const minutes = (Date.now() - Date.parse((m as any).kickoff_utc)) / 60_000;
+      if (minutes >= 5 && minutes <= 110) unmatched.push(`${m.homeTeam} - ${m.awayTeam}`);
+      continue;
+    }
     out.push({
       statusShort: hit.statusShort,
       homeTeam: m.homeTeam,
@@ -214,7 +220,16 @@ async function fetchRealLiveFromFreeSources(): Promise<LiveFixture[]> {
       sofaEventId: hit.provider === 'LiveScore' ? hit.eventId : undefined,
     });
   }
+  AsyncStorage.setItem('@unmatched_planned_live', JSON.stringify({ at: new Date().toISOString(), unmatched, sourceNames: live.slice(0, 80).map((e) => `${e.homeTeam} - ${e.awayTeam}`) })).catch(() => {});
   return out;
+}
+
+export async function readUnmatchedPlannedLive(): Promise<unknown> {
+  try {
+    return JSON.parse((await AsyncStorage.getItem('@unmatched_planned_live')) ?? 'null');
+  } catch {
+    return null;
+  }
 }
 
 async function hasRealMatchInLiveWindow(): Promise<boolean> {

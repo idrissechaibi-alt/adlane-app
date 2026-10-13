@@ -4,7 +4,87 @@
 // Best-effort : une équipe qui ne matche pas reste simplement non associée,
 // jamais de donnée inventée à sa place.
 
+/**
+ * Équipes que les sources nomment très différemment (« Sporting Clube de Portugal » / « Sporting CP », « Slavia Praha » /
+ * « Slavia Prague », « Internazionale Milano » / « Inter Milan », « Bayern München » / « Bayern Munich »…) : toutes les
+ * variantes d'une ligne sont ramenées à la première. Sans cela, le match n'était pas reconnu d'une source à l'autre
+ * (Lens – Sporting resté invisible en direct, donc aucun pari ni combiné).
+ */
+const ALIAS_GROUPS: string[][] = [
+  ['Sporting CP', 'Sporting Clube de Portugal', 'Sporting Lisbon', 'Sporting Lisboa'],
+  ['Slavia Prague', 'SK Slavia Praha', 'Slavia Praha'],
+  ['Inter Milan', 'FC Internazionale Milano', 'Internazionale', 'Inter'],
+  ['AC Milan', 'Milan'],
+  ['Bayern Munich', 'FC Bayern München', 'Bayern Munchen', 'Bayern'],
+  ['PSV Eindhoven', 'PSV'],
+  ['Paris Saint-Germain', 'Paris Saint Germain', 'PSG'],
+  ['Manchester City', 'Man City'],
+  ['Manchester United', 'Man United', 'Man Utd'],
+  ['Tottenham Hotspur', 'Tottenham', 'Spurs'],
+  ['Wolverhampton Wanderers', 'Wolves'],
+  ['Newcastle United', 'Newcastle'],
+  ['Brighton and Hove Albion', 'Brighton & Hove Albion', 'Brighton'],
+  ['West Ham United', 'West Ham'],
+  ['Leeds United', 'Leeds'],
+  ['Coventry City', 'Coventry'],
+  ['Atletico Madrid', 'Club Atlético de Madrid', 'Atlético de Madrid', 'Atletico de Madrid'],
+  ['Athletic Club', 'Athletic Bilbao'],
+  ['Real Sociedad', 'Real Sociedad de Fútbol'],
+  ['Olympique de Marseille', 'Marseille', 'Olympique Marseille'],
+  ['Olympique Lyonnais', 'Lyon'],
+  ['AS Monaco', 'Monaco'],
+  ['Racing Club de Lens', 'Lens', 'RC Lens'],
+  ['Stade Brestois 29', 'Brest', 'Stade Brestois'],
+  ['Bayer 04 Leverkusen', 'Bayer Leverkusen', 'Leverkusen'],
+  ['Borussia Mönchengladbach', 'Borussia Monchengladbach', "Gladbach", "M'gladbach"],
+  ['Borussia Dortmund', 'Dortmund', 'BVB'],
+  ['RB Salzburg', 'Red Bull Salzburg', 'FC Red Bull Salzburg'],
+  ['SL Benfica', 'Benfica'],
+  ['FC Porto', 'Porto'],
+  ['Sporting Braga', 'SC Braga', 'Braga'],
+  ['Ajax', 'AFC Ajax'],
+  ['Feyenoord', 'Feyenoord Rotterdam'],
+  ['Celtic', 'Celtic Glasgow'],
+  ['Shakhtar Donetsk', 'Shakhtar'],
+  ['Dinamo Zagreb', 'GNK Dinamo Zagreb'],
+  ['Red Star Belgrade', 'Crvena Zvezda', 'FK Crvena Zvezda'],
+  ['Young Boys', 'BSC Young Boys'],
+  ['Union Saint-Gilloise', 'Royale Union Saint-Gilloise', 'Union SG'],
+  ['Bodo/Glimt', 'FK Bodø/Glimt', 'Bodo Glimt'],
+  ['Qarabag', 'Qarabag FK', 'Qarabağ'],
+  ['Olympiacos', 'Olympiakos', 'Olympiacos FC'],
+  ['Kairat Almaty', 'FC Kairat', 'Kairat'],
+  ['Pafos', 'Pafos FC'],
+  ['FC Copenhagen', 'FC København', 'Copenhagen'],
+  ['Sturm Graz', 'SK Sturm Graz'],
+  ['Club Brugge', 'Club Brugge KV'],
+  ['Galatasaray', 'Galatasaray SK'],
+  ['Fenerbahce', 'Fenerbahçe', 'Fenerbahce SK'],
+  ['Eintracht Frankfurt', 'Frankfurt'],
+  ['Girona', 'Girona FC'],
+  ['Elche', 'Elche CF'],
+  ['Celta Vigo', 'RC Celta de Vigo', 'Celta de Vigo'],
+  ['Alaves', 'Deportivo Alavés', 'Deportivo Alaves'],
+];
+
+const aliasMap = new Map<string, string>();
+let aliasReady = false;
+
+function buildAliases(): void {
+  aliasReady = true;
+  for (const group of ALIAS_GROUPS) {
+    const canonical = baseNormalize(group[0]);
+    for (const variant of group) aliasMap.set(baseNormalize(variant), canonical);
+  }
+}
+
 export function normalizeTeamName(name: string): string {
+  if (!aliasReady) buildAliases();
+  const base = baseNormalize(name);
+  return aliasMap.get(base) ?? base;
+}
+
+function baseNormalize(name: string): string {
   return name
     .normalize('NFD').replace(/[̀-ͯ]/g, '')
     .toLowerCase()

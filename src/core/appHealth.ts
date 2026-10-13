@@ -8,7 +8,7 @@ import { getAPIConfig, getAllRequestCounts, getQuotaUsage, getRequestCount } fro
 import { getDailyPlan } from './scheduler';
 import { remainingBudget } from './requestBudget';
 import { estimateExpectedGoalsFromMarket } from './poisson';
-import { getNativeBackgroundTickStats, readAbortedTicks, readLastFastTick, readLastRealFastTick, readLastTickDiagnostics, readTickProgress } from './backgroundTasks';
+import { getNativeBackgroundTickStats, readAbortedTicks, readLastFastTick, readLastRealFastTick, readUnmatchedPlannedLive, readLastTickDiagnostics, readTickProgress } from './backgroundTasks';
 import { loadOmnirouteConfig } from './focusEnrichment';
 import { ensureRefCorrections } from './oddsLoop';
 import { getRefCorrections } from './oddsLearning';
@@ -180,6 +180,7 @@ export async function buildAppHealth(): Promise<Record<string, unknown>> {
     })),
     sofaScore: await section(async () => getSofaStatus()),
     liveSources: await section(async () => getHubStatus()),
+    unmatchedPlannedLive: await section(readUnmatchedPlannedLive),
     liveStatsScan: await section(async () => getLiveStatsScanStatus()),
     backupOddsSources: await section(async () => probeBackupSources()),
     teamStats: await section(async () => getTeamStatsStatus()),
