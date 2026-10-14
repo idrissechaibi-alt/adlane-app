@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-10-14T15:30:25.082Z",
+  "exportedAt": "2026-10-14T15:32:32.074Z",
   "formatVersion": 1,
   "source": "APP adlane",
   "data": {
@@ -5953,9 +5953,9 @@
       "ticksLast24h": 72
     },
     "tickProgress": {
-      "startedAt": "2026-10-14T15:30:19.439Z",
+      "startedAt": "2026-10-14T15:32:26.472Z",
       "step": "scan matinal",
-      "at": "2026-10-14T15:30:19.439Z",
+      "at": "2026-10-14T15:32:26.472Z",
       "stepDurationsSec": {}
     },
     "lastTick": {
@@ -6077,25 +6077,12 @@
       "nightlyReviewPointsCreated": 0
     },
     "lastRealFastTick": {
-      "at": "2026-10-14T12:12:30.034Z",
-      "liveFound": 2,
+      "at": "2026-10-14T15:32:21.166Z",
+      "liveFound": 1,
       "fresh": 0,
       "source": "sources_live_gratuites"
     },
     "abortedTicks": [
-      {
-        "startedAt": "2026-10-12T19:05:24.121Z",
-        "step": "programme fictif",
-        "at": "2026-10-12T19:13:49.610Z",
-        "stepDurationsSec": {
-          "terminé": 0,
-          "scan matinal": 0,
-          "relevé live partagé": 0,
-          "scan en direct 20e/60e": 393,
-          "bilan de minuit": 0,
-          "marqueurs live": 113
-        }
-      },
       {
         "startedAt": "2026-10-12T19:35:31.796Z",
         "step": "marqueurs live",
@@ -6227,6 +6214,15 @@
         "step": "scan matinal",
         "at": "2026-10-14T15:30:16.160Z",
         "stepDurationsSec": {}
+      },
+      {
+        "startedAt": "2026-10-14T15:30:19.439Z",
+        "step": "scan en direct 20e/60e",
+        "at": "2026-10-14T15:30:29.212Z",
+        "stepDurationsSec": {
+          "scan matinal": 10,
+          "relevé live partagé": 0
+        }
       }
     ],
     "strategies": [
@@ -6468,12 +6464,12 @@
       ]
     },
     "inPlayProposals": {
-      "real": 171,
+      "real": 173,
       "fictional": 6061,
       "fictionalReviewed": 5681,
       "fictionalSettledLegs": 5039,
-      "lastCreatedAt": "2026-10-14T12:18:02.606Z",
-      "createdLast24h": 1578
+      "lastCreatedAt": "2026-10-14T15:30:27.816Z",
+      "createdLast24h": 1580
     },
     "predictionOutcomes30d": 8653,
     "marketSeries": {
@@ -6533,7 +6529,7 @@
         {
           "name": "Principal",
           "ok": true,
-          "latencyMs": 228,
+          "latencyMs": 117,
           "readyModels": 28,
           "configuredReady": 13,
           "configuredTotal": 13
@@ -6541,82 +6537,82 @@
         {
           "name": "Omniroute",
           "ok": true,
-          "latencyMs": 2193,
-          "readyModels": 850,
+          "latencyMs": 1773,
+          "readyModels": 851,
           "configuredReady": 2,
           "configuredTotal": 2
         }
       ],
       "leaderboard": [
         {
-          "label": "Principal · qwen3.8-27b",
-          "ok": 850,
-          "fail": 1244,
-          "avgMs": 1056,
+          "label": "Omniroute · Clodiko",
+          "ok": 7447,
+          "fail": 239,
+          "avgMs": 1363,
           "coolingDown": false
         },
         {
-          "label": "Principal · nemotron-3-super-120b",
-          "ok": 3384,
-          "fail": 508,
-          "avgMs": 3635,
-          "coolingDown": false
-        },
-        {
-          "label": "Principal · gpt-oss-120b",
-          "ok": 892,
-          "fail": 1457,
-          "avgMs": 1034,
+          "label": "Omniroute · Maximus appus",
+          "ok": 3318,
+          "fail": 76,
+          "avgMs": 2188,
           "coolingDown": false
         },
         {
           "label": "Principal · allam-2-7b",
-          "ok": 3414,
-          "fail": 3691,
-          "avgMs": 1692,
+          "ok": 3430,
+          "fail": 3711,
+          "avgMs": 940,
+          "coolingDown": true
+        },
+        {
+          "label": "Principal · nemotron-3-super-120b",
+          "ok": 3388,
+          "fail": 521,
+          "avgMs": 3288,
+          "coolingDown": true
+        },
+        {
+          "label": "Principal · qwen3.8-27b",
+          "ok": 861,
+          "fail": 1259,
+          "avgMs": 1211,
+          "coolingDown": true
+        },
+        {
+          "label": "Principal · gpt-oss-120b",
+          "ok": 901,
+          "fail": 1473,
+          "avgMs": 2088,
+          "coolingDown": true
+        },
+        {
+          "label": "Principal · llama-3.2-11b-vision-instruct",
+          "ok": 1110,
+          "fail": 117,
+          "avgMs": 11738,
           "coolingDown": false
         },
         {
           "label": "Principal · gpt-oss-20b",
-          "ok": 2598,
-          "fail": 286,
-          "avgMs": 5766,
-          "coolingDown": false
-        },
-        {
-          "label": "Principal · llama-3.2-11b-vision-instruct",
-          "ok": 1099,
-          "fail": 110,
-          "avgMs": 6721,
-          "coolingDown": false
+          "ok": 2600,
+          "fail": 297,
+          "avgMs": 13590,
+          "coolingDown": true
         },
         {
           "label": "Principal · llama-3.1-nemotron-safety-guard-8b-v3",
           "ok": 369,
-          "fail": 494,
+          "fail": 500,
           "avgMs": 8978,
-          "coolingDown": false
+          "coolingDown": true
         },
         {
           "label": "Principal · nemotron-3.5-content-safety",
           "ok": 1646,
-          "fail": 1662,
+          "fail": 1666,
           "avgMs": 61594,
-          "coolingDown": false
-        },
-        {
-          "label": "Omniroute · Clodiko",
-          "ok": 7423,
-          "fail": 239,
-          "avgMs": 245708,
-          "coolingDown": false
-        },
-        {
-          "label": "Principal · riva-translate-4b-instruct-v2",
-          "ok": 895,
-          "fail": 872,
-          "avgMs": 206836,
-          "coolingDown": false
+          "coolingDown": true
         }
       ],
       "webCapable": [],
@@ -6625,7 +6621,7 @@
     },
     "dailyPlan": {
       "date": "2026-10-14",
-      "generatedAt": "2026-10-14T00:19:44.190Z",
+      "generatedAt": "2026-10-14T15:32:30.314Z",
       "matches": [
         {
           "match": "Feyenoord Rotterdam - Como 1907",
@@ -6637,6 +6633,12 @@
           "match": "LASK Linz - Liverpool FC",
           "league": "UEFA Champions League",
           "kickoff": "2026-10-14T16:45:00Z",
+          "hasOdds": false
+        },
+        {
+          "match": "Aston Villa FC - Fenerbahçe SK",
+          "league": "UEFA Champions League",
+          "kickoff": "2026-10-14T19:00:00Z",
           "hasOdds": false
         },
         {
@@ -6652,7 +6654,7 @@
           "hasOdds": false
         },
         {
-          "match": "Aston Villa FC - Fenerbahçe SK",
+          "match": "FK Bodø/Glimt - Borussia Dortmund",
           "league": "UEFA Champions League",
           "kickoff": "2026-10-14T19:00:00Z",
           "hasOdds": false
@@ -6674,25 +6676,19 @@
           "league": "UEFA Champions League",
           "kickoff": "2026-10-14T19:00:00Z",
           "hasOdds": false
-        },
-        {
-          "match": "FK Bodø/Glimt - Borussia Dortmund",
-          "league": "UEFA Champions League",
-          "kickoff": "2026-10-14T19:00:00Z",
-          "hasOdds": false
         }
       ]
     },
     "apiUsageToday": {
       "countsToday": {
-        "footballData": 1,
-        "apiFootball": 36,
-        "theOddsApi": 1,
+        "footballData": 4,
+        "apiFootball": 39,
+        "theOddsApi": 4,
         "perplexity": 0,
-        "apiFootball-autolearn": 36,
-        "sportmonks-autolearn": 12,
-        "sofaScore": 0,
-        "sportmonks": 79
+        "apiFootball-autolearn": 38,
+        "sportmonks-autolearn": 13,
+        "sofaScore": 1,
+        "sportmonks": 82
       },
       "theOddsApiMonth": {
         "used": 500,
@@ -6702,46 +6698,46 @@
       }
     },
     "apiFootballBudget": {
-      "usedToday": 36,
-      "autolearnUsedToday": 36,
-      "autolearnRemaining": 34
+      "usedToday": 39,
+      "autolearnUsedToday": 38,
+      "autolearnRemaining": 32
     },
     "sofaScore": null,
     "liveSources": {
       "LiveScore": {
         "ok": true,
         "count": 10,
-        "at": "2026-10-14T15:30:19.468Z"
+        "at": "2026-10-14T15:32:26.474Z"
       },
       "TheSportsDB": {
         "ok": true,
         "count": 17,
-        "at": "2026-10-14T15:30:19.474Z"
-      },
-      "ESPN": {
-        "ok": true,
-        "count": 2,
-        "at": "2026-10-14T15:30:19.552Z"
+        "at": "2026-10-14T15:32:26.485Z"
       },
       "FotMob": {
         "ok": true,
         "count": 11,
-        "at": "2026-10-14T15:30:19.682Z"
+        "at": "2026-10-14T15:32:26.495Z"
+      },
+      "ESPN": {
+        "ok": true,
+        "count": 2,
+        "at": "2026-10-14T15:32:26.563Z"
       },
       "AllSportsApi": {
         "ok": true,
         "count": 0,
-        "at": "2026-10-14T15:30:19.875Z"
+        "at": "2026-10-14T15:32:26.945Z"
       },
       "365Scores": {
         "ok": true,
         "count": 16,
-        "at": "2026-10-14T15:30:19.915Z"
+        "at": "2026-10-14T15:32:26.945Z"
       }
     },
     "learnedTeamAliases": {},
     "unmatchedPlannedLive": {
-      "at": "2026-10-14T15:30:19.992Z",
+      "at": "2026-10-14T15:32:27.018Z",
       "unmatched": [],
       "sourceNames": [
         "Manchester City U19 - Paris Saint-Germain U19",
@@ -6755,6 +6751,7 @@
         "Atyrau - FC Yelimay",
         "Volga Ulyanovsk - Murom",
         "Ümraniyespor - Boluspor",
+        "Al-Jandal - Al Akhdoud",
         "Maccabi Herzliya U19 - SC Ashdod U19",
         "Manchester City U19 - PSG U19",
         "Mo Constantine - Js Azazga",
@@ -6763,7 +6760,7 @@
         "Hapoel Tel Aviv U19 - Maccabi Haifa U19",
         "Hapoel Kfar Saba U19 - Maccabi Tel Aviv U19",
         "Al Duhail - Al Shabab",
-        "Al-Jndal - Al-Akhdoud",
+        "Al-Jandal - Al-Okhdood",
         "Vision Buyumbura - Kayanza United",
         "Super Nova Youth - Cliftonville Youth",
         "Pärnu U21 Vaprus - Tabasalu",
@@ -6772,13 +6769,12 @@
         "Ittihad Al-Shorta - Sporty",
         "Atyrau - Elimai Semey",
         "Real Betis Juvenil - FC Porto Juniors",
-        "Manchester City Youth - Paris Saint-Germain Academy",
-        "Milan Futuro - Piacenza"
+        "Manchester City Youth - Paris Saint-Germain Academy"
       ]
     },
     "liveStatsScan": {
       "lastScan": {
-        "at": "2026-10-14T15:30:20.236Z",
+        "at": "2026-10-14T15:32:28.431Z",
         "matches": 1,
         "sources": "6 sources gratuites"
       },
@@ -6800,79 +6796,14 @@
     "teamStats": {
       "indexUpdatedAt": "2026-10-14T00:32:40Z",
       "teamsInIndex": 111,
-      "summariesCached": 70,
-      "lookups": 1,
-      "withTrend": 1,
-      "unknownTeams": 0,
-      "lastTrendAt": "2026-10-14T15:30:20.536Z",
-      "lastUnknown": null
+      "summariesCached": 71,
+      "lookups": 3,
+      "withTrend": 0,
+      "unknownTeams": 3,
+      "lastTrendAt": null,
+      "lastUnknown": "Mo Constantine - Js Azazga"
     },
     "teamStatsUsageLog": [
-      {
-        "at": "2026-10-14T11:57:19.214Z",
-        "match": "FC Yenisey Krasnoyarsk - Kaluga",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-10-14T11:57:19.650Z",
-        "match": "Hapoel Haifa U19 - Maccabi Petach Tikva U19",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-10-14T11:57:27.002Z",
-        "match": "Chanthaburi FC - Nakhon Pathom United",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-10-14T12:12:59.068Z",
-        "match": "Shakhtar Donetsk U19 - AEK Athens U19",
-        "result": "tendance"
-      },
-      {
-        "at": "2026-10-14T12:12:59.418Z",
-        "match": "Feyenoord U19 - Como U19",
-        "result": "tendance"
-      },
-      {
-        "at": "2026-10-14T12:13:01.982Z",
-        "match": "Pattaya Dolphins United - Songkhla United FC",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-10-14T12:13:06.685Z",
-        "match": "Olympiacos B - Athens Kallithea",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-10-14T12:17:07.816Z",
-        "match": "Volna Nizhny Novgorod - Dynamo Saint Petersburg",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-10-14T12:17:08.309Z",
-        "match": "Nong Bua Pitchaya FC - Chiangmai United",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-10-14T12:17:09.147Z",
-        "match": "Kasetsart - Mahasarakham Sam Bai Tao",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-10-14T12:17:09.469Z",
-        "match": "Dinamo Minsk U19 - Dinamo Tbilisi U19",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-10-14T12:17:11.414Z",
-        "match": "Ballkani U19 - HJK U19",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-10-14T12:17:11.811Z",
-        "match": "Leningradets - Luki-Energiya",
-        "result": "équipe inconnue"
-      },
       {
         "at": "2026-10-14T12:17:12.541Z",
         "match": "Feronikeli - Llapi",
@@ -6932,6 +6863,71 @@
         "at": "2026-10-14T15:30:20.660Z",
         "match": "Manchester City FC - Paris Saint-Germain FC",
         "result": "tendance"
+      },
+      {
+        "at": "2026-10-14T15:30:32.295Z",
+        "match": "Spartakos Kitiou - Ypsonas",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-14T15:30:32.335Z",
+        "match": "Volga Ulyanovsk - Murom",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-14T15:30:32.985Z",
+        "match": "Punjab FC - Odisha FC",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-14T15:30:33.045Z",
+        "match": "Mo Constantine - Js Azazga",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-14T15:30:33.581Z",
+        "match": "Real Betis U19 - FC Porto U19",
+        "result": "tendance"
+      },
+      {
+        "at": "2026-10-14T15:30:34.764Z",
+        "match": "SK Super Nova U19 - Cliftonville U19",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-14T15:30:34.820Z",
+        "match": "Hapoel Tel Aviv U19 - Maccabi Haifa U19",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-14T15:30:34.891Z",
+        "match": "Super Nova Youth - Cliftonville Youth",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-14T15:30:35.235Z",
+        "match": "Atyrau - FC Yelimay",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-14T15:30:35.471Z",
+        "match": "Manchester City U19 - PSG U19",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-14T15:30:37.917Z",
+        "match": "Pärnu U21 Vaprus - Tabasalu",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-14T15:30:38.474Z",
+        "match": "Hapoel Petah Tikva U19 - Maccabi Netanya U19",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-14T15:32:30.298Z",
+        "match": "Mo Constantine - Js Azazga",
+        "result": "équipe inconnue"
       }
     ],
     "bookieLineMinimums": {
@@ -6974,7 +6970,7 @@
         "unit": "corners_1h",
         "label": "Corners 1ère mi-temps",
         "verified": 295,
-        "pending": 365,
+        "pending": 364,
         "meanPredicted": 4.6,
         "meanActual": 4.7,
         "meanError": 0.11,
@@ -7002,7 +6998,7 @@
         "unit": "cards_1h",
         "label": "Cartons 1ère mi-temps",
         "verified": 291,
-        "pending": 361,
+        "pending": 360,
         "meanPredicted": 1.3,
         "meanActual": 1.3,
         "meanError": 0,
@@ -7029,8 +7025,8 @@
       {
         "unit": "goals_1h",
         "label": "Buts à la pause",
-        "verified": 488,
-        "pending": 183,
+        "verified": 484,
+        "pending": 186,
         "meanPredicted": 1.3,
         "meanActual": 1.4,
         "meanError": 0.06,
@@ -7057,11 +7053,11 @@
       {
         "unit": "goals_ft",
         "label": "Buts en fin de match",
-        "verified": 720,
-        "pending": 209,
+        "verified": 717,
+        "pending": 213,
         "meanPredicted": 3.1,
-        "meanActual": 3.1,
-        "meanError": 0.07,
+        "meanActual": 3.2,
+        "meanError": 0.08,
         "meanAbsError": 1.23,
         "bigMisses": 20,
         "worst": [
@@ -7085,12 +7081,12 @@
       {
         "unit": "corners_ft",
         "label": "Corners sur le match",
-        "verified": 503,
-        "pending": 136,
+        "verified": 498,
+        "pending": 144,
         "meanPredicted": 8.7,
         "meanActual": 9.2,
-        "meanError": 0.5,
-        "meanAbsError": 2.31,
+        "meanError": 0.51,
+        "meanAbsError": 2.32,
         "bigMisses": 33,
         "worst": [
           {
@@ -7113,8 +7109,8 @@
       {
         "unit": "cards_ft",
         "label": "Cartons sur le match",
-        "verified": 489,
-        "pending": 130,
+        "verified": 484,
+        "pending": 138,
         "meanPredicted": 3.8,
         "meanActual": 3.9,
         "meanError": 0.12,
@@ -7169,12 +7165,12 @@
       {
         "unit": "fouls_ft",
         "label": "Fautes sur le match",
-        "verified": 272,
-        "pending": 23,
-        "meanPredicted": 24.1,
+        "verified": 268,
+        "pending": 24,
+        "meanPredicted": 24.2,
         "meanActual": 24.3,
-        "meanError": 0.18,
-        "meanAbsError": 3.07,
+        "meanError": 0.1,
+        "meanAbsError": 3.02,
         "bigMisses": 0,
         "worst": [
           {
@@ -8316,76 +8312,76 @@
         },
         {
           "unit": "corners_ft",
-          "factor": 1.1069193585116577,
+          "factor": 1.1126973881878766,
           "samples": 400,
-          "meanDelta": 0.290516605188618,
-          "meanAbsDelta": 2.065420349587285,
-          "dispersion": 1.941795095475705,
+          "meanDelta": 0.32814854481438727,
+          "meanAbsDelta": 2.0999502830930066,
+          "dispersion": 1.9511824811068588,
           "bins": [
             {
-              "upTo": 2.7155555555555555,
-              "factor": 1.689839887039205,
+              "upTo": 2.7247474747474745,
+              "factor": 1.6946984197037942,
               "samples": 133
             },
             {
-              "upTo": 3.7572016460905338,
-              "factor": 1.1881753654690528,
+              "upTo": 3.794871794871795,
+              "factor": 1.1916392648045384,
               "samples": 133
             },
             {
               "upTo": null,
-              "factor": 0.8305409454702378,
+              "factor": 0.8408479973860954,
               "samples": 134
             }
           ]
         },
         {
           "unit": "cards_ft",
-          "factor": 1.6276935601961187,
+          "factor": 1.6146440156551205,
           "samples": 400,
-          "meanDelta": 0.014349733666123363,
-          "meanAbsDelta": 1.3508530439444237,
-          "dispersion": 1.3679886689941885,
+          "meanDelta": 0.006524892312304992,
+          "meanAbsDelta": 1.3660632706406854,
+          "dispersion": 1.3946501138670517,
           "bins": [
             {
-              "upTo": 0.8717948717948716,
-              "factor": 2.4750132988883604,
+              "upTo": 0.8717948717948718,
+              "factor": 2.4959900458437563,
               "samples": 133
             },
             {
-              "upTo": 1.388167388167388,
-              "factor": 1.927416219433737,
+              "upTo": 1.3881673881673882,
+              "factor": 1.9293710556135957,
               "samples": 133
             },
             {
               "upTo": null,
-              "factor": 1.1855884871340767,
+              "factor": 1.1558649686947096,
               "samples": 134
             }
           ]
         },
         {
           "unit": "fouls_ft",
-          "factor": 1.1311999858587367,
-          "samples": 288,
-          "meanDelta": 0.22046538483028216,
-          "meanAbsDelta": 3.0293568851967465,
-          "dispersion": 1.3087612088765106,
+          "factor": 1.12319978979192,
+          "samples": 284,
+          "meanDelta": 0.14322551666731473,
+          "meanAbsDelta": 2.9853578336409523,
+          "dispersion": 1.2694570411989663,
           "bins": [
             {
               "upTo": 7.594377510040161,
-              "factor": 1.3262124624658131,
-              "samples": 96
+              "factor": 1.3228437877425758,
+              "samples": 94
             },
             {
-              "upTo": 10.320987654320987,
-              "factor": 1.0506188031503918,
-              "samples": 96
+              "upTo": 10.251082251082249,
+              "factor": 1.0492429193670223,
+              "samples": 95
             },
             {
               "upTo": null,
-              "factor": 1.0943836654055785,
-              "samples": 96
+              "factor": 1.0808616807564098,
+              "samples": 95
             }
           ]
         },
@@ -8441,8 +8437,8 @@
         }
       ],
       "samples": {
-        "pending": 99,
-        "measured": 2720
+        "pending": 124,
+        "measured": 2699
       }
     },
     "configured": {
