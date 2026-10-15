@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-10-15T13:26:24.524Z",
+  "exportedAt": "2026-10-15T13:32:32.493Z",
   "formatVersion": 1,
   "source": "APP adlane",
   "data": {
@@ -5949,17 +5949,15 @@
   },
   "health": {
     "nativeBackgroundTicks": {
-      "lastTickAt": "2026-10-15T13:20:28.709Z",
-      "ticksLast24h": 46
+      "lastTickAt": "2026-10-15T13:26:29.626Z",
+      "ticksLast24h": 47
     },
     "tickProgress": {
-      "startedAt": "2026-10-15T13:26:00.160Z",
-      "step": "scan en direct 20e/60e",
-      "at": "2026-10-15T13:26:02.723Z",
+      "startedAt": "2026-10-15T13:32:20.356Z",
+      "step": "relevé live partagé",
+      "at": "2026-10-15T13:32:21.753Z",
       "stepDurationsSec": {
-        "terminé": 0,
-        "scan matinal": 3,
-        "relevé live partagé": 0
+        "scan matinal": 1
       }
     },
     "lastTick": {
@@ -6075,31 +6073,12 @@
       "nightlyReviewPointsCreated": 14
     },
     "lastRealFastTick": {
-      "at": "2026-10-15T13:26:08.144Z",
+      "at": "2026-10-15T13:32:21.724Z",
       "liveFound": 0,
       "fresh": 0,
       "source": "api_football"
     },
     "abortedTicks": [
-      {
-        "startedAt": "2026-10-13T17:38:57.566Z",
-        "step": "programme fictif",
-        "at": "2026-10-13T18:02:44.546Z",
-        "stepDurationsSec": {
-          "terminé": 154,
-          "scan matinal": 930,
-          "relevé live partagé": 0,
-          "scan en direct 20e/60e": 475,
-          "bilan de minuit": 20,
-          "marqueurs live": 2
-        }
-      },
-      {
-        "startedAt": "2026-10-13T18:02:58.818Z",
-        "step": "scan matinal",
-        "at": "2026-10-13T18:02:58.818Z",
-        "stepDurationsSec": {}
-      },
       {
         "startedAt": "2026-10-13T18:03:02.683Z",
         "step": "marqueurs live",
@@ -6216,6 +6195,25 @@
           "terminé": 0,
           "scan matinal": 0,
           "relevé live partagé": 0
+        }
+      },
+      {
+        "startedAt": "2026-10-15T13:26:00.160Z",
+        "step": "scan en direct 20e/60e",
+        "at": "2026-10-15T13:26:02.723Z",
+        "stepDurationsSec": {
+          "terminé": 0,
+          "scan matinal": 3,
+          "relevé live partagé": 0
+        }
+      },
+      {
+        "startedAt": "2026-10-15T13:26:29.653Z",
+        "step": "scan en direct 20e/60e",
+        "at": "2026-10-15T13:26:30.689Z",
+        "stepDurationsSec": {
+          "scan matinal": 0,
+          "relevé live partagé": 1
         }
       }
     ],
@@ -6523,7 +6521,7 @@
         {
           "name": "Principal",
           "ok": true,
-          "latencyMs": 9001,
+          "latencyMs": 75,
           "readyModels": 27,
           "configuredReady": 13,
           "configuredTotal": 13
@@ -6531,8 +6529,8 @@
         {
           "name": "Omniroute",
           "ok": true,
-          "latencyMs": 11403,
-          "readyModels": 849,
+          "latencyMs": 1648,
+          "readyModels": 850,
           "configuredReady": 2,
           "configuredTotal": 2
         }
@@ -6540,36 +6538,36 @@
       "leaderboard": [
         {
           "label": "Principal · allam-2-7b",
-          "ok": 3774,
+          "ok": 3778,
           "fail": 4259,
-          "avgMs": 930,
+          "avgMs": 863,
           "coolingDown": false
         },
         {
           "label": "Principal · qwen3.8-27b",
-          "ok": 1044,
+          "ok": 1045,
           "fail": 1480,
-          "avgMs": 1061,
-          "coolingDown": true
+          "avgMs": 899,
+          "coolingDown": false
         },
         {
           "label": "Principal · gpt-oss-120b",
           "ok": 1089,
-          "fail": 1694,
+          "fail": 1695,
           "avgMs": 2326,
           "coolingDown": true
         },
         {
           "label": "Principal · nemotron-3-super-120b",
-          "ok": 3726,
+          "ok": 3727,
           "fail": 610,
-          "avgMs": 7079,
+          "avgMs": 7224,
           "coolingDown": false
         },
         {
           "label": "Principal · diffusiongemma-26b-a4b-it",
           "ok": 1209,
-          "fail": 1459,
+          "fail": 1460,
           "avgMs": 9955,
           "coolingDown": false
         },
@@ -6627,7 +6625,7 @@
         "apiFootball-autolearn": 12,
         "sportmonks-autolearn": 5,
         "sofaScore": 1,
-        "sportmonks": 26
+        "sportmonks": 28
       },
       "theOddsApiMonth": {
         "used": 500,
@@ -6643,42 +6641,42 @@
     },
     "sofaScore": null,
     "liveSources": {
-      "TheSportsDB": {
-        "ok": true,
-        "count": 13,
-        "at": "2026-10-15T13:26:00.975Z"
-      },
-      "365Scores": {
-        "ok": true,
-        "count": 15,
-        "at": "2026-10-15T13:26:01.122Z"
-      },
       "LiveScore": {
         "ok": true,
         "count": 5,
-        "at": "2026-10-15T13:26:00.963Z"
+        "at": "2026-10-15T13:32:20.436Z"
+      },
+      "TheSportsDB": {
+        "ok": true,
+        "count": 13,
+        "at": "2026-10-15T13:32:20.437Z"
       },
       "FotMob": {
         "ok": true,
         "count": 5,
-        "at": "2026-10-15T13:26:01.005Z"
+        "at": "2026-10-15T13:32:20.460Z"
       },
-      "AllSportsApi": {
+      "365Scores": {
         "ok": true,
-        "count": 0,
-        "at": "2026-10-15T13:26:01.028Z"
+        "count": 15,
+        "at": "2026-10-15T13:32:20.526Z"
       },
       "ESPN": {
         "ok": true,
         "count": 4,
-        "at": "2026-10-15T13:26:01.330Z"
+        "at": "2026-10-15T13:32:20.601Z"
+      },
+      "AllSportsApi": {
+        "ok": true,
+        "count": 0,
+        "at": "2026-10-15T13:32:20.866Z"
       }
     },
     "learnedTeamAliases": {
       "aek athens": "pae aek"
     },
     "unmatchedPlannedLive": {
-      "at": "2026-10-15T13:26:01.365Z",
+      "at": "2026-10-15T13:32:20.876Z",
       "unmatched": [],
       "sourceNames": [
         "BG Pathum United - Adelaide United",
@@ -6698,15 +6696,15 @@
         "Berane - Jedinstvo BP",
         "Petrovac - Kom",
         "Kataka FC - Vipers",
-        "Kyrgyzaltyn - Neftchi Kochkor-Ata",
         "Bishkek City - OshSU Aldier",
         "Toktogul - Abdysh-Ata Kant",
+        "Kyrgyzaltyn - Neftchi Kochkor-Ata",
         "Al-Jaish - Qamishli"
       ]
     },
     "liveStatsScan": {
       "lastScan": {
-        "at": "2026-10-15T13:26:07.683Z",
+        "at": "2026-10-15T13:32:20.993Z",
         "matches": 0,
         "sources": "6 sources gratuites"
       },
@@ -6719,7 +6717,7 @@
       },
       "fanLine": {
         "fixtures": 20,
-        "soccer": 5
+        "soccer": 8
       },
       "oddsmagnet": {
         "httpStatus": null
@@ -6729,43 +6727,13 @@
       "indexUpdatedAt": "2026-10-15T00:03:12Z",
       "teamsInIndex": 111,
       "summariesCached": 77,
-      "lookups": 48,
+      "lookups": 5,
       "withTrend": 0,
-      "unknownTeams": 48,
+      "unknownTeams": 5,
       "lastTrendAt": null,
-      "lastUnknown": "Kataka FC - Vipers"
+      "lastUnknown": "BG Pathum United - Adelaide United"
     },
     "teamStatsUsageLog": [
-      {
-        "at": "2026-10-15T13:00:59.836Z",
-        "match": "Kahrbaa Alasmalia - Team FC",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-10-15T13:01:55.141Z",
-        "match": "Kahrbaa Alasmalia - Team FC",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-10-15T13:01:56.512Z",
-        "match": "La Viena FC - Haras El Hodood",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-10-15T13:01:56.918Z",
-        "match": "El Dakhleya FC - Egypt Telecom",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-10-15T13:01:57.352Z",
-        "match": "Mansoura SC - Al Nasr Cairo",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-10-15T13:01:59.902Z",
-        "match": "Tanta - Dayrot",
-        "result": "équipe inconnue"
-      },
       {
         "at": "2026-10-15T13:20:36.321Z",
         "match": "Jaish - Qamislo Sport",
@@ -6859,6 +6827,36 @@
       {
         "at": "2026-10-15T13:20:51.963Z",
         "match": "Kataka FC - Vipers",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-15T13:32:19.182Z",
+        "match": "BG Pathum United - Adelaide United",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-15T13:32:29.124Z",
+        "match": "Kuching FA - Kitchee",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-15T13:32:29.559Z",
+        "match": "Kuching City - Kitchee",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-15T13:32:30.143Z",
+        "match": "Svay Rieng - Shanghai Shenhua",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-15T13:32:30.192Z",
+        "match": "Tampines Rovers FC - Machida Zelvia",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-15T13:32:30.252Z",
+        "match": "BG Pathum United - Adelaide United",
         "result": "équipe inconnue"
       }
     ],
@@ -6959,7 +6957,7 @@
         "unit": "goals_1h",
         "label": "Buts à la pause",
         "verified": 463,
-        "pending": 188,
+        "pending": 187,
         "meanPredicted": 1.3,
         "meanActual": 1.3,
         "meanError": 0,
@@ -6986,8 +6984,8 @@
       {
         "unit": "goals_ft",
         "label": "Buts en fin de match",
-        "verified": 824,
-        "pending": 226,
+        "verified": 825,
+        "pending": 225,
         "meanPredicted": 3.1,
         "meanActual": 3.1,
         "meanError": 0.02,
@@ -7014,11 +7012,11 @@
       {
         "unit": "corners_ft",
         "label": "Corners sur le match",
-        "verified": 571,
-        "pending": 168,
+        "verified": 568,
+        "pending": 175,
         "meanPredicted": 8.6,
-        "meanActual": 9.2,
-        "meanError": 0.6,
+        "meanActual": 9.3,
+        "meanError": 0.61,
         "meanAbsError": 2.32,
         "bigMisses": 41,
         "worst": [
@@ -7042,12 +7040,12 @@
       {
         "unit": "cards_ft",
         "label": "Cartons sur le match",
-        "verified": 558,
-        "pending": 160,
+        "verified": 553,
+        "pending": 165,
         "meanPredicted": 3.7,
         "meanActual": 3.8,
-        "meanError": 0.13,
-        "meanAbsError": 1.53,
+        "meanError": 0.14,
+        "meanAbsError": 1.54,
         "bigMisses": 40,
         "worst": [
           {
@@ -7098,12 +7096,12 @@
       {
         "unit": "fouls_ft",
         "label": "Fautes sur le match",
-        "verified": 286,
-        "pending": 25,
+        "verified": 282,
+        "pending": 30,
         "meanPredicted": 23.9,
         "meanActual": 24.1,
-        "meanError": 0.19,
-        "meanAbsError": 3.04,
+        "meanError": 0.22,
+        "meanAbsError": 3.05,
         "bigMisses": 0,
         "worst": [
           {
@@ -8264,76 +8262,76 @@
         },
         {
           "unit": "corners_ft",
-          "factor": 1.1166742545510804,
+          "factor": 1.116651878447254,
           "samples": 400,
-          "meanDelta": 0.29144567880860955,
-          "meanAbsDelta": 1.9997779859075855,
-          "dispersion": 1.7309844691513194,
+          "meanDelta": 0.30044654595086406,
+          "meanAbsDelta": 2.0056038811942747,
+          "dispersion": 1.723596781657384,
           "bins": [
             {
-              "upTo": 2.5793650793650795,
-              "factor": 1.7513206772192083,
+              "upTo": 2.611111111111111,
+              "factor": 1.7487589047086614,
               "samples": 133
             },
             {
-              "upTo": 3.755555555555556,
-              "factor": 1.1821530811681797,
+              "upTo": 3.7572016460905338,
+              "factor": 1.1854327639612916,
               "samples": 133
             },
             {
               "upTo": null,
-              "factor": 0.8347496076924645,
+              "factor": 0.8348800626421001,
               "samples": 134
             }
           ]
         },
         {
           "unit": "cards_ft",
-          "factor": 1.5855403295924309,
+          "factor": 1.5884243256605852,
           "samples": 400,
-          "meanDelta": -0.01639997056652303,
-          "meanAbsDelta": 1.3756698049935216,
-          "dispersion": 1.4230437484354135,
+          "meanDelta": -0.012628872596050101,
+          "meanAbsDelta": 1.3792469286071565,
+          "dispersion": 1.431885724625745,
           "bins": [
             {
               "upTo": 0.8717948717948718,
-              "factor": 2.4721852473879595,
+              "factor": 2.483925771008489,
               "samples": 133
             },
             {
-              "upTo": 1.3881673881673882,
-              "factor": 1.9228218176395973,
+              "upTo": 1.388167388167388,
+              "factor": 1.9055603398451868,
               "samples": 133
             },
             {
               "upTo": null,
-              "factor": 1.1211299242257224,
+              "factor": 1.1328686265325472,
               "samples": 134
             }
           ]
         },
         {
           "unit": "fouls_ft",
-          "factor": 1.129592772265229,
-          "samples": 305,
-          "meanDelta": 0.23514520180202222,
-          "meanAbsDelta": 3.0401849850950025,
-          "dispersion": 1.3271492551146904,
+          "factor": 1.1323702874000368,
+          "samples": 301,
+          "meanDelta": 0.268980761951899,
+          "meanAbsDelta": 3.0498754074952528,
+          "dispersion": 1.3413369232324186,
           "bins": [
             {
-              "upTo": 7.594377510040162,
-              "factor": 1.2993727301047293,
-              "samples": 101
+              "upTo": 7.594377510040161,
+              "factor": 1.2928578727160749,
+              "samples": 100
             },
             {
-              "upTo": 10.341666666666665,
-              "factor": 1.0553126351871949,
-              "samples": 102
+              "upTo": 10.337552742616033,
+              "factor": 1.0645214611421043,
+              "samples": 100
             },
             {
               "upTo": null,
-              "factor": 1.1006116436857865,
-              "samples": 102
+              "factor": 1.1031014263716385,
+              "samples": 101
             }
           ]
         },
@@ -8389,8 +8387,8 @@
         }
       ],
       "samples": {
-        "pending": 54,
-        "measured": 2662
+        "pending": 69,
+        "measured": 2649
       }
     },
     "configured": {
