@@ -719,8 +719,8 @@ export default function EvolutionScreen() {
           <Ionicons name="bulb" size={16} color="#f59e0b" />
           <Text style={styles.infoText}>
             Chaque match terminé est rejoué à la 15e, 30e, mi-temps, 60e et 75e : l'app compare ce qui a suivi chaque situation au
-            cas moyen. Un motif est retenu à partir de 100 matchs et 10 points d'écart ; il corrige alors les pronos (fictifs, puis
-            réels à 200 matchs). {patternInfo ? `${patternInfo.matches} matchs rejoués, ${patternInfo.validated} motifs validés, ${patternInfo.realReady} actifs sur le réel.` : ''}
+            cas moyen. Un motif est retenu à partir de 100 matchs et 10 points d'écart ; il corrige alors les pronos, fictifs et
+            réels. {patternInfo ? `${patternInfo.matches} matchs rejoués, ${patternInfo.validated} motifs validés, ${patternInfo.realReady} actifs sur le réel.` : ''}
           </Text>
         </View>
 

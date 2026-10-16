@@ -6,14 +6,15 @@
 //
 // Pour chaque trio (moment, déclencheur, cible), on compte n et le nombre de fois où la cible s'est produite. Le taux est
 // comparé au taux de base du même moment (tous matchs confondus). Un MOTIF est retenu quand n ≥ 100 et que l'écart au taux de
-// base atteint 10 points. Il corrige alors la probabilité des paris concernés : d'abord sur le pipe fictif, puis sur le réel
-// quand il se confirme (n ≥ 200). Chaque pari réglé reçoit une explication chiffrée : pourquoi il a réussi ou raté.
+// base atteint 10 points. Il corrige alors la probabilité des paris concernés, sur le pipe fictif ET sur le réel (même seuil :
+// les matchs du fictif sont de vrais matchs). Chaque pari réglé reçoit une explication chiffrée : pourquoi il a réussi ou raté.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export const CHECKPOINTS = [15, 30, 45, 60, 75] as const;
 const MIN_PATTERN_SAMPLES = 100;
-const MIN_REAL_SAMPLES = 200;
+// Même seuil pour les deux pipes : le fictif observe de vrais matchs, il sert de fournisseur statistique au réel.
+const MIN_REAL_SAMPLES = MIN_PATTERN_SAMPLES;
 const MIN_DELTA = 0.1;
 const ADJUST_WEIGHT = 0.5;
 const COUNTS_KEY = '@pattern_counts';
@@ -211,7 +212,7 @@ export interface Pattern {
   rate: number;
   baseRate: number;
   delta: number;
-  /** n ≥ 100 et écart ≥ 10 points : utilisé pour corriger les pronos (réel à partir de n ≥ 200). */
+  /** n ≥ 100 et écart ≥ 10 points : utilisé pour corriger les pronos (fictif et réel). */
   validated: boolean;
   /** Assez solide pour le pipe réel. */
   real: boolean;
