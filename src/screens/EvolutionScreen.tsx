@@ -18,6 +18,7 @@ import MarketTrendChart from '../components/MarketTrendChart';
 import { MarketDayPoint, TRACKED_MARKETS, TrackedMarket, marketLabel, readInPlayProposals, readMarketSeries, readMarketSeriesReal, readMarketSeriesFictional, readCumulativeCounts, readPaperBets, readPredictionOutcomes } from '../core/learnStore';
 import { getAllBets, getAllLessons, getAllCalibrations, getDailyReports } from '../database/storage';
 import { MARKET_TITLES, computeAllBetsCalibrations } from '../core/calibration';
+import { LegExplanation, Pattern, describePattern, getPatterns, patternStatus, readExplanations } from '../core/patternEngine';
 import { generateImprovementReport } from '../core/reporter';
 import { MarketCalibration, Lesson, Bet, DailyReport } from '../types';
 import { useIsFocused } from '@react-navigation/native';
@@ -38,6 +39,9 @@ export default function EvolutionScreen() {
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [bets, setBets] = useState<Bet[]>([]);
   const [loading, setLoading] = useState(true);
+  const [patterns, setPatterns] = useState<Pattern[]>([]);
+  const [patternInfo, setPatternInfo] = useState<{ matches: number; validated: number; realReady: number } | null>(null);
+  const [explanations, setExplanations] = useState<LegExplanation[]>([]);
   const [selectedTab, setSelectedTab] = useState<'courbes' | 'calibration' | 'lessons' | 'report'>('courbes');
   const [marketSeries, setMarketSeries] = useState<MarketDayPoint[]>([]);
   /** Séries séparées réel/fictif — comparaison visuelle des deux pipelines
@@ -487,6 +491,9 @@ export default function EvolutionScreen() {
       ]);
 
       setBets(dbBets);
+      getPatterns(20).then(setPatterns).catch(() => {});
+      patternStatus().then(setPatternInfo).catch(() => {});
+      readExplanations().then(setExplanations).catch(() => {});
       setLessons(dbLessons);
       setDailyReports(reports);
 
@@ -695,32 +702,70 @@ export default function EvolutionScreen() {
     </View>
   );
 
-  const renderLessonsView = () => (
-    <View>
-      <View style={styles.infoBox}>
-        <Ionicons name="bulb" size={16} color="#f59e0b" />
-        <Text style={styles.infoText}>
-          Ces règles dures sont issues des pertes réelles. Elles sont appliquées automatiquement par le validateur.
-        </Text>
-      </View>
-
-      {lessons.map((lesson, idx) => (
-        <View key={idx} style={styles.lessonCard}>
-          <View style={styles.lessonHeader}>
-            <Text style={styles.lessonOccurrences}>{lesson.occurrences}× occurrences</Text>
-            <View style={styles.ruleTag}>
-              <Text style={styles.ruleText}>{lesson.regle_validation}</Text>
-            </View>
-          </View>
-
-          <Text style={styles.lessonMotif}>{lesson.motif}</Text>
-          <Text style={styles.lessonDetail}>{lesson.detail.substring(0, 200)}...</Text>
-
-          <Text style={styles.lessonDate}>Dernière maj : {lesson.derniere_maj}</Text>
+  const renderLessonsView = () => {
+    const validated = patterns.filter((p) => p.validated);
+    const emerging = patterns.filter((p) => !p.validated).slice(0, 12);
+    const byMarket = (list: Pattern[]) =>
+      (['buts', 'corners', 'cartons', 'mi-temps', 'btts'] as const)
+        .map((m) => ({ m, items: list.filter((p) => p.market === m) }))
+        .filter((g) => g.items.length > 0);
+    const marketTitle: Record<string, string> = { buts: 'Buts', corners: 'Corners', cartons: 'Cartons jaunes', 'mi-temps': 'But avant la pause', btts: 'Les deux équipes marquent' };
+    const today = new Date().toISOString().slice(0, 10);
+    const todays = explanations.filter((e) => e.day === today).slice(-25).reverse();
+    const recent = todays.length > 0 ? todays : explanations.slice(-15).reverse();
+    return (
+      <View>
+        <View style={styles.infoBox}>
+          <Ionicons name="bulb" size={16} color="#f59e0b" />
+          <Text style={styles.infoText}>
+            Chaque match terminé est rejoué à la 15e, 30e, mi-temps, 60e et 75e : l'app compare ce qui a suivi chaque situation au
+            cas moyen. Un motif est retenu à partir de 50 matchs et 10 points d'écart ; il corrige alors les pronos (fictifs, puis
+            réels à 100 matchs). {patternInfo ? `${patternInfo.matches} matchs rejoués, ${patternInfo.validated} motifs validés, ${patternInfo.realReady} actifs sur le réel.` : ''}
+          </Text>
         </View>
-      ))}
-    </View>
-  );
+
+        <Text style={styles.sectionTitle}>Motifs validés</Text>
+        {validated.length === 0 ? (
+          <Text style={styles.lessonDetail}>Pas encore de motif validé : il faut 50 matchs rejoués par situation. Les premiers apparaîtront au fil des soirées.</Text>
+        ) : (
+          byMarket(validated).map(({ m, items }) => (
+            <View key={m} style={styles.lessonCard}>
+              <Text style={styles.lessonMotif}>{marketTitle[m]}</Text>
+              {items.slice(0, 8).map((p, i) => (
+                <Text key={i} style={[styles.lessonDetail, { color: p.delta >= 0 ? '#34d399' : '#f87171' }]}>
+                  {p.real ? '● ' : '○ '}{describePattern(p)}
+                </Text>
+              ))}
+            </View>
+          ))
+        )}
+
+        {emerging.length > 0 && (
+          <>
+            <Text style={styles.sectionTitle}>En observation (moins de 50 matchs)</Text>
+            <View style={styles.lessonCard}>
+              {emerging.map((p, i) => (
+                <Text key={i} style={styles.lessonDate}>{describePattern(p)}</Text>
+              ))}
+            </View>
+          </>
+        )}
+
+        <Text style={styles.sectionTitle}>{todays.length > 0 ? 'Pourquoi les paris du jour ont réussi ou raté' : 'Derniers paris expliqués'}</Text>
+        {recent.length === 0 ? (
+          <Text style={styles.lessonDetail}>Les explications arrivent quand les paris sont réglés (bilan horaire).</Text>
+        ) : (
+          recent.map((e, i) => (
+            <View key={i} style={styles.lessonCard}>
+              <Text style={styles.lessonOccurrences}>{e.real ? 'Réel' : 'Fictif'} · {e.match}</Text>
+              <Text style={styles.lessonMotif}>{e.won ? '✅' : '❌'} {e.selection} ({Math.round(e.prob * 100)} %)</Text>
+              <Text style={styles.lessonDetail}>{e.text}</Text>
+            </View>
+          ))
+        )}
+      </View>
+    );
+  };
 
   const renderReportView = () => {
     if (dailyReports.length === 0) {

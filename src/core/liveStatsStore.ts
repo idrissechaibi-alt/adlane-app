@@ -20,6 +20,8 @@ export interface LiveStatsSample {
   reds?: number;
   /** Détail par équipe (domicile / extérieur) : tirs, cadrés, corners, cartons, fautes. */
   side?: { h: [number, number, number, number, number]; a: [number, number, number, number, number] };
+  /** Contexte d'avant-match (premier relevé seulement) : favori, buts attendus d'après la tendance des équipes. */
+  ctx?: { fav?: 'h' | 'a' | null; trendGoals?: number | null; keyAbsent?: number | null; formationChanged?: boolean | null };
 }
 
 const KEY_PREFIX = '@real_live_stats_';
@@ -28,6 +30,11 @@ const lastAt = new Map<string, number>();
 let lastScan: { at: string; matches: number; sources: string } | null = null;
 
 const dayKey = () => new Date().toISOString().slice(0, 10);
+
+/** Ce match a-t-il déjà un relevé aujourd'hui (le contexte d'avant-match n'est joint qu'au premier) ? */
+export function hasLiveStats(matchKey: string): boolean {
+  return lastAt.has(matchKey);
+}
 
 export async function appendLiveStatsSample(matchKey: string, sample: LiveStatsSample): Promise<boolean> {
   const last = lastAt.get(matchKey) ?? 0;

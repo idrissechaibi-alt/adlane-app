@@ -97,8 +97,10 @@ import { OmnirouteConfig } from '../types';
 import { mapWithConcurrency } from './concurrency';
 import { hubDateKey, hubKnowsMatch, hubLiveStatus, hubStats } from '../api/footballDataAPIs/liveDataHub';
 import { playerShotLegs } from './playerShots';
-import { appendLiveStatsSample, noteLiveStatsScan } from './liveStatsStore';
+import { appendLiveStatsSample, hasLiveStats, noteLiveStatsScan } from './liveStatsStore';
+import { getOpeningProbabilities } from '../api/footballDataAPIs/refOdds';
 import { digestFinishedMatches } from './matchDigest';
+import { patternAdjust } from './patternEngine';
 import { StrategyContext, evaluateStrategies, oddsFromExpectedGoals } from './strategies';
 import { SofaPeriodStats } from '../api/footballDataAPIs/sofaScore';
 import { DeltaUnit, LegProjection, PLAUSIBLE_MAX, describeCorrection, ensureDeltaSamplesLoaded, flushShadowProjections, getDeltaCorrection, projectFullMatchCount, recordShadowProjection, factorForRemaining, situationMultiplier } from './deltaLearning';
@@ -851,6 +853,28 @@ async function playerShotCandidates(live: LiveFixture): Promise<CandidateLeg[]> 
   return withLearnedExpertise(found.map((l) => ({ market: 'tirs_cadres' as const, selection: l.selection, prob: l.prob, evidence: l.evidence })));
 }
 
+/**
+ * Motifs appris (patternEngine) : chaque jambe dont la situation actuelle correspond à un motif validé voit sa probabilité
+ * corrigée — pipe fictif dès 50 matchs mesurés, pipe réel à partir de 100.
+ */
+async function applyPatterns(legs: CandidateLeg[], live: LiveFixture, observed: ObservedLiveCounts | undefined, stats: LiveMatchStats | undefined, real: boolean): Promise<void> {
+  const point = {
+    minute: live.minute,
+    h: live.homeGoals,
+    a: live.awayGoals,
+    sot: stats?.shotsOnTargetHome != null ? stats.shotsOnTargetHome + (stats.shotsOnTargetAway ?? 0) : undefined,
+    corners: observed?.corners,
+    cards: observed?.cards,
+  };
+  for (const leg of legs) {
+    const done = leg.market === 'total_buts' ? point.h + point.a : leg.market === 'corners' ? point.corners ?? 0 : leg.market === 'cartons' ? point.cards ?? 0 : 0;
+    const adj = await patternAdjust(leg.market, leg.selection, leg.prob, point, real, done).catch(() => null);
+    if (!adj) continue;
+    leg.prob = adj.prob;
+    leg.evidence += adj.note;
+  }
+}
+
 interface LegWithContext {
   leg: CandidateLeg;
   fixtureId: number;
@@ -1169,6 +1193,7 @@ async function bestLegFor(
     ? await buildLegs20(match, live.fixtureId, live, preMatchExpectedGoals, currentStats, observedLive, situation)
     : buildLegs60(live, preMatchExpectedGoals, currentStats, observedLive, await getMatchTrend(match.homeTeam, match.awayTeam), situation);
   rawLegs.push(...(await playerShotCandidates(live)));
+  await applyPatterns(rawLegs, live, observedLive, currentStats, true);
 
   // Tous les marchés concourent ; les plus sûrs passent devant, un seul par
   // marché (et par fenêtre 1ère MT / match).
@@ -1760,7 +1785,19 @@ export async function runLiveStatsScan(liveFixtures: LiveFixture[]): Promise<num
     const free = await fetchFreeLiveStats(f).catch(() => undefined);
     const a = free?.all;
     if (!a) return;
-    const ok = await appendLiveStatsSample(`${f.homeTeam} - ${f.awayTeam}`, {
+    const mk = `${f.homeTeam} - ${f.awayTeam}`;
+    // Premier relevé du match : favori (cotes d'ouverture bet365) et buts attendus d'après la tendance des équipes.
+    let ctx: { fav?: 'h' | 'a' | null; trendGoals?: number | null } | undefined;
+    if (!hasLiveStats(mk)) {
+      const open = await getOpeningProbabilities(f.homeTeam, f.awayTeam).catch(() => null);
+      const trend = await getMatchTrend(f.homeTeam, f.awayTeam).catch(() => null);
+      ctx = {
+        fav: open ? (open.home > open.away + 0.1 ? 'h' : open.away > open.home + 0.1 ? 'a' : null) : null,
+        trendGoals: trend?.goals ? Math.round((trend.goals.home + trend.goals.away) * 10) / 10 : null,
+      };
+    }
+    const ok = await appendLiveStatsSample(mk, {
+      ctx,
       ts: new Date().toISOString(),
       minute: f.minute,
       status: f.statusShort,
@@ -1981,6 +2018,7 @@ export async function runInPlayComboTick(
           ? await buildLegs20(match, live.fixtureId, live, expectedGoals, currentStats, observedLive, { features: free?.features ?? null, real: false })
           : buildLegs60(live, expectedGoals, currentStats, observedLive, await getMatchTrend(match.homeTeam, match.awayTeam), { features: free?.features ?? null, real: false });
         rawLegs.push(...(await playerShotCandidates(live)));
+        await applyPatterns(rawLegs, live, observedLive, currentStats, false);
         const window = kind === 'minute20' ? '20e → pause + match complet' : '60e → fin de match';
 
         for (const leg of rawLegs.filter(worthProposing)) {
@@ -2192,6 +2230,7 @@ export async function runInPlayComboTick(
           ? await buildLegs20(match, live.fixtureId, live, preMatchExpectedGoals, currentStats, observedLive)
           : buildLegs60(live, preMatchExpectedGoals, currentStats, observedLive, await getMatchTrend(match.homeTeam, match.awayTeam));
         rawLegs.push(...(await playerShotCandidates(live)));
+        await applyPatterns(rawLegs, live, observedLive, currentStats, false);
 
         const window = kind === 'minute20' ? '20e → pause + match complet' : '60e → fin de match';
         for (const leg of rawLegs.filter(worthProposing)) {

@@ -15,6 +15,7 @@ import { getRefCorrections } from './oddsLearning';
 import { readTeamStatsUsageLog } from './teamStats';
 import { getLiveStatsScanStatus } from './liveStatsStore';
 import { readLearnedAliases } from './teamAliasStore';
+import { patternStatus } from './patternEngine';
 import { probeBackupSources } from '../api/footballDataAPIs/backupOdds';
 import { checkAllProviders, getRouteLeaderboard, getWebCapableRoutes } from './llmRouter';
 import { getRecentSearchSource, getWorkingSearchProviders } from './webSearch';
@@ -182,6 +183,7 @@ export async function buildAppHealth(): Promise<Record<string, unknown>> {
     sofaScore: await section(async () => getSofaStatus()),
     liveSources: await section(async () => getHubStatus()),
     learnedTeamAliases: await section(readLearnedAliases),
+    patternEngine: await section(async () => patternStatus()),
     settlementAudit: await section(async () => JSON.parse((await AsyncStorage.getItem('@settlement_audit')) ?? '[]').slice(-30)),
     unmatchedPlannedLive: await section(readUnmatchedPlannedLive),
     liveStatsScan: await section(async () => getLiveStatsScanStatus()),

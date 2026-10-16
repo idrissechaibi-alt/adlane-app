@@ -11,6 +11,7 @@ import { buildFictionalMarketStats, formatFictionalDigestMessage } from './daily
 import { readOddsLoopFile } from './oddsLoop';
 import { getDeltaReport, getSituationReport } from './deltaLearning';
 import { getPatternLessons, getTodaysMatchLessons } from './matchDigest';
+import { describePattern, getPatterns, readExplanations } from './patternEngine';
 
 export type EveningPart = 'bilan' | 'cotes' | 'lecons' | 'stats';
 export const EVENING_PARTS: EveningPart[] = ['bilan', 'cotes', 'lecons', 'stats'];
@@ -102,6 +103,14 @@ async function leconsMessage(day: string): Promise<string> {
     if (patterns.length) lines.push('Motifs appris (cumul, versés dans la boucle) :', ...patterns.map((m) => `• ${m}`), '');
   } catch {
     // lecture impossible : on s'en passe
+  }
+  try {
+    const ps = (await getPatterns(50)).filter((p) => p.validated).slice(0, 6);
+    if (ps.length) lines.push('Motifs validés (corrigent les pronos) :', ...ps.map((p) => `• ${describePattern(p)}`), '');
+    const ex = (await readExplanations()).filter((e) => e.day === day && !e.won).slice(-5);
+    if (ex.length) lines.push('Pourquoi des paris ont raté aujourd\'hui :', ...ex.map((e) => `• ${e.match} — ${e.selection} : ${e.text}`), '');
+  } catch {
+    // best-effort
   }
   const series = readMarketSeries().filter((p) => p.date === day);
   if (series.length) lines.push('Fiabilité du jour par marché :', ...series.filter((p) => p.predictions >= 5).sort((a, b) => b.predictions - a.predictions).slice(0, 7).map((p) => `• ${marketLabel(p.market)} : ${p.correct}/${p.predictions} (${Math.round(p.hitRate * 100)} % réel pour ${Math.round(p.meanPredicted * 100)} % annoncé)`));

@@ -47,6 +47,7 @@ import { readMatchTimelines, MatchSample } from './fictionalProgram';
 import { isSyntheticFixtureId } from './halftimeMonitor';
 import { HubPlayerShots, hubFinalResult, hubLiveStatus, hubPlayerShots, hubStats } from '../api/footballDataAPIs/liveDataHub';
 import { playerSotFromSelection } from './playerShots';
+import { LegExplanation, explainSettledLeg, flushPatterns, ingestMatch, saveExplanations } from './patternEngine';
 import { EVENING_PARTS, EveningPart, buildEveningMessage } from './eveningReport';
 import { syncFullBackupToGitHub } from './gitAutoSync';
 import { liveLegVerdict } from './liveBetStatus';
@@ -768,6 +769,23 @@ export async function runNightlyReviewIfDue(): Promise<number> {
       }
     }
 
+    // MOTIFS : chaque match terminé dont on a la chronologie (pipe fictif) est rejoué à la 15e/30e/mi-temps/60e/75e pour
+    // apprendre ce qui suit chaque situation (voir patternEngine.ts). Une seule fois par match.
+    try {
+      for (const [fixtureId, final] of finals) {
+        const tl = timelines[fixtureId];
+        if (!tl || tl.length < 2) continue;
+        await ingestMatch(
+          `f:${day}:${fixtureId}`,
+          tl.map((x) => ({ minute: x.minute, h: x.homeGoals, a: x.awayGoals, sot: x.shotsOnTargetHome != null ? x.shotsOnTargetHome + (x.shotsOnTargetAway ?? 0) : undefined, corners: x.cornersTotal, cards: x.cardsTotal })),
+          { h: final.goalsHome, a: final.goalsAway, htH: final.htHome, htA: final.htAway, corners: final.cornersFT, cards: final.cardsFT }
+        );
+      }
+      await flushPatterns();
+    } catch {
+      // apprentissage best-effort
+    }
+
     // Aucune recherche par IA : les résultats viennent uniquement des sources de données
     // (API-Football, puis les 6 sources live gratuites).
 
@@ -829,6 +847,7 @@ export async function runNightlyReviewIfDue(): Promise<number> {
       }
     }
 
+    const explanations: LegExplanation[] = [];
     for (const proposal of unreviewedDayProposals) {
       const allResolved = proposal.legs.every((leg) => finals.has(leg.fixtureId));
       if (!allResolved) continue; // au moins un match du combo n'a pas encore de score final
@@ -845,6 +864,32 @@ export async function runNightlyReviewIfDue(): Promise<number> {
         if (won == null) continue;
         leg.settled = true;
         leg.won = won;
+        // Pourquoi ce pari a réussi / raté (chiffres + motifs de la situation au moment du pari).
+        try {
+          const tl = timelines[leg.fixtureId] ?? [];
+          const at = [...tl].reverse().find((x) => x.minute <= (proposal.minute ?? 0));
+          const [sh, sa] = (leg.scoreLabel ?? '0-0').split('-').map(Number);
+          const point = at
+            ? { minute: at.minute, h: at.homeGoals, a: at.awayGoals, sot: at.shotsOnTargetHome != null ? at.shotsOnTargetHome + (at.shotsOnTargetAway ?? 0) : undefined, corners: at.cornersTotal, cards: at.cardsTotal }
+            : { minute: proposal.minute ?? 0, h: sh || 0, a: sa || 0 };
+          explanations.push(
+            await explainSettledLeg({
+              day,
+              real: proposal.real !== false,
+              match: `${leg.homeTeam} - ${leg.awayTeam}`,
+              market: leg.market,
+              selection: leg.selection,
+              prob: leg.prob,
+              won,
+              point,
+              expected: leg.projection?.expected,
+              actual: leg.projection?.actual,
+              unitLabel: leg.market === 'total_buts' ? 'buts' : leg.market === 'corners' ? 'corners' : leg.market === 'cartons' ? 'cartons' : leg.market === 'fautes' ? 'fautes' : '',
+            })
+          );
+        } catch {
+          // explication best-effort
+        }
         settledOutcomes.push({
           ts: new Date().toISOString(),
           fixtureId: leg.fixtureId,
@@ -862,6 +907,7 @@ export async function runNightlyReviewIfDue(): Promise<number> {
     }
 
     if (settledOutcomes.length > 0) appendPredictionOutcomes(settledOutcomes);
+    await saveExplanations(explanations).catch(() => {});
 
     // Le digest Telegram ne porte que sur ce qui vient d'être réglé À CET
     // APPEL (pas tout le règlement cumulé du jour) : "today" peut repasser

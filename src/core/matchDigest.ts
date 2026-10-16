@@ -5,6 +5,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LiveStatsSample, listLiveStatsDays, readLiveStatsDay, removeLiveStatsMatch } from './liveStatsStore';
 import { normalizeTeamName } from './teamNameMatch';
+import { flushPatterns, ingestMatch } from './patternEngine';
 
 const DIGEST_KEY = '@match_digests';
 const TEAM_KEY = '@team_live_lessons';
@@ -259,6 +260,15 @@ export async function digestFinishedMatches(liveKeys: Set<string>, idleMinutes =
       const d = analyse(day, match, samples);
       if (d) {
         digests[`${day}|${match}`] = d;
+        // Le match réel rejoué pour les motifs (situation à 15e/30e/MT/60e/75e → ce qui a suivi).
+        const ctx = samples.find((x) => x.ctx)?.ctx;
+        const ht = d.goals.filter((g) => g[0] <= 45);
+        await ingestMatch(
+          `r:${day}:${match}`,
+          d.key.map((k) => ({ minute: k[0], h: k[1], a: k[2], sot: k[4], corners: k[5], cards: k[6] })),
+          { h: d.score[0], a: d.score[1], htH: ht.filter((g) => g[1] === 'h').length, htA: ht.filter((g) => g[1] === 'a').length, corners: d.totals.corners, cards: d.totals.cards },
+          ctx ?? undefined
+        ).catch(() => false);
         await updateTeams(d);
         await updatePatterns(d);
         done++;
@@ -266,6 +276,9 @@ export async function digestFinishedMatches(liveKeys: Set<string>, idleMinutes =
       await removeLiveStatsMatch(day, match);
     }
   }
-  if (done > 0) await AsyncStorage.setItem(DIGEST_KEY, JSON.stringify(digests)).catch(() => {});
+  if (done > 0) {
+    await AsyncStorage.setItem(DIGEST_KEY, JSON.stringify(digests)).catch(() => {});
+    await flushPatterns().catch(() => {});
+  }
   return done;
 }
