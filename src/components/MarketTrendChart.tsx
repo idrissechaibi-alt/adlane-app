@@ -20,6 +20,8 @@ const PADDING_BOTTOM = 34; // graduations de dates + titre de l'axe
 const PADDING_LEFT = 34; // graduations en %
 const PADDING_RIGHT = 36; // étiquette du dernier point
 const DAY_MS = 86_400_000;
+/** En dessous, le taux d'un jour est peu fiable : point creux. */
+const SMALL_SAMPLE = 5;
 const MONTHS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
 
 const REAL_COLOR = '#60a5fa';
@@ -98,12 +100,20 @@ function renderSeries(
   return (
     <React.Fragment>
       <Path d={path} stroke={color} strokeWidth={2} fill="none" />
-      {sorted.map((p) => (
-        <Circle key={p.date} cx={toX(dayNum(p.date))} cy={toY(p.hitRate)} r={dot} fill={color} />
-      ))}
-      <Circle cx={lastX} cy={lastY} r={4} fill={color} />
+      {sorted.map((p) =>
+        // Moins de 5 paris ce jour-là : point CREUX (taux peu fiable — 1 sur 1 = 100 %).
+        p.predictions < SMALL_SAMPLE ? (
+          <Circle key={p.date} cx={toX(dayNum(p.date))} cy={toY(p.hitRate)} r={dot + 0.5} fill="#1e293b" stroke={color} strokeWidth={1.5} />
+        ) : (
+          <Circle key={p.date} cx={toX(dayNum(p.date))} cy={toY(p.hitRate)} r={dot} fill={color} />
+        )
+      )}
+      <Circle cx={lastX} cy={lastY} r={4} fill={last.predictions < SMALL_SAMPLE ? '#1e293b' : color} stroke={color} strokeWidth={1.5} />
       <SvgText x={Math.min(lastX + 7, width - 30)} y={lastY + 4 + labelDy} fill={color} fontSize={11} fontWeight="bold">
         {`${Math.round(last.hitRate * 100)}%`}
+      </SvgText>
+      <SvgText x={Math.min(lastX + 7, width - 30)} y={lastY + 14 + labelDy} fill={color} fontSize={8}>
+        {`${last.correct}/${last.predictions}`}
       </SvgText>
     </React.Fragment>
   );
@@ -224,7 +234,8 @@ export default function MarketTrendChart({ label, points, fictionalPoints = [], 
 
       <View style={styles.footer}>
         <Text style={styles.footerText}>
-          % de paris réussis chaque jour · du {ddmm(fromDayNum(first))} au {ddmm(fromDayNum(last))} ({last - first + 1} jours)
+          % de paris réussis chaque jour · du {ddmm(fromDayNum(first))} au {ddmm(fromDayNum(last))} ({last - first + 1} jours){'\n'}
+          ● point plein = 5 paris ou plus · ○ point creux = moins de 5 paris (peu fiable) · le point d'aujourd'hui reste en cours jusqu'au dernier règlement
         </Text>
       </View>
     </View>
