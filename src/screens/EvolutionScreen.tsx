@@ -833,7 +833,13 @@ export default function EvolutionScreen() {
   };
 
   const renderOverallCurve = () => {
-    const real = aggregateByDay(marketSeriesReal);
+    // Réel : paris en direct (depuis le 09/10) + paris d'avant-match des premiers jours (bilans quotidiens), pour partir du tout début.
+    const liveReal = aggregateByDay(marketSeriesReal);
+    const liveDates = new Set(liveReal.map((p) => p.date));
+    const preMatch: MarketDayPoint[] = dailyReports
+      .filter((r) => r.bets_settled > 0 && !liveDates.has(r.date))
+      .map((r) => ({ date: r.date, market: 'total_buts' as TrackedMarket, predictions: r.bets_settled, correct: r.bets_won, hitRate: r.bets_won / r.bets_settled, meanPredicted: 0 }));
+    const real = [...preMatch, ...liveReal].sort((a, b) => a.date.localeCompare(b.date));
     const fict = aggregateByDay(TRACKED_MARKETS.flatMap((m) => fictionalPointsFor(m.key)));
     const snaps = readAccuracySnapshots();
     const all = [...real, ...fict];
@@ -848,8 +854,9 @@ export default function EvolutionScreen() {
       <View style={styles.curvesIntro}>
         <Text style={styles.curvesIntroTitle}>Évolution de l'app depuis sa création</Text>
         <Text style={styles.curvesIntroText}>
-          Premiers relevés en direct le {fmt(HISTORY_START)}, premiers paris réglés le {fmt(first)}. Mis à jour à chaque bilan (chaque nuit
-          et au fil de la journée), sans limite de durée.
+          Premiers paris réglés le {fmt(first)} (avant-match), relevés en direct depuis le {fmt(HISTORY_START)}, pronos en direct depuis le
+          09/10. Entre les deux, l'app observait les matchs sans encore parier : la courbe y a un trou. Mise à jour à chaque bilan, sans
+          limite de durée.
           {fict.length ? `\nFictif : ${pct(firstWeek(fict))} la 1ère semaine → ${pct(lastWeek(fict))} les 7 derniers jours (${sum(fict).n} paris réglés).` : ''}
           {real.length ? `\nRéel : ${pct(firstWeek(real))} la 1ère semaine → ${pct(lastWeek(real))} les 7 derniers jours (${sum(real).n} paris réglés).` : ''}
           {snaps.length ? `\nModèle à marqueurs : ${Math.round(snaps[0].hitRate * 100)} % le ${fmt(snaps[0].date)} → ${Math.round(snaps[snaps.length - 1].hitRate * 100)} % aujourd'hui.` : ''}
