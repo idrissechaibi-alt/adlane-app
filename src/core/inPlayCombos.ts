@@ -113,7 +113,7 @@ import { ensureRefCorrections, recordRefComparison } from './oddsLoop';
 import { CountInfo, MIN_ESTIMATED_ODDS, OddsContext, ensureOddsLoaded, estimateLegOdds, featuresOf, parseLine, setOddsWatch } from './oddsLearning';
 import { ensureLineLimitsLoaded, ensureMarketOffLoaded, isMarketOff, lineAvailability } from './lineLimits';
 import { atLeastProb, pickHighestOverLine, pickLowestUnderLine } from './countModel';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from './kvStore';
 import { matchesForDate, isWithinBreakWindow } from './internationalBreak';
 import { INTERNATIONAL_BREAK_CALENDAR } from '../data/internationalBreakCalendar';
 import { sendInternationalBreakCalendarNow } from './internationalBreakNotify';

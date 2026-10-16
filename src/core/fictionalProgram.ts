@@ -25,7 +25,7 @@
 // surveiller un match, sans dépendre d'un relevé "tous les matchs en direct
 // maintenant" ni d'API-Football.
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from './kvStore';
 import { OmnirouteConfig } from '../types';
 import { OmnirouteAttempt, askOmnirouteUsable, attemptsAllFailed } from './omniroute';
 import { syntheticFixtureId } from './halftimeMonitor';

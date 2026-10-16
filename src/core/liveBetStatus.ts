@@ -8,7 +8,7 @@ import { InPlayProposal, InPlayProposalLeg } from './learnStore';
 import { FinalResult, settleReprojectedLeg } from './dailyReview';
 import { HubPlayerShots, hubFinalResult, hubLiveConsensus, hubFirstHalfGoals, hubLiveStatus, hubPlayerShots, hubStats } from '../api/footballDataAPIs/liveDataHub';
 import { playerSotFromSelection } from './playerShots';
-import { getHalfTimeGoals } from './liveStatsStore';
+import { getHalfTimeCounts, getHalfTimeGoals } from './liveStatsStore';
 
 export type LegStatus = 'won' | 'lost' | 'pending';
 
@@ -56,6 +56,8 @@ function decidedEarly(leg: InPlayProposalLeg, live: { homeGoals: number; awayGoa
     const value = leg.market === 'corners' ? period.corners : leg.market === 'cartons' ? period.cards : period.fouls;
     if (leg.market === 'fautes' && !value) return 'pending';
     if (value > l.line) return l.side === 'plus' ? 'won' : 'lost';
+    // 1ère mi-temps terminée sans que la ligne soit franchie : « Moins de » gagné, « Plus de » perdu, dès la pause.
+    if (!fullMatch && live.statusShort !== '1H') return l.side === 'plus' ? 'lost' : 'won';
   }
   return 'pending';
 }
@@ -78,6 +80,11 @@ export async function liveLegVerdict(leg: InPlayProposalLeg, dateKey: string): P
   if (!consensus || consensus.agree < 2) return 'pending';
   const live = { ...live0, homeGoals: consensus.match.homeGoals, awayGoals: consensus.match.awayGoals };
   const stats = await hubStats(leg.homeTeam, leg.awayTeam, dateKey).catch(() => null);
+  // Pari de 1ère mi-temps après la pause sans stats de 1ère MT chez les sources : notre relevé pris pendant la pause.
+  if (stats && !stats.firstHalf && live.statusShort !== '1H' && ['corners', 'cartons', 'fautes'].includes(leg.market) && !/sur le match/i.test(leg.selection)) {
+    const ht = await getHalfTimeCounts(`${leg.homeTeam} - ${leg.awayTeam}`).catch(() => null);
+    if (ht) stats.firstHalf = ht as any;
+  }
   const htFromSource = live.hasHalfTime ? { goals: live.homeGoalsHT + live.awayGoalsHT, certain: true } : null;
   const htEspn = leg.market === 'buts_1ere_mt' && live.statusShort !== '1H' && !htFromSource ? await hubFirstHalfGoals(leg.homeTeam, leg.awayTeam, dateKey).catch(() => null) : null;
   const htGoals = htFromSource ?? (htEspn != null ? { goals: htEspn, certain: true } : null) ?? (leg.market === 'buts_1ere_mt' && live.statusShort !== '1H' ? await getHalfTimeGoals(`${leg.homeTeam} - ${leg.awayTeam}`).catch(() => null) : null);

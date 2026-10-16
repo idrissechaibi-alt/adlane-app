@@ -2,7 +2,7 @@
 // d'apprentissage (motifs agrégés) et dans le fichier des équipes (profil + leçons par équipe), puis les relevés bruts
 // sont remplacés par un résumé compact (≈ 25 points au lieu de ≈ 90) : c'est ce qui préserve l'espace.
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from './kvStore';
 import { LiveStatsSample, listLiveStatsDays, readLiveStatsDay, removeLiveStatsMatch, takeLivePlayers } from './liveStatsStore';
 import { normalizeTeamName } from './teamNameMatch';
 import { flushPatterns, ingestMatch } from './patternEngine';

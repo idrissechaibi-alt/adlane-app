@@ -1,7 +1,7 @@
 // Module de stockage local de la Base de Données Équipes (teams_database.json)
 // Persistance sur le téléphone avec possibilité de mise à jour quotidienne
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from '../core/kvStore';
 import { TeamKnowledgeData } from '../types/database';
 
 const TEAMS_DB_KEY = '@teams_database_json';

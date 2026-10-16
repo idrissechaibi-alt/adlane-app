@@ -10,7 +10,7 @@
 // Les notes récoltées alimentent le prompt des agents ET le moteur de combos
 // en cours de match. Budget épuisé = on passe, jamais de blocage ni de retry.
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from './kvStore';
 import * as SecureStore from 'expo-secure-store';
 import { fetchGoogleSearchContext } from './gemini';
 import { askOmnirouteLight } from './omniroute';

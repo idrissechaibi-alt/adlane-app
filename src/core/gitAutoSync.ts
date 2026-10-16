@@ -3,7 +3,7 @@
 
 import { Directory, EncodingType, File, Paths } from 'expo-file-system';
 import * as SecureStore from 'expo-secure-store';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from './kvStore';
 import { getAllBets, getAllCalibrations, getAllLessons, getDailyReports, restoreSnapshot } from '../database/storage';
 import { fetchWithTimeout } from './httpTimeout';
 import { readAllLearningFiles } from './learnStore';

@@ -1,7 +1,7 @@
 // Module de stockage local - SQLite + AsyncStorage
 // 100% des données stockées sur le téléphone Android
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from '../core/kvStore';
 import * as SQLite from 'expo-sqlite';
 import { Bet, Lesson, MarketCalibration, OmnirouteConfig, DailyReport } from '../types';
 import { HISTORICAL_BETS, HISTORICAL_LESSONS, INITIAL_CALIBRATIONS } from '../data/historical';

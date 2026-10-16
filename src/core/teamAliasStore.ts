@@ -2,7 +2,7 @@
 // (même horaire + une équipe reconnue), l'autre équipe est mémorisée sous les deux noms. Rien à saisir à la main, et la
 // liste grandit toute seule. Persisté, rechargé au démarrage de chaque tour.
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from './kvStore';
 import { normalizeTeamName, setLearnedAliases } from './teamNameMatch';
 
 const KEY = '@team_aliases';

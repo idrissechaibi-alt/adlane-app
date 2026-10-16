@@ -5,7 +5,7 @@
 // Sert au pipe fictif ET de secours au pipe réel quand API-Football n'a plus
 // de requêtes. Les matchs sont rapprochés entre sources par noms d'équipe.
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from '../../core/kvStore';
 import { getAPIConfig } from '../multiAPIManager';
 import { namesLikelyMatch, normalizeTeamName } from '../../core/teamNameMatch';
 import {

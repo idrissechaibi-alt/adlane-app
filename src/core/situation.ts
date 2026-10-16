@@ -9,7 +9,7 @@
 // des statistiques live ; un match relevé rarement a simplement un momentum neutre (0), jamais inventé.
 
 import { weatherFeatures } from './weather';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from './kvStore';
 import type { SofaPeriodStats } from '../api/footballDataAPIs/sofaScore';
 import { getOpeningProbabilities } from '../api/footballDataAPIs/refOdds';
 import { getSecondOpinion } from './eloRatings';

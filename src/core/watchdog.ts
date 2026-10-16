@@ -2,7 +2,7 @@
 // fichier de stats d'équipes périmé. Chaque type d'alerte est limité à une par 6 h (jamais de rafale), et un message
 // « rétabli » n'est pas envoyé : seule une anomalie nouvelle ou persistante après 6 h est signalée.
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from './kvStore';
 import { getHubStatus } from '../api/footballDataAPIs/liveDataHub';
 import { getNativeBackgroundTickStats, readAbortedTicks } from './backgroundTasks';
 import { getTeamStatsStatus } from './teamStats';

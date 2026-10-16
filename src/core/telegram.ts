@@ -8,7 +8,7 @@
 // appel HTTP direct vers api.telegram.org (API officielle des bots Telegram)
 // est fait, jamais vers un autre service.
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from './kvStore';
 import { fetchWithTimeout } from './httpTimeout';
 
 const TELEGRAM_CONFIG_KEY = '@telegram_config';

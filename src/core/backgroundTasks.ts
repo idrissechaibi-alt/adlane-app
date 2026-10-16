@@ -8,7 +8,7 @@
 
 import * as BackgroundTask from 'expo-background-task';
 import * as TaskManager from 'expo-task-manager';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from './kvStore';
 import { getAPIConfig } from '../api/multiAPIManager';
 import { API_FOOTBALL_RESERVE, spendDirectBudget } from './requestBudget';
 import { ensureDailyUniverse } from './matchUniverse';

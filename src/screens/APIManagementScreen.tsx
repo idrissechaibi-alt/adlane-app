@@ -7,7 +7,7 @@ import {
   Text, TextInput, TouchableOpacity, View
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from '../core/kvStore';
 import {
   getAPIConfig, saveAPIConfig, testAPIConnection, APIConfig,
   getAllRequestCounts, resetRequestCount, incrementRequestCount,

@@ -12,7 +12,7 @@
 // estimateExpectedGoalsFromHistory) : les prédictions en arrière-plan
 // (scan en direct) n'ont donc plus besoin de cotes de bookmaker.
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from './kvStore';
 import { normalizeTeamName } from './teamNameMatch';
 import { fetchWithTimeout } from './httpTimeout';
 

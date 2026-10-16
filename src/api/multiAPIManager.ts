@@ -1,7 +1,7 @@
 // Gestionnaire Multi-API avec Fallback Automatique
 // Orchestre plusieurs sources de données football avec retry et cache
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from '../core/kvStore';
 
 const API_CONFIG_KEY = '@multi_api_manager_config';
 

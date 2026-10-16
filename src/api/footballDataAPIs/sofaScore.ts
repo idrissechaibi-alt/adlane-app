@@ -4,7 +4,7 @@
 // (anti-bot Cloudflare) selon le réseau/l'IP ; en cas d'échec on renvoie
 // simplement success:false, jamais de données inventées.
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from '../../core/kvStore';
 import { APIResponse, FootballMatch, MatchStatistics, Team, Player, MarketOdds } from '../types';
 import { syntheticFixtureId } from '../../core/halftimeMonitor';
 

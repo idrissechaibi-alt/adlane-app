@@ -3,7 +3,7 @@
 //  - fiches d'équipes : le fichier compilé chaque nuit (data/team-stats, FotMob) et enrichi en fin de match ;
 //  - correspondance entre les deux (noms d'ESPN ↔ fichier des équipes).
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from './kvStore';
 import { namesLikelyMatch, normalizeTeamName } from './teamNameMatch';
 
 const TEAM_BASE = 'https://raw.githubusercontent.com/idrissechaibi-alt/adlane-app/main/data/team-stats';

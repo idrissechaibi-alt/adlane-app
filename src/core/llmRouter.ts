@@ -12,7 +12,7 @@
 // route qui échoue 3 fois d'affilée est mise de côté 10 minutes (essayée en
 // tout dernier recours seulement).
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from './kvStore';
 import { LlmProvider, OmnirouteConfig } from '../types';
 import { fetchWithTimeout } from './httpTimeout';
 import { mapWithConcurrency } from './concurrency';

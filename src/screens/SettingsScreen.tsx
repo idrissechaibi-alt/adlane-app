@@ -23,7 +23,7 @@ import { checkAllProviders, checkProvider, getModelStatsForEndpoint, getRouteLea
 import { LlmProvider } from '../types';
 import { TelegramConfig, sendTelegramMessage } from '../core/telegram';
 import { sendInternationalBreakCalendarNow } from '../core/internationalBreakNotify';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from '../core/kvStore';
 
 const OMNIROUTE_CONFIG_KEY = '@omniroute_config';
 const TELEGRAM_CONFIG_KEY = '@telegram_config';

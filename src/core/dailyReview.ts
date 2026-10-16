@@ -14,7 +14,7 @@
 // PREMIER tour qui suit minuit : la journée close est toujours traitée, avec
 // au plus quelques minutes de retard.
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from './kvStore';
 import { getAPIConfig } from '../api/multiAPIManager';
 import { spendDirectBudget } from './requestBudget';
 import { syncEloForAllCoveredLeagues } from './eloRatings';

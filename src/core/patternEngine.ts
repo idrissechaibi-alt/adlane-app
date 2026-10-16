@@ -9,7 +9,7 @@
 // base atteint 10 points. Il corrige alors la probabilité des paris concernés, sur le pipe fictif ET sur le réel (même seuil :
 // les matchs du fictif sont de vrais matchs). Chaque pari réglé reçoit une explication chiffrée : pourquoi il a réussi ou raté.
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from './kvStore';
 
 export const CHECKPOINTS = [15, 30, 45, 60, 75] as const;
 const MIN_PATTERN_SAMPLES = 100;

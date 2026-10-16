@@ -1,7 +1,7 @@
 // Écran Planning & Propositions du Jour
 // Affiche les créneaux chronologiques, compte à rebours T-90, et propositions validées/rejetées
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from '../core/kvStore';
 import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,

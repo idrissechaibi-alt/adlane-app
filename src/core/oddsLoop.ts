@@ -11,7 +11,7 @@
 // Score d'alignement = 100 × (1 − écart absolu moyen / 40 %), borné à 0-100. Il se calcule sur les
 // estimations faites AVANT d'apprendre de chaque saisie : un score honnête, pas un score appris par cœur.
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from './kvStore';
 import type { InPlayProposal } from './learnStore';
 import {
   OddsContext,

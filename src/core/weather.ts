@@ -2,7 +2,7 @@
 // Ville du stade : ESPN ; coordonnées : géocodage Open-Meteo, gardées en mémoire. Les trois variables entrent dans le
 // modèle de situation (deltaLearning) : leur effet sur les buts / corners / cartons est APPRIS puis plafonné, jamais fixé.
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from './kvStore';
 import { hubDateKey, hubVenueCity } from '../api/footballDataAPIs/liveDataHub';
 import { normalizeTeamName } from './teamNameMatch';
 

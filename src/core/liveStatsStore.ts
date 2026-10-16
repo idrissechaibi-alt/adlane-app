@@ -2,7 +2,7 @@
 // 365Scores, ESPN, AllSportsApi, TheSportsDB). Un relevé par match et par minute de scan : score, minute, tirs,
 // tirs cadrés, corners, cartons, fautes, possession, xG, rouges. Aucun plafond : tout l'historique est gardé.
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from './kvStore';
 
 export interface LiveStatsSample {
   ts: string;
@@ -91,6 +91,13 @@ export async function getHalfTimeGoals(matchKey: string): Promise<{ goals: numbe
     // pas de résumé
   }
   return null;
+}
+
+/** Corners / cartons / fautes à la pause, d'après notre relevé pris pendant la mi-temps (statut HT). null si aucun. */
+export async function getHalfTimeCounts(matchKey: string): Promise<{ corners: number; cards: number; fouls: number } | null> {
+  const raw = (await readLiveStatsDay(dayKey()))[matchKey];
+  const ht = raw?.find((x) => x.status === 'HT' && x.corners != null);
+  return ht ? { corners: ht.corners ?? 0, cards: ht.cards ?? 0, fouls: ht.fouls ?? 0 } : null;
 }
 
 const PLAYERS_PREFIX = '@real_live_players_';

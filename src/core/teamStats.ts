@@ -14,7 +14,7 @@
  * quelle.
  */
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from './kvStore';
 import { namesLikelyMatch, normalizeTeamName } from './teamNameMatch';
 import { ensureTeamLiveLessonsLoaded, seedTeamTiming, teamLiveNote } from './matchDigest';
 import { poissonProb } from './poisson';

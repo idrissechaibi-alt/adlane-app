@@ -12,7 +12,7 @@
 // Valeurs de départ (exemples de l'utilisateur) : cartons du match, 1.5 absent pour ~4
 // attendus, 2.5 présent ; fautes du match, 17.5 absent pour ~24 attendues, 18.5 présent.
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from './kvStore';
 
 const KEY = '@bookie_line_availability_v2';
 const OLD_KEY = '@bookie_line_availability';

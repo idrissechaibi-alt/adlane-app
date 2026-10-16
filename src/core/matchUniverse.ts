@@ -4,7 +4,7 @@
 //
 // C'est la liste que la boucle d'auto-apprentissage observe en direct.
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from './kvStore';
 import { getAPIConfig } from '../api/multiAPIManager';
 import { API_FOOTBALL_RESERVE, spendBudget } from './requestBudget';
 import { fetchWithTimeout } from './httpTimeout';

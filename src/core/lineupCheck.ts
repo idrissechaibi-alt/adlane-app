@@ -5,7 +5,7 @@
 //  - un facteur sur les buts attendus de l'équipe (part des buts de la saison portée par les absents, plafonné à -25 %) ;
 //  - une note jointe à l'argumentaire de chaque pari du match, et deux déclencheurs pour les motifs (absences, système).
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from './kvStore';
 import { hubDateKey, hubLineup } from '../api/footballDataAPIs/liveDataHub';
 import { getTeamProfile, TeamPlayer } from './teamStats';
 import { normalizeTeamName } from './teamNameMatch';

@@ -2,7 +2,7 @@
 // Utilise l'API football-data.org filtrée par codes de compétition
 
 import { DailyScheduleSlot, ScheduledMatchDetail } from '../types/database';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from './kvStore';
 import * as SecureStore from 'expo-secure-store';
 import { getAPIConfig, incrementRequestCount } from '../api/multiAPIManager';
 import { fetchCompetitionOdds, FOOTBALL_DATA_TO_ODDS_SPORT_KEY, SimpleMatchOdds } from '../api/footballDataAPIs/theOddsAPI';

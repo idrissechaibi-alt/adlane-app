@@ -2,7 +2,7 @@
 // Utilise AsyncStorage pour stockage persistant sur mobile
 // Gère les TTL (Time-To-Live) pour invalidation automatique
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from '../core/kvStore';
 
 const CACHE_PREFIX = '@api_cache_';
 const CACHE_CONFIG_KEY = '@api_cache_config';

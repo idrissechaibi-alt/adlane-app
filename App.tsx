@@ -12,6 +12,7 @@ import { buildAppHealth } from './src/core/appHealth';
 import { ensureNotificationPermissions } from './src/core/notifications';
 import { registerBackgroundAutoLearn, runAutoLearnTick, runRealFastTick } from './src/core/backgroundTasks';
 import { keepScreenOn, releaseScreen } from './src/core/keepAwake';
+import { migrateAsyncStorage } from './src/core/kvStore';
 
 const REAL_FAST_TICK_INTERVAL_MS = 60_000;
 import DashboardScreen from './src/screens/DashboardScreen';
@@ -68,6 +69,8 @@ export default function App() {
     const setupApp = async () => {
       try {
         await applyPendingUpdate();
+        // Données de l'app sorties de la base AsyncStorage (plafond 6 Mo → « SQLITE_FULL ») vers des fichiers.
+        await migrateAsyncStorage().catch(() => 0);
         await initDatabase();
         await seedDatabaseIfEmpty();
         setSnapshotHealthProvider(buildAppHealth);

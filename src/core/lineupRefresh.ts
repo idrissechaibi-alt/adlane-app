@@ -18,7 +18,7 @@
 // avec une proposition active — jamais un appel par match dans le pipeline
 // général de scan/enrichissement.
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from './kvStore';
 import * as SecureStore from 'expo-secure-store';
 import { fetchGoogleSearchContext } from './gemini';
 import { fetchMatchContext } from './perplexity';

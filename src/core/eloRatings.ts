@@ -19,7 +19,7 @@
 // filet de secours des fixtures, item B) : aucun coût de quota API, mais de
 // fait limité aux 5 grands championnats déjà couverts par ce fichier.
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from './kvStore';
 import { normalizeTeamName } from './teamNameMatch';
 import { fetchWithTimeout } from './httpTimeout';
 

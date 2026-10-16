@@ -13,7 +13,7 @@
 // moment. Autres marchés (1X2, BTTS…) : rapport cote × probabilité par tranche.
 // Avec peu de saisies, une marge standard de 8 % tient lieu de valeur de départ.
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from './kvStore';
 import type { InPlayProposal, TrackedMarket } from './learnStore';
 import { atLeastProb } from './countModel';
 import { normalizeTeamName } from './teamNameMatch';

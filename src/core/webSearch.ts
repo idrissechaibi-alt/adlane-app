@@ -9,7 +9,7 @@
 // - FreeLLMAPI active la recherche Google sur les modèles Gemini quand la
 //   requête contient l'outil `google_search` (voir llmRouter.callRoute).
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from './kvStore';
 import { OmnirouteConfig } from '../types';
 import { fetchWithTimeout } from './httpTimeout';
 import { LlmRoute, callRoute, configuredProviders } from './llmRouter';

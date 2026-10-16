@@ -6,7 +6,7 @@
 // devient un facteur de correction appliqué aux projections suivantes.
 // Entièrement mesuré sur les résultats réels, rien d'inventé.
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from './kvStore';
 import { readInPlayProposals } from './learnStore';
 import { hubFinalResult } from '../api/footballDataAPIs/liveDataHub';
 import { mapWithConcurrency } from './concurrency';

@@ -3,7 +3,7 @@
 // des données réelles du téléphone. Uniquement des compteurs, horodatages et
 // booléens de présence : aucune clé API, aucun jeton, aucune adresse.
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from './kvStore';
 import { getAPIConfig, getAllRequestCounts, getQuotaUsage, getRequestCount } from '../api/multiAPIManager';
 import { getDailyPlan } from './scheduler';
 import { remainingBudget } from './requestBudget';
