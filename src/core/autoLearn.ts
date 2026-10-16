@@ -38,6 +38,7 @@ import {
   readMarketSeries,
   readPaperBets,
   readPredictionOutcomes,
+  historyDays,
   readTrainingRows,
   readAccuracySnapshots,
   recordAccuracySnapshot,
@@ -609,7 +610,7 @@ export function applyMarketExpertise(
  */
 function backfillOutcomesFromProposals(): number {
   const known = new Set(
-    readPredictionOutcomes(30).map((o) => `${o.fixtureId}-${o.kind}-${o.market}-${o.selection}`)
+    readPredictionOutcomes(historyDays()).map((o) => `${o.fixtureId}-${o.kind}-${o.market}-${o.selection}`)
   );
 
   const missing: PredictionOutcome[] = [];
@@ -646,7 +647,7 @@ export async function consolidateLearning(): Promise<LearnedModel | null> {
   backfillOutcomesFromProposals();
 
   const rows = readTrainingRows(14);
-  const marketExpertise = computeMarketExpertise(readPredictionOutcomes(30));
+  const marketExpertise = computeMarketExpertise(readPredictionOutcomes(historyDays()));
 
   // L'expertise par marché vient d'un corpus distinct (résultats mesurés) et
   // ne dépend pas du volume d'instantanés de marqueurs : on la met à jour même

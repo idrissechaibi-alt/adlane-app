@@ -1005,6 +1005,23 @@ export async function runNightlyReviewIfDue(): Promise<number> {
     ...allProposals.filter((p) => !currentIds.has(p.id)),
   ]);
   invalidateDeltaCache();
+  // Historique complet : tout jour passé présent dans les paris mais absent des courbes (jour manqué, ancienne limite de
+  // 30 jours) est reconstruit à partir des paris eux-mêmes, pour que les courbes partent du premier jour de l'app.
+  const todayKey = dayKey(new Date());
+  const byDay = new Map<string, typeof allProposals>();
+  for (const p of allProposals) {
+    const d = p.createdAt.slice(0, 10);
+    if (d >= todayKey) continue;
+    (byDay.get(d) ?? byDay.set(d, []).get(d)!).push(p);
+  }
+  const known = new Set(series.map((p) => p.date));
+  const knownReal = new Set(seriesReal.map((p) => p.date));
+  const knownFict = new Set(seriesFictional.map((p) => p.date));
+  for (const [d, list] of byDay) {
+    if (!known.has(d)) mergeDayPoints(series, buildDayPoints(d, list));
+    if (!knownReal.has(d)) mergeDayPoints(seriesReal, buildDayPoints(d, list.filter((p) => p.real !== false)));
+    if (!knownFict.has(d)) mergeDayPoints(seriesFictional, buildDayPoints(d, list.filter((p) => p.real === false)));
+  }
   writeMarketSeries(series.sort((a, b) => a.date.localeCompare(b.date)));
   writeMarketSeriesReal(seriesReal.sort((a, b) => a.date.localeCompare(b.date)));
   writeMarketSeriesFictional(seriesFictional.sort((a, b) => a.date.localeCompare(b.date)));

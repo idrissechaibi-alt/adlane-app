@@ -6,7 +6,7 @@
 
 import { getAllBets, getAllLessons } from '../database/storage';
 import { fetchRepoJson } from './gitAutoSync';
-import { InPlayProposal, readInPlayProposals, readMarketSeries, marketLabel } from './learnStore';
+import { InPlayProposal, MarketDayPoint, readInPlayProposals, readMarketSeries, readMarketSeriesFictional, readMarketSeriesReal, marketLabel } from './learnStore';
 import { buildFictionalMarketStats, formatFictionalDigestMessage } from './dailyDigest';
 import { readOddsLoopFile } from './oddsLoop';
 import { getDeltaReport, getSituationReport } from './deltaLearning';
@@ -55,7 +55,35 @@ async function bilanMessage(day: string, todays: InPlayProposal[]): Promise<stri
   lines.push('', `🧪 FICTIFS : ${fictional.length} paris, ${f.settled} jambes réglées, ${f.won} gagnée(s) (${pc(f.won, f.settled)})`);
   const detail = formatFictionalDigestMessage(day, buildFictionalMarketStats(todays), readMarketSeries().filter((p) => p.date < day));
   if (detail) lines.push('', detail.split('\n').slice(1).join('\n'));
+  lines.push('', ...sinceCreationLines(day));
   return lines.join('\n');
+}
+
+/** Évolution depuis la création de l'app : 1ère semaine de paris réglés contre les 7 derniers jours, réel et fictif. */
+function sinceCreationLines(day: string): string[] {
+  const weekly = (series: MarketDayPoint[]) => {
+    const byDate = new Map<string, [number, number]>();
+    for (const p of series.filter((x) => x.date <= day)) {
+      const e = byDate.get(p.date) ?? [0, 0];
+      e[0] += p.predictions;
+      e[1] += p.correct;
+      byDate.set(p.date, e);
+    }
+    const days = Array.from(byDate.entries()).filter(([, e]) => e[0] > 0).sort((a, b) => a[0].localeCompare(b[0]));
+    if (days.length === 0) return null;
+    const agg = (list: typeof days) => list.reduce((s, [, e]) => [s[0] + e[0], s[1] + e[1]], [0, 0]);
+    const [n1, w1] = agg(days.slice(0, 7));
+    const [n2, w2] = agg(days.slice(-7));
+    const [nt, wt] = agg(days);
+    return { since: days[0][0], first: pc(w1, n1), last: pc(w2, n2), total: nt, overall: pc(wt, nt) };
+  };
+  const out = ['📈 DEPUIS LA CRÉATION'];
+  const f = weekly(readMarketSeriesFictional());
+  const r = weekly(readMarketSeriesReal());
+  if (f) out.push(`🧪 Fictif (depuis le ${f.since}) : ${f.first} la 1ère semaine → ${f.last} les 7 derniers jours · ${f.overall} sur ${f.total} paris`);
+  if (r) out.push(`🎯 Réel (depuis le ${r.since}) : ${r.first} la 1ère semaine → ${r.last} les 7 derniers jours · ${r.overall} sur ${r.total} paris`);
+  if (!f && !r) out.push('Pas encore de journée réglée.');
+  return out;
 }
 
 async function cotesMessage(day: string): Promise<string> {

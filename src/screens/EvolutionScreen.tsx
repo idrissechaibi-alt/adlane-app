@@ -15,7 +15,7 @@ import {
 import { Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import MarketTrendChart from '../components/MarketTrendChart';
-import { MarketDayPoint, TRACKED_MARKETS, TrackedMarket, marketLabel, readInPlayProposals, readMarketSeries, readMarketSeriesReal, readMarketSeriesFictional, readCumulativeCounts, readPaperBets, readPredictionOutcomes } from '../core/learnStore';
+import { MarketDayPoint, TRACKED_MARKETS, TrackedMarket, marketLabel, readInPlayProposals, readMarketSeries, readMarketSeriesReal, readMarketSeriesFictional, readCumulativeCounts, readPaperBets, readPredictionOutcomes, historyDays, HISTORY_START, readAccuracySnapshots } from '../core/learnStore';
 import { getAllBets, getAllLessons, getAllCalibrations, getDailyReports } from '../database/storage';
 import { MARKET_TITLES, computeAllBetsCalibrations } from '../core/calibration';
 import { LegExplanation, Pattern, describePattern, getPatterns, patternStatus, readExplanations } from '../core/patternEngine';
@@ -270,7 +270,7 @@ export default function EvolutionScreen() {
     }
     try {
       const byMarket = new Map<TrackedMarket, { total: number; won: number; predictedSum: number }>();
-      for (const outcome of readPredictionOutcomes(30)) {
+      for (const outcome of readPredictionOutcomes(historyDays())) {
         const entry = byMarket.get(outcome.market) ?? { total: 0, won: 0, predictedSum: 0 };
         entry.total += 1;
         entry.predictedSum += outcome.predictedProb;
@@ -487,7 +487,7 @@ export default function EvolutionScreen() {
         getAllBets(),
         getAllLessons(),
         getAllCalibrations(),
-        getDailyReports(30),
+        getDailyReports(3650),
       ]);
 
       setBets(dbBets);
@@ -816,6 +816,49 @@ export default function EvolutionScreen() {
     return [...checkpointPoints, ...paperPoints].sort((a, b) => a.date.localeCompare(b.date));
   };
 
+  /** Tous marchés confondus, jour par jour depuis la création de l'app (réel et fictif séparés). */
+  const aggregateByDay = (pts: MarketDayPoint[]): MarketDayPoint[] => {
+    const byDate = new Map<string, { n: number; ok: number; pSum: number }>();
+    for (const p of pts) {
+      const e = byDate.get(p.date) ?? { n: 0, ok: 0, pSum: 0 };
+      e.n += p.predictions;
+      e.ok += p.correct;
+      e.pSum += p.meanPredicted * p.predictions;
+      byDate.set(p.date, e);
+    }
+    return Array.from(byDate.entries())
+      .filter(([, e]) => e.n > 0)
+      .map(([date, e]) => ({ date, market: 'total_buts' as TrackedMarket, predictions: e.n, correct: e.ok, hitRate: e.ok / e.n, meanPredicted: e.pSum / e.n }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  };
+
+  const renderOverallCurve = () => {
+    const real = aggregateByDay(marketSeriesReal);
+    const fict = aggregateByDay(TRACKED_MARKETS.flatMap((m) => fictionalPointsFor(m.key)));
+    const snaps = readAccuracySnapshots();
+    const all = [...real, ...fict];
+    if (all.length === 0 && snaps.length === 0) return null;
+    const first = all.length ? all.reduce((a, b) => (a.date < b.date ? a : b)).date : snaps[0].date;
+    const sum = (pts: MarketDayPoint[]) => pts.reduce((s, p) => ({ n: s.n + p.predictions, ok: s.ok + p.correct }), { n: 0, ok: 0 });
+    const pct = (s: { n: number; ok: number }) => (s.n ? `${Math.round((s.ok / s.n) * 100)} %` : '—');
+    const fmt = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
+    const firstWeek = (pts: MarketDayPoint[]) => sum(pts.slice(0, 7));
+    const lastWeek = (pts: MarketDayPoint[]) => sum(pts.slice(-7));
+    return (
+      <View style={styles.curvesIntro}>
+        <Text style={styles.curvesIntroTitle}>Évolution de l'app depuis sa création</Text>
+        <Text style={styles.curvesIntroText}>
+          Premiers relevés en direct le {fmt(HISTORY_START)}, premiers paris réglés le {fmt(first)}. Mis à jour à chaque bilan (chaque nuit
+          et au fil de la journée), sans limite de durée.
+          {fict.length ? `\nFictif : ${pct(firstWeek(fict))} la 1ère semaine → ${pct(lastWeek(fict))} les 7 derniers jours (${sum(fict).n} paris réglés).` : ''}
+          {real.length ? `\nRéel : ${pct(firstWeek(real))} la 1ère semaine → ${pct(lastWeek(real))} les 7 derniers jours (${sum(real).n} paris réglés).` : ''}
+          {snaps.length ? `\nModèle à marqueurs : ${Math.round(snaps[0].hitRate * 100)} % le ${fmt(snaps[0].date)} → ${Math.round(snaps[snaps.length - 1].hitRate * 100)} % aujourd'hui.` : ''}
+        </Text>
+        <MarketTrendChart label="Tous marchés confondus" width={Dimensions.get('window').width - 32 - 24} points={real} fictionalPoints={fict} />
+      </View>
+    );
+  };
+
   const renderCurvesView = () => {
     const chartWidth = Dimensions.get('window').width - 32 - 24; // marges écran + carte
     const lastUpdate = marketSeries.length > 0
@@ -893,6 +936,8 @@ export default function EvolutionScreen() {
             {lastUpdate ? ` Dernier bilan : ${lastUpdate}.` : ' Aucun bilan encore effectué.'}
           </Text>
         </View>
+
+        {renderOverallCurve()}
 
         {TRACKED_MARKETS.map((market) => (
           <MarketTrendChart

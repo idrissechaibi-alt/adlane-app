@@ -48,6 +48,14 @@ export const TRACKED_MARKETS = [
 
 export type TrackedMarket = (typeof TRACKED_MARKETS)[number]['key'];
 
+/** Premier jour de l'app (premiers relevés en direct) : les courbes et la calibration couvrent tout depuis ce jour. */
+export const HISTORY_START = '2026-09-21';
+
+/** Nombre de jours entre la création de l'app et aujourd'hui (inclus) : pour lire tout l'historique jour par jour. */
+export function historyDays(): number {
+  return Math.max(1, Math.ceil((Date.now() - Date.parse(`${HISTORY_START}T00:00:00Z`)) / 86_400_000) + 1);
+}
+
 export function marketLabel(key: string): string {
   return TRACKED_MARKETS.find((m) => m.key === key)?.label ?? key;
 }
@@ -572,7 +580,7 @@ export function readMarketSeries(): MarketDayPoint[] {
 }
 
 export function writeMarketSeries(points: MarketDayPoint[]): void {
-  writeText(fileIn('market-series.json'), JSON.stringify(points.slice(-400)));
+  writeText(fileIn('market-series.json'), JSON.stringify(points));
 }
 
 // Séries SÉPARÉES réel/fictif — uniquement pour l'affichage comparatif
@@ -595,7 +603,7 @@ export function readMarketSeriesReal(): MarketDayPoint[] {
 }
 
 export function writeMarketSeriesReal(points: MarketDayPoint[]): void {
-  writeText(fileIn('market-series-real.json'), JSON.stringify(points.slice(-400)));
+  writeText(fileIn('market-series-real.json'), JSON.stringify(points));
 }
 
 export function readMarketSeriesFictional(): MarketDayPoint[] {
@@ -609,7 +617,7 @@ export function readMarketSeriesFictional(): MarketDayPoint[] {
 }
 
 export function writeMarketSeriesFictional(points: MarketDayPoint[]): void {
-  writeText(fileIn('market-series-fictional.json'), JSON.stringify(points.slice(-400)));
+  writeText(fileIn('market-series-fictional.json'), JSON.stringify(points));
 }
 
 // ==================== TAUX D'ERREUR GLOBAL, PAR JOUR ====================
@@ -641,12 +649,12 @@ export function readAccuracySnapshots(): DailyAccuracySnapshot[] {
 }
 
 /** Remplace l'instantané du jour s'il existe déjà (idempotent sur plusieurs
- * tours du même jour), garde un historique glissant de 60 jours. */
+ * tours du même jour). Tout l'historique est gardé, depuis la création de l'app. */
 export function recordAccuracySnapshot(snapshot: DailyAccuracySnapshot): void {
   const existing = readAccuracySnapshots();
   const withoutToday = existing.filter((s) => s.date !== snapshot.date);
   const updated = [...withoutToday, snapshot].sort((a, b) => a.date.localeCompare(b.date));
-  writeText(fileIn('accuracy-snapshots.json'), JSON.stringify(updated.slice(-60)));
+  writeText(fileIn('accuracy-snapshots.json'), JSON.stringify(updated));
 }
 
 export function readInPlayProposals(): InPlayProposal[] {
