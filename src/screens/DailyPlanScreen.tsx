@@ -30,7 +30,7 @@ import { DailyScheduleSlot } from '../types/database';
 import { Bet, Market } from '../types';
 import { TrackedMarket } from '../core/learnStore';
 import { namesLikelyMatch, normalizeTeamName } from '../core/teamNameMatch';
-import { LegStatus, checkLegStatuses, combineLegStatuses } from '../core/liveBetStatus';
+import { LegCounter, LegStatus, checkLegStatuses, combineLegStatuses, liveLegCounter } from '../core/liveBetStatus';
 
 export default function DailyPlanScreen() {
   const [loading, setLoading] = useState(false);
@@ -60,6 +60,8 @@ export default function DailyPlanScreen() {
   const [placing, setPlacing] = useState(false);
   const [proposalStatus, setProposalStatus] = useState<Record<string, LegStatus>>({});
   const [legStatuses, setLegStatuses] = useState<Record<string, LegStatus[]>>({});
+  /** Compteur en direct de chaque jambe encore en cours (minute + score / corners / cartons / tirs du joueur). */
+  const [legCounters, setLegCounters] = useState<Record<string, Array<LegCounter | null>>>({});
 
   // État de chaque pari (en cours / réussi / perdu) revérifié à chaque
   // actualisation de la liste (toutes les 30 s).
@@ -71,6 +73,15 @@ export default function DailyPlanScreen() {
       );
       if (cancelled) return;
       setLegStatuses(Object.fromEntries(entries));
+      // Compteurs en direct des jambes encore en cours (rafraîchis avec la liste, toutes les 30 s).
+      const counters = await Promise.all(
+        inPlayProposals.map(async (p) => {
+          const statuses = entries.find(([id]) => id === p.id)?.[1] ?? [];
+          const day = p.createdAt.slice(0, 10);
+          return [p.id, await Promise.all(p.legs.map((l, i) => (statuses[i] === 'pending' ? liveLegCounter(l, day).catch(() => null) : Promise.resolve(null))))] as const;
+        })
+      );
+      if (!cancelled) setLegCounters(Object.fromEntries(counters));
       setProposalStatus(Object.fromEntries(entries.map(([id, statuses]) => [id, combineLegStatuses(statuses)])));
     })();
     return () => {
@@ -473,6 +484,29 @@ export default function DailyPlanScreen() {
     }
   };
 
+  /** Chrono + compteur du pari en direct, avec une barre qui se remplit jusqu'à la ligne. */
+  const renderCounter = (c: LegCounter | null | undefined) => {
+    if (!c) return null;
+    const minute = c.status === 'HT' ? 'Mi-temps' : `${c.minute}'`;
+    const target = c.target;
+    const ratio = target ? Math.max(0, Math.min(1, c.current / Math.ceil(target))) : null;
+    // « Plus de » : vert en approchant de la ligne. « Moins de » : rouge en approchant (la ligne est un plafond).
+    const color = ratio == null ? '#60a5fa' : c.side === 'moins' ? (ratio >= 1 ? '#ef4444' : ratio >= 0.75 ? '#f59e0b' : '#10b981') : ratio >= 1 ? '#10b981' : ratio >= 0.75 ? '#f59e0b' : '#60a5fa';
+    return (
+      <View style={styles.counterBox}>
+        <Text style={styles.counterText}>
+          ⏱ {minute} · {c.what} {c.label}
+          {target != null ? `  (${c.current} / ${target})` : ''}
+        </Text>
+        {ratio != null && (
+          <View style={styles.counterTrack}>
+            <View style={[styles.counterFill, { width: `${Math.round(ratio * 100)}%`, backgroundColor: color }]} />
+          </View>
+        )}
+      </View>
+    );
+  };
+
   /** Un pari en direct (simple ou combiné) avec son bouton "Placer". */
   const renderLiveProposal = (proposal: InPlayProposal, showMatch = true) => {
     const played = placedBetIds.has(`live-${proposal.id}`);
@@ -492,6 +526,7 @@ export default function DailyPlanScreen() {
         <Text style={styles.liveBetTitle}>
           {minuteLabel} · {proposal.legs.length === 1 ? first.selection : `Combiné ${proposal.legs.length} matchs`} — {confidence}%
         </Text>
+        {proposal.legs.length === 1 && renderCounter(legCounters[proposal.id]?.[0])}
         {proposal.legs.some((l) => l.waitForOdds) && (
           <Text style={styles.waitOdds}>
             ⏳ À poser seulement si ta cote atteint {proposal.legs.find((l) => l.waitForOdds)!.waitForOdds!.min.toFixed(2)}
@@ -510,6 +545,7 @@ export default function DailyPlanScreen() {
                 {leg.waitForOdds ? `  ⏳ cote ≥ ${leg.waitForOdds.min.toFixed(2)}` : ''}
                 {missingLegs[`${proposal.id}:${i}`] ? '  ⚠️ non proposée' : ''}
               </Text>
+              {renderCounter(legCounters[proposal.id]?.[i])}
               {legStatuses[proposal.id]?.[i] !== 'won' && legStatuses[proposal.id]?.[i] !== 'lost' && !missingLegs[`${proposal.id}:${i}`] && (
                 <TouchableOpacity onPress={() => handleNotFound(proposal, i)}>
                   <Text style={styles.legNotFound}>Cette jambe est introuvable chez mon bookmaker</Text>
@@ -1027,6 +1063,10 @@ export default function DailyPlanScreen() {
 }
 
 const styles = StyleSheet.create({
+  counterBox: { marginTop: 4, marginBottom: 4 },
+  counterText: { color: '#e2e8f0', fontSize: 13, fontWeight: '600' },
+  counterTrack: { height: 6, borderRadius: 3, backgroundColor: '#334155', marginTop: 4, overflow: 'hidden' },
+  counterFill: { height: 6, borderRadius: 3 },
   container: {
     flex: 1,
     backgroundColor: '#0f172a',

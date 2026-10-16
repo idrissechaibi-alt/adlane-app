@@ -141,3 +141,57 @@ export function combineLegStatuses(statuses: LegStatus[]): LegStatus {
   if (statuses.includes('lost')) return 'lost';
   return statuses.length > 0 && statuses.every((s) => s === 'won') ? 'won' : 'pending';
 }
+
+/** Compteur en direct d'une jambe : minute, score ou compteur du marché (domicile-extérieur), ligne à atteindre. */
+export interface LegCounter {
+  minute: number;
+  status: string;
+  /** Ce qui est compté, en clair (« Buts », « Corners », « Cartons jaunes », « Fautes », nom du joueur). */
+  what: string;
+  /** Domicile-extérieur, ou valeur du joueur. */
+  label: string;
+  current: number;
+  /** Ligne du pari (2.5, 12.5…) ; null pour un pari sans ligne (BTTS, 1X2). */
+  target: number | null;
+  side: 'plus' | 'moins' | null;
+}
+
+const counterCache = new Map<string, { at: number; value: LegCounter | null }>();
+
+export async function liveLegCounter(leg: InPlayProposalLeg, dateKey: string): Promise<LegCounter | null> {
+  const key = `${dateKey}|${leg.homeTeam}|${leg.awayTeam}|${leg.selection}`;
+  const hit = counterCache.get(key);
+  if (hit && Date.now() - hit.at < 30_000) return hit.value;
+  let value: LegCounter | null = null;
+  try {
+    const consensus = await hubLiveConsensus(leg.homeTeam, leg.awayTeam).catch(() => null);
+    const live = consensus?.match ?? (await hubLiveStatus(leg.homeTeam, leg.awayTeam).catch(() => null));
+    if (live && ['1H', 'HT', '2H'].includes(live.statusShort)) {
+      const l = lineOf(leg.selection);
+      const base = { minute: live.minute, status: live.statusShort, target: l?.line ?? null, side: l?.side ?? null };
+      if (['total_buts', 'btts', '1X2', 'buts_1ere_mt'].includes(leg.market)) {
+        value = { ...base, what: 'Score', label: `${live.homeGoals}-${live.awayGoals}`, current: live.homeGoals + live.awayGoals };
+      } else if (['corners', 'cartons', 'fautes'].includes(leg.market)) {
+        const stats = await hubStats(leg.homeTeam, leg.awayTeam, dateKey).catch(() => null);
+        const firstHalfBet = !/sur le match/i.test(leg.selection);
+        const period = firstHalfBet && live.statusShort !== '1H' ? stats?.firstHalf : stats?.all;
+        if (period) {
+          const [h, a, what] =
+            leg.market === 'corners' ? [period.cornersHome, period.cornersAway, 'Corners']
+            : leg.market === 'cartons' ? [period.cardsHome, period.cardsAway, 'Cartons jaunes']
+            : [period.foulsHome ?? 0, period.foulsAway ?? 0, 'Fautes'];
+          value = { ...base, what: String(what), label: `${h}-${a}`, current: Number(h) + Number(a) };
+        }
+      } else if (leg.market === 'tirs_cadres') {
+        const players = await hubPlayerShots(leg.homeTeam, leg.awayTeam, dateKey).catch(() => null);
+        const sot = playerSotFromSelection(leg.selection, players);
+        const who = /—\s*(.+?)\s*\(/.exec(leg.selection)?.[1] ?? 'Joueur';
+        if (sot != null) value = { ...base, what: who, label: `${sot} tir(s) cadré(s)`, current: sot };
+      }
+    }
+  } catch {
+    value = null;
+  }
+  counterCache.set(key, { at: Date.now(), value });
+  return value;
+}
