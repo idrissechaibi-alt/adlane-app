@@ -30,6 +30,16 @@ import { getDailyPlan, refreshPlanOddsIfDue, runMorningScanIfDue } from './sched
 import { reconcileScoutingAnalyses } from './scoutingReview';
 import { runWatchdog } from './watchdog';
 import { learnAlias, loadLearnedAliases } from './teamAliasStore';
+import { canonicalizeFixtures, loadTeamRegistry, registerTeams, saveTeamRegistry } from './teamRegistry';
+import { getTeamIndexNames } from './teamStats';
+
+/** Registre des équipes prêt : noms du planning et du fichier des équipes enregistrés EN PREMIER (ce sont les noms de référence). */
+async function prepareTeamRegistry(): Promise<void> {
+  await loadTeamRegistry();
+  const plan = await getDailyPlan().catch(() => null);
+  registerTeams((plan?.slots ?? []).flatMap((s) => (s.matches as Array<{ homeTeam: string; awayTeam: string }>).flatMap((m) => [m.homeTeam, m.awayTeam])));
+  registerTeams(await getTeamIndexNames().catch(() => []));
+}
 import { refreshDueLineups } from './lineupRefresh';
 import { readLearnedModel } from './learnStore';
 import { namesLikelyMatch, normalizeTeamName } from './teamNameMatch';
@@ -194,6 +204,7 @@ async function fetchRealLiveFromFreeSources(): Promise<LiveFixture[]> {
   if (!plan) return [];
   const planned = plan.slots.flatMap((slot) => slot.matches as Array<{ homeTeam: string; awayTeam: string; leagueName?: string }>);
   await loadLearnedAliases();
+  await prepareTeamRegistry();
   const live = await hubLiveEvents();
   const dateKey = new Date().toISOString().slice(0, 10);
   const out: LiveFixture[] = [];
@@ -241,6 +252,9 @@ async function fetchRealLiveFromFreeSources(): Promise<LiveFixture[]> {
     });
   }
   AsyncStorage.setItem('@unmatched_planned_live', JSON.stringify({ at: new Date().toISOString(), unmatched, sourceNames: live.slice(0, 80).map((e) => `${e.homeTeam} - ${e.awayTeam}`) })).catch(() => {});
+  // Un seul nom par équipe pour toute la suite (relevés, paris, résumés, dossiers d'équipe).
+  canonicalizeFixtures(out);
+  await saveTeamRegistry();
   return out;
 }
 
@@ -361,6 +375,9 @@ async function fetchRealLiveFixturesShared(): Promise<Omit<SharedLiveFixturesRes
 async function fetchSharedLiveFixtures(): Promise<SharedLiveFixturesResult> {
   const real = await fetchRealLiveFixturesShared();
   const fictionalFixtures = await fetchFictionalLiveFixtures(real.fixtures).catch(() => [] as LiveFixture[]);
+  canonicalizeFixtures(real.fixtures);
+  canonicalizeFixtures(fictionalFixtures);
+  await saveTeamRegistry();
   return { ...real, fictionalFixtures };
 }
 
@@ -617,6 +634,7 @@ async function runAutoLearnTickLocked(mode: TickMode): Promise<AutoLearnTickDiag
   const doSlow = mode !== 'fast';
   await recordAbortedPreviousTick();
   await loadLearnedAliases();
+  await prepareTeamRegistry().catch(() => {});
   // Scan matinal automatique (7h locales) : voir runMorningScanIfDue pour le
   // principe de déclenchement (premier tour après l'heure cible, idempotent).
   currentTickStartedAt = new Date().toISOString();

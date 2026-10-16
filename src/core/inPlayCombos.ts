@@ -104,6 +104,7 @@ import { patternAdjust } from './patternEngine';
 import { getLineupCheck, runLineupChecks } from './lineupCheck';
 import { hubPlayerShots } from '../api/footballDataAPIs/liveDataHub';
 import { saveLivePlayers } from './liveStatsStore';
+import { canonicalTeam } from './teamRegistry';
 import { StrategyContext, evaluateStrategies, oddsFromExpectedGoals } from './strategies';
 import { SofaPeriodStats } from '../api/footballDataAPIs/sofaScore';
 import { DeltaUnit, LegProjection, PLAUSIBLE_MAX, describeCorrection, ensureDeltaSamplesLoaded, flushShadowProjections, getDeltaCorrection, projectFullMatchCount, recordShadowProjection, factorForRemaining, situationMultiplier } from './deltaLearning';
@@ -1803,7 +1804,7 @@ function canonicalMatchKey(f: LiveFixture, planned: Array<{ homeTeam: string; aw
   const h = normalizeTeamName(f.homeTeam);
   const a = normalizeTeamName(f.awayTeam);
   const m = planned.find((p) => namesLikelyMatch(h, normalizeTeamName(p.homeTeam)) && namesLikelyMatch(a, normalizeTeamName(p.awayTeam)));
-  return m ? `${m.homeTeam} - ${m.awayTeam}` : `${f.homeTeam} - ${f.awayTeam}`;
+  return m ? `${m.homeTeam} - ${m.awayTeam}` : `${canonicalTeam(f.homeTeam)} - ${canonicalTeam(f.awayTeam)}`;
 }
 
 export async function runLiveStatsScan(liveFixtures: LiveFixture[]): Promise<number> {

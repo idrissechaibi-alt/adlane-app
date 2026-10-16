@@ -446,6 +446,12 @@ export function describeMatchTrend(trend: MatchTrend): string {
 
 
 /** Profil joueurs d'une équipe (titulaires habituels, système, joueurs de la saison) — pour comparer à la compo officielle. */
+/** Noms des équipes du fichier (noms de référence pour le registre des équipes). */
+export async function getTeamIndexNames(): Promise<string[]> {
+  const index = await loadIndex().catch(() => null);
+  return (index?.teams ?? []).map((t) => t.name);
+}
+
 export async function getTeamProfile(teamName: string): Promise<{ name: string; usualXI: number[]; usualFormation: string | null; players: TeamPlayer[] } | null> {
   try {
     const index = await loadIndex();

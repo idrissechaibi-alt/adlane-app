@@ -165,6 +165,37 @@ export function namesLikelyMatch(normalizedA: string, normalizedB: string): bool
   return false;
 }
 
+/** Sigles de club sans valeur d'identité (« Atalanta BC » = « Atalanta », « US Sassuolo Calcio » = « Sassuolo »). */
+const CLUB_SUFFIXES = new Set(['fc', 'bc', 'us', 'cfc', 'ssc', 'acf', 'ac', 'afc', 'sad', 'ec', 'se', 'ca', 'club', 'calcio', 'rcd', 'sd', 'cd', 'ud', 'rc', 'sc', 'as', 'ss', 'ssd', 'cf', 'fk', 'sk', 'nk', 'kv', 'sv', 'if', 'bk', 'ik', 'aik', 'osc', 'ogc', 'sco', 'aj', 'ks', 'cs', 'fcsb']);
+
+/**
+ * MÊME équipe, de façon sûre (fusion définitive des noms) : mêmes mots utiles une fois retirés les sigles de club, articles,
+ * accents et graphies de ville — ou une écriture quasi identique (faute de frappe, translittération). Plus strict que
+ * namesLikelyMatch : « Real Madrid » / « Real Madrid Castilla » ou « Paris FC » / « Paris Saint-Germain » ne fusionnent pas.
+ */
+/** Clé d'identité d'une équipe (mots utiles triés, sans sigles ni articles) : deux noms de même clé = même équipe. */
+export function teamCoreKey(normalized: string): string {
+  const tag = squadTag(normalized);
+  const core = normalized.split(' ').map((t) => SYNONYMS[t] ?? t).filter((t) => t.length > 0 && !/^\d+$/.test(t) && !STATUS_TOKENS.has(t) && !CLUB_SUFFIXES.has(t));
+  return core.length ? `${tag}|${[...core].sort().join(' ')}` : '';
+}
+
+export function sameTeamStrict(normalizedA: string, normalizedB: string): boolean {
+  if (normalizedA === normalizedB) return true;
+  if (squadTag(normalizedA) !== squadTag(normalizedB)) return false;
+  if (!aliasReady) buildAliases();
+  if (canonicals().has(normalizedA) && canonicals().has(normalizedB)) return false;
+  const core = (n: string) =>
+    n.split(' ').map((t) => SYNONYMS[t] ?? t).filter((t) => t.length > 0 && !/^\d+$/.test(t) && !STATUS_TOKENS.has(t) && !CLUB_SUFFIXES.has(t));
+  const a = core(normalizedA);
+  const b = core(normalizedB);
+  if (a.length === 0 || b.length === 0) return false;
+  const ja = [...a].sort().join(' ');
+  const jb = [...b].sort().join(' ');
+  if (ja === jb) return true;
+  return ja.length >= 6 && jb.length >= 6 && a.length === b.length && similarity(ja, jb) >= 0.9;
+}
+
 /** Catégorie de l'équipe : '' pour l'équipe première, sinon jeunes / réserve / féminine. */
 function squadTag(n: string): string {
   const t = n.split(' ');

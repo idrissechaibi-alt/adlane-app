@@ -3,6 +3,7 @@
 // des données réelles du téléphone. Uniquement des compteurs, horodatages et
 // booléens de présence : aucune clé API, aucun jeton, aucune adresse.
 
+import { loadTeamRegistry, teamRegistrySize } from './teamRegistry';
 import AsyncStorage from './kvStore';
 import { getAPIConfig, getAllRequestCounts, getQuotaUsage, getRequestCount } from '../api/multiAPIManager';
 import { getDailyPlan } from './scheduler';
@@ -183,6 +184,7 @@ export async function buildAppHealth(): Promise<Record<string, unknown>> {
     sofaScore: await section(async () => getSofaStatus()),
     liveSources: await section(async () => getHubStatus()),
     learnedTeamAliases: await section(readLearnedAliases),
+    teamRegistry: await section(async () => { await loadTeamRegistry(); return { teams: teamRegistrySize() }; }),
     patternEngine: await section(async () => patternStatus()),
     settlementAudit: await section(async () => JSON.parse((await AsyncStorage.getItem('@settlement_audit')) ?? '[]').slice(-30)),
     unmatchedPlannedLive: await section(readUnmatchedPlannedLive),

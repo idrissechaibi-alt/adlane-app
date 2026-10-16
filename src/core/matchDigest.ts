@@ -4,7 +4,7 @@
 
 import AsyncStorage from './kvStore';
 import { LiveStatsSample, listLiveStatsDays, readLiveStatsDay, removeLiveStatsMatch, takeLivePlayers } from './liveStatsStore';
-import { namesLikelyMatch, normalizeTeamName } from './teamNameMatch';
+import { normalizeTeamName, sameTeamStrict, teamCoreKey } from './teamNameMatch';
 import { flushPatterns, ingestMatch } from './patternEngine';
 import { hubPlayerShots } from '../api/footballDataAPIs/liveDataHub';
 
@@ -159,7 +159,7 @@ async function updateTeams(d: MatchDigest, players?: any[] | null): Promise<void
   teams.forEach((name, idx) => {
     // Dossier existant de la même équipe sous un autre nom (« Atalanta » / « Atalanta BC ») : réutilisé.
     const norm = normalizeTeamName(name);
-    const k = store[norm] ? norm : Object.keys(store).find((x) => namesLikelyMatch(norm, x)) ?? norm;
+    const k = store[norm] ? norm : Object.keys(store).find((x) => sameTeamStrict(norm, x)) ?? norm;
     const t = (store[k] ??= { name, n: 0, goalsForMin: [], goalsAgainstMin: [], corners: 0, cards: 0, fouls: 0, shots: 0, lessons: [] });
     t.n += 1;
     for (const [min, side] of d.goals) (side === (idx === 0 ? 'h' : 'a') ? t.goalsForMin : t.goalsAgainstMin).push(min);
@@ -282,7 +282,7 @@ function mergeSameMatches(store: Record<string, LiveStatsSample[]>): Record<stri
     const [h, a] = key.split(' - ');
     const home = normalizeTeamName(h ?? '');
     const away = normalizeTeamName(a ?? '');
-    const g = groups.find((x) => namesLikelyMatch(home, x.home) && namesLikelyMatch(away, x.away));
+    const g = groups.find((x) => sameTeamStrict(home, x.home) && sameTeamStrict(away, x.away));
     if (g) g.keys.push(key);
     else groups.push({ home, away, keys: [key] });
   }
@@ -299,9 +299,42 @@ function mergeSameMatches(store: Record<string, LiveStatsSample[]>): Record<stri
   return out;
 }
 
+const REBUILT_KEY = '@team_live_rebuilt_v1';
+
+/**
+ * Nettoyage, une seule fois : un match résumé deux fois sous deux noms (avant le registre des équipes) n'est gardé qu'une
+ * fois (la version la plus complète), puis les dossiers d'équipe sont reconstruits à partir des résumés dédoublonnés —
+ * « Atalanta » et « Atalanta BC » ne font plus qu'un dossier, et le match n'y compte qu'une fois.
+ */
+async function dedupeAndRebuildTeamsOnce(digests: Record<string, MatchDigest>): Promise<boolean> {
+  if ((await AsyncStorage.getItem(REBUILT_KEY).catch(() => null)) === 'done') return false;
+  const ident = (d: MatchDigest) => {
+    const t = teamsOf(d.match);
+    return t ? `${d.day}|${teamCoreKey(normalizeTeamName(t[0])) || t[0]}|${teamCoreKey(normalizeTeamName(t[1])) || t[1]}` : `${d.day}|${d.match}`;
+  };
+  const best = new Map<string, string>();
+  for (const [k, d] of Object.entries(digests)) {
+    const id = ident(d);
+    const cur = best.get(id);
+    if (!cur || (d.key?.length ?? 0) + (d.players ? 1000 : 0) > (digests[cur].key?.length ?? 0) + (digests[cur].players ? 1000 : 0)) best.set(id, k);
+  }
+  const keep = new Set(best.values());
+  for (const k of Object.keys(digests)) if (!keep.has(k)) delete digests[k];
+  teamMemo = {};
+  const toHub = (lines: PlayerLine[], team: 'home' | 'away') =>
+    lines.map(([name, position, starter, shots, sot, goals, assists, fouls, yellow, red]) => ({ name, position, starter: !!starter, shots, sot, goals, assists, fouls, yellow, red, team }));
+  for (const d of Object.values(digests).sort((a, b) => a.day.localeCompare(b.day))) {
+    await updateTeams(d, d.players ? [...toHub(d.players.h, 'home'), ...toHub(d.players.a, 'away')] : null);
+  }
+  if (Object.keys(digests).length === 0) await AsyncStorage.setItem(TEAM_KEY, JSON.stringify({})).catch(() => {});
+  await AsyncStorage.setItem(REBUILT_KEY, 'done').catch(() => {});
+  return true;
+}
+
 export async function digestFinishedMatches(liveKeys: Set<string>, idleMinutes = 6): Promise<number> {
   const today = new Date().toISOString().slice(0, 10);
   const digests = await readJson<Record<string, MatchDigest>>(DIGEST_KEY, {});
+  const rebuilt = await dedupeAndRebuildTeamsOnce(digests).catch(() => false);
   let done = 0;
   for (const day of await listLiveStatsDays()) {
     const store = mergeSameMatches(await readLiveStatsDay(day));
@@ -355,7 +388,7 @@ export async function digestFinishedMatches(liveKeys: Set<string>, idleMinutes =
     else (d as any).playersTried = true; // source sans feuille pour ce match : pas retenté
     filled++;
   }
-  if (done > 0 || filled > 0) {
+  if (done > 0 || filled > 0 || rebuilt) {
     await AsyncStorage.setItem(DIGEST_KEY, JSON.stringify(digests)).catch(() => {});
     await flushPatterns().catch(() => {});
   }
