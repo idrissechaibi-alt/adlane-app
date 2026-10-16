@@ -188,6 +188,16 @@ export async function ingestMatch(id: string, timeline: MatchPoint[], final: Mat
     for (const [t, hit] of Object.entries(targets)) {
       for (const c of conds) {
         const k = `${cp}|${c}|${t}`;
+        // Motif DÉJÀ validé avant ce match : ce match est un nouveau test, compté à part (suivi après validation).
+        if (c !== '*') {
+          const cell = counts![k];
+          const base = counts![`${cp}|*|${t}`];
+          if (cell && base && cell[0] >= MIN_PATTERN_SAMPLES && Math.abs(cell[1] / cell[0] - base[1] / base[0]) >= MIN_DELTA) {
+            const post = (counts![`post|${k}`] ??= [0, 0]);
+            post[0] += 1;
+            if (hit) post[1] += 1;
+          }
+        }
         const cell = (counts![k] ??= [0, 0]);
         cell[0] += 1;
         if (hit) cell[1] += 1;
@@ -216,6 +226,11 @@ export interface Pattern {
   validated: boolean;
   /** Assez solide pour le pipe réel. */
   real: boolean;
+  /** Matchs testés DEPUIS la validation du motif, et combien ont confirmé la cible (le motif reste testé et affiné). */
+  postN: number;
+  postHit: number;
+  /** Nombre de fois où la cible s'est réalisée sur l'ensemble des matchs testés. */
+  hits: number;
 }
 
 const marketOf = (t: string): Pattern['market'] =>
@@ -226,6 +241,7 @@ export async function getPatterns(minSamples = 20): Promise<Pattern[]> {
   await load();
   const out: Pattern[] = [];
   for (const [k, [n, hit]] of Object.entries(counts!)) {
+    if (k.startsWith('post|')) continue;
     const [cp, cond, target] = k.split('|');
     if (cond === '*' || n < minSamples) continue;
     const base = counts![`${cp}|*|${target}`];
@@ -246,6 +262,9 @@ export async function getPatterns(minSamples = 20): Promise<Pattern[]> {
       delta,
       validated: n >= MIN_PATTERN_SAMPLES && Math.abs(delta) >= MIN_DELTA,
       real: n >= MIN_REAL_SAMPLES && Math.abs(delta) >= MIN_DELTA,
+      postN: counts![`post|${k}`]?.[0] ?? 0,
+      postHit: counts![`post|${k}`]?.[1] ?? 0,
+      hits: hit,
     });
   }
   return out.sort((x, y) => Number(y.validated) - Number(x.validated) || Math.abs(y.delta) - Math.abs(x.delta));

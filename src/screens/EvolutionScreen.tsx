@@ -702,6 +702,24 @@ export default function EvolutionScreen() {
     </View>
   );
 
+  /** Compteur d'un motif : matchs testés, fois où il s'est réalisé, %, et le suivi depuis sa validation (il reste testé). */
+  const renderPatternCounter = (p: Pattern) => {
+    const pct = (a: number, b: number) => (b > 0 ? Math.round((a / b) * 100) : 0);
+    const post = p.postN > 0 ? pct(p.postHit, p.postN) : null;
+    const drift = post != null && p.postN >= 20 ? post - Math.round(p.rate * 100) : null;
+    return (
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 3 }}>
+        <Text style={styles.patternChip}>🧪 testé {p.n} matchs</Text>
+        <Text style={styles.patternChip}>✅ réalisé {p.hits} fois · {pct(p.hits, p.n)} %</Text>
+        {p.validated && (
+          <Text style={[styles.patternChip, drift != null && Math.abs(drift) >= 10 ? { color: '#fbbf24', borderColor: '#fbbf24' } : null]}>
+            {post == null ? '🔁 depuis validation : pas encore de match' : `🔁 depuis validation : ${p.postHit}/${p.postN} · ${post} %${drift != null && Math.abs(drift) >= 10 ? ' (écart, en réévaluation)' : ''}`}
+          </Text>
+        )}
+      </View>
+    );
+  };
+
   const renderLessonsView = () => {
     const validated = patterns.filter((p) => p.validated);
     const emerging = patterns.filter((p) => !p.validated).slice(0, 12);
@@ -743,9 +761,12 @@ export default function EvolutionScreen() {
             <View key={m} style={styles.lessonCard}>
               <Text style={styles.lessonMotif}>{marketTitle[m]}</Text>
               {items.slice(0, 8).map((p, i) => (
-                <Text key={i} style={[styles.lessonDetail, { color: p.delta >= 0 ? '#34d399' : '#f87171' }]}>
-                  {p.real ? '● ' : '○ '}{describePattern(p)}
-                </Text>
+                <View key={i} style={{ marginTop: 6 }}>
+                  {renderPatternCounter(p)}
+                  <Text style={[styles.lessonDetail, { color: p.delta >= 0 ? '#34d399' : '#f87171' }]}>
+                    {p.real ? '● ' : '○ '}{describePattern(p)}
+                  </Text>
+                </View>
               ))}
             </View>
           ))
@@ -756,7 +777,10 @@ export default function EvolutionScreen() {
             <Text style={styles.sectionTitle}>En observation (moins de 100 matchs)</Text>
             <View style={styles.lessonCard}>
               {emerging.map((p, i) => (
-                <Text key={i} style={styles.lessonDate}>{describePattern(p)}</Text>
+                <View key={i} style={{ marginTop: 6 }}>
+                  {renderPatternCounter(p)}
+                  <Text style={styles.lessonDate}>{describePattern(p)}</Text>
+                </View>
               ))}
             </View>
           </>
@@ -1046,6 +1070,16 @@ export default function EvolutionScreen() {
 }
 
 const styles = StyleSheet.create({
+  patternChip: {
+    color: '#cbd5e1',
+    fontSize: 11,
+    borderWidth: 1,
+    borderColor: '#334155',
+    borderRadius: 10,
+    paddingHorizontal: 7,
+    paddingVertical: 1,
+    overflow: 'hidden',
+  },
   curvesIntro: {
     backgroundColor: 'rgba(96, 165, 250, 0.08)',
     borderRadius: 10,
