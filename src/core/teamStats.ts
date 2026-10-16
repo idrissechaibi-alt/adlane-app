@@ -50,6 +50,30 @@ interface TeamSummary {
   insights: string[];
   /** Résumé des derniers matchs : ce qui explique chaque résultat. */
   recent: string[];
+  /** Titulaires habituels (identifiants FotMob), système habituel, joueurs de la saison (toutes compétitions). */
+  usualXI?: number[];
+  usualFormation?: string | null;
+  players?: TeamPlayer[];
+}
+
+export interface TeamPlayer {
+  id: number;
+  name: string;
+  pos: string;
+  apps: number;
+  starts: number;
+  minutes: number;
+  goals: number;
+  assists: number;
+  shots: number;
+  sot: number;
+  xg: number;
+  fouls: number;
+  yellow: number;
+  red: number;
+  sotPer90?: number | null;
+  shotsPer90?: number | null;
+  foulsPer90?: number | null;
 }
 
 interface IndexTeam {
@@ -220,11 +244,11 @@ function averages(matches: RawMatch[]): Averages {
 
 async function ensureSummary(team: IndexTeam): Promise<TeamSummary | null> {
   const summaries = await loadSummaries();
-  const sig = `${team.lastMatch}|${team.matches}|${team.analysisVersion ?? 0}|timing1`;
+  const sig = `${team.lastMatch}|${team.matches}|${team.analysisVersion ?? 0}|players1`;
   const known = summaries[String(team.id)];
   if (known && known.sig === sig) return known;
 
-  const file = await fetchJson<{ matches: RawMatch[]; analysis?: { insights?: string[]; recent?: Array<{ date: string; opponent: string; home: boolean; note: string }> } }>(`${BASE_URL}/teams/${team.id}.json`);
+  const file = await fetchJson<{ matches: RawMatch[]; analysis?: { insights?: string[]; recent?: Array<{ date: string; opponent: string; home: boolean; note: string }>; usualXI?: number[]; usualFormation?: string | null; players?: TeamPlayer[] } }>(`${BASE_URL}/teams/${team.id}.json`);
   if (!file?.matches) return known ?? null;
   // Matchs avec stats détaillées uniquement, les plus récents d'abord.
   const played = file.matches.filter((m) => m.stats?.ft).sort((a, b) => (a.date < b.date ? 1 : -1));
@@ -240,6 +264,9 @@ async function ensureSummary(team: IndexTeam): Promise<TeamSummary | null> {
     away: averages(away),
     insights: (file.analysis?.insights ?? []).slice(0, 12),
     recent: (file.analysis?.recent ?? []).slice(-3).map((r) => `${r.date} ${r.home ? 'vs' : '@'} ${r.opponent} — ${r.note}`),
+    usualXI: file.analysis?.usualXI ?? [],
+    usualFormation: file.analysis?.usualFormation ?? null,
+    players: (file.analysis?.players ?? []).slice(0, 30),
   };
   // Minutes des buts de TOUTE la saison (toutes compétitions) versées au profil live : il ne repart pas de zéro.
   void seedTeamTiming(
@@ -415,4 +442,20 @@ export function describeMatchTrend(trend: MatchTrend): string {
     teamLiveNote(trend.homeTeam) +
     teamLiveNote(trend.awayTeam)
   );
+}
+
+
+/** Profil joueurs d'une équipe (titulaires habituels, système, joueurs de la saison) — pour comparer à la compo officielle. */
+export async function getTeamProfile(teamName: string): Promise<{ name: string; usualXI: number[]; usualFormation: string | null; players: TeamPlayer[] } | null> {
+  try {
+    const index = await loadIndex();
+    if (!index) return null;
+    const team = findTeam(index, teamName);
+    if (!team) return null;
+    const sum = await ensureSummary(team);
+    if (!sum) return null;
+    return { name: sum.name, usualXI: sum.usualXI ?? [], usualFormation: sum.usualFormation ?? null, players: sum.players ?? [] };
+  } catch {
+    return null;
+  }
 }

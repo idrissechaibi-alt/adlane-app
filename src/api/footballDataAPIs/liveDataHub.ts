@@ -853,6 +853,14 @@ export interface HubPlayerShots {
   /** Tirs cadrés / tirs totaux déjà pris (ESPN, relevé joueur par joueur). */
   sot: number;
   shots: number;
+  goals?: number;
+  assists?: number;
+  fouls?: number;
+  yellow?: number;
+  red?: number;
+  /** Entré en jeu / remplacé. */
+  subIn?: boolean;
+  subOut?: boolean;
 }
 
 /** Tirs cadrés par joueur (ESPN, gratuit) : en direct comme après le match. */
@@ -874,7 +882,21 @@ export async function hubPlayerShots(homeTeam: string, awayTeam: string, dateKey
         const stat = (name: string) => num((p.stats ?? []).find((s: any) => s.name === name)?.value);
         const name = p.athlete?.displayName;
         if (!name) continue;
-        out.push({ name, team: side, position: String(p.position?.abbreviation ?? ''), starter: !!p.starter, sot: stat('shotsOnTarget'), shots: stat('totalShots') });
+        out.push({
+          name,
+          team: side,
+          position: String(p.position?.abbreviation ?? ''),
+          starter: !!p.starter,
+          sot: stat('shotsOnTarget'),
+          shots: stat('totalShots'),
+          goals: stat('totalGoals'),
+          assists: stat('goalAssists'),
+          fouls: stat('foulsCommitted'),
+          yellow: stat('yellowCards'),
+          red: stat('redCards'),
+          subIn: !!p.subbedIn,
+          subOut: !!p.subbedOut,
+        });
       }
     }
     return out.length > 0 ? out : null;
@@ -897,6 +919,26 @@ export async function hubFirstHalfGoals(homeTeam: string, awayTeam: string, date
     const events: any[] = d?.keyEvents ?? [];
     if (events.length === 0) return null;
     return events.filter((e) => e.scoringPlay && Number(e.period?.number) === 1).length;
+  } catch {
+    return null;
+  }
+}
+
+/** Composition officielle (FotMob, gratuit) : système et titulaires de chaque équipe, dès qu'elle est publiée (~1 h avant). */
+export interface HubLineup {
+  home: { formation: string | null; starters: Array<{ id: number; name: string }> };
+  away: { formation: string | null; starters: Array<{ id: number; name: string }> };
+}
+
+export async function hubLineup(homeTeam: string, awayTeam: string, dateKey: string): Promise<HubLineup | null> {
+  try {
+    const m = (await findEverywhere(homeTeam, awayTeam, dateKey, true)).find((x) => x.provider === 'FotMob');
+    if (!m) return null;
+    const d = await getJson(`https://www.fotmob.com/api/data/matchDetails?matchId=${m.ref}`);
+    const lu = d?.content?.lineup;
+    const side = (t: any) => ({ formation: t?.formation ?? null, starters: (t?.starters ?? []).map((p: any) => ({ id: Number(p.id), name: String(p.name) })) });
+    if (!lu?.homeTeam?.starters?.length || !lu?.awayTeam?.starters?.length) return null;
+    return { home: side(lu.homeTeam), away: side(lu.awayTeam) };
   } catch {
     return null;
   }

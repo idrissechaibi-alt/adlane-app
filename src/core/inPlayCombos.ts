@@ -101,6 +101,9 @@ import { appendLiveStatsSample, hasLiveStats, noteLiveStatsScan } from './liveSt
 import { getOpeningProbabilities } from '../api/footballDataAPIs/refOdds';
 import { digestFinishedMatches } from './matchDigest';
 import { patternAdjust } from './patternEngine';
+import { getLineupCheck, runLineupChecks } from './lineupCheck';
+import { hubPlayerShots } from '../api/footballDataAPIs/liveDataHub';
+import { saveLivePlayers } from './liveStatsStore';
 import { StrategyContext, evaluateStrategies, oddsFromExpectedGoals } from './strategies';
 import { SofaPeriodStats } from '../api/footballDataAPIs/sofaScore';
 import { DeltaUnit, LegProjection, PLAUSIBLE_MAX, describeCorrection, ensureDeltaSamplesLoaded, flushShadowProjections, getDeltaCorrection, projectFullMatchCount, recordShadowProjection, factorForRemaining, situationMultiplier } from './deltaLearning';
@@ -1178,7 +1181,12 @@ async function bestLegFor(
   live: LiveFixture
 ): Promise<LegWithContext[]> {
   const match = matchRefOfScheduled(scheduled);
-  const preMatchExpectedGoals = { home: scheduled.expectedHomeGoals, away: scheduled.expectedAwayGoals };
+  // Compo officielle (vérifiée ~15 min avant) : joueurs clés absents → buts attendus de l'équipe réduits (plafonné).
+  const lineup = await getLineupCheck(scheduled.homeTeam, scheduled.awayTeam).catch(() => null);
+  const preMatchExpectedGoals = {
+    home: scheduled.expectedHomeGoals * (lineup?.home.goalFactor ?? 1),
+    away: scheduled.expectedAwayGoals * (lineup?.away.goalFactor ?? 1),
+  };
   await ensureOddsLoaded();
   await ensureLineLimitsLoaded();
   await ensureMarketOffLoaded();
@@ -1201,6 +1209,7 @@ async function bestLegFor(
   // par les bookmakers est trop faible pour valoir la mise.
   // + cote estimée du bookmaker sous le plancher (apprise des cotes saisies) : écarté.
   // Tableau bet365 réel (MoviOdds, sans clé) + 365Scores : cotes et lignes réellement proposées sur CE match.
+  if (lineup) for (const l of rawLegs) l.evidence += lineup.note;
   const ref = rawLegs.length > 0 ? await getRefOdds(match.homeTeam, match.awayTeam) : null;
   const playable = rawLegs.filter(
     (l) =>
@@ -1778,6 +1787,14 @@ export function proposalDuplicateKey(p: InPlayProposal): string | null {
  * un relevé par match, gardé minute par minute (score, tirs, corners, cartons, fautes, possession, xG, rouges).
  * Il alimente aussi le momentum et les variables de situation, indépendamment des checkpoints 20e / 60e.
  */
+const playersAt = new Map<string, number>();
+function playersDue(mk: string): boolean {
+  const last = playersAt.get(mk) ?? 0;
+  if (Date.now() - last < 5 * 60_000) return false;
+  playersAt.set(mk, Date.now());
+  return true;
+}
+
 export async function runLiveStatsScan(liveFixtures: LiveFixture[]): Promise<number> {
   const live = liveFixtures.filter((f) => ['1H', 'HT', '2H'].includes(f.statusShort));
   let recorded = 0;
@@ -1791,10 +1808,18 @@ export async function runLiveStatsScan(liveFixtures: LiveFixture[]): Promise<num
     if (!hasLiveStats(mk)) {
       const open = await getOpeningProbabilities(f.homeTeam, f.awayTeam).catch(() => null);
       const trend = await getMatchTrend(f.homeTeam, f.awayTeam).catch(() => null);
+      const lu = await getLineupCheck(f.homeTeam, f.awayTeam).catch(() => null);
       ctx = {
         fav: open ? (open.home > open.away + 0.1 ? 'h' : open.away > open.home + 0.1 ? 'a' : null) : null,
         trendGoals: trend?.goals ? Math.round((trend.goals.home + trend.goals.away) * 10) / 10 : null,
-      };
+        keyAbsent: lu ? lu.home.absentKey.length + lu.away.absentKey.length : null,
+        formationChanged: lu ? lu.home.formationChanged || lu.away.formationChanged : null,
+      } as any;
+    }
+    // Stats des joueurs (ESPN) : un relevé toutes les 5 minutes, le dernier gardé (compilé avec l'équipe en fin de match).
+    if (playersDue(mk)) {
+      const players = await hubPlayerShots(f.homeTeam, f.awayTeam, hubDateKey()).catch(() => null);
+      if (players) await saveLivePlayers(mk, players).catch(() => {});
     }
     const ok = await appendLiveStatsSample(mk, {
       ctx,
@@ -1835,6 +1860,8 @@ export async function runRealInPlayTick(liveFixtures: LiveFixture[]): Promise<nu
   const fresh: InPlayProposal[] = [];
   const omnirouteConfig = await loadOmnirouteConfig();
   const plan = await getDailyPlan();
+  // Compos officielles des matchs réels qui commencent dans les 20 prochaines minutes.
+  if (plan) await runLineupChecks(plan.slots.flatMap((sl) => sl.matches as Array<{ homeTeam: string; awayTeam: string; kickoff_utc: string }>)).catch(() => 0);
   if (plan) {
     for (const slot of plan.slots) {
       const { matches: withOdds, skipped } = buildScheduledMatches([slot]);

@@ -93,6 +93,37 @@ export async function getHalfTimeGoals(matchKey: string): Promise<{ goals: numbe
   return null;
 }
 
+const PLAYERS_PREFIX = '@real_live_players_';
+
+/** Dernier relevé des stats des joueurs d'un match (écrase le précédent : seul le plus récent compte). */
+export async function saveLivePlayers(matchKey: string, players: unknown[]): Promise<void> {
+  const key = `${PLAYERS_PREFIX}${dayKey()}`;
+  try {
+    const store = JSON.parse((await AsyncStorage.getItem(key)) ?? '{}');
+    store[matchKey] = players;
+    await AsyncStorage.setItem(key, JSON.stringify(store));
+  } catch {
+    // best-effort
+  }
+}
+
+/** Stats des joueurs d'un match (dernier relevé), puis suppression (une fois compilées dans le profil des équipes). */
+export async function takeLivePlayers(day: string, matchKey: string): Promise<any[] | null> {
+  const key = `${PLAYERS_PREFIX}${day}`;
+  try {
+    const store = JSON.parse((await AsyncStorage.getItem(key)) ?? '{}');
+    const players = store[matchKey] ?? null;
+    if (players) {
+      delete store[matchKey];
+      if (Object.keys(store).length === 0) await AsyncStorage.removeItem(key);
+      else await AsyncStorage.setItem(key, JSON.stringify(store));
+    }
+    return players;
+  } catch {
+    return null;
+  }
+}
+
 /** Relevés bruts d'un jour (tous les matchs). */
 export async function readLiveStatsDay(day: string): Promise<Record<string, LiveStatsSample[]>> {
   try {

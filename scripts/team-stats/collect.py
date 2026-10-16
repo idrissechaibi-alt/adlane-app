@@ -92,6 +92,48 @@ def goals_of(d):
     return sorted(res)
 
 
+POS = {0: 'G', 1: 'D', 2: 'M', 3: 'F'}
+
+
+def _pstat(p, key):
+    for g in p.get('stats') or []:
+        for v in (g.get('stats') or {}).values():
+            if v.get('key') == key:
+                val = (v.get('stat') or {}).get('value')
+                return val if isinstance(val, (int, float)) else 0
+    return 0
+
+
+def players_of(d, team_id):
+    """Joueurs de l'équipe ayant joué ce match : [id, nom, poste, titulaire, minutes, buts, passes, tirs, cadrés, xG, fautes, jaunes, rouges]."""
+    c = d.get('content') or {}
+    lu = c.get('lineup') or {}
+    side = None
+    for k in ('homeTeam', 'awayTeam'):
+        if int((lu.get(k) or {}).get('id') or -1) == team_id:
+            side = lu[k]
+    starters = {int(x['id']): x for x in (side or {}).get('starters') or []}
+    subs = {int(x['id']): x for x in (side or {}).get('subs') or []}
+    cards = {}
+    for e in ((c.get('matchFacts') or {}).get('events') or {}).get('events') or []:
+        if e.get('type') == 'Card' and (e.get('player') or {}).get('id'):
+            pid = int(e['player']['id'])
+            y, r = cards.get(pid, (0, 0))
+            cards[pid] = (y + (1 if str(e.get('card', '')).lower().startswith('yellow') else 0), r + (1 if 'red' in str(e.get('card', '')).lower() else 0))
+    out = []
+    for pid_s, p in (c.get('playerStats') or {}).items():
+        if int(p.get('teamId') or -1) != team_id:
+            continue
+        pid = int(pid_s)
+        info = starters.get(pid) or subs.get(pid) or {}
+        pos = 'G' if p.get('isGoalkeeper') else POS.get(info.get('usualPlayingPositionId'), '?')
+        y, r = cards.get(pid, (0, 0))
+        out.append([pid, p.get('name'), pos, 1 if pid in starters else 0, _pstat(p, 'minutes_played'), _pstat(p, 'goals'), _pstat(p, 'assists'),
+                    _pstat(p, 'total_shots'), _pstat(p, 'ShotsOnTarget'), round(float(_pstat(p, 'expected_goals') or 0), 2), _pstat(p, 'fouls'), y, r])
+    lineup = {'formation': (side or {}).get('formation'), 'starters': list(starters.keys())} if side else None
+    return out, lineup
+
+
 def match_record(d, team_id, meta):
     gen = d['general']
     home_id = int(gen['homeTeam']['id'])
@@ -127,6 +169,8 @@ def match_record(d, team_id, meta):
         'goalMinutes': {'for': [m for m, s in goals if s == mine], 'against': [m for m, s in goals if s == theirs]},
         'redCards': [status.get('numberOfHomeRedCards', 0), status.get('numberOfAwayRedCards', 0)][::1 if is_home else -1],
         'stats': periods,
+        'players': players_of(d, team_id)[0],
+        'lineup': players_of(d, team_id)[1],
     }
 
 
@@ -134,7 +178,7 @@ def match_record(d, team_id, meta):
 # ---------------------------------------------------------------------------
 # Analyse par équipe : calculée (jamais devinée) à partir des matchs enregistrés,
 # recalculée à chaque passage. Sert de résumé des raisons et performances observées.
-ANALYSIS_VERSION = 2
+ANALYSIS_VERSION = 3
 
 
 def _avg(xs):
@@ -361,8 +405,41 @@ def build_analysis(matches):
             l, v = min(under_ok, key=lambda x: x[0])
             ins.append(f"Moins de {l:g} {labels[key]} dans {v['of'] - v['over']} de ses {v['of']} matchs (total des deux équipes).")
 
+    # Joueurs (saison, toutes compétitions) : titulaires habituels, buteurs, tireurs, fautes / cartons, système habituel.
+    agg = {}
+    formations = {}
+    for m in ms:
+        if (m.get('lineup') or {}).get('formation'):
+            formations[m['lineup']['formation']] = formations.get(m['lineup']['formation'], 0) + 1
+        for p in m.get('players') or []:
+            pid, name, pos, st, mins, g, a, sh, sot, xg, fl, y, r = p
+            e = agg.setdefault(pid, {'id': pid, 'name': name, 'pos': pos, 'apps': 0, 'starts': 0, 'minutes': 0, 'goals': 0, 'assists': 0, 'shots': 0, 'sot': 0, 'xg': 0.0, 'fouls': 0, 'yellow': 0, 'red': 0})
+            e['apps'] += 1; e['starts'] += st; e['minutes'] += mins or 0; e['goals'] += g; e['assists'] += a
+            e['shots'] += sh; e['sot'] += sot; e['xg'] += xg; e['fouls'] += fl; e['yellow'] += y; e['red'] += r
+    players = sorted(agg.values(), key=lambda e: -e['minutes'])
+    for e in players:
+        per90 = 90 / e['minutes'] if e['minutes'] >= 90 else 0
+        e['xg'] = _r(e['xg'])
+        e['sotPer90'] = _r(e['sot'] * per90) if per90 else None
+        e['shotsPer90'] = _r(e['shots'] * per90) if per90 else None
+        e['foulsPer90'] = _r(e['fouls'] * per90) if per90 else None
+    withp = [m for m in ms if m.get('players')]
+    usual_xi = [e['id'] for e in sorted(players, key=lambda e: -e['starts'])[:11] if e['starts'] >= max(2, len(withp) * 0.4)]
+    usual_formation = max(formations, key=formations.get) if formations else None
+    key_players = [e for e in sorted(players, key=lambda e: -(e['goals'] + e['assists'] + e['xg'])) if e['goals'] + e['assists'] >= 2][:4]
+    if key_players:
+        ins.append('Joueurs clés : ' + ', '.join(f"{e['name']} ({e['goals']} buts, {e['assists']} passes)" for e in key_players) + '.')
+    shooters = [e for e in players if (e['sotPer90'] or 0) >= 1.0 and e['minutes'] >= 270]
+    if shooters:
+        ins.append('Tireurs réguliers : ' + ', '.join(f"{e['name']} ({e['sotPer90']} tirs cadrés/90)" for e in sorted(shooters, key=lambda e: -e['sotPer90'])[:3]) + '.')
+    if usual_formation:
+        ins.append(f"Système habituel : {usual_formation} ({formations[usual_formation]} matchs sur {sum(formations.values())}).")
+
     return {
         'version': ANALYSIS_VERSION,
+        'players': players[:30],
+        'usualXI': usual_xi,
+        'usualFormation': usual_formation,
         'matches': n,
         'matchesWithStats': len(withs),
         'form': {'last5': form5, 'pointsLast5': pts(last5), 'pointsPerGameLast5': _r(ppg_last5), 'pointsPerGameSeason': _r(ppg_season), 'record': wdl(ms)},
@@ -444,6 +521,25 @@ def main():
     have = {tid: {m['matchId'] for m in store[tid]['matches']} for tid in ids}
     fetched = 0
     now_iso = datetime.now(timezone.utc).isoformat()
+    # Rattrapage : les matchs déjà enregistrés sans joueurs ni compo sont relus une fois pour les compléter.
+    missing_players = {}
+    for tid in ids:
+        for rec in store[tid]['matches']:
+            if 'players' not in rec and rec.get('stats'):
+                missing_players.setdefault(rec['matchId'], []).append((tid, rec))
+    if missing_players:
+        print(f'{len(missing_players)} matchs à compléter (joueurs, compos)')
+    done_fill = 0
+    for mid, items in sorted(missing_players.items()):
+        d = get(f'matchDetails?matchId={mid}')
+        if not d:
+            continue
+        for tid, rec in items:
+            rec['players'], rec['lineup'] = players_of(d, tid)
+        done_fill += 1
+        if done_fill % 50 == 0:
+            print(f'  complétés : {done_fill}')
+
     for mid, w in sorted(wanted.items()):
         todo = [t for t in w['teams'] if mid not in have[t]]
         if not todo:

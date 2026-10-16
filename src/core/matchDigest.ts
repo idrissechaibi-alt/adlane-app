@@ -3,7 +3,7 @@
 // sont remplacés par un résumé compact (≈ 25 points au lieu de ≈ 90) : c'est ce qui préserve l'espace.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { LiveStatsSample, listLiveStatsDays, readLiveStatsDay, removeLiveStatsMatch } from './liveStatsStore';
+import { LiveStatsSample, listLiveStatsDays, readLiveStatsDay, removeLiveStatsMatch, takeLivePlayers } from './liveStatsStore';
 import { normalizeTeamName } from './teamNameMatch';
 import { flushPatterns, ingestMatch } from './patternEngine';
 
@@ -45,6 +45,8 @@ interface TeamLive {
   homeMatches?: number;
   /** Minutes des buts de la saison déjà versées depuis le fichier des stats. */
   seeded?: boolean;
+  /** Joueurs suivis en direct (cumul) : matchs, titularisations, buts, passes, tirs, cadrés, fautes, jaunes, rouges. */
+  players?: Record<string, [number, number, number, number, number, number, number, number, number]>;
   lessons: string[];
 }
 
@@ -136,7 +138,7 @@ function teamsOf(match: string): [string, string] | null {
   return i > 0 ? [match.slice(0, i), match.slice(i + 3)] : null;
 }
 
-async function updateTeams(d: MatchDigest): Promise<void> {
+async function updateTeams(d: MatchDigest, players?: any[] | null): Promise<void> {
   const teams = teamsOf(d.match);
   if (!teams) return;
   const store = teamMemo ?? (await readJson<Record<string, TeamLive>>(TEAM_KEY, {}));
@@ -161,6 +163,13 @@ async function updateTeams(d: MatchDigest): Promise<void> {
       [c.shots, c.sot, c.corners, c.cards, c.fouls] = [c.shots + theirS[0], c.sot + theirS[1], c.corners + theirS[2], c.cards + theirS[3], c.fouls + theirS[4]];
     }
     if (idx === 0) t.homeMatches = (t.homeMatches ?? 0) + 1;
+    // Stats des joueurs de ce match (dernier relevé ESPN), compilées dans le profil de l'équipe.
+    for (const p of players ?? []) {
+      if (p.team !== (idx === 0 ? 'home' : 'away') || !p.name) continue;
+      const cur = ((t.players ??= {})[p.name] ??= [0, 0, 0, 0, 0, 0, 0, 0, 0]);
+      const add = [1, p.starter ? 1 : 0, p.goals ?? 0, p.assists ?? 0, p.shots ?? 0, p.sot ?? 0, p.fouls ?? 0, p.yellow ?? 0, p.red ?? 0];
+      for (let i = 0; i < 9; i++) cur[i] += add[i];
+    }
     const mine = d.score[idx];
     const theirs = d.score[1 - idx];
     t.lessons = [...t.lessons, `${d.day} ${d.match} ${d.score[0]}-${d.score[1]} : ${d.lessons.join(' ') || `${mine}-${theirs}, ${d.totals.corners} corners, ${d.totals.cards} cartons.`}`].slice(-TEAM_LESSONS_KEPT);
@@ -237,6 +246,8 @@ export function teamLiveNote(team: string): string {
   const parts = t.n >= 2 ? [`${t.n} matchs suivis minute par minute : ${split}`] : [];
   if (t.goalsForMin.length >= 4) parts.push(`${Math.round((early / t.goalsForMin.length) * 100)} % de ses buts avant la 30e`);
   if (t.goalsAgainstMin.length >= 4) parts.push(`${Math.round((late / t.goalsAgainstMin.length) * 100)} % de ses buts encaissés après la 70e`);
+  const shooters = Object.entries(t.players ?? {}).filter(([, v]) => v[0] >= 2).sort((x, y) => y[1][5] / y[1][0] - x[1][5] / x[1][0]).slice(0, 2);
+  if (shooters.length) parts.push(`tireurs suivis en direct : ${shooters.map(([n, v]) => `${n} ${(v[5] / v[0]).toFixed(1)} tirs cadrés/match`).join(', ')}`);
   return `\n- Suivi en direct ${t.name} : ${parts.join(' ; ')}. ${last(t.lessons) ? `Dernière leçon : ${last(t.lessons)}` : ''}`;
 }
 
@@ -269,7 +280,7 @@ export async function digestFinishedMatches(liveKeys: Set<string>, idleMinutes =
           { h: d.score[0], a: d.score[1], htH: ht.filter((g) => g[1] === 'h').length, htA: ht.filter((g) => g[1] === 'a').length, corners: d.totals.corners, cards: d.totals.cards },
           ctx ?? undefined
         ).catch(() => false);
-        await updateTeams(d);
+        await updateTeams(d, await takeLivePlayers(day, match).catch(() => null));
         await updatePatterns(d);
         done++;
       }
