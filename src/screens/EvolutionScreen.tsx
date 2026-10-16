@@ -867,41 +867,45 @@ export default function EvolutionScreen() {
 
     return (
       <View>
-        {accuracyTrend ? (
-          <View style={styles.accuracyTrendBox}>
-            <View style={styles.accuracyTrendCol}>
-              <Text style={styles.accuracyTrendValue}>{accuracyTrend.errorRatePercent.toFixed(1)}%</Text>
-              <Text style={styles.accuracyTrendLabel}>Taux d'erreur actuel</Text>
-            </View>
-            <View style={styles.accuracyTrendDivider} />
-            <View style={styles.accuracyTrendCol}>
-              {accuracyTrend.evolutionVsYesterdayPoints != null ? (
-                <Text
-                  style={[
-                    styles.accuracyTrendValue,
-                    { color: accuracyTrend.evolutionVsYesterdayPoints >= 0 ? '#4ade80' : '#f87171' },
-                  ]}
-                >
-                  {accuracyTrend.evolutionVsYesterdayPoints >= 0 ? '+' : ''}
-                  {accuracyTrend.evolutionVsYesterdayPoints.toFixed(1)} pts
-                </Text>
-              ) : (
-                <Text style={styles.accuracyTrendValueMuted}>—</Text>
-              )}
-              <Text style={styles.accuracyTrendLabel}>
-                Évolution du taux de réussite vs hier
+        {(() => {
+          // Taux de RÉUSSITE des pronos (paris réglés, réels + fictifs), depuis la création, et sa variation depuis hier.
+          const pts = [...marketSeriesReal, ...TRACKED_MARKETS.flatMap((m) => fictionalPointsFor(m.key))];
+          if (pts.length === 0) return null;
+          const today = new Date().toISOString().slice(0, 10);
+          const tally = (list: MarketDayPoint[]) => list.reduce((a, p) => ({ n: a.n + p.predictions, ok: a.ok + p.correct }), { n: 0, ok: 0 });
+          const all = tally(pts);
+          const untilYesterday = tally(pts.filter((p) => p.date < today));
+          const rate = all.n ? (all.ok / all.n) * 100 : 0;
+          const delta = untilYesterday.n && untilYesterday.n !== all.n ? rate - (untilYesterday.ok / untilYesterday.n) * 100 : null;
+          const real = tally(marketSeriesReal);
+          const fict = tally(TRACKED_MARKETS.flatMap((m) => fictionalPointsFor(m.key)));
+          const pct = (t: { n: number; ok: number }) => (t.n ? `${Math.round((t.ok / t.n) * 100)} %` : '—');
+          return (
+            <View>
+              <View style={styles.accuracyTrendBox}>
+                <View style={styles.accuracyTrendCol}>
+                  <Text style={[styles.accuracyTrendValue, { color: '#4ade80' }]}>{rate.toFixed(1)}%</Text>
+                  <Text style={styles.accuracyTrendLabel}>Pronos réussis (depuis le début)</Text>
+                </View>
+                <View style={styles.accuracyTrendDivider} />
+                <View style={styles.accuracyTrendCol}>
+                  {delta != null ? (
+                    <Text style={[styles.accuracyTrendValue, { color: delta >= 0 ? '#4ade80' : '#f87171' }]}>
+                      {delta >= 0 ? '+' : ''}
+                      {delta.toFixed(1)} pts
+                    </Text>
+                  ) : (
+                    <Text style={styles.accuracyTrendValueMuted}>—</Text>
+                  )}
+                  <Text style={styles.accuracyTrendLabel}>Variation depuis hier</Text>
+                </View>
+              </View>
+              <Text style={[styles.infoText, { marginBottom: 10, marginHorizontal: 4 }]}>
+                {all.ok} pronos gagnés sur {all.n} réglés. Réel : {pct(real)} ({real.n}) · Fictif : {pct(fict)} ({fict.n}).
               </Text>
             </View>
-          </View>
-        ) : (
-          <View style={styles.infoBox}>
-            <Ionicons name="information-circle" size={16} color="#60a5fa" />
-            <Text style={styles.infoText}>
-              Pas encore assez de paris papier réglés pour calculer un taux d'erreur. Ça vient avec les
-              premiers tours de fond.
-            </Text>
-          </View>
-        )}
+          );
+        })()}
 
         {renderWebAccessIndicator()}
         {paperBetsSummary && paperBetsSummary.total > 0 && (
@@ -910,9 +914,12 @@ export default function EvolutionScreen() {
             <Text style={styles.paperBetsText}>
               <Text style={styles.paperBetsNumber}>{paperBetsSummary.total}</Text> paris du modèle à marqueurs (fenêtres de 10 et 25 min)
               {' '}(<Text style={styles.paperBetsNumber}>{paperBetsSummary.settled}</Text> réglés,{' '}
-              <Text style={styles.paperBetsNumber}>{paperBetsSummary.won}</Text> réussis) sur{' '}
+              <Text style={styles.paperBetsNumber}>{paperBetsSummary.won}</Text> réussis
+              {paperBetsSummary.settled > 0 ? `, soit ${Math.round((paperBetsSummary.won / paperBetsSummary.settled) * 100)} %` : ''}) sur{' '}
               <Text style={styles.paperBetsNumber}>{paperBetsSummary.matches}</Text> match{paperBetsSummary.matches > 1 ? 's' : ''} —
-              ce qui est réglé alimente déjà les courbes buts 1ère mi-temps/corners/cartons/fautes ci-dessous.
+              ce qui est réglé alimente déjà les courbes buts 1ère mi-temps/corners/cartons/fautes ci-dessous. Ce sont des paris
+              d'entraînement d'un sous-modèle interne, souvent sur des événements peu probables (un corner dans les 10 min…) : leur taux
+              n'est pas celui des pronos de l'app, affiché en haut.
             </Text>
           </View>
         )}
