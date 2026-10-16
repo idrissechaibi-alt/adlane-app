@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-10-16T22:51:18.086Z",
+  "exportedAt": "2026-10-16T23:29:22.120Z",
   "formatVersion": 1,
   "source": "APP adlane",
   "data": {
@@ -5949,13 +5949,13 @@
   },
   "health": {
     "nativeBackgroundTicks": {
-      "lastTickAt": "2026-10-16T22:31:05.322Z",
-      "ticksLast24h": 80
+      "lastTickAt": "2026-10-16T23:29:06.107Z",
+      "ticksLast24h": 76
     },
     "tickProgress": {
-      "startedAt": "2026-10-16T22:51:12.976Z",
+      "startedAt": "2026-10-16T23:29:16.250Z",
       "step": "scan en direct 20e/60e",
-      "at": "2026-10-16T22:51:14.356Z",
+      "at": "2026-10-16T23:29:17.005Z",
       "stepDurationsSec": {
         "scan matinal": 1,
         "relevé live partagé": 0
@@ -6053,24 +6053,12 @@
       "nightlyReviewPointsCreated": 16
     },
     "lastRealFastTick": {
-      "at": "2026-10-16T22:51:14.353Z",
+      "at": "2026-10-16T23:29:16.999Z",
       "liveFound": 0,
       "fresh": 0,
       "source": "api_football"
     },
     "abortedTicks": [
-      {
-        "startedAt": "2026-10-16T16:09:27.679Z",
-        "step": "marqueurs live",
-        "at": "2026-10-16T16:11:55.493Z",
-        "stepDurationsSec": {
-          "terminé": 0,
-          "scan matinal": 0,
-          "relevé live partagé": 0,
-          "scan en direct 20e/60e": 148,
-          "bilan de minuit": 0
-        }
-      },
       {
         "startedAt": "2026-10-16T16:11:59.159Z",
         "step": "bilan de minuit",
@@ -6212,6 +6200,15 @@
         "at": "2026-10-16T22:49:56.483Z",
         "stepDurationsSec": {
           "scan matinal": 9,
+          "relevé live partagé": 0
+        }
+      },
+      {
+        "startedAt": "2026-10-16T22:51:12.976Z",
+        "step": "scan en direct 20e/60e",
+        "at": "2026-10-16T22:51:14.356Z",
+        "stepDurationsSec": {
+          "scan matinal": 1,
           "relevé live partagé": 0
         }
       }
@@ -6368,8 +6365,8 @@
       "won": 818,
       "lastPlacedAt": "2026-10-16T22:17:15.113Z",
       "lastSettledAt": "2026-10-16T22:03:16.114Z",
-      "placedLast24h": 523,
-      "settledLast24h": 268
+      "placedLast24h": 522,
+      "settledLast24h": 267
     },
     "trainingRows": {
       "last14Days": 9688,
@@ -6460,7 +6457,7 @@
       "fictionalReviewed": 9290,
       "fictionalSettledLegs": 8152,
       "lastCreatedAt": "2026-10-16T21:57:04.520Z",
-      "createdLast24h": 2077
+      "createdLast24h": 1998
     },
     "predictionOutcomes30d": 11847,
     "marketSeries": {
@@ -6520,7 +6517,7 @@
         {
           "name": "Principal",
           "ok": true,
-          "latencyMs": 169,
+          "latencyMs": 119,
           "readyModels": 27,
           "configuredReady": 12,
           "configuredTotal": 13
@@ -6528,8 +6525,8 @@
         {
           "name": "Omniroute",
           "ok": true,
-          "latencyMs": 168,
-          "readyModels": 865,
+          "latencyMs": 1938,
+          "readyModels": 855,
           "configuredReady": 2,
           "configuredTotal": 2
         }
@@ -6538,50 +6535,22 @@
         {
           "label": "Principal · qwen3.8-27b",
           "ok": 1096,
-          "fail": 1798,
+          "fail": 1801,
           "avgMs": 743,
           "coolingDown": true
         },
         {
           "label": "Principal · allam-2-7b",
-          "ok": 4448,
-          "fail": 4993,
-          "avgMs": 1258,
-          "coolingDown": true
-        },
-        {
-          "label": "Omniroute · Clodiko",
-          "ok": 10690,
-          "fail": 368,
-          "avgMs": 6608,
+          "ok": 4451,
+          "fail": 4995,
+          "avgMs": 1176,
           "coolingDown": false
         },
         {
           "label": "Principal · gpt-oss-120b",
-          "ok": 1386,
+          "ok": 1388,
           "fail": 2100,
-          "avgMs": 2264,
-          "coolingDown": true
-        },
-        {
-          "label": "Omniroute · Maximus appus",
-          "ok": 6252,
-          "fail": 235,
-          "avgMs": 9618,
-          "coolingDown": false
-        },
-        {
-          "label": "Principal · llama-3.2-11b-vision-instruct",
-          "ok": 2370,
-          "fail": 331,
-          "avgMs": 8923,
-          "coolingDown": false
-        },
-        {
-          "label": "Principal · nemotron-3-super-120b",
-          "ok": 4147,
-          "fail": 623,
-          "avgMs": 13896,
+          "avgMs": 1553,
           "coolingDown": false
         },
         {
@@ -6599,10 +6568,38 @@
           "coolingDown": false
         },
         {
+          "label": "Omniroute · Maximus appus",
+          "ok": 6260,
+          "fail": 235,
+          "avgMs": 464305,
+          "coolingDown": false
+        },
+        {
+          "label": "Omniroute · Clodiko",
+          "ok": 10697,
+          "fail": 368,
+          "avgMs": 661235,
+          "coolingDown": false
+        },
+        {
           "label": "Principal · nemotron-3.5-content-safety",
           "ok": 2521,
           "fail": 2444,
           "avgMs": 371223,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · nemotron-3-super-120b",
+          "ok": 4148,
+          "fail": 623,
+          "avgMs": 670503,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · gpt-oss-20b",
+          "ok": 3356,
+          "fail": 331,
+          "avgMs": 1077868,
           "coolingDown": false
         }
       ],
@@ -6642,14 +6639,14 @@
     },
     "apiUsageToday": {
       "countsToday": {
-        "footballData": 26,
+        "footballData": 27,
         "apiFootball": 78,
         "theOddsApi": 104,
         "perplexity": 2,
         "apiFootball-autolearn": 55,
         "sportmonks-autolearn": 20,
         "sofaScore": 0,
-        "sportmonks": 135
+        "sportmonks": 136
       },
       "theOddsApiMonth": {
         "used": 500,
@@ -6667,38 +6664,38 @@
     "liveSources": {
       "LiveScore": {
         "ok": true,
-        "count": 7,
-        "at": "2026-10-16T22:51:13.103Z",
-        "failStreak": 0
-      },
-      "FotMob": {
-        "ok": true,
-        "count": 7,
-        "at": "2026-10-16T22:51:13.106Z",
+        "count": 10,
+        "at": "2026-10-16T23:29:16.274Z",
         "failStreak": 0
       },
       "TheSportsDB": {
         "ok": true,
-        "count": 7,
-        "at": "2026-10-16T22:51:13.365Z",
+        "count": 9,
+        "at": "2026-10-16T23:29:16.279Z",
+        "failStreak": 0
+      },
+      "FotMob": {
+        "ok": true,
+        "count": 9,
+        "at": "2026-10-16T23:29:16.292Z",
+        "failStreak": 0
+      },
+      "ESPN": {
+        "ok": true,
+        "count": 22,
+        "at": "2026-10-16T23:29:16.506Z",
         "failStreak": 0
       },
       "AllSportsApi": {
         "ok": true,
         "count": 0,
-        "at": "2026-10-16T22:51:14.000Z",
+        "at": "2026-10-16T23:29:16.591Z",
         "failStreak": 0
       },
       "365Scores": {
         "ok": true,
         "count": 14,
-        "at": "2026-10-16T22:51:13.660Z",
-        "failStreak": 0
-      },
-      "ESPN": {
-        "ok": true,
-        "count": 14,
-        "at": "2026-10-16T22:51:13.955Z",
+        "at": "2026-10-16T23:29:16.667Z",
         "failStreak": 0
       }
     },
@@ -6707,7 +6704,7 @@
       "sassuolo": "us sassuolo"
     },
     "teamRegistry": {
-      "teams": 172
+      "teams": 199
     },
     "patternEngine": {
       "matches": 714,
@@ -6734,40 +6731,47 @@
       }
     ],
     "unmatchedPlannedLive": {
-      "at": "2026-10-16T22:51:14.024Z",
+      "at": "2026-10-16T23:29:16.710Z",
       "unmatched": [],
       "sourceNames": [
+        "Mirassol - Internacional",
         "Ponte Preta - Atletico GO",
-        "Santiago Wanderers - Rangers",
+        "Supra du Quebec - Inter Toronto",
         "Boca Juniors de Cali - Atletico FC",
         "CD Recoleta - Rubio Nu",
         "Cerro - Cerro Largo",
+        "Colon - Huracan FC",
         "Atlanta United II - Connecticut United",
         "Defensa y Justicia - Instituto Cordoba",
         "Atlanta United 2 - Connecticut United",
-        "San Martín Fc - Alianza Fc Panama II",
-        "CD El Vencedor - Independiente San Vicente",
         "Club Calor - Delfines Coatzacoalcos",
-        "Inter Santa Tecla (Reserves) - Municipal Limeño Reserves",
         "Bahia (W) - São Paulo (W)",
         "Héroes de Zaci II - Ayense",
         "Sportivo Carapeguá - Resistencia SC",
         "Marcilio Dias - Figueirense",
-        "Georgetown - Seton Hall",
+        "Vega Real - Cibao",
         "Furman - Virginia Tech",
         "SMU - Stanford",
         "Stetson - Florida Polytechnic",
-        "Arkansas State - App State",
-        "Maryland - Iowa",
-        "Prairie View A&M - Grambling",
+        "Butler - Villanova",
+        "Duke - Virginia",
+        "Marquette - UConn",
+        "Michigan - Maryland",
+        "Ohio State - Michigan State",
+        "Pittsburgh - North Carolina",
+        "Providence - Akron",
+        "West Virginia - Kentucky",
         "Alcorn State - Southern",
         "Kansas - Iowa State",
-        "Navy - Bucknell"
+        "Cincinnati - Houston",
+        "Navy - Bucknell",
+        "South Alabama - Southern Miss",
+        "Virginia Tech - Virginia"
       ]
     },
     "liveStatsScan": {
       "lastScan": {
-        "at": "2026-10-16T22:51:14.085Z",
+        "at": "2026-10-16T23:29:16.748Z",
         "matches": 0,
         "sources": "6 sources gratuites"
       },
@@ -6790,33 +6794,13 @@
       "indexUpdatedAt": "2026-10-16T15:25:38Z",
       "teamsInIndex": 111,
       "summariesCached": 83,
-      "lookups": 2,
+      "lookups": 3,
       "withTrend": 0,
-      "unknownTeams": 2,
+      "unknownTeams": 3,
       "lastTrendAt": null,
-      "lastUnknown": "Ponte Preta - Atletico GO"
+      "lastUnknown": "Bahia (W) - São Paulo (W)"
     },
     "teamStatsUsageLog": [
-      {
-        "at": "2026-10-16T20:53:42.410Z",
-        "match": "Deportivo Cuenca - Tecnico Universitario",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-10-16T20:53:43.583Z",
-        "match": "Los Chankas - ADT",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-10-16T20:53:45.227Z",
-        "match": "Los Chankas - ADT Tarma",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-10-16T21:50:48.685Z",
-        "match": "Deportivo Cuenca - Tecnico Universitario",
-        "result": "équipe inconnue"
-      },
       {
         "at": "2026-10-16T21:50:51.906Z",
         "match": "Los Chankas CYC - Asociacion Deportiva Tarma",
@@ -6920,6 +6904,26 @@
       {
         "at": "2026-10-16T22:51:17.368Z",
         "match": "Ponte Preta - Atletico GO",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-16T22:51:21.553Z",
+        "match": "Marcilio Dias - Figueirense",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-16T23:29:20.248Z",
+        "match": "Atlanta United II - Connecticut United",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-16T23:29:21.231Z",
+        "match": "Mirassol - Internacional",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-16T23:29:21.781Z",
+        "match": "Bahia (W) - São Paulo (W)",
         "result": "équipe inconnue"
       }
     ],
@@ -7025,7 +7029,7 @@
         "unit": "goals_1h",
         "label": "Buts à la pause",
         "verified": 493,
-        "pending": 186,
+        "pending": 187,
         "meanPredicted": 1.3,
         "meanActual": 1.2,
         "meanError": -0.03,
@@ -7053,7 +7057,7 @@
         "unit": "goals_ft",
         "label": "Buts en fin de match",
         "verified": 1149,
-        "pending": 244,
+        "pending": 245,
         "meanPredicted": 3.1,
         "meanActual": 3,
         "meanError": -0.05,
@@ -7081,7 +7085,7 @@
         "unit": "corners_ft",
         "label": "Corners sur le match",
         "verified": 717,
-        "pending": 264,
+        "pending": 265,
         "meanPredicted": 8.7,
         "meanActual": 9.3,
         "meanError": 0.55,
@@ -7109,7 +7113,7 @@
         "unit": "cards_ft",
         "label": "Cartons sur le match",
         "verified": 682,
-        "pending": 225,
+        "pending": 226,
         "meanPredicted": 3.5,
         "meanActual": 3.8,
         "meanError": 0.26,
@@ -8470,7 +8474,7 @@
         }
       ],
       "samples": {
-        "pending": 102,
+        "pending": 106,
         "measured": 2605
       }
     },
