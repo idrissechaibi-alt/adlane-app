@@ -135,6 +135,117 @@ function findOdd(bookmakers: any[], betName: string, value: string): number | nu
  * match sans cote était écarté du scan en direct (un seul marché proposé,
  * rien à la 60e).
  */
+const S365 = 'https://webws.365scores.com/web';
+const S365_PARAMS = 'appTypeId=5&langId=1&timezoneName=UTC&userCountryId=1';
+
+function poissonOver(lambda: number, line: number): number {
+  // P(N > line) pour une ligne en .5 : 1 - P(N <= floor(line)).
+  let term = Math.exp(-lambda);
+  let cdf = term;
+  for (let k = 1; k <= Math.floor(line); k++) {
+    term *= lambda / k;
+    cdf += term;
+  }
+  return 1 - cdf;
+}
+
+/** Total de buts attendu (Poisson) qui reproduit la probabilité « Plus de `line` » du bookmaker (marge retirée). */
+function lambdaForOver(pOver: number, line: number): number {
+  let lo = 0.2;
+  let hi = 7;
+  for (let i = 0; i < 40; i++) {
+    const mid = (lo + hi) / 2;
+    if (poissonOver(mid, line) < pOver) lo = mid;
+    else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+
+/**
+ * 3e repli, GRATUIT et sans quota : cotes bet365 d'avant-match publiées par 365Scores. Le 1X2 vient tel quel ; le total
+ * vient à la ligne que 365Scores met en avant (souvent 2.5, parfois 1.5 ou 3.5). Pour une autre ligne que 2.5, les cotes
+ * Plus / Moins de 2.5 sont DÉDUITES (même total attendu, loi de Poisson, même marge que la ligne publiée) : elles servent
+ * à estimer les buts attendus du match, jamais affichées comme une cote bookmaker à jouer.
+ */
+async function enrichWith365ScoresOdds(matches: ScheduledMatchDetail[]): Promise<number> {
+  const missing = matches.filter((m) => !hasCoreOdds(m.odds));
+  if (missing.length === 0) return 0;
+  const fmt = (iso: string) => {
+    const d = new Date(iso);
+    return `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}`;
+  };
+  const dates = Array.from(new Set(missing.map((m) => fmt(m.kickoff_utc))));
+  const games: any[] = [];
+  for (const d of dates) {
+    try {
+      const res = await fetchWithTimeout(`${S365}/games/allscores/?${S365_PARAMS}&sports=1&startDate=${d}&endDate=${d}&showOdds=true`, {}, 15_000);
+      if (res.ok) games.push(...(((await res.json()) as any)?.games ?? []));
+    } catch {
+      // source facultative
+    }
+  }
+  let filled = 0;
+  for (const match of missing) {
+    const home = normalizeTeamName(match.homeTeam);
+    const away = normalizeTeamName(match.awayTeam);
+    const game = games.find((g) => g?.homeCompetitor?.name && namesLikelyMatch(home, normalizeTeamName(g.homeCompetitor.name)) && namesLikelyMatch(away, normalizeTeamName(g.awayCompetitor.name)));
+    if (!game) continue;
+    const rate = (odds: any, name: string) => Number(odds?.options?.find((o: any) => o.name === name)?.rate?.decimal) || 0;
+    if (game.odds?.lineTypeId === 1) {
+      if (!(match.odds.home > 1)) match.odds.home = rate(game.odds, '1');
+      if (!(match.odds.draw > 1)) match.odds.draw = rate(game.odds, 'X');
+      if (!(match.odds.away > 1)) match.odds.away = rate(game.odds, '2');
+    }
+    if (!(match.odds.over_2_5 > 1 && match.odds.under_2_5 > 1)) {
+      try {
+        const res = await fetchWithTimeout(`${S365}/game/?${S365_PARAMS}&gameId=${game.id}&topBookmaker=14&showOdds=true`, {}, 15_000);
+        const detail: any = res.ok ? await res.json() : null;
+        const preds: any[] = detail?.game?.promotedPredictions?.predictions ?? [];
+        const total = preds.map((p) => p.odds).find((o) => o?.lineTypeId === 3);
+        const line = Number(total?.internalOptionValue);
+        const over = rate(total, 'Over');
+        const under = rate(total, 'Under');
+        if (Number.isFinite(line) && over > 1 && under > 1) {
+          if (line === 2.5) {
+            match.odds.over_2_5 = over;
+            match.odds.under_2_5 = under;
+          } else {
+            const book = 1 / over + 1 / under;
+            const lambda = lambdaForOver(1 / over / book, line);
+            const p25 = poissonOver(lambda, 2.5);
+            match.odds.over_2_5 = Math.round((1 / (p25 * book)) * 100) / 100;
+            match.odds.under_2_5 = Math.round((1 / ((1 - p25) * book)) * 100) / 100;
+          }
+        }
+      } catch {
+        // source facultative
+      }
+    }
+    if (hasCoreOdds(match.odds)) filled++;
+  }
+  return filled;
+}
+
+const PLAN_ODDS_REFRESH_KEY = '@plan_odds_refresh_at';
+
+/**
+ * Les cotes d'avant-match sont souvent publiées APRÈS le scan de la nuit : chaque heure, les matchs du planning encore
+ * sans cotes sont recomplétés (TheOddsAPI / API-Football si quota, sinon 365Scores), et le planning est réenregistré.
+ */
+export async function refreshPlanOddsIfDue(): Promise<number> {
+  const last = Number((await AsyncStorage.getItem(PLAN_ODDS_REFRESH_KEY)) ?? 0);
+  if (Date.now() - last < 60 * 60_000) return 0;
+  const plan = await getDailyPlan();
+  if (!plan) return 0;
+  const matches = plan.slots.flatMap((s) => s.matches as ScheduledMatchDetail[]).filter((m) => Date.parse(m.kickoff_utc) > Date.now() && !hasCoreOdds(m.odds));
+  await AsyncStorage.setItem(PLAN_ODDS_REFRESH_KEY, String(Date.now()));
+  if (matches.length === 0) return 0;
+  await enrichWithApiFootballOdds(matches).catch(() => {});
+  const filled = await enrichWith365ScoresOdds(matches).catch(() => 0);
+  await AsyncStorage.setItem(DAILY_SCHEDULE_KEY, JSON.stringify(plan));
+  return filled;
+}
+
 async function enrichWithApiFootballOdds(matches: ScheduledMatchDetail[]): Promise<void> {
   const missing = matches.filter((m) => !hasCoreOdds(m.odds));
   if (missing.length === 0) return;
@@ -261,6 +372,7 @@ export async function executeMorningScan(): Promise<DailyPlan> {
 
     await enrichWithRealOdds(mappedMatches);
     await enrichWithApiFootballOdds(mappedMatches);
+    await enrichWith365ScoresOdds(mappedMatches).catch(() => 0);
 
     const slots = groupMatchesIntoSlots(mappedMatches);
     const plan: DailyPlan = {

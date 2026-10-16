@@ -26,7 +26,7 @@ import { getRecentSearchSource, probeAnySearch } from './webSearch';
 import { hubLiveEvents, hubLiveStatus } from '../api/footballDataAPIs/liveDataHub';
 import { syntheticFixtureId } from './halftimeMonitor';
 import { registerSofaEvents } from '../api/footballDataAPIs/sofaScore';
-import { getDailyPlan, runMorningScanIfDue } from './scheduler';
+import { getDailyPlan, refreshPlanOddsIfDue, runMorningScanIfDue } from './scheduler';
 import { reconcileScoutingAnalyses } from './scoutingReview';
 import { runWatchdog } from './watchdog';
 import { learnAlias, loadLearnedAliases } from './teamAliasStore';
@@ -632,6 +632,7 @@ async function runAutoLearnTickLocked(mode: TickMode): Promise<AutoLearnTickDiag
     } catch (error: any) {
       console.warn('[Tâche de fond] Scan matinal automatique échoué:', error.message);
     }
+    await refreshPlanOddsIfDue().catch(() => 0);
   }
 
   // Ordre : ce qui produit des paris et règle les résultats d'abord. Android

@@ -529,6 +529,45 @@ const REVIEW_TIME_BUDGET_MS = 3 * 60_000;
 let reviewDeadline = Infinity;
 const reviewTimeLeft = () => Date.now() < reviewDeadline;
 
+const PATTERN_BACKFILL_KEY = '@pattern_backfill';
+const PATTERN_BACKFILL_EVERY_MS = 60 * 60_000;
+
+const timelinePoints = (tl: MatchSample[]) =>
+  tl.map((x) => ({ minute: x.minute, h: x.homeGoals, a: x.awayGoals, sot: x.shotsOnTargetHome != null ? x.shotsOnTargetHome + (x.shotsOnTargetAway ?? 0) : undefined, corners: x.cornersTotal, cards: x.cardsTotal }));
+
+/**
+ * MOTIFS : tous les matchs fictifs terminés dont la chronologie est en mémoire (y compris les jours passés, avec ou sans
+ * pari proposé) alimentent le moteur de motifs. Une fois par heure ; un jour clos entièrement lu n'est plus relu.
+ */
+async function ingestAllTimelinesIntoPatterns(): Promise<void> {
+  let state: { at: number; doneDays: string[] } = { at: 0, doneDays: [] };
+  try {
+    state = { ...state, ...JSON.parse((await AsyncStorage.getItem(PATTERN_BACKFILL_KEY)) ?? '{}') };
+  } catch {
+    // état absent : tout relire
+  }
+  if (Date.now() - state.at < PATTERN_BACKFILL_EVERY_MS) return;
+  const prefix = '@fictional_timeline_';
+  const keys = (await AsyncStorage.getAllKeys()).filter((k) => k.startsWith(prefix));
+  const yesterday = dayKey(new Date(Date.now() - 86_400_000));
+  const done = new Set(state.doneDays);
+  for (const key of keys.sort()) {
+    const day = key.slice(prefix.length);
+    if (done.has(day)) continue;
+    const timelines = await readMatchTimelines(day);
+    for (const [fixtureId, tl] of Object.entries(timelines)) {
+      if (!tl || tl.length < 2) continue;
+      const final = extractFinalResultFromTimeline(tl);
+      if (!final) continue;
+      const last = [...tl].reverse().find((x) => TIMELINE_FINISHED_STATUSES.has(x.statusShort));
+      await ingestMatch(`f:${day}:${fixtureId}`, timelinePoints(tl), { h: final.goalsHome, a: final.goalsAway, htH: final.htHome, htA: final.htAway, corners: last?.cornersTotal, cards: last?.cardsTotal });
+    }
+    if (day < yesterday) done.add(day);
+  }
+  await flushPatterns();
+  await AsyncStorage.setItem(PATTERN_BACKFILL_KEY, JSON.stringify({ at: Date.now(), doneDays: Array.from(done) })).catch(() => {});
+}
+
 export async function runNightlyReviewIfDue(): Promise<number> {
   reviewDeadline = Date.now() + REVIEW_TIME_BUDGET_MS;
   const today = dayKey(new Date());
@@ -625,6 +664,12 @@ export async function runNightlyReviewIfDue(): Promise<number> {
   // "close" au premier passage n'était jamais revue : ses paris dont le
   // score n'avait pas encore pu être trouvé restaient non réglés pour
   // toujours (111 paris fictifs du 9 octobre).
+  try {
+    await ingestAllTimelinesIntoPatterns();
+  } catch (error: any) {
+    console.warn('[Bilan] Motifs (chronologies) échoués:', error?.message);
+  }
+
   const retryDays = [yesterday, today].filter((day) => !closedPendingDays.includes(day));
   const pendingDays = todayDue ? [...closedPendingDays, ...retryDays] : closedPendingDays;
   if (pendingDays.length === 0) return 0;
@@ -777,7 +822,7 @@ export async function runNightlyReviewIfDue(): Promise<number> {
         if (!tl || tl.length < 2) continue;
         await ingestMatch(
           `f:${day}:${fixtureId}`,
-          tl.map((x) => ({ minute: x.minute, h: x.homeGoals, a: x.awayGoals, sot: x.shotsOnTargetHome != null ? x.shotsOnTargetHome + (x.shotsOnTargetAway ?? 0) : undefined, corners: x.cornersTotal, cards: x.cardsTotal })),
+          timelinePoints(tl),
           { h: final.goalsHome, a: final.goalsAway, htH: final.htHome, htA: final.htAway, corners: final.cornersFT, cards: final.cardsFT }
         );
       }

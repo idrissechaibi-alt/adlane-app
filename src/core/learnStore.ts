@@ -347,7 +347,7 @@ const outcomeKey = (o: PredictionOutcome) => `${o.fixtureId}|${o.market}|${o.sel
 export function readPredictionOutcomes(days: number = 30): PredictionOutcome[] {
   const outcomes: PredictionOutcome[] = [];
   // Un même pari (match, marché, sélection, checkpoint) n'est compté qu'une fois, même si le bilan l'a enregistré à plusieurs passages.
-  const seen = new Set<string>();
+  const seen = new Map<string, number>();
   // Du plus ancien au plus récent : une correction écrite plus tard l'emporte toujours.
   for (let i = days - 1; i >= 0; i--) {
     const date = new Date(Date.now() - i * 86_400_000);
@@ -359,12 +359,12 @@ export function readPredictionOutcomes(days: number = 30): PredictionOutcome[] {
         const o: PredictionOutcome = JSON.parse(line);
         const key = outcomeKey(o);
         // Une correction (même pari, verdict rectifié) remplace l'ancienne valeur.
-        if (seen.has(key)) {
-          const i = outcomes.findIndex((x) => outcomeKey(x) === key);
-          if (i >= 0) outcomes[i] = o;
+        const at = seen.get(key);
+        if (at != null) {
+          outcomes[at] = o;
           continue;
         }
-        seen.add(key);
+        seen.set(key, outcomes.length);
         outcomes.push(o);
       } catch {
         // ligne corrompue : ignorée sans casser la lecture
