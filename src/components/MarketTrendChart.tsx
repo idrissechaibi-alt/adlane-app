@@ -14,15 +14,18 @@ import { StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Line, Path, Text as SvgText } from 'react-native-svg';
 import { MarketDayPoint } from '../core/learnStore';
 
-const CHART_HEIGHT = 96;
-const PADDING_TOP = 10;
-const PADDING_BOTTOM = 16;
-const PADDING_LEFT = 6;
-const PADDING_RIGHT = 34; // place pour l'étiquette du dernier point
+const CHART_HEIGHT = 170;
+const PADDING_TOP = 12;
+const PADDING_BOTTOM = 34; // graduations de dates + titre de l'axe
+const PADDING_LEFT = 34; // graduations en %
+const PADDING_RIGHT = 36; // étiquette du dernier point
+const DAY_MS = 86_400_000;
+const MONTHS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
 
 const REAL_COLOR = '#60a5fa';
 const FICTIONAL_COLOR = '#a78bfa';
 const GRID_COLOR = '#334155';
+const AXIS_TEXT = '#94a3b8';
 const THRESHOLD_COLOR = '#64748b';
 
 interface Props {
@@ -37,48 +40,75 @@ interface Props {
   width: number;
 }
 
+const dayNum = (date: string) => Math.round(Date.parse(`${date}T00:00:00Z`) / DAY_MS);
+const fromDayNum = (n: number) => new Date(n * DAY_MS);
+const ddmm = (d: Date) => `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+
+/**
+ * Graduations de l'axe des dates, adaptées à la durée couverte : chaque jour au début, puis chaque semaine (lundis),
+ * puis chaque mois quand l'historique s'allonge. Les étiquettes trop serrées sont espacées automatiquement.
+ */
+function dateTicks(first: number, last: number, plotWidth: number): Array<{ day: number; label: string }> {
+  const span = Math.max(1, last - first);
+  const maxLabels = Math.max(2, Math.floor(plotWidth / 38));
+  let ticks: Array<{ day: number; label: string }> = [];
+  if (span <= 21) {
+    const step = Math.max(1, Math.ceil((span + 1) / maxLabels));
+    for (let d = first; d <= last; d += step) ticks.push({ day: d, label: ddmm(fromDayNum(d)) });
+  } else if (span <= 120) {
+    // Lundis (le 1er janvier 1970 était un jeudi : jour n → (n + 3) % 7 = 0 pour un lundi).
+    let d = first + ((7 - ((first + 3) % 7)) % 7);
+    const weekStep = Math.max(1, Math.ceil(span / 7 / maxLabels));
+    for (; d <= last; d += 7 * weekStep) ticks.push({ day: d, label: ddmm(fromDayNum(d)) });
+  } else {
+    const start = fromDayNum(first);
+    let y = start.getUTCFullYear();
+    let m = start.getUTCMonth() + 1;
+    const all: Array<{ day: number; label: string }> = [];
+    for (;;) {
+      if (m > 11) { m = 0; y++; }
+      const d = Math.round(Date.UTC(y, m, 1) / DAY_MS);
+      if (d > last) break;
+      all.push({ day: d, label: m === 0 ? `${MONTHS[m]} ${String(y).slice(2)}` : MONTHS[m] });
+      m++;
+    }
+    const step = Math.max(1, Math.ceil(all.length / maxLabels));
+    ticks = all.filter((_, i) => i % step === 0);
+  }
+  return ticks;
+}
+
 function renderSeries(
   points: MarketDayPoint[],
-  allDates: string[],
   color: string,
-  toX: (dateIndex: number) => number,
+  toX: (day: number) => number,
   toY: (rate: number) => number,
-  width: number
+  width: number,
+  labelDy: number
 ) {
   if (points.length === 0) return null;
-
-  const byDate = new Map(points.map((p) => [p.date, p]));
-  const presentDates = allDates.filter((d) => byDate.has(d));
-
-  const path = presentDates
-    .map((date, i) => {
-      const point = byDate.get(date)!;
-      const x = toX(allDates.indexOf(date));
-      return `${i === 0 ? 'M' : 'L'} ${x} ${toY(point.hitRate)}`;
-    })
-    .join(' ');
-
-  const last = byDate.get(presentDates[presentDates.length - 1])!;
-  const lastX = toX(allDates.indexOf(last.date));
+  const sorted = [...points].sort((a, b) => a.date.localeCompare(b.date));
+  // Un jour sans point reste un trou : la ligne est coupée au-delà d'un jour manquant.
+  let path = '';
+  let prev: number | null = null;
+  for (const p of sorted) {
+    const d = dayNum(p.date);
+    path += `${prev == null || d - prev > 1 ? 'M' : 'L'} ${toX(d)} ${toY(p.hitRate)} `;
+    prev = d;
+  }
+  const last = sorted[sorted.length - 1];
+  const lastX = toX(dayNum(last.date));
   const lastY = toY(last.hitRate);
+  const dot = sorted.length > 60 ? 1.5 : 2.5;
 
   return (
     <React.Fragment>
       <Path d={path} stroke={color} strokeWidth={2} fill="none" />
-      {presentDates.map((date) => {
-        const point = byDate.get(date)!;
-        return (
-          <Circle
-            key={date}
-            cx={toX(allDates.indexOf(date))}
-            cy={toY(point.hitRate)}
-            r={2.5}
-            fill={color}
-          />
-        );
-      })}
+      {sorted.map((p) => (
+        <Circle key={p.date} cx={toX(dayNum(p.date))} cy={toY(p.hitRate)} r={dot} fill={color} />
+      ))}
       <Circle cx={lastX} cy={lastY} r={4} fill={color} />
-      <SvgText x={Math.min(lastX + 7, width - 2)} y={lastY + 4} fill={color} fontSize={11} fontWeight="bold">
+      <SvgText x={Math.min(lastX + 7, width - 30)} y={lastY + 4 + labelDy} fill={color} fontSize={11} fontWeight="bold">
         {`${Math.round(last.hitRate * 100)}%`}
       </SvgText>
     </React.Fragment>
@@ -101,7 +131,9 @@ export default function MarketTrendChart({ label, points, fictionalPoints = [], 
     );
   }
 
-  const allDates = Array.from(new Set([...points.map((p) => p.date), ...fictionalPoints.map((p) => p.date)])).sort();
+  const allDays = [...points, ...fictionalPoints].map((p) => dayNum(p.date));
+  const first = Math.min(...allDays);
+  const last = Math.max(...allDays);
 
   const plotWidth = Math.max(1, width - PADDING_LEFT - PADDING_RIGHT);
   const plotHeight = CHART_HEIGHT - PADDING_TOP - PADDING_BOTTOM;
@@ -109,8 +141,16 @@ export default function MarketTrendChart({ label, points, fictionalPoints = [], 
   // Échelle Y fixe de 0 à 100% : comparer deux marchés n'a de sens que sur la
   // même échelle (une échelle auto-ajustée exagérerait des écarts minuscules).
   const toY = (rate: number) => PADDING_TOP + (1 - rate) * plotHeight;
-  const toX = (index: number) =>
-    PADDING_LEFT + (allDates.length === 1 ? plotWidth / 2 : (index / (allDates.length - 1)) * plotWidth);
+  // Axe X proportionnel au temps : l'écart entre deux points correspond aux jours réellement écoulés.
+  const toX = (day: number) => PADDING_LEFT + (last === first ? plotWidth / 2 : ((day - first) / (last - first)) * plotWidth);
+  const ticks = dateTicks(first, last, plotWidth);
+
+  // Les deux étiquettes de fin ne doivent pas se chevaucher.
+  const lastOf = (pts: MarketDayPoint[]) => (pts.length ? [...pts].sort((a, b) => a.date.localeCompare(b.date))[pts.length - 1] : null);
+  const lr = lastOf(points);
+  const lf = lastOf(fictionalPoints);
+  const clash = lr && lf && Math.abs(toY(lr.hitRate) - toY(lf.hitRate)) < 12;
+  const realBelow = clash && lr!.hitRate <= lf!.hitRate;
 
   return (
     <View style={styles.card}>
@@ -147,18 +187,28 @@ export default function MarketTrendChart({ label, points, fictionalPoints = [], 
       )}
 
       <Svg width={width} height={CHART_HEIGHT}>
-        {/* Repères horizontaux discrets : 0%, 50%, 100% */}
-        {[0, 0.5, 1].map((rate) => (
-          <Line
-            key={rate}
-            x1={PADDING_LEFT}
-            y1={toY(rate)}
-            x2={PADDING_LEFT + plotWidth}
-            y2={toY(rate)}
-            stroke={GRID_COLOR}
-            strokeWidth={1}
-          />
+        {/* Axe Y : % de paris réussis ce jour-là */}
+        {[0, 0.25, 0.5, 0.75, 1].map((rate) => (
+          <React.Fragment key={rate}>
+            <Line x1={PADDING_LEFT} y1={toY(rate)} x2={PADDING_LEFT + plotWidth} y2={toY(rate)} stroke={GRID_COLOR} strokeWidth={1} />
+            <SvgText x={PADDING_LEFT - 5} y={toY(rate) + 3} fill={AXIS_TEXT} fontSize={9} textAnchor="end">
+              {`${Math.round(rate * 100)}%`}
+            </SvgText>
+          </React.Fragment>
         ))}
+
+        {/* Axe X : dates, graduées par jour, semaine ou mois selon la durée */}
+        {ticks.map((t) => (
+          <React.Fragment key={t.day}>
+            <Line x1={toX(t.day)} y1={PADDING_TOP} x2={toX(t.day)} y2={PADDING_TOP + plotHeight + 4} stroke={GRID_COLOR} strokeWidth={1} strokeDasharray="2 3" />
+            <SvgText x={toX(t.day)} y={PADDING_TOP + plotHeight + 15} fill={AXIS_TEXT} fontSize={9} textAnchor="middle">
+              {t.label}
+            </SvgText>
+          </React.Fragment>
+        ))}
+        <SvgText x={PADDING_LEFT + plotWidth / 2} y={CHART_HEIGHT - 3} fill={THRESHOLD_COLOR} fontSize={9} textAnchor="middle">
+          {last - first > 120 ? 'mois' : last - first > 21 ? 'semaines (lundis)' : 'jours'}
+        </SvgText>
 
         {/* Seuil d'acceptation */}
         <Line
@@ -170,22 +220,17 @@ export default function MarketTrendChart({ label, points, fictionalPoints = [], 
           strokeWidth={1}
           strokeDasharray="4 4"
         />
-        <SvgText
-          x={PADDING_LEFT + plotWidth + 4}
-          y={toY(threshold) + 3}
-          fill={THRESHOLD_COLOR}
-          fontSize={9}
-        >
+        <SvgText x={PADDING_LEFT + plotWidth + 4} y={toY(threshold) + 3} fill={THRESHOLD_COLOR} fontSize={9}>
           {`${Math.round(threshold * 100)}%`}
         </SvgText>
 
-        {renderSeries(fictionalPoints, allDates, FICTIONAL_COLOR, toX, toY, width)}
-        {renderSeries(points, allDates, REAL_COLOR, toX, toY, width)}
+        {renderSeries(fictionalPoints, FICTIONAL_COLOR, toX, toY, width, clash ? (realBelow ? -6 : 6) : 0)}
+        {renderSeries(points, REAL_COLOR, toX, toY, width, clash ? (realBelow ? 6 : -6) : 0)}
       </Svg>
 
       <View style={styles.footer}>
         <Text style={styles.footerText}>
-          {allDates[0].slice(5)} → {allDates[allDates.length - 1].slice(5)}
+          % de paris réussis chaque jour · du {ddmm(fromDayNum(first))} au {ddmm(fromDayNum(last))} ({last - first + 1} jours)
         </Text>
       </View>
     </View>
