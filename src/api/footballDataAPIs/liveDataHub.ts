@@ -38,6 +38,8 @@ interface Provider {
   name: HubProviderName;
   live(): Promise<HubMatch[]>;
   byDate(dateKey: string): Promise<HubMatch[]>;
+  /** Délai minimal entre deux interrogations (sources à quota serré). */
+  minTtlMs?: number;
   detail?(match: HubMatch): Promise<HubDetail>;
 }
 
@@ -436,6 +438,8 @@ function mapSportsDb(x: any): HubMatch | null {
 
 const sportsDb: Provider = {
   name: 'TheSportsDB',
+  // Clé gratuite « 123 » : quelques requêtes par minute seulement (HTTP 429 au-delà) → interrogée toutes les 3 min.
+  minTtlMs: 3 * 60_000,
   async live() {
     const d = await getJson('https://www.thesportsdb.com/api/v1/json/123/livescore.php?s=Soccer');
     return (d?.livescore ?? []).map(mapSportsDb).filter((m: HubMatch | null): m is HubMatch => !!m && ['1H', 'HT', '2H'].includes(m.statusShort));
@@ -564,14 +568,15 @@ async function flushStatus(): Promise<void> {
 
 async function cachedList(provider: Provider, kind: 'live' | string): Promise<HubMatch[]> {
   const key = `${provider.name}|${kind}`;
-  const ttl = kind === 'live' ? LIVE_TTL_MS : kind >= utcDay(-1) ? TODAY_TTL_MS : PAST_TTL_MS;
+  const ttl = Math.max(provider.minTtlMs ?? 0, kind === 'live' ? LIVE_TTL_MS : kind >= utcDay(-1) ? TODAY_TTL_MS : PAST_TTL_MS);
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < ttl) return hit.data;
   if ((pausedUntil.get(key) ?? 0) > Date.now()) return hit?.data ?? [];
   try {
     const fetchOnce = () => (kind === 'live' ? provider.live() : provider.byDate(kind));
     // Une relance après 2 s avant de conclure à un échec (réseau mobile instable, source lente un instant).
-    const data = await fetchOnce().catch(async () => {
+    const data = await fetchOnce().catch(async (e: any) => {
+      if (/429/.test(String(e?.message))) throw e; // limite de requêtes : relancer tout de suite aggraverait
       await new Promise((r) => setTimeout(r, 2000));
       return fetchOnce();
     });
@@ -579,6 +584,11 @@ async function cachedList(provider: Provider, kind: 'live' | string): Promise<Hu
     if (kind === 'live') noteStatus(provider.name, true, data.length);
     return data;
   } catch (error: any) {
+    // Limite de requêtes atteinte (429) : la source marche, elle demande seulement d'attendre → pause de 10 min, pas une panne.
+    if (/429/.test(String(error?.message))) {
+      pausedUntil.set(key, Date.now() + 10 * 60_000);
+      return hit?.data ?? [];
+    }
     pausedUntil.set(key, Date.now() + FAILURE_PAUSE_MS);
     if (kind === 'live' && error?.message !== 'clé absente') noteStatus(provider.name, false, undefined, error?.message || 'injoignable');
     return hit?.data ?? [];
