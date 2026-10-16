@@ -48,6 +48,7 @@ import { isSyntheticFixtureId } from './halftimeMonitor';
 import { HubPlayerShots, hubFinalResult, hubLiveStatus, hubPlayerShots, hubStats } from '../api/footballDataAPIs/liveDataHub';
 import { playerSotFromSelection } from './playerShots';
 import { LegExplanation, explainSettledLeg, flushPatterns, ingestMatch, saveExplanations } from './patternEngine';
+import { digestPlayers } from './matchDigest';
 import { EVENING_PARTS, EveningPart, buildEveningMessage } from './eveningReport';
 import { syncFullBackupToGitHub } from './gitAutoSync';
 import { liveLegVerdict } from './liveBetStatus';
@@ -104,6 +105,8 @@ export interface FinalResult {
   foulsFT?: number;
   /** Tirs cadrés par joueur en fin de match (ESPN) : marché « tirs cadrés joueur ». */
   playerSot?: HubPlayerShots[];
+  /** Corners / cartons de notre propre relevé minute par minute : dernier recours si aucune source en ligne ne les donne. */
+  tlCounts?: { cornersFT?: number; cardsFT?: number; corners1H?: number; cards1H?: number };
 }
 
 /** Matchs réglés via les sources live gratuites par passage du bilan. */
@@ -297,13 +300,18 @@ function extractFinalResultFromTimeline(timeline: MatchSample[]): FinalResult | 
   if (!finished) return null;
 
   const lastFirstHalf = [...timeline].reverse().find((s) => s.statusShort === '1H');
+  // Corners / cartons à la pause : relevé pris pendant la mi-temps (certain), sinon dernier relevé de la 1ère MT à 45'+.
+  const atBreak = timeline.find((s) => s.statusShort === 'HT') ?? (lastFirstHalf && lastFirstHalf.minute >= 45 ? lastFirstHalf : undefined);
 
   return {
     goalsHome: finished.homeGoals,
     goalsAway: finished.awayGoals,
     htHome: lastFirstHalf?.homeGoals ?? 0,
     htAway: lastFirstHalf?.awayGoals ?? 0,
-  };
+    // Corners et cartons (jaunes) relevés pendant le match : sans eux, les paris corners/cartons des matchs fictifs
+    // attendaient une source en ligne plafonnée par passage, et beaucoup restaient sans verdict.
+    tlCounts: { cornersFT: finished.cornersTotal, cardsFT: finished.cardsTotal, corners1H: atBreak?.cornersTotal, cards1H: atBreak?.cardsTotal },
+  } as FinalResult;
 }
 
 async function fetchFinalResultsViaOmniroute(
@@ -526,6 +534,7 @@ async function settlePlacedLiveBets(proposals: InPlayProposal[]): Promise<void> 
  * un bilan de 20 min retardait les scans en direct au point de rater la
  * fenêtre de la 20e minute des matchs réels. */
 const REVIEW_TIME_BUDGET_MS = 3 * 60_000;
+const CATCHUP_KEY = '@review_catchup_attempts';
 let reviewDeadline = Infinity;
 const reviewTimeLeft = () => Date.now() < reviewDeadline;
 
@@ -671,11 +680,29 @@ export async function runNightlyReviewIfDue(): Promise<number> {
   }
 
   const retryDays = [yesterday, today].filter((day) => !closedPendingDays.includes(day));
-  const pendingDays = todayDue ? [...closedPendingDays, ...retryDays] : closedPendingDays;
+  const pendingDays = todayDue ? [...closedPendingDays, ...retryDays] : [...closedPendingDays];
+  const allProposals = readInPlayProposals();
+
+  // RATTRAPAGE : jours passés (14 derniers) où des paris n'ont pas encore de verdict (stat manquante au premier bilan).
+  // Chaque jour est retenté au plus toutes les 6 h, 2 jours par passage — les courbes et la calibration ne gardent
+  // ainsi aucun trou silencieux.
+  try {
+    const attempts: Record<string, number> = JSON.parse((await AsyncStorage.getItem(CATCHUP_KEY)) ?? '{}');
+    const oldest = dayKey(new Date(Date.now() - 14 * 86_400_000));
+    const open = Array.from(new Set(allProposals.filter((p) => p.legs.some((l) => !l.settled)).map((p) => p.createdAt.slice(0, 10))))
+      .filter((d) => d >= oldest && d < yesterday && !pendingDays.includes(d) && Date.now() - (attempts[d] ?? 0) >= 6 * 3_600_000)
+      .sort()
+      .slice(0, 2);
+    for (const d of open) attempts[d] = Date.now();
+    for (const d of Object.keys(attempts)) if (d < oldest) delete attempts[d];
+    if (open.length) await AsyncStorage.setItem(CATCHUP_KEY, JSON.stringify(attempts));
+    pendingDays.push(...open);
+  } catch {
+    // rattrapage best-effort
+  }
   if (pendingDays.length === 0) return 0;
   if (todayDue) await AsyncStorage.setItem(LAST_TODAY_ATTEMPT_KEY, String(Date.now()));
 
-  const allProposals = readInPlayProposals();
   const apiConfig = await getAPIConfig();
 
   const series = readMarketSeries();
@@ -708,6 +735,12 @@ export async function runNightlyReviewIfDue(): Promise<number> {
         unreviewedDayProposals.flatMap((p) => p.legs.map((l) => [l.fixtureId, l] as const))
       ).values()
     );
+    // TOUTES les jambes (allLegs n'en garde qu'une par match) : un match peut porter un pari buts ET un pari corners ET un
+    // pari tirs cadrés — chaque étape ci-dessous doit voir le marché de chacune, sinon la stat n'est jamais demandée.
+    const everyLeg = unreviewedDayProposals.flatMap((p) => p.legs);
+    const oneLegPerMatch = <T extends { fixtureId: number }>(legs: T[]) => Array.from(new Map(legs.map((l) => [l.fixtureId, l])).values());
+    const needsHalfFor = (fixtureId: number) =>
+      everyLeg.some((l) => l.fixtureId === fixtureId && (l.market === 'buts_1ere_mt' || (['corners', 'cartons', 'fautes'].includes(l.market) && !/sur le match/i.test(l.selection))));
     // API-Football uniquement pour les paris RÉELS (5 grands championnats) ;
     // les paris fictifs sont réglés par les fournisseurs IA (plus bas).
     const realFixtureIds = new Set(
@@ -748,15 +781,15 @@ export async function runNightlyReviewIfDue(): Promise<number> {
     await mapWithConcurrency(hubPending, 4, async (leg) => {
       if (!reviewTimeLeft()) return;
       let result = await hubFinalResult(leg.homeTeam, leg.awayTeam, day).catch(() => null);
-      // Pari sur le match entier : le score final suffit, sans score à la pause.
-      const needsHalf = leg.market === 'buts_1ere_mt' || (['corners', 'cartons', 'fautes'].includes(leg.market) && !/sur le match/i.test(leg.selection));
+      // Pari sur le match entier : le score final suffit, sans score à la pause (sauf si UN des paris du match en dépend).
+      const needsHalf = needsHalfFor(leg.fixtureId);
       if (!result && !needsHalf) result = await hubFinalResult(leg.homeTeam, leg.awayTeam, day, { needHalfTime: false }).catch(() => null);
       if (result) finals.set(leg.fixtureId, result);
     });
 
     // Corners / cartons du match entier manquants (score venu d'API-Football,
     // qui ne les donne pas ici) : complétés par les sources live gratuites.
-    const needCounts = allLegs.filter((l) => {
+    const needCounts = oneLegPerMatch(everyLeg.filter((l) => {
       const final = finals.get(l.fixtureId);
       if (!final) return false;
       const ft = /sur le match/i.test(l.selection);
@@ -764,7 +797,7 @@ export async function runNightlyReviewIfDue(): Promise<number> {
       if (l.market === 'cartons') return (ft ? final.cardsFT : final.cards1H) == null;
       if (l.market === 'fautes') return (ft ? final.foulsFT : final.fouls1H) == null;
       return false;
-    });
+    }));
     await mapWithConcurrency(needCounts.slice(0, HUB_FINAL_RESULT_MAX_PER_PASS), 4, async (leg) => {
       if (!reviewTimeLeft()) return;
       const stats = await hubStats(leg.homeTeam, leg.awayTeam, day).catch(() => null);
@@ -778,11 +811,22 @@ export async function runNightlyReviewIfDue(): Promise<number> {
       final.fouls1H ??= stats.firstHalf?.fouls || undefined;
     });
 
+    // Dernier recours pour les corners / cartons encore manquants : notre relevé minute par minute du match.
+    for (const final of finals.values()) {
+      const t = final.tlCounts;
+      if (!t) continue;
+      final.cornersFT ??= t.cornersFT;
+      final.cardsFT ??= t.cardsFT;
+      final.corners1H ??= t.corners1H;
+      final.cards1H ??= t.cards1H;
+    }
+
     // Tirs cadrés par joueur (marché « tirs cadrés joueur ») : ESPN, une requête par match concerné.
-    const needPlayers = Array.from(new Map(allLegs.filter((l) => l.market === 'tirs_cadres' && finals.has(l.fixtureId) && !finals.get(l.fixtureId)!.playerSot).map((l) => [l.fixtureId, l])).values());
+    const needPlayers = Array.from(new Map(everyLeg.filter((l) => l.market === 'tirs_cadres' && finals.has(l.fixtureId) && !finals.get(l.fixtureId)!.playerSot).map((l) => [l.fixtureId, l])).values());
     await mapWithConcurrency(needPlayers.slice(0, HUB_FINAL_RESULT_MAX_PER_PASS), 4, async (leg) => {
       if (!reviewTimeLeft()) return;
-      const players = await hubPlayerShots(leg.homeTeam, leg.awayTeam, day).catch(() => null);
+      // ESPN, sinon les stats des joueurs gardées dans le résumé du match (relevé en direct).
+      const players = (await hubPlayerShots(leg.homeTeam, leg.awayTeam, day).catch(() => null)) ?? ((await digestPlayers(day, leg.homeTeam, leg.awayTeam).catch(() => null)) as any);
       const final = finals.get(leg.fixtureId);
       if (final && players) final.playerSot = players;
     });
@@ -797,7 +841,7 @@ export async function runNightlyReviewIfDue(): Promise<number> {
     if (apiConfig.apiFootball) {
       const needStats = Array.from(
         new Set(
-          allLegs
+          everyLeg
             .filter((l) => (l.market === 'corners' || l.market === 'cartons') && finals.has(l.fixtureId))
             .filter((l) => realFixtureIds.has(l.fixtureId))
             .filter((l) => finals.get(l.fixtureId)!.corners1H == null && !isSyntheticFixtureId(l.fixtureId))

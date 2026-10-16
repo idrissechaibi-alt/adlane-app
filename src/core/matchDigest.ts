@@ -299,6 +299,21 @@ function mergeSameMatches(store: Record<string, LiveStatsSample[]>): Record<stri
   return out;
 }
 
+/** Stats des joueurs gardées dans le résumé d'un match (secours du règlement « tirs cadrés joueur » si ESPN ne répond pas). */
+export async function digestPlayers(day: string, homeTeam: string, awayTeam: string): Promise<Array<{ name: string; team: 'home' | 'away'; position: string; starter: boolean; sot: number; shots: number }> | null> {
+  const digests = await readJson<Record<string, MatchDigest>>(DIGEST_KEY, {});
+  const h = normalizeTeamName(homeTeam);
+  const a = normalizeTeamName(awayTeam);
+  for (const d of Object.values(digests)) {
+    if (d.day !== day || !d.players) continue;
+    const t = teamsOf(d.match);
+    if (!t || !sameTeamStrict(normalizeTeamName(t[0]), h) || !sameTeamStrict(normalizeTeamName(t[1]), a)) continue;
+    const map = (lines: PlayerLine[], team: 'home' | 'away') => lines.map(([name, position, starter, shots, sot]) => ({ name, team, position, starter: !!starter, sot, shots }));
+    return [...map(d.players.h, 'home'), ...map(d.players.a, 'away')];
+  }
+  return null;
+}
+
 const REBUILT_KEY = '@team_live_rebuilt_v1';
 
 /**
