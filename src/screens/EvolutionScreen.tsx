@@ -12,7 +12,7 @@ import {
   ActivityIndicator,
   Alert
 } from 'react-native';
-import { Dimensions } from 'react-native';
+import { Dimensions, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import MarketTrendChart from '../components/MarketTrendChart';
 import { MarketDayPoint, TRACKED_MARKETS, TrackedMarket, marketLabel, readInPlayProposals, readMarketSeries, readMarketSeriesReal, readMarketSeriesFictional, readCumulativeCounts, readPaperBets, readPredictionOutcomes, historyDays, readAccuracySnapshots } from '../core/learnStore';
@@ -715,6 +715,17 @@ export default function EvolutionScreen() {
     const recent = todays.length > 0 ? todays : explanations.slice(-15).reverse();
     return (
       <View>
+        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+          {([
+            ['Schéma : boucle d\'apprentissage', 'https://claude.ai/artifact/SZGQtKFPZqs2NoCgSkNqJQ'],
+            ['Schéma : fictif → réel', 'https://claude.ai/artifact/LUTQ4YoRD6HkVMiZbnriep'],
+          ] as const).map(([label, url]) => (
+            <TouchableOpacity key={url} style={[styles.learningDigestButton, { flex: 1, marginBottom: 0 }]} onPress={() => Linking.openURL(url).catch(() => {})}>
+              <Ionicons name="git-network-outline" size={14} color="#a78bfa" />
+              <Text style={[styles.learningDigestButtonText, { fontSize: 12 }]}>{label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
         <View style={styles.infoBox}>
           <Ionicons name="bulb" size={16} color="#f59e0b" />
           <Text style={styles.infoText}>

@@ -6,6 +6,7 @@ import AsyncStorage from './kvStore';
 import { LiveStatsSample, listLiveStatsDays, readLiveStatsDay, removeLiveStatsMatch, takeLivePlayers } from './liveStatsStore';
 import { namesLikelyMatch, normalizeTeamName } from './teamNameMatch';
 import { flushPatterns, ingestMatch } from './patternEngine';
+import { hubPlayerShots } from '../api/footballDataAPIs/liveDataHub';
 
 const DIGEST_KEY = '@match_digests';
 const TEAM_KEY = '@team_live_lessons';
@@ -28,6 +29,19 @@ export interface MatchDigest {
   periods: Array<[number, number, number]>;
   lessons: string[];
   key: Compact[];
+  /**
+   * Stats individuelles des joueurs DE CE MATCH, par équipe (ESPN, dernier relevé en direct) :
+   * [nom, poste, titulaire 1/0, tirs, tirs cadrés, buts, passes déc., fautes, jaunes, rouges, entré 1/0, sorti 1/0].
+   */
+  players?: { h: PlayerLine[]; a: PlayerLine[] };
+}
+
+export type PlayerLine = [string, string, number, number, number, number, number, number, number, number, number, number];
+
+function playerLines(players: any[] | null, side: 'home' | 'away'): PlayerLine[] {
+  return (players ?? [])
+    .filter((p) => p?.team === side && p.name)
+    .map((p): PlayerLine => [String(p.name), String(p.position ?? ''), p.starter ? 1 : 0, p.shots ?? 0, p.sot ?? 0, p.goals ?? 0, p.assists ?? 0, p.fouls ?? 0, p.yellow ?? 0, p.red ?? 0, p.subIn ? 1 : 0, p.subOut ? 1 : 0]);
 }
 
 interface TeamLive {
@@ -300,6 +314,19 @@ export async function digestFinishedMatches(liveKeys: Set<string>, idleMinutes =
       if (!finished) continue;
       const d = analyse(day, match, samples);
       if (d) {
+        // Stats des joueurs : la copie la plus fournie parmi les noms du même match.
+        let players: any[] | null = null;
+        for (const k of aliases) {
+          const p = await takeLivePlayers(day, k).catch(() => null);
+          if (p && (!players || p.length > players.length)) players = p;
+        }
+        // Relevé en direct manquant : feuille de match ESPN, disponible après le coup de sifflet.
+        if (!players?.length) {
+          const t = teamsOf(match);
+          if (t) players = (await hubPlayerShots(t[0], t[1], day).catch(() => null)) as any[] | null;
+        }
+        // Chaque match compilé garde les stats perso de ses joueurs, équipe par équipe.
+        if (players?.length) d.players = { h: playerLines(players, 'home'), a: playerLines(players, 'away') };
         digests[`${day}|${match}`] = d;
         // Le match réel rejoué pour les motifs (situation à 15e/30e/MT/60e/75e → ce qui a suivi).
         const ctx = samples.find((x) => x.ctx)?.ctx;
@@ -310,12 +337,6 @@ export async function digestFinishedMatches(liveKeys: Set<string>, idleMinutes =
           { h: d.score[0], a: d.score[1], htH: ht.filter((g) => g[1] === 'h').length, htA: ht.filter((g) => g[1] === 'a').length, corners: d.totals.corners, cards: d.totals.cards },
           ctx ?? undefined
         ).catch(() => false);
-        // Stats des joueurs : la copie la plus fournie parmi les noms du même match.
-        let players: any[] | null = null;
-        for (const k of aliases) {
-          const p = await takeLivePlayers(day, k).catch(() => null);
-          if (p && (!players || p.length > players.length)) players = p;
-        }
         await updateTeams(d, players);
         await updatePatterns(d);
         done++;
@@ -323,7 +344,18 @@ export async function digestFinishedMatches(liveKeys: Set<string>, idleMinutes =
       for (const k of aliases) await removeLiveStatsMatch(day, k);
     }
   }
-  if (done > 0) {
+  // Rattrapage : matchs déjà compilés sans stats des joueurs (avant cette fonction) → feuille de match ESPN, 6 par passage.
+  let filled = 0;
+  for (const d of Object.values(digests)) {
+    if (filled >= 6) break;
+    if (d.players || (d as any).playersTried) continue;
+    const t = teamsOf(d.match);
+    const players = t ? await hubPlayerShots(t[0], t[1], d.day).catch(() => null) : null;
+    if (players?.length) d.players = { h: playerLines(players, 'home'), a: playerLines(players, 'away') };
+    else (d as any).playersTried = true; // source sans feuille pour ce match : pas retenté
+    filled++;
+  }
+  if (done > 0 || filled > 0) {
     await AsyncStorage.setItem(DIGEST_KEY, JSON.stringify(digests)).catch(() => {});
     await flushPatterns().catch(() => {});
   }
