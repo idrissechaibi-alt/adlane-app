@@ -88,14 +88,8 @@ function renderSeries(
 ) {
   if (points.length === 0) return null;
   const sorted = [...points].sort((a, b) => a.date.localeCompare(b.date));
-  // Un jour sans point reste un trou : la ligne est coupée au-delà d'un jour manquant.
-  let path = '';
-  let prev: number | null = null;
-  for (const p of sorted) {
-    const d = dayNum(p.date);
-    path += `${prev == null || d - prev > 1 ? 'M' : 'L'} ${toX(d)} ${toY(p.hitRate)} `;
-    prev = d;
-  }
+  // Ligne continue d'un point au suivant (jamais coupée).
+  const path = sorted.map((p, i) => `${i === 0 ? 'M' : 'L'} ${toX(dayNum(p.date))} ${toY(p.hitRate)}`).join(' ');
   const last = sorted[sorted.length - 1];
   const lastX = toX(dayNum(last.date));
   const lastY = toY(last.hitRate);
