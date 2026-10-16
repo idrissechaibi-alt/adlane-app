@@ -856,8 +856,9 @@ export default function EvolutionScreen() {
   const fictionalPointsFor = (market: TrackedMarket): MarketDayPoint[] => {
     const checkpointPoints = marketSeriesFictional.filter((p) => p.market === market);
     const coveredDates = new Set(checkpointPoints.map((p) => p.date));
-    const paperPoints = paperBetDayPoints.filter((p) => p.market === market && !coveredDates.has(p.date));
-    return [...checkpointPoints, ...paperPoints].sort((a, b) => a.date.localeCompare(b.date));
+    // Pronos de l'app uniquement : les paris d'entraînement du sous-modèle à marqueurs (sans cote) n'entrent pas dans les courbes.
+    void coveredDates;
+    return [...checkpointPoints].sort((a, b) => a.date.localeCompare(b.date));
   };
 
   /** Tous marchés confondus, jour par jour depuis la création de l'app (réel et fictif séparés). */
@@ -980,12 +981,10 @@ export default function EvolutionScreen() {
         <View style={styles.curvesIntro}>
           <Text style={styles.curvesIntroTitle}>Évolution de l'IA, marché par marché</Text>
           <Text style={styles.curvesIntroText}>
-            Taux de réussite des prédictions réglées. Bleu = paris réels (bilan de minuit), violet =
-            boucle d'auto-apprentissage (paris fictifs) — deux courbes séparées pour comparer leur
-            progression. Le pointillé marque le seuil de 60%. Pour buts 1ère mi-temps/corners/cartons/
-            fautes, la courbe violette inclut les paris papier réglés en direct (pas besoin d'attendre
-            le bilan) ; pour 1X2/total de buts/BTTS, seul le bilan de minuit peut régler un point (score
-            final requis). Chaque point compte uniquement les prédictions dont le résultat est connu.
+            Taux de réussite CUMULÉ depuis le premier jour : chaque point = paris gagnés / paris réglés jusqu'à ce jour.
+            Bleu = paris réels, violet = paris fictifs. Seuls les pronos jouables comptent (cote ≥ 1.40 : cote bookmaker
+            saisie ou lue, sinon cote estimée). Un pari entre dans la courbe dès qu'il est gagné ou perdu ; celui dont la stat
+            manque encore (match fini, corners pas encore connus…) attend son verdict. Pointillé = seuil de 60 %.
             {lastUpdate ? ` Dernier bilan : ${lastUpdate}.` : ' Aucun bilan encore effectué.'}
           </Text>
         </View>

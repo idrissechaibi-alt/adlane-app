@@ -531,6 +531,25 @@ export interface InPlayProposalLeg {
   waitForOdds?: { min: number; estimated: number };
   /** Cote estimée au moment de la proposition (celle qui a servi au filtre du plancher) : affichée telle quelle. */
   estOdds?: number;
+  /** Dernière cote bookmaker saisie à la main pour ce pari. */
+  bookOdds?: number;
+}
+
+/** Cote retenue pour un pari : bookmaker saisie, sinon estimée à la création (bet365 si lue), sinon cote juste 1/proba. */
+export function legOdds(leg: { bookOdds?: number; estOdds?: number; prob: number }): number {
+  return leg.bookOdds ?? leg.estOdds ?? (leg.prob > 0 ? 1 / leg.prob : 0);
+}
+
+/** Seuls les paris à cote ≥ 1,40 (jouables) comptent dans les courbes. */
+export const CURVE_MIN_ODDS = 1.4;
+
+/** Mémorise la cote bookmaker saisie pour un pari à une jambe. */
+export function setLegBookOdds(proposalId: string, odds: number): void {
+  const all = readInPlayProposals();
+  const p = all.find((x) => x.id === proposalId);
+  if (!p || p.legs.length !== 1) return;
+  p.legs[0].bookOdds = odds;
+  writeInPlayProposals(all);
 }
 
 export interface InPlayProposal {

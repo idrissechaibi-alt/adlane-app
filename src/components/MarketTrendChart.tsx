@@ -119,10 +119,31 @@ function renderSeries(
   );
 }
 
-export default function MarketTrendChart({ label, points, fictionalPoints = [], threshold = 0.6, width }: Props) {
-  const totalPredictions = points.reduce((sum, p) => sum + p.predictions, 0);
-  const totalFictionalPredictions = fictionalPoints.reduce((sum, p) => sum + p.predictions, 0);
-  const totalFictionalCorrect = fictionalPoints.reduce((sum, p) => sum + p.correct, 0);
+/**
+ * CUMUL depuis le premier jour : chaque point = paris gagnés / paris réglés de tous les jours jusqu'à celui-ci. La courbe
+ * montre la vraie tendance de l'app sans les sauts d'un jour isolé (1 pari sur 1 = 100 %).
+ */
+function cumulate(points: MarketDayPoint[]): MarketDayPoint[] {
+  let n = 0;
+  let ok = 0;
+  let pSum = 0;
+  return [...points]
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .filter((p) => p.predictions > 0)
+    .map((p) => {
+      n += p.predictions;
+      ok += p.correct;
+      pSum += p.meanPredicted * p.predictions;
+      return { ...p, predictions: n, correct: ok, hitRate: ok / n, meanPredicted: pSum / n };
+    });
+}
+
+export default function MarketTrendChart({ label, points: dailyPoints, fictionalPoints: dailyFictional = [], threshold = 0.6, width }: Props) {
+  const points = cumulate(dailyPoints);
+  const fictionalPoints = cumulate(dailyFictional);
+  const totalPredictions = points.length ? points[points.length - 1].predictions : 0;
+  const totalFictionalPredictions = fictionalPoints.length ? fictionalPoints[fictionalPoints.length - 1].predictions : 0;
+  const totalFictionalCorrect = fictionalPoints.length ? fictionalPoints[fictionalPoints.length - 1].correct : 0;
   const fictionalHitRatePercent =
     totalFictionalPredictions > 0 ? Math.round((totalFictionalCorrect / totalFictionalPredictions) * 100) : null;
 
@@ -234,8 +255,8 @@ export default function MarketTrendChart({ label, points, fictionalPoints = [], 
 
       <View style={styles.footer}>
         <Text style={styles.footerText}>
-          % de paris réussis chaque jour · du {ddmm(fromDayNum(first))} au {ddmm(fromDayNum(last))} ({last - first + 1} jours){'\n'}
-          ● point plein = 5 paris ou plus · ○ point creux = moins de 5 paris (peu fiable) · le point d'aujourd'hui reste en cours jusqu'au dernier règlement
+          Taux de réussite CUMULÉ depuis le début (paris réglés, cote ≥ 1.40) · du {ddmm(fromDayNum(first))} au {ddmm(fromDayNum(last))}{'\n'}
+          Chiffre sous le % = paris gagnés / paris réglés au total · un pari compte dès qu'il est gagné ou perdu
         </Text>
       </View>
     </View>

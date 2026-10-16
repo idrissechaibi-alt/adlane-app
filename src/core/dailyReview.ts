@@ -26,6 +26,8 @@ import { mapWithConcurrency } from './concurrency';
 import {
   InPlayProposal,
   MarketDayPoint,
+  legOdds,
+  CURVE_MIN_ODDS,
   PredictionOutcome,
   TrackedMarket,
   appendPredictionOutcomes,
@@ -454,7 +456,8 @@ function buildDayPoints(date: string, proposals: InPlayProposal[]): MarketDayPoi
 
   for (const proposal of proposals) {
     for (const leg of proposal.legs) {
-      if (!leg.settled) continue;
+      // Courbes : paris réglés (verdict connu) ET jouables (cote ≥ 1,40 : bookmaker saisie, sinon estimée).
+      if (!leg.settled || legOdds(leg) < CURVE_MIN_ODDS) continue;
       const entry = byMarket.get(leg.market) ?? { correct: 0, total: 0, predictedSum: 0 };
       entry.total += 1;
       entry.predictedSum += leg.prob;

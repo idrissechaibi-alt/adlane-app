@@ -23,7 +23,7 @@ import { markLineAvailable, markLineUnavailable, markMarketOff } from '../core/l
 import { parseLine } from '../core/oddsLearning';
 import { executeMorningScan, getDailyPlan, checkAndUpdateT90Status, DailyPlan, runMorningScanIfDue, todayLocalDateString } from '../core/scheduler';
 import { buildScheduledMatches, ProposedSlip } from '../core/dailyWorkflow';
-import { InPlayProposal, readInPlayProposals } from '../core/learnStore';
+import { setLegBookOdds, InPlayProposal, readInPlayProposals } from '../core/learnStore';
 import { getLineupRefresh, isT90Reached, LineupRefresh } from '../core/lineupRefresh';
 import { getAllBets, saveBet } from '../database/storage';
 import { DailyScheduleSlot } from '../types/database';
@@ -295,6 +295,7 @@ export default function DailyPlanScreen() {
         updatedAt: now,
       };
       await saveBet(bet);
+      setLegBookOdds(proposal.id, odds);
       await recordOddsAndLearn(proposal, odds, proposal.legs.length === 1 ? await liveLegContext(proposal.legs[0]) : null).catch(() => {});
       setPlacedBetIds((prev) => new Set(prev).add(bet.id));
       setPlacingId(null);
@@ -356,6 +357,7 @@ export default function DailyPlanScreen() {
       // Minute, score et compteur au moment de la saisie : la cote du 30e et celle du 67e comptent toutes les deux.
       const context = proposal.legs.length === 1 ? await liveLegContext(proposal.legs[0]) : null;
       await recordOddsAndLearn(proposal, odds, context);
+      setLegBookOdds(proposal.id, odds);
       // La ligne a une cote chez le bookmaker : elle existe.
       const leg = proposal.legs.length === 1 ? proposal.legs[0] : null;
       const parsed = leg ? parseLine(leg.selection) : null;
