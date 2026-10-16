@@ -1795,14 +1795,27 @@ function playersDue(mk: string): boolean {
   return true;
 }
 
+/**
+ * Nom unique d'un match pour ses relevés : celui du planning du jour quand le match y est, quel que soit le nom donné par la
+ * source du moment (API-Football, FotMob…). Sans ça, un même match était relevé sous deux noms et compté deux fois.
+ */
+function canonicalMatchKey(f: LiveFixture, planned: Array<{ homeTeam: string; awayTeam: string }>): string {
+  const h = normalizeTeamName(f.homeTeam);
+  const a = normalizeTeamName(f.awayTeam);
+  const m = planned.find((p) => namesLikelyMatch(h, normalizeTeamName(p.homeTeam)) && namesLikelyMatch(a, normalizeTeamName(p.awayTeam)));
+  return m ? `${m.homeTeam} - ${m.awayTeam}` : `${f.homeTeam} - ${f.awayTeam}`;
+}
+
 export async function runLiveStatsScan(liveFixtures: LiveFixture[]): Promise<number> {
   const live = liveFixtures.filter((f) => ['1H', 'HT', '2H'].includes(f.statusShort));
+  const plan = await getDailyPlan().catch(() => null);
+  const planned = (plan?.slots ?? []).flatMap((s) => s.matches as Array<{ homeTeam: string; awayTeam: string }>);
   let recorded = 0;
   await mapWithConcurrency(live, 4, async (f) => {
     const free = await fetchFreeLiveStats(f).catch(() => undefined);
     const a = free?.all;
     if (!a) return;
-    const mk = `${f.homeTeam} - ${f.awayTeam}`;
+    const mk = canonicalMatchKey(f, planned);
     // Premier relevé du match : favori (cotes d'ouverture bet365) et buts attendus d'après la tendance des équipes.
     let ctx: { fav?: 'h' | 'a' | null; trendGoals?: number | null } | undefined;
     if (!hasLiveStats(mk)) {
@@ -1845,7 +1858,7 @@ export async function runLiveStatsScan(liveFixtures: LiveFixture[]): Promise<num
   });
   noteLiveStatsScan(live.length, '6 sources gratuites');
   // Fin de scan d'un match : analyse des relevés, leçons vers la boucle d'apprentissage et le fichier des équipes, relevés bruts compactés.
-  await digestFinishedMatches(new Set(live.map((f) => `${f.homeTeam} - ${f.awayTeam}`))).catch(() => 0);
+  await digestFinishedMatches(new Set(live.flatMap((f) => [canonicalMatchKey(f, planned), `${f.homeTeam} - ${f.awayTeam}`]))).catch(() => 0);
   return recorded;
 }
 

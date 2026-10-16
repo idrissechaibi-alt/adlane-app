@@ -4,7 +4,7 @@
 
 import AsyncStorage from './kvStore';
 import { LiveStatsSample, listLiveStatsDays, readLiveStatsDay, removeLiveStatsMatch, takeLivePlayers } from './liveStatsStore';
-import { normalizeTeamName } from './teamNameMatch';
+import { namesLikelyMatch, normalizeTeamName } from './teamNameMatch';
 import { flushPatterns, ingestMatch } from './patternEngine';
 
 const DIGEST_KEY = '@match_digests';
@@ -143,7 +143,9 @@ async function updateTeams(d: MatchDigest, players?: any[] | null): Promise<void
   if (!teams) return;
   const store = teamMemo ?? (await readJson<Record<string, TeamLive>>(TEAM_KEY, {}));
   teams.forEach((name, idx) => {
-    const k = normalizeTeamName(name);
+    // Dossier existant de la même équipe sous un autre nom (« Atalanta » / « Atalanta BC ») : réutilisé.
+    const norm = normalizeTeamName(name);
+    const k = store[norm] ? norm : Object.keys(store).find((x) => namesLikelyMatch(norm, x)) ?? norm;
     const t = (store[k] ??= { name, n: 0, goalsForMin: [], goalsAgainstMin: [], corners: 0, cards: 0, fouls: 0, shots: 0, lessons: [] });
     t.n += 1;
     for (const [min, side] of d.goals) (side === (idx === 0 ? 'h' : 'a') ? t.goalsForMin : t.goalsAgainstMin).push(min);
@@ -255,18 +257,46 @@ export function teamLiveNote(team: string): string {
  * Digère les matchs terminés (plus aucun relevé depuis `idleMinutes`, ou pas dans la liste en direct) : analyse, leçons,
  * boucle d'apprentissage, équipes, puis suppression des relevés bruts. Les jours passés sont toujours digérés.
  */
+/**
+ * Un même match peut avoir été relevé sous deux noms (« Atalanta - Venezia » chez une source, « Atalanta BC - Venezia FC »
+ * chez une autre) : les relevés sont réunis sous un seul nom (le plus fourni) avant l'analyse, sinon le match compterait
+ * deux fois dans le fichier des équipes.
+ */
+function mergeSameMatches(store: Record<string, LiveStatsSample[]>): Record<string, { samples: LiveStatsSample[]; aliases: string[] }> {
+  const groups: Array<{ home: string; away: string; keys: string[] }> = [];
+  for (const key of Object.keys(store)) {
+    const [h, a] = key.split(' - ');
+    const home = normalizeTeamName(h ?? '');
+    const away = normalizeTeamName(a ?? '');
+    const g = groups.find((x) => namesLikelyMatch(home, x.home) && namesLikelyMatch(away, x.away));
+    if (g) g.keys.push(key);
+    else groups.push({ home, away, keys: [key] });
+  }
+  const out: Record<string, { samples: LiveStatsSample[]; aliases: string[] }> = {};
+  for (const g of groups) {
+    const main = [...g.keys].sort((x, y) => store[y].length - store[x].length)[0];
+    const merged = g.keys.flatMap((k) => store[k]).sort((x, y) => x.ts.localeCompare(y.ts));
+    // Deux relevés à moins de 30 s d'écart (deux noms, même instant) : un seul gardé.
+    const samples = merged.filter((s, i) => i === 0 || Date.parse(s.ts) - Date.parse(merged[i - 1].ts) >= 30_000 || s.minute !== merged[i - 1].minute);
+    const ctx = merged.find((s) => s.ctx)?.ctx;
+    if (ctx && samples.length && !samples[0].ctx) samples[0] = { ...samples[0], ctx };
+    out[main] = { samples, aliases: g.keys };
+  }
+  return out;
+}
+
 export async function digestFinishedMatches(liveKeys: Set<string>, idleMinutes = 6): Promise<number> {
   const today = new Date().toISOString().slice(0, 10);
   const digests = await readJson<Record<string, MatchDigest>>(DIGEST_KEY, {});
   let done = 0;
   for (const day of await listLiveStatsDays()) {
-    const store = await readLiveStatsDay(day);
-    for (const [match, samples] of Object.entries(store)) {
+    const store = mergeSameMatches(await readLiveStatsDay(day));
+    for (const [match, { samples, aliases }] of Object.entries(store)) {
       const lastSample = last(samples);
       const idle = (Date.now() - Date.parse(lastSample.ts)) / 60_000;
       // Terminé = jour passé, OU plus en direct depuis assez longtemps : 6 min seulement si le dernier relevé est tardif (≥ 80e),
       // sinon 25 min — une app restée fermée ou une source muette quelques minutes ne doit pas faire croire à un match fini.
-      const finished = day < today || (!liveKeys.has(match) && (idle >= 25 || (idle >= idleMinutes && lastSample.minute >= 80)));
+      const finished = day < today || (!aliases.some((k) => liveKeys.has(k)) && (idle >= 25 || (idle >= idleMinutes && lastSample.minute >= 80)));
       if (!finished) continue;
       const d = analyse(day, match, samples);
       if (d) {
@@ -280,11 +310,17 @@ export async function digestFinishedMatches(liveKeys: Set<string>, idleMinutes =
           { h: d.score[0], a: d.score[1], htH: ht.filter((g) => g[1] === 'h').length, htA: ht.filter((g) => g[1] === 'a').length, corners: d.totals.corners, cards: d.totals.cards },
           ctx ?? undefined
         ).catch(() => false);
-        await updateTeams(d, await takeLivePlayers(day, match).catch(() => null));
+        // Stats des joueurs : la copie la plus fournie parmi les noms du même match.
+        let players: any[] | null = null;
+        for (const k of aliases) {
+          const p = await takeLivePlayers(day, k).catch(() => null);
+          if (p && (!players || p.length > players.length)) players = p;
+        }
+        await updateTeams(d, players);
         await updatePatterns(d);
         done++;
       }
-      await removeLiveStatsMatch(day, match);
+      for (const k of aliases) await removeLiveStatsMatch(day, k);
     }
   }
   if (done > 0) {

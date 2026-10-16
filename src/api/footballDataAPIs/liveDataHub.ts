@@ -437,11 +437,11 @@ function mapSportsDb(x: any): HubMatch | null {
 const sportsDb: Provider = {
   name: 'TheSportsDB',
   async live() {
-    const d = await getJson('https://www.thesportsdb.com/api/v1/json/3/livescore.php?s=Soccer');
+    const d = await getJson('https://www.thesportsdb.com/api/v1/json/123/livescore.php?s=Soccer');
     return (d?.livescore ?? []).map(mapSportsDb).filter((m: HubMatch | null): m is HubMatch => !!m && ['1H', 'HT', '2H'].includes(m.statusShort));
   },
   async byDate(dateKey) {
-    const d = await getJson(`https://www.thesportsdb.com/api/v1/json/3/eventsday.php?d=${dateKey}&s=Soccer`);
+    const d = await getJson(`https://www.thesportsdb.com/api/v1/json/123/eventsday.php?d=${dateKey}&s=Soccer`);
     return (d?.events ?? []).map(mapSportsDb).filter((m: HubMatch | null): m is HubMatch => m !== null);
   },
 };

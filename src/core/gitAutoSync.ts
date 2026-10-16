@@ -490,7 +490,7 @@ const FULL_BACKUP_LAST_KEY = '@full_backup_last';
 const FULL_BACKUP_MIN_INTERVAL_MS = 3 * 3_600_000;
 const CHUNK_CHARS = 250_000; // ≈ 750 Ko en UTF-8 au pire des cas accentués
 const SECRET_KEY = /key|token|secret|password|config|credential|auth|telegram|omniroute|api/i;
-const LEARNING_KEY = /odds|bookie|delta|situation|learn|calib|market|strateg|expert|pending|missing|digest|stats|lesson|review|proposal|paper|pattern|venue|alias/i;
+const LEARNING_KEY = /odds|bookie|delta|situation|learn|calib|market|strateg|expert|pending|missing|digest|stats|lesson|review|proposal|paper|pattern|venue|alias|players|lineup/i;
 
 function hashText(text: string): string {
   let h = 5381;
