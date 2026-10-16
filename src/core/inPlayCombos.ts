@@ -858,7 +858,7 @@ async function playerShotCandidates(live: LiveFixture): Promise<CandidateLeg[]> 
 
 /**
  * Motifs appris (patternEngine) : chaque jambe dont la situation actuelle correspond à un motif validé voit sa probabilité
- * corrigée — pipe fictif dès 50 matchs mesurés, pipe réel à partir de 100.
+ * corrigée — pipe fictif dès 100 matchs mesurés, pipe réel à partir de 200.
  */
 async function applyPatterns(legs: CandidateLeg[], live: LiveFixture, observed: ObservedLiveCounts | undefined, stats: LiveMatchStats | undefined, real: boolean): Promise<void> {
   const point = {

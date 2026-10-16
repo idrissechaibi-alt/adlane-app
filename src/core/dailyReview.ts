@@ -530,14 +530,14 @@ let reviewDeadline = Infinity;
 const reviewTimeLeft = () => Date.now() < reviewDeadline;
 
 const PATTERN_BACKFILL_KEY = '@pattern_backfill';
-const PATTERN_BACKFILL_EVERY_MS = 60 * 60_000;
+const PATTERN_BACKFILL_EVERY_MS = 20 * 60_000;
 
 const timelinePoints = (tl: MatchSample[]) =>
   tl.map((x) => ({ minute: x.minute, h: x.homeGoals, a: x.awayGoals, sot: x.shotsOnTargetHome != null ? x.shotsOnTargetHome + (x.shotsOnTargetAway ?? 0) : undefined, corners: x.cornersTotal, cards: x.cardsTotal }));
 
 /**
  * MOTIFS : tous les matchs fictifs terminés dont la chronologie est en mémoire (y compris les jours passés, avec ou sans
- * pari proposé) alimentent le moteur de motifs. Une fois par heure ; un jour clos entièrement lu n'est plus relu.
+ * pari proposé) alimentent le moteur de motifs. Toutes les 20 min ; un jour clos entièrement lu n'est plus relu.
  */
 async function ingestAllTimelinesIntoPatterns(): Promise<void> {
   let state: { at: number; doneDays: string[] } = { at: 0, doneDays: [] };

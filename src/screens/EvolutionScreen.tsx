@@ -719,14 +719,14 @@ export default function EvolutionScreen() {
           <Ionicons name="bulb" size={16} color="#f59e0b" />
           <Text style={styles.infoText}>
             Chaque match terminé est rejoué à la 15e, 30e, mi-temps, 60e et 75e : l'app compare ce qui a suivi chaque situation au
-            cas moyen. Un motif est retenu à partir de 50 matchs et 10 points d'écart ; il corrige alors les pronos (fictifs, puis
-            réels à 100 matchs). {patternInfo ? `${patternInfo.matches} matchs rejoués, ${patternInfo.validated} motifs validés, ${patternInfo.realReady} actifs sur le réel.` : ''}
+            cas moyen. Un motif est retenu à partir de 100 matchs et 10 points d'écart ; il corrige alors les pronos (fictifs, puis
+            réels à 200 matchs). {patternInfo ? `${patternInfo.matches} matchs rejoués, ${patternInfo.validated} motifs validés, ${patternInfo.realReady} actifs sur le réel.` : ''}
           </Text>
         </View>
 
         <Text style={styles.sectionTitle}>Motifs validés</Text>
         {validated.length === 0 ? (
-          <Text style={styles.lessonDetail}>Pas encore de motif validé : il faut 50 matchs rejoués par situation. Les premiers apparaîtront au fil des soirées.</Text>
+          <Text style={styles.lessonDetail}>Pas encore de motif validé : il faut 100 matchs rejoués par situation. Les premiers apparaîtront au fil des soirées.</Text>
         ) : (
           byMarket(validated).map(({ m, items }) => (
             <View key={m} style={styles.lessonCard}>
@@ -742,7 +742,7 @@ export default function EvolutionScreen() {
 
         {emerging.length > 0 && (
           <>
-            <Text style={styles.sectionTitle}>En observation (moins de 50 matchs)</Text>
+            <Text style={styles.sectionTitle}>En observation (moins de 100 matchs)</Text>
             <View style={styles.lessonCard}>
               {emerging.map((p, i) => (
                 <Text key={i} style={styles.lessonDate}>{describePattern(p)}</Text>

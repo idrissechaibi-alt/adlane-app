@@ -105,7 +105,7 @@ async function leconsMessage(day: string): Promise<string> {
     // lecture impossible : on s'en passe
   }
   try {
-    const ps = (await getPatterns(50)).filter((p) => p.validated).slice(0, 6);
+    const ps = (await getPatterns(100)).filter((p) => p.validated).slice(0, 6);
     if (ps.length) lines.push('Motifs validés (corrigent les pronos) :', ...ps.map((p) => `• ${describePattern(p)}`), '');
     const ex = (await readExplanations()).filter((e) => e.day === day && !e.won).slice(-5);
     if (ex.length) lines.push('Pourquoi des paris ont raté aujourd\'hui :', ...ex.map((e) => `• ${e.match} — ${e.selection} : ${e.text}`), '');
