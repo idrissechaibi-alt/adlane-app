@@ -1,936 +1,597 @@
-// Écran de visualisation des données Football
-// Affiche les matchs, cotes, et statistiques
+// Écran « Données Foot » : ce que l'app sait des équipes, des classements et de ses sources.
+// Trois volets compacts, données gratuites uniquement :
+//  - Équipes : fiche par équipe (forme, domicile / extérieur, moyennes pour / contre, minutes des buts, joueurs, constats) ;
+//  - Classements : 5 grands championnats + Ligue des champions (ESPN), un appui ouvre la fiche de l'équipe ;
+//  - Sources : état des 6 sources du direct, du fichier des équipes et des classements.
 
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  ActivityIndicator,
-  ScrollView,
-  StyleSheet,
-  RefreshControl,
-  Image
-} from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Image, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useIsFocused } from '@react-navigation/native';
 
-import { FootballAPIManager, createFootballAPIManager } from '../api';
-import { FootballMatch, MarketOdds } from '../api/types';
-import { StandingEntry } from '../api/footballDataAPIs/ballDontLie';
-import { getAPIConfig, incrementRequestCount } from '../api/multiAPIManager';
-import { fetchCompetitionOdds, LEAGUE_ID_TO_ODDS_SPORT_KEY } from '../api/footballDataAPIs/theOddsAPI';
-import { normalizeTeamName, namesLikelyMatch } from '../core/teamNameMatch';
-import { EdgeCalculator, SurebetCalculator, ProbabilityCalculator } from '../calc/advancedCalculations';
+import { LEAGUES, LeagueDef, Standings, TeamIndexEntry, TeamIndexFile, TeamSheet, findIndexTeam, getStandings, getTeamIndex, getTeamSheet } from '../core/footballData';
+import { getHubStatus } from '../api/footballDataAPIs/liveDataHub';
 
-/**
- * Heure de coup d'envoi lisible. Une source qui ne fournit pas de date
- * exploitable doit le dire, pas afficher "Invalid Date".
- */
-function formatKickoff(kickoffUtc: string): string {
-  if (!kickoffUtc) return 'Horaire inconnu';
-  const date = new Date(kickoffUtc);
-  if (Number.isNaN(date.getTime())) return 'Horaire inconnu';
-  return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+const C = {
+  bg: '#0f172a',
+  card: '#151f33',
+  line: '#24324a',
+  ink: '#e2e8f0',
+  ink2: '#94a3b8',
+  muted: '#64748b',
+  accent: '#3987e5',
+  for: '#3987e5',
+  against: '#d95926',
+  good: '#22c55e',
+  warn: '#f59e0b',
+  bad: '#ef4444',
+};
+
+type Tab = 'teams' | 'standings' | 'sources';
+
+const AVG_ROWS: Array<[string, string, number]> = [
+  ['expected_goals_xg', 'xG', 2],
+  ['total_shots', 'Tirs', 1],
+  ['shots_on_target', 'Tirs cadrés', 1],
+  ['big_chances', 'Grosses occasions', 1],
+  ['corners', 'Corners', 1],
+  ['fouls_committed', 'Fautes', 1],
+  ['ball_possession', 'Possession %', 0],
+];
+
+const RATE_ROWS: Array<[string, string]> = [
+  ['over15', '+1.5 buts'],
+  ['over25', '+2.5 buts'],
+  ['over35', '+3.5 buts'],
+  ['btts', 'Les 2 marquent'],
+  ['cleanSheet', 'Clean sheet'],
+  ['failedToScore', 'Sans marquer'],
+];
+
+const BUCKETS = ['0-15', '16-30', '31-45', '46-60', '61-75', '76-90+'];
+
+function ago(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const min = Math.round((Date.now() - Date.parse(iso)) / 60_000);
+  if (!Number.isFinite(min)) return '—';
+  if (min < 1) return "à l'instant";
+  if (min < 60) return `il y a ${min} min`;
+  if (min < 48 * 60) return `il y a ${Math.round(min / 60)} h`;
+  return `il y a ${Math.round(min / 1440)} j`;
 }
 
-type FormResult = 'V' | 'N' | 'D';
+const pct = (v: number | undefined) => (v == null ? '—' : `${Math.round(v * 100)} %`);
 
-/** V/N/D d'une équipe pour un match terminé donné, vu de son côté (domicile ou extérieur). */
-function resultFor(match: FootballMatch, teamId: string): FormResult | null {
-  if (!match.scoreFulltime) return null;
-  const isHome = String(match.homeTeamId) === teamId;
-  const goalsFor = isHome ? match.scoreFulltime.home : match.scoreFulltime.away;
-  const goalsAgainst = isHome ? match.scoreFulltime.away : match.scoreFulltime.home;
-  if (goalsFor > goalsAgainst) return 'V';
-  if (goalsFor < goalsAgainst) return 'D';
-  return 'N';
+function FormBadges({ form }: { form: string }) {
+  return (
+    <View style={styles.row}>
+      {form.split('').map((r, i) => (
+        <View key={i} style={[styles.formBadge, { backgroundColor: r === 'V' ? C.good : r === 'D' ? C.bad : C.muted }]}>
+          <Text style={styles.formText}>{r}</Text>
+        </View>
+      ))}
+    </View>
+  );
 }
 
-export default function FootballDataScreen({ navigation }: any) {
-  const [manager, setManager] = useState<FootballAPIManager | null>(null);
-  const [fixtures, setFixtures] = useState<FootballMatch[]>([]);
-  const [odds, setOdds] = useState<Record<string, MarketOdds[]>>({});
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [selectedLeague, setSelectedLeague] = useState('39'); // Premier League par défaut
-  const [error, setError] = useState<string | null>(null);
-  const [hasConfiguredKeys, setHasConfiguredKeys] = useState(true);
-  const [standings, setStandings] = useState<StandingEntry[]>([]);
-  const [standingsError, setStandingsError] = useState<string | null>(null);
-  const [standingsLoading, setStandingsLoading] = useState(false);
-  const [teamForm, setTeamForm] = useState<Record<string, FormResult[]>>({});
+function Chip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  return (
+    <TouchableOpacity onPress={onPress} style={[styles.chip, active && styles.chipActive]}>
+      <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
 
-  // Ligues disponibles — IDs API-Football réels (v3.football.api-sports.io).
-  // "101" et "1" étaient utilisés ici pour Ligue 1 / Champions League : ce
-  // sont en réalité d'AUTRES compétitions dans la numérotation API-Football
-  // (61 et 2 sont les bons IDs, confirmés par footballDataCoUk.ts/eloRatings.ts
-  // qui utilisent déjà "61" pour Ligue 1 ailleurs dans l'app) — ce qui faisait
-  // remonter 0 ou les mauvais matchs pour ces deux boutons.
-  const leagues = [
-    { id: '39', name: 'Premier League', country: 'Angleterre', logo: 'https://media.api-sports.io/football/leagues/39.png' },
-    { id: '140', name: 'La Liga', country: 'Espagne', logo: 'https://media.api-sports.io/football/leagues/140.png' },
-    { id: '135', name: 'Serie A', country: 'Italie', logo: 'https://media.api-sports.io/football/leagues/135.png' },
-    { id: '78', name: 'Bundesliga', country: 'Allemagne', logo: 'https://media.api-sports.io/football/leagues/78.png' },
-    { id: '61', name: 'Ligue 1', country: 'France', logo: 'https://media.api-sports.io/football/leagues/61.png' },
-    { id: '2', name: 'Champions League', country: 'Europe', logo: 'https://media.api-sports.io/football/leagues/2.png' },
-  ];
-
-  useEffect(() => {
-    // Initialiser le manager API
-    const initManager = async () => {
-      const config = await getAPIConfig();
-      setHasConfiguredKeys(Boolean(config.apiFootball || config.footballData || config.theOddsApi));
-      const manager = createFootballAPIManager({
-        ballDontLie: config.apiFootball ? { apiKey: config.apiFootball, apiHost: 'v3.football.api-sports.io' } : undefined,
-        footballData: config.footballData ? { apiKey: config.footballData } : undefined,
-        theOddsAPI: config.theOddsApi ? { apiKey: config.theOddsApi } : undefined,
-      });
-      setManager(manager);
-      fetchFixtures(manager);
-      loadStandings(manager);
-    };
-
-    initManager();
-  }, [selectedLeague]);
-
-  useEffect(() => {
-    // Recharge la config quand l'utilisateur revient de "Gestion des API"
-    const unsubscribe = navigation.addListener('focus', () => {
-      getAPIConfig().then((config) => {
-        setHasConfiguredKeys(Boolean(config.apiFootball || config.footballData || config.theOddsApi));
-      });
-    });
-    return unsubscribe;
-  }, [navigation]);
-
-  /** Classement réel de la ligue sélectionnée (API-Football), affiché sous "Matchs du jour". */
-  const loadStandings = async (mgr: FootballAPIManager) => {
-    setStandingsLoading(true);
-    setStandingsError(null);
-    try {
-      const result = await mgr.getStandings(selectedLeague);
-      if (result.success && result.data) {
-        setStandings(result.data);
-      } else {
-        setStandings([]);
-        setStandingsError(result.error || 'Classement indisponible.');
-      }
-    } catch (err: any) {
-      setStandings([]);
-      setStandingsError(err.message || 'Classement indisponible.');
-    } finally {
-      setStandingsLoading(false);
-    }
-  };
-
-  /**
-   * 3 derniers résultats de chaque équipe présente dans les matchs du jour
-   * (affichés sous son nom dans "Matchs du jour"). Une requête par équipe,
-   * mais mise en cache côté ballDontLie.ts (30 min) : rechargement de
-   * l'écran ou changement de ligue n'implique pas de nouveaux appels tant
-   * que le cache est valide.
-   */
-  const loadTeamForm = async (mgr: FootballAPIManager, matches: FootballMatch[]) => {
-    const teams = new Map<string, string>();
-    matches.forEach((m) => {
-      if (m.homeTeamId) teams.set(m.homeTeamId, m.homeTeam);
-      if (m.awayTeamId) teams.set(m.awayTeamId, m.awayTeam);
-    });
-    if (teams.size === 0) return;
-
-    const entries = await Promise.all(
-      Array.from(teams.keys()).map(async (teamId) => {
-        try {
-          const result = await mgr.getTeamLastMatches(teamId, 3);
-          if (!result.success || !result.data) return null;
-          const form = result.data
-            .map((m) => resultFor(m, teamId))
-            .filter((r): r is FormResult => r !== null);
-          return [teamId, form] as const;
-        } catch {
-          return null;
-        }
-      })
-    );
-
-    const map: Record<string, FormResult[]> = {};
-    entries.forEach((entry) => {
-      if (entry) map[entry[0]] = entry[1];
-    });
-    setTeamForm(map);
-  };
-
-  /**
-   * Cotes de TOUS les matchs de la ligue en UNE requête.
-   *
-   * L'ancienne version bouclait match par match sur getMatchOdds, qui tombait
-   * d'abord sur SofaScore (8 s de timeout chacun) puis sur un endpoint
-   * TheOddsAPI paramétré pour le football américain : la page restait bloquée
-   * des dizaines de secondes et aucune cote n'arrivait jamais.
-   */
-  const loadOddsForLeague = async (matches: FootballMatch[]) => {
-    const sportKey = LEAGUE_ID_TO_ODDS_SPORT_KEY[selectedLeague];
-    if (!sportKey) return;
-
-    const config = await getAPIConfig();
-    if (!config.theOddsApi) return;
-
-    try {
-      await incrementRequestCount('theOddsApi');
-      const result = await fetchCompetitionOdds(config.theOddsApi, sportKey);
-      if (!result.success || !result.data) return;
-
-      const index = new Map(
-        result.data.map((entry) => [
-          `${normalizeTeamName(entry.homeTeam)}|${normalizeTeamName(entry.awayTeam)}`,
-          entry,
-        ])
-      );
-
-      // Repli en inclusion partielle si la correspondance exacte échoue
-      // (football-data.org "Olympique de Marseille" vs TheOddsAPI
-      // "Marseille", etc. — cf. scheduler.ts) : hors Premier League, les
-      // noms officiels longs ne correspondent presque jamais mot pour mot
-      // aux noms courts des bookmakers.
-      const usedEntries = new Set<typeof result.data[number]>();
-
-      const oddsMap: Record<string, MarketOdds[]> = {};
-      for (const match of matches) {
-        const key = `${normalizeTeamName(match.homeTeam)}|${normalizeTeamName(match.awayTeam)}`;
-        let found = index.get(key);
-
-        if (!found) {
-          const homeNorm = normalizeTeamName(match.homeTeam);
-          const awayNorm = normalizeTeamName(match.awayTeam);
-          found = result.data.find((entry) =>
-            !usedEntries.has(entry) &&
-            namesLikelyMatch(homeNorm, normalizeTeamName(entry.homeTeam)) &&
-            namesLikelyMatch(awayNorm, normalizeTeamName(entry.awayTeam))
-          );
-        }
-
-        if (!found) continue;
-        usedEntries.add(found);
-
-        const markets: MarketOdds[] = [];
-        if (found.home != null || found.draw != null || found.away != null) {
-          markets.push({
-            market: '1X2',
-            odds: { home: found.home, draw: found.draw, away: found.away },
-            timestamp: new Date().toISOString(),
-            source: 'theOddsAPI',
-          });
-        }
-        if (found.over_2_5 != null || found.under_2_5 != null) {
-          markets.push({
-            market: 'OU_2_5',
-            odds: { over: found.over_2_5, under: found.under_2_5, total: 2.5 },
-            timestamp: new Date().toISOString(),
-            source: 'theOddsAPI',
-          });
-        }
-        if (markets.length > 0) oddsMap[match.id] = markets;
-      }
-
-      setOdds(oddsMap);
-    } catch (error: any) {
-      console.warn('[Données Foot] Cotes indisponibles:', error.message);
-    }
-  };
-
-  const fetchFixtures = async (mgr: FootballAPIManager, forceRefresh = false) => {
-    if (!forceRefresh && fixtures.length > 0 && !refreshing) return;
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const today = new Date().toISOString().split('T')[0];
-      const result = await mgr.getFixturesByDate(selectedLeague, today);
-
-      if (result.success && result.data) {
-        setFixtures(result.data);
-        // Les cotes et les formes récentes arrivent après : on n'attend pas
-        // qu'elles soient là pour rendre la liste de matchs exploitable.
-        void loadOddsForLeague(result.data);
-        void loadTeamForm(mgr, result.data);
-      } else {
-        setError(result.error || 'Erreur lors du chargement des matchs');
-      }
-    } catch (err: any) {
-      setError(err.message || 'Erreur inconnue');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
-  const onRefresh = async () => {
-    setRefreshing(true);
-    if (manager) {
-      await fetchFixtures(manager, true);
-    }
-  };
-
-  /** Rang au classement par nom d'équipe normalisé, pour l'afficher sous le nom dans les cartes de match. */
-  const rankByTeam = React.useMemo(() => {
-    const map = new Map<string, number>();
-    standings.forEach((row) => map.set(normalizeTeamName(row.teamName), row.rank));
-    return map;
-  }, [standings]);
-
-  // Calculer les value bets
-  const valueBets = React.useMemo(() => {
-    if (!manager) return [];
-
-    const edgeCalc = new EdgeCalculator();
-    const bets: any[] = [];
-
-    fixtures.forEach(match => {
-      const matchOdds = odds[match.id] || [];
-      const valueBets = edgeCalc.findValueBets(match, matchOdds);
-      bets.push(...valueBets);
-    });
-
-    return bets.sort((a, b) => b.edge - a.edge);
-  }, [fixtures, odds, manager]);
-
-  // Calculer les surebets
-  const surebets = React.useMemo(() => {
-    if (!manager) return [];
-
-    const surebetCalc = new SurebetCalculator();
-    const allSurebets: any[] = [];
-
-    fixtures.forEach(match => {
-      // Pour cette démo, on utilise les mêmes odds pour tous les bookmakers
-      // Dans une app réelle, on aurait plusieurs sources
-      const oddsByBookmaker = {
-        bookmaker1: odds[match.id] || [],
-        bookmaker2: odds[match.id] || []
-      };
-      const surebets = surebetCalc.findSurebets(match, oddsByBookmaker);
-      allSurebets.push(...surebets);
-    });
-
-    return allSurebets;
-  }, [fixtures, odds, manager]);
-
-  // Afficher un match
-  /** Badges V/N/D (plus récent en dernier), ou rien si l'historique n'est pas encore chargé. */
-  const renderForm = (form: FormResult[] | undefined) => {
-    if (!form || form.length === 0) return null;
-    return (
-      <View style={styles.formRow}>
-        {form.map((r, i) => (
-          <View key={i} style={[styles.formBadge, styles[`formBadge${r}` as const]]}>
-            <Text style={styles.formBadgeText}>{r}</Text>
-          </View>
-        ))}
+function Section({ title, children, right }: { title: string; children: React.ReactNode; right?: React.ReactNode }) {
+  return (
+    <View style={styles.card}>
+      <View style={styles.cardHead}>
+        <Text style={styles.cardTitle}>{title}</Text>
+        {right}
       </View>
-    );
-  };
+      {children}
+    </View>
+  );
+}
 
-  const renderMatch = ({ item }: { item: FootballMatch }) => {
-    const matchOdds = odds[item.id] || [];
-    const homeOdds = matchOdds.find(o => o.market === '1X2')?.odds.home || '-';
-    const drawOdds = matchOdds.find(o => o.market === '1X2')?.odds.draw || '-';
-    const awayOdds = matchOdds.find(o => o.market === '1X2')?.odds.away || '-';
-    const homeRank = rankByTeam.get(normalizeTeamName(item.homeTeam));
-    const awayRank = rankByTeam.get(normalizeTeamName(item.awayTeam));
+/** Barre « pour / contre » : deux demi-barres partant du centre, valeurs écrites de chaque côté. */
+function DualBar({ label, values, digits }: { label: string; values: [number, number]; digits: number }) {
+  const [f, a] = values;
+  const max = Math.max(f, a, 0.01);
+  return (
+    <View style={styles.dualRow}>
+      <Text style={styles.dualVal}>{f.toFixed(digits)}</Text>
+      <View style={styles.dualHalfL}>
+        <View style={[styles.dualFill, { width: `${(f / max) * 100}%`, backgroundColor: C.for, borderTopLeftRadius: 4, borderBottomLeftRadius: 4 }]} />
+      </View>
+      <Text style={styles.dualLabel} numberOfLines={1}>{label}</Text>
+      <View style={styles.dualHalfR}>
+        <View style={[styles.dualFill, { width: `${(a / max) * 100}%`, backgroundColor: C.against, borderTopRightRadius: 4, borderBottomRightRadius: 4 }]} />
+      </View>
+      <Text style={[styles.dualVal, { textAlign: 'right' }]}>{a.toFixed(digits)}</Text>
+    </View>
+  );
+}
 
-    return (
-      <TouchableOpacity style={styles.matchCard} activeOpacity={0.7}>
-        <View style={styles.matchHeader}>
-          <Text style={styles.leagueName}>{item.leagueName}</Text>
-          <Text style={styles.matchTime}>{formatKickoff(item.kickoff_utc)}</Text>
-        </View>
+function Legend() {
+  return (
+    <View style={[styles.row, { gap: 12, marginBottom: 6 }]}>
+      <View style={styles.row}><View style={[styles.legendDot, { backgroundColor: C.for }]} /><Text style={styles.small}>Pour</Text></View>
+      <View style={styles.row}><View style={[styles.legendDot, { backgroundColor: C.against }]} /><Text style={styles.small}>Contre</Text></View>
+    </View>
+  );
+}
 
-        <View style={styles.matchTeams}>
-          <View style={styles.teamContainer}>
-            <Text style={styles.teamName}>{item.homeTeam}</Text>
-            {homeRank != null && <Text style={styles.teamRank}>{homeRank}e au classement</Text>}
-            {renderForm(item.homeTeamId ? teamForm[item.homeTeamId] : undefined)}
-            <Text style={styles.teamOdds}>{homeOdds}</Text>
-          </View>
-          <Text style={styles.vs}>VS</Text>
-          <View style={styles.teamContainer}>
-            <Text style={styles.teamName}>{item.awayTeam}</Text>
-            {awayRank != null && <Text style={styles.teamRank}>{awayRank}e au classement</Text>}
-            {renderForm(item.awayTeamId ? teamForm[item.awayTeamId] : undefined)}
-            <Text style={styles.teamOdds}>{awayOdds}</Text>
-          </View>
-        </View>
-
-        {matchOdds.length > 0 && (
-          <View style={styles.oddsRow}>
-            <View style={styles.oddsBox}>
-              <Text style={styles.oddsLabel}>Nul</Text>
-              <Text style={styles.oddsValue}>{drawOdds}</Text>
+function GoalTiming({ timing }: { timing: NonNullable<TeamSheet['goalTiming']> }) {
+  const max = Math.max(1, ...BUCKETS.map((b) => Math.max(timing.for[b] ?? 0, timing.against[b] ?? 0)));
+  return (
+    <View>
+      <Legend />
+      <View style={styles.timingWrap}>
+        {BUCKETS.map((b) => {
+          const f = timing.for[b] ?? 0;
+          const a = timing.against[b] ?? 0;
+          return (
+            <View key={b} style={styles.timingCol}>
+              <View style={styles.timingBars}>
+                <View style={styles.timingBarSlot}>
+                  <Text style={styles.timingNum}>{f}</Text>
+                  <View style={[styles.timingBar, { height: (f / max) * 56, backgroundColor: C.for }]} />
+                </View>
+                <View style={styles.timingBarSlot}>
+                  <Text style={styles.timingNum}>{a}</Text>
+                  <View style={[styles.timingBar, { height: (a / max) * 56, backgroundColor: C.against }]} />
+                </View>
+              </View>
+              <Text style={styles.timingLabel}>{b}'</Text>
             </View>
-          </View>
-        )}
-      </TouchableOpacity>
-    );
-  };
-
-  // Afficher un value bet
-  const renderValueBet = ({ item }: { item: any }) => (
-    <View style={[styles.valueBetCard, styles.valueBetHigh]}>
-      <View style={styles.valueBetHeader}>
-        <Text style={styles.valueBetTeam}>{item.match.homeTeam}</Text>
-        <Text style={styles.valueBetLabel}>vs</Text>
-        <Text style={styles.valueBetTeam}>{item.match.awayTeam}</Text>
-      </View>
-      <View style={styles.valueBetBody}>
-        <Text style={styles.valueBetSelection}>{item.selection.toUpperCase()}</Text>
-        <Text style={styles.valueBetOdds}>@{item.odds.toFixed(2)}</Text>
-        <Text style={styles.valueBetEdge}>Edge: {(item.edge * 100).toFixed(1)}%</Text>
+          );
+        })}
       </View>
     </View>
   );
+}
 
-  if (loading && fixtures.length === 0) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <ActivityIndicator size="large" color="#3b82f6" />
-        <Text style={styles.loadingText}>Chargement des matchs...</Text>
-      </SafeAreaView>
-    );
-  }
-
+function TeamSheetView({ sheet, onBack }: { sheet: TeamSheet; onBack: () => void }) {
+  const usual = new Set(sheet.usualXI);
+  const keyPlayers = [...sheet.players].sort((x, y) => y.goals + y.assists - (x.goals + x.assists)).slice(0, 8);
+  const avgRows = AVG_ROWS.filter(([k]) => Array.isArray(sheet.averages[k]));
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Football Data</Text>
-        <TouchableOpacity onPress={() => navigation.navigate('Paramètres', { screen: 'APIManagement' })}>
-          <Ionicons name="settings-outline" size={24} color="white" />
-        </TouchableOpacity>
-      </View>
+    <View>
+      <TouchableOpacity onPress={onBack} style={[styles.row, { marginBottom: 8 }]}>
+        <Ionicons name="chevron-back" size={16} color={C.accent} />
+        <Text style={{ color: C.accent, fontSize: 13 }}>Toutes les équipes</Text>
+      </TouchableOpacity>
 
-      {!hasConfiguredKeys && (
-        <TouchableOpacity
-          style={styles.noKeysBanner}
-          onPress={() => navigation.navigate('Paramètres', { screen: 'APIManagement' })}
-        >
-          <Ionicons name="key-outline" size={18} color="#fbbf24" />
-          <Text style={styles.noKeysBannerText}>
-            Aucune clé API configurée. Touchez ici pour ajouter API-Football ou Football-Data.org dans "Gestion des API".
-          </Text>
-        </TouchableOpacity>
-      )}
-
-      {/* League Selector — icônes des compétitions plutôt que des rectangles de texte */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.leagueSelector}>
-        {leagues.map(league => (
-          <TouchableOpacity
-            key={league.id}
-            style={[
-              styles.leagueIconButton,
-              selectedLeague === league.id && styles.leagueIconButtonActive
-            ]}
-            onPress={() => setSelectedLeague(league.id)}
-          >
-            <Image source={{ uri: league.logo }} style={styles.leagueIcon} resizeMode="contain" />
-            <Text style={[
-              styles.leagueIconLabel,
-              selectedLeague === league.id && styles.leagueIconLabelActive
-            ]} numberOfLines={1}>
-              {league.name}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-
-      {/*
-        Tout le reste défile dans UN SEUL ScrollView vertical (comme les
-        autres écrans de l'app). Auparavant, la liste "Matchs du jour" était
-        une FlatList posée directement dans la SafeAreaView sans conteneur
-        défilant qui la borne : elle s'étirait pour occuper tout l'espace
-        restant et masquait Value Bets/Surebets/Stats en dessous, donnant
-        l'impression d'un panneau resté "ouvert" et impossible à réduire.
-      */}
-      <ScrollView
-        style={styles.scrollArea}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-      >
-        {error && (
-          <View style={styles.errorContainer}>
-            <Ionicons name="alert-circle" size={20} color="#ef4444" />
-            <Text style={styles.errorText}>{error}</Text>
+      <View style={styles.card}>
+        <Text style={styles.teamName}>{sheet.name}</Text>
+        <Text style={styles.small}>{sheet.leagues.join(' · ')} · {sheet.matches} matchs cette saison · fichier mis à jour {ago(sheet.updatedAt)}</Text>
+        {sheet.form && (
+          <View style={[styles.row, { marginTop: 10, justifyContent: 'space-between' }]}>
+            <View>
+              <Text style={styles.kicker}>5 derniers</Text>
+              <FormBadges form={sheet.form.last5} />
+            </View>
+            <View style={styles.kpi}>
+              <Text style={styles.kpiValue}>{sheet.form.record.V}-{sheet.form.record.N}-{sheet.form.record.D}</Text>
+              <Text style={styles.kicker}>V-N-D</Text>
+            </View>
+            <View style={styles.kpi}>
+              <Text style={styles.kpiValue}>{sheet.form.ppg?.toFixed(2) ?? '—'}</Text>
+              <Text style={styles.kicker}>pts / match</Text>
+            </View>
+            {sheet.usualFormation && (
+              <View style={styles.kpi}>
+                <Text style={styles.kpiValue}>{sheet.usualFormation}</Text>
+                <Text style={styles.kicker}>système</Text>
+              </View>
+            )}
           </View>
         )}
+      </View>
 
-        {/* Match List */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Matchs du jour</Text>
-            <Text style={styles.sectionCount}>{fixtures.length} matchs</Text>
-          </View>
+      <Section title="Domicile / extérieur">
+        <View style={styles.tableHead}>
+          <Text style={[styles.th, { flex: 1.4, textAlign: 'left' }]}></Text>
+          <Text style={styles.th}>MJ</Text>
+          <Text style={styles.th}>Pts/m</Text>
+          <Text style={styles.th}>Buts +</Text>
+          <Text style={styles.th}>Buts −</Text>
+        </View>
+        {(['home', 'away'] as const).map((v) => {
+          const s = sheet.venue[v];
+          return (
+            <View key={v} style={styles.tr}>
+              <Text style={[styles.td, { flex: 1.4, textAlign: 'left' }]}>{v === 'home' ? 'Domicile' : 'Extérieur'}</Text>
+              <Text style={styles.td}>{s?.n ?? '—'}</Text>
+              <Text style={styles.td}>{s ? s.ppg.toFixed(2) : '—'}</Text>
+              <Text style={styles.td}>{s ? s.gf.toFixed(2) : '—'}</Text>
+              <Text style={styles.td}>{s ? s.ga.toFixed(2) : '—'}</Text>
+            </View>
+          );
+        })}
+      </Section>
 
-          {fixtures.map((item) => (
-            <View key={item.id}>{renderMatch({ item })}</View>
+      <Section title="Fréquence des scénarios (ses matchs)">
+        <View style={styles.rateGrid}>
+          {RATE_ROWS.filter(([k]) => sheet.rates[k] != null).map(([k, label]) => (
+            <View key={k} style={styles.rateCell}>
+              <Text style={styles.rateValue}>{pct(sheet.rates[k])}</Text>
+              <Text style={styles.small}>{label}</Text>
+              <View style={styles.rateTrack}><View style={[styles.rateFill, { width: `${Math.round(sheet.rates[k] * 100)}%` }]} /></View>
+            </View>
           ))}
+        </View>
+      </Section>
 
-          {/* Classement réel de la ligue sélectionnée (API-Football) */}
-          <View style={styles.standingsBox}>
-            <Text style={styles.standingsTitle}>
-              Classement — {leagues.find((l) => l.id === selectedLeague)?.name}
-            </Text>
+      {avgRows.length > 0 && (
+        <Section title="Moyennes par match">
+          <Legend />
+          {avgRows.map(([k, label, digits]) => (
+            <DualBar key={k} label={label} values={sheet.averages[k]} digits={digits} />
+          ))}
+        </Section>
+      )}
 
-            {standingsLoading ? (
-              <ActivityIndicator size="small" color="#3b82f6" style={{ marginVertical: 12 }} />
-            ) : standingsError ? (
-              <Text style={styles.standingsError}>{standingsError}</Text>
-            ) : standings.length === 0 ? (
-              <Text style={styles.standingsError}>Classement indisponible pour cette compétition.</Text>
-            ) : (
-              <View>
-                <View style={styles.standingsHeaderRow}>
-                  <Text style={[styles.standingsCell, styles.standingsRankCell, styles.standingsHeaderText]}>#</Text>
-                  <Text style={[styles.standingsCell, styles.standingsTeamCell, styles.standingsHeaderText]}>Équipe</Text>
-                  <Text style={[styles.standingsCell, styles.standingsHeaderText]}>J</Text>
-                  <Text style={[styles.standingsCell, styles.standingsHeaderText]}>Diff</Text>
-                  <Text style={[styles.standingsCell, styles.standingsHeaderText]}>Pts</Text>
+      {sheet.goalTiming && (
+        <Section title="Minutes des buts (saison)">
+          <GoalTiming timing={sheet.goalTiming} />
+        </Section>
+      )}
+
+      {keyPlayers.length > 0 && (
+        <Section title="Joueurs" right={<Text style={styles.small}>● titulaire habituel</Text>}>
+          <View style={styles.tableHead}>
+            <Text style={[styles.th, { flex: 2.4, textAlign: 'left' }]}>Joueur</Text>
+            <Text style={styles.th}>Min</Text>
+            <Text style={styles.th}>B</Text>
+            <Text style={styles.th}>PD</Text>
+            <Text style={styles.th}>TC/90</Text>
+            <Text style={styles.th}>J</Text>
+          </View>
+          {keyPlayers.map((p) => (
+            <View key={p.id} style={styles.tr}>
+              <Text style={[styles.td, { flex: 2.4, textAlign: 'left' }]} numberOfLines={1}>
+                {usual.has(p.id) ? '● ' : '   '}{p.name} <Text style={styles.small}>{p.pos}</Text>
+              </Text>
+              <Text style={styles.td}>{p.minutes}</Text>
+              <Text style={styles.td}>{p.goals}</Text>
+              <Text style={styles.td}>{p.assists}</Text>
+              <Text style={styles.td}>{p.sotPer90 != null ? p.sotPer90.toFixed(1) : '—'}</Text>
+              <Text style={styles.td}>{p.yellow}</Text>
+            </View>
+          ))}
+        </Section>
+      )}
+
+      {sheet.insights.length > 0 && (
+        <Section title="Ce que l'app retient">
+          {sheet.insights.map((t, i) => (
+            <View key={i} style={[styles.row, { alignItems: 'flex-start', marginBottom: 4 }]}>
+              <Text style={[styles.body, { color: C.accent }]}>•  </Text>
+              <Text style={[styles.body, { flex: 1 }]}>{t}</Text>
+            </View>
+          ))}
+        </Section>
+      )}
+
+      {sheet.recent.length > 0 && (
+        <Section title="Derniers matchs">
+          {sheet.recent.map((m, i) => {
+            const res = m.goalsFor > m.goalsAgainst ? 'V' : m.goalsFor < m.goalsAgainst ? 'D' : 'N';
+            return (
+              <View key={i} style={styles.matchRow}>
+                <View style={[styles.formBadge, { backgroundColor: res === 'V' ? C.good : res === 'D' ? C.bad : C.muted }]}>
+                  <Text style={styles.formText}>{res}</Text>
                 </View>
-                {standings.map((row) => (
-                  <View key={row.rank} style={styles.standingsRow}>
-                    <Text style={[styles.standingsCell, styles.standingsRankCell]}>{row.rank}</Text>
-                    <Text style={[styles.standingsCell, styles.standingsTeamCell]} numberOfLines={1}>{row.teamName}</Text>
-                    <Text style={styles.standingsCell}>{row.played}</Text>
-                    <Text style={styles.standingsCell}>{row.goalsDiff > 0 ? `+${row.goalsDiff}` : row.goalsDiff}</Text>
-                    <Text style={[styles.standingsCell, styles.standingsPointsCell]}>{row.points}</Text>
+                <View style={{ flex: 1, marginLeft: 8 }}>
+                  <Text style={styles.body} numberOfLines={1}>
+                    {m.goalsFor}-{m.goalsAgainst} {m.home ? 'vs' : '@'} {m.opponent}
+                  </Text>
+                  <Text style={styles.small} numberOfLines={2}>
+                    {m.date.slice(8, 10)}/{m.date.slice(5, 7)} · {m.competition}{m.note ? ` · ${m.note.replace(/^[VND] \d+-\d+( : )?/, '')}` : ''}
+                  </Text>
+                </View>
+              </View>
+            );
+          })}
+        </Section>
+      )}
+    </View>
+  );
+}
+
+export default function FootballDataScreen() {
+  const focused = useIsFocused();
+  const [tab, setTab] = useState<Tab>('standings');
+  const [league, setLeague] = useState<LeagueDef>(LEAGUES[0]);
+  const [standings, setStandings] = useState<Record<string, { data: Standings | null; stale: boolean }>>({});
+  const [index, setIndex] = useState<TeamIndexFile | null>(null);
+  const [indexStale, setIndexStale] = useState(false);
+  const [teamLeague, setTeamLeague] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [sheet, setSheet] = useState<TeamSheet | null>(null);
+  const [sheetLoading, setSheetLoading] = useState(false);
+  const [hub, setHub] = useState<Record<string, any>>({});
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const loadStandings = useCallback(async (l: LeagueDef, force = false) => {
+    setLoading(true);
+    const res = await getStandings(l, force);
+    setStandings((s) => ({ ...s, [l.espn]: res }));
+    setLoading(false);
+  }, []);
+
+  const loadIndex = useCallback(async (force = false) => {
+    const res = await getTeamIndex(force);
+    setIndex(res.data);
+    setIndexStale(res.stale);
+  }, []);
+
+  useEffect(() => {
+    if (!focused) return;
+    loadIndex();
+    getHubStatus().then(setHub).catch(() => {});
+  }, [focused, loadIndex]);
+
+  useEffect(() => {
+    if (!standings[league.espn]) loadStandings(league);
+  }, [league, standings, loadStandings]);
+
+  const openTeam = useCallback(async (entry: TeamIndexEntry | null, fallbackName?: string) => {
+    if (!entry) {
+      setMessage(`${fallbackName ?? 'Cette équipe'} n'est pas encore dans le fichier des équipes.`);
+      return;
+    }
+    setMessage(null);
+    setTab('teams');
+    setSheetLoading(true);
+    const s = await getTeamSheet(entry);
+    setSheet(s);
+    setSheetLoading(false);
+    if (!s) setMessage(`Fiche de ${entry.name} indisponible (réseau ?).`);
+  }, []);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.all([
+      tab === 'standings' ? loadStandings(league, true) : Promise.resolve(),
+      loadIndex(true),
+      getHubStatus().then(setHub).catch(() => {}),
+      sheet && index ? getTeamSheet(index.teams.find((t) => t.id === sheet.id) ?? (sheet as any), true).then((s) => s && setSheet(s)) : Promise.resolve(),
+    ]);
+    setRefreshing(false);
+  }, [tab, league, sheet, index, loadStandings, loadIndex]);
+
+  const teams = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return (index?.teams ?? [])
+      .filter((t) => !teamLeague || t.leagues.includes(teamLeague))
+      .filter((t) => !q || t.name.toLowerCase().includes(q) || (t.shortName ?? '').toLowerCase().includes(q))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [index, teamLeague, query]);
+
+  const current = standings[league.espn];
+
+  const renderStandings = () => (
+    <View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }}>
+        {LEAGUES.map((l) => <Chip key={l.key} label={l.short} active={l.key === league.key} onPress={() => setLeague(l)} />)}
+      </ScrollView>
+      <View style={styles.card}>
+        <View style={styles.cardHead}>
+          <Text style={styles.cardTitle}>{current?.data?.season || league.name}</Text>
+          <Text style={styles.small}>{current?.data ? `ESPN · ${ago(current.data.fetchedAt)}${current.stale ? ' (hors ligne)' : ''}` : ''}</Text>
+        </View>
+        {loading && !current?.data ? (
+          <ActivityIndicator color={C.accent} style={{ marginVertical: 20 }} />
+        ) : !current?.data ? (
+          <Text style={styles.body}>Classement indisponible (ESPN injoignable). Tire vers le bas pour réessayer.</Text>
+        ) : (
+          <>
+            <View style={styles.tableHead}>
+              <Text style={[styles.th, { flex: 0.5 }]}>#</Text>
+              <Text style={[styles.th, { flex: 3.2, textAlign: 'left' }]}>Équipe</Text>
+              <Text style={styles.th}>J</Text>
+              <Text style={[styles.th, { flex: 1.4 }]}>V-N-D</Text>
+              <Text style={styles.th}>Diff</Text>
+              <Text style={[styles.th, { color: C.ink }]}>Pts</Text>
+            </View>
+            {current.data.rows.map((r) => {
+              const entry = findIndexTeam(index, r.team);
+              return (
+                <TouchableOpacity key={r.team} style={styles.tr} onPress={() => openTeam(entry, r.team)}>
+                  <View style={[styles.zone, { backgroundColor: r.noteColor ?? 'transparent' }]} />
+                  <Text style={[styles.td, { flex: 0.45, color: C.ink2 }]}>{r.rank}</Text>
+                  <View style={[styles.row, { flex: 3.2 }]}>
+                    {r.logo ? <Image source={{ uri: r.logo }} style={styles.logo} /> : <View style={styles.logo} />}
+                    <Text style={[styles.td, { textAlign: 'left', flex: 1 }]} numberOfLines={1}>{r.team}</Text>
+                    {entry && <Ionicons name="document-text-outline" size={12} color={C.muted} />}
+                  </View>
+                  <Text style={styles.td}>{r.played}</Text>
+                  <Text style={[styles.td, { flex: 1.4, color: C.ink2 }]}>{r.wins}-{r.draws}-{r.losses}</Text>
+                  <Text style={[styles.td, { color: C.ink2 }]}>{r.diff > 0 ? `+${r.diff}` : r.diff}</Text>
+                  <Text style={[styles.td, { fontWeight: '700' }]}>{r.points}</Text>
+                </TouchableOpacity>
+              );
+            })}
+            {current.data.rows.some((r) => r.note) && (
+              <View style={{ marginTop: 8 }}>
+                {Array.from(new Map(current.data.rows.filter((r) => r.note).map((r) => [r.note, r.noteColor])).entries()).map(([note, color]) => (
+                  <View key={note!} style={[styles.row, { marginTop: 2 }]}>
+                    <View style={[styles.legendDot, { backgroundColor: color ?? C.muted }]} />
+                    <Text style={styles.small}>{note}</Text>
                   </View>
                 ))}
               </View>
             )}
-          </View>
+            <Text style={[styles.small, { marginTop: 8 }]}>Appuie sur une équipe pour ouvrir sa fiche (icône = fiche disponible).</Text>
+          </>
+        )}
+      </View>
+    </View>
+  );
+
+  const renderTeams = () => {
+    if (sheetLoading) return <ActivityIndicator color={C.accent} style={{ marginVertical: 30 }} />;
+    if (sheet) return <TeamSheetView sheet={sheet} onBack={() => setSheet(null)} />;
+    return (
+      <View>
+        <View style={styles.search}>
+          <Ionicons name="search" size={14} color={C.muted} />
+          <TextInput value={query} onChangeText={setQuery} placeholder="Chercher une équipe" placeholderTextColor={C.muted} style={styles.searchInput} />
         </View>
-
-        {/* Value Bets Section */}
-        {valueBets.length > 0 && (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Value Bets</Text>
-              <Ionicons name="diamond" size={20} color="#fbbf24" />
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }}>
+          <Chip label="Toutes" active={!teamLeague} onPress={() => setTeamLeague(null)} />
+          {LEAGUES.map((l) => <Chip key={l.key} label={l.short} active={teamLeague === l.name} onPress={() => setTeamLeague(l.name)} />)}
+        </ScrollView>
+        {!index ? (
+          <Text style={styles.body}>Fichier des équipes indisponible (réseau ?). Tire vers le bas pour réessayer.</Text>
+        ) : (
+          <View style={styles.card}>
+            <View style={styles.cardHead}>
+              <Text style={styles.cardTitle}>{teams.length} équipes</Text>
+              <Text style={styles.small}>fichier {ago(index.updatedAt)}{indexStale ? ' (hors ligne)' : ''}</Text>
             </View>
-
-            {valueBets.slice(0, 5).map((item, index) => (
-              <View key={`${item.match.id}-${index}`}>{renderValueBet({ item })}</View>
+            {teams.map((t) => (
+              <TouchableOpacity key={t.id} style={styles.tr} onPress={() => openTeam(t)}>
+                <Text style={[styles.td, { flex: 3, textAlign: 'left' }]} numberOfLines={1}>{t.name}</Text>
+                <Text style={[styles.td, { flex: 2, color: C.ink2, textAlign: 'left' }]} numberOfLines={1}>{t.leagues.join(', ')}</Text>
+                <Text style={[styles.td, { color: C.ink2 }]}>{t.matches} m.</Text>
+                <Ionicons name="chevron-forward" size={14} color={C.muted} />
+              </TouchableOpacity>
             ))}
           </View>
         )}
+      </View>
+    );
+  };
 
-        {/* Surebets Section */}
-        {surebets.length > 0 && (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Surebets</Text>
-              <Ionicons name="shield-checkmark" size={20} color="#10b981" />
-            </View>
-
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              {surebets.map((surebet, index) => (
-                <View key={index} style={styles.surebetCard}>
-                  <Text style={styles.surebetProfit}>
-                    {(surebet.profitPercentage).toFixed(2)}%
-                  </Text>
-                  <Text style={styles.surebetLabel}>Profit garanti</Text>
-                </View>
+  const renderSources = () => {
+    const names = ['LiveScore', 'FotMob', '365Scores', 'ESPN', 'AllSportsApi', 'TheSportsDB'];
+    const known = Object.values(standings).filter((s) => s.data);
+    return (
+      <View>
+        <Section title="Direct (6 sources gratuites)">
+          {names.map((n) => {
+            const s = hub[n];
+            const streak = s?.failStreak ?? 0;
+            const state = !s ? 'inconnu' : s.ok ? 'ok' : streak >= 3 ? 'en panne' : 'raté';
+            const color = state === 'ok' ? C.good : state === 'en panne' ? C.bad : state === 'raté' ? C.warn : C.muted;
+            const icon = state === 'ok' ? 'checkmark-circle' : state === 'en panne' ? 'close-circle' : state === 'raté' ? 'alert-circle' : 'help-circle';
+            return (
+              <View key={n} style={styles.tr}>
+                <Ionicons name={icon as any} size={14} color={color} />
+                <Text style={[styles.td, { flex: 2, textAlign: 'left', marginLeft: 6 }]}>{n}</Text>
+                <Text style={[styles.td, { flex: 1.6, color, textAlign: 'left' }]}>{state}{streak > 0 && !s?.ok ? ` ×${streak}` : ''}</Text>
+                <Text style={[styles.td, { color: C.ink2 }]}>{s?.count != null ? `${s.count} m.` : ''}</Text>
+                <Text style={[styles.td, { flex: 1.6, color: C.ink2, textAlign: 'right' }]}>{ago(s?.at)}</Text>
+              </View>
+            );
+          })}
+          {Object.values(hub).some((s: any) => !s.ok && s.error) && (
+            <View style={{ marginTop: 6 }}>
+              {names.filter((n) => hub[n] && !hub[n].ok && hub[n].error).map((n) => (
+                <Text key={n} style={styles.small} numberOfLines={2}>{n} : {hub[n].error}</Text>
               ))}
-            </ScrollView>
-          </View>
-        )}
+            </View>
+          )}
+          <Text style={[styles.small, { marginTop: 8 }]}>
+            Un seul échec est normal (coupure courte, la source est réessayée 2 s après). « En panne » = 3 échecs de suite. Toutes en panne en même temps = réseau du téléphone.
+          </Text>
+        </Section>
+        <Section title="Fichier des équipes">
+          <Text style={styles.body}>{index ? `${index.teams.length} équipes · mis à jour ${ago(index.updatedAt)}${indexStale ? ' (copie hors ligne)' : ''}` : 'Non chargé'}</Text>
+          <Text style={styles.small}>Compilé chaque nuit (FotMob) + stats live et joueurs ajoutés en fin de match.</Text>
+        </Section>
+        <Section title="Classements">
+          <Text style={styles.body}>{known.length ? `${known.length} compétition(s) chargée(s) · ESPN` : 'Aucun classement chargé pour l’instant'}</Text>
+          {known.map((s) => (
+            <Text key={s.data!.league} style={styles.small}>{s.data!.league} : {ago(s.data!.fetchedAt)}{s.stale ? ' (hors ligne)' : ''}</Text>
+          ))}
+        </Section>
+      </View>
+    );
+  };
 
-        {/* Quick Stats */}
-        <View style={styles.statsContainer}>
-          <View style={styles.statBox}>
-            <Text style={styles.statValue}>{fixtures.filter(m => m.status === 'live').length}</Text>
-            <Text style={styles.statLabel}>En direct</Text>
-          </View>
-          <View style={styles.statBox}>
-            <Text style={styles.statValue}>{fixtures.filter(m => m.status === 'finished').length}</Text>
-            <Text style={styles.statLabel}>Terminés</Text>
-          </View>
-          <View style={styles.statBox}>
-            <Text style={styles.statValue}>{valueBets.length}</Text>
-            <Text style={styles.statLabel}>Value Bets</Text>
-          </View>
-        </View>
+  return (
+    <SafeAreaView style={styles.container} edges={['bottom']}>
+      <View style={styles.segment}>
+        {([['standings', 'Classements', 'podium-outline'], ['teams', 'Équipes', 'people-outline'], ['sources', 'Sources', 'pulse-outline']] as const).map(([k, label, icon]) => (
+          <TouchableOpacity key={k} style={[styles.segBtn, tab === k && styles.segBtnActive]} onPress={() => setTab(k)}>
+            <Ionicons name={icon as any} size={14} color={tab === k ? C.ink : C.ink2} />
+            <Text style={[styles.segText, tab === k && { color: C.ink }]}>{label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      {message && (
+        <TouchableOpacity onPress={() => setMessage(null)} style={styles.message}>
+          <Ionicons name="information-circle" size={14} color={C.warn} />
+          <Text style={[styles.small, { flex: 1, color: C.ink, marginLeft: 6 }]}>{message}</Text>
+        </TouchableOpacity>
+      )}
+      <ScrollView
+        contentContainerStyle={{ padding: 12, paddingBottom: 40 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.accent} />}
+      >
+        {tab === 'standings' ? renderStandings() : tab === 'teams' ? renderTeams() : renderSources()}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0f172a'
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#1e293b',
-    borderBottomWidth: 1,
-    borderBottomColor: '#334155'
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: 'white'
-  },
-  leagueSelector: {
-    paddingVertical: 12,
-    backgroundColor: '#1e293b',
-    borderBottomWidth: 1,
-    borderBottomColor: '#334155'
-  },
-  scrollArea: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: 24,
-  },
-  leagueButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginRight: 8,
-    backgroundColor: '#334155',
-    borderRadius: 20
-  },
-  leagueButtonActive: {
-    backgroundColor: '#3b82f6'
-  },
-  leagueButtonText: {
-    color: '#94a3b8',
-    fontWeight: '600'
-  },
-  leagueButtonTextActive: {
-    color: 'white'
-  },
-  leagueIconButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 72,
-    paddingVertical: 8,
-    marginRight: 10,
-    borderRadius: 12,
-    backgroundColor: '#1e293b',
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  leagueIconButtonActive: {
-    backgroundColor: '#1d3a63',
-    borderColor: '#3b82f6',
-  },
-  leagueIcon: {
-    width: 32,
-    height: 32,
-    marginBottom: 4,
-  },
-  leagueIconLabel: {
-    color: '#94a3b8',
-    fontSize: 10,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  leagueIconLabelActive: {
-    color: '#f8fafc',
-  },
-  standingsBox: {
-    marginTop: 16,
-    paddingTop: 14,
-    borderTopWidth: 1,
-    borderTopColor: '#334155',
-  },
-  standingsTitle: {
-    fontSize: 13,
-    fontWeight: 'bold',
-    color: '#f1f5f9',
-    marginBottom: 10,
-  },
-  standingsError: {
-    color: '#64748b',
-    fontSize: 12,
-    fontStyle: 'italic',
-  },
-  standingsHeaderRow: {
-    flexDirection: 'row',
-    paddingBottom: 8,
-    marginBottom: 4,
-    borderBottomWidth: 1,
-    borderBottomColor: '#334155',
-  },
-  standingsRow: {
-    flexDirection: 'row',
-    paddingVertical: 6,
-  },
-  standingsCell: {
-    flex: 1,
-    color: '#cbd5e1',
-    fontSize: 12,
-    textAlign: 'center',
-  },
-  standingsHeaderText: {
-    color: '#64748b',
-    fontWeight: '700',
-    fontSize: 10,
-    textTransform: 'uppercase',
-  },
-  standingsRankCell: {
-    flex: 0.5,
-    fontWeight: '700',
-    color: '#f8fafc',
-  },
-  standingsTeamCell: {
-    flex: 3,
-    textAlign: 'left',
-    color: '#f8fafc',
-    fontWeight: '600',
-  },
-  standingsPointsCell: {
-    fontWeight: '700',
-    color: '#10b981',
-  },
-  errorContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    margin: 16,
-    backgroundColor: '#ef444420',
-    borderRadius: 8
-  },
-  errorText: {
-    marginLeft: 8,
-    color: '#ef4444',
-    fontWeight: '500'
-  },
-  noKeysBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    marginHorizontal: 16,
-    marginTop: 12,
-    backgroundColor: '#78350f40',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#fbbf2440',
-    gap: 8
-  },
-  noKeysBannerText: {
-    flex: 1,
-    color: '#fde68a',
-    fontSize: 12,
-    lineHeight: 17
-  },
-  section: {
-    padding: 16
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: 'white'
-  },
-  sectionCount: {
-    fontSize: 14,
-    color: '#94a3b8'
-  },
-  matchList: {
-    paddingBottom: 8
-  },
-  matchCard: {
-    backgroundColor: '#1e293b',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12
-  },
-  matchHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12
-  },
-  leagueName: {
-    fontSize: 14,
-    color: '#94a3b8',
-    fontWeight: '500'
-  },
-  matchTime: {
-    fontSize: 14,
-    color: '#60a5fa'
-  },
-  matchTeams: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center'
-  },
-  teamContainer: {
-    alignItems: 'center',
-    flex: 1
-  },
-  teamName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: 'white',
-    marginBottom: 4
-  },
-  teamOdds: {
-    fontSize: 14,
-    color: '#10b981',
-    fontWeight: 'bold'
-  },
-  teamRank: {
-    fontSize: 11,
-    color: '#94a3b8',
-    marginBottom: 4
-  },
-  formRow: {
-    flexDirection: 'row',
-    marginBottom: 6,
-    gap: 3
-  },
-  formBadge: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  formBadgeV: {
-    backgroundColor: '#10b981'
-  },
-  formBadgeN: {
-    backgroundColor: '#64748b'
-  },
-  formBadgeD: {
-    backgroundColor: '#ef4444'
-  },
-  formBadgeText: {
-    fontSize: 9,
-    fontWeight: 'bold',
-    color: 'white'
-  },
-  vs: {
-    fontSize: 14,
-    color: '#64748b',
-    marginHorizontal: 8
-  },
-  oddsRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 12
-  },
-  oddsBox: {
-    alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    backgroundColor: '#334155',
-    borderRadius: 8
-  },
-  oddsLabel: {
-    fontSize: 12,
-    color: '#94a3b8'
-  },
-  oddsValue: {
-    fontSize: 16,
-    color: '#eab308',
-    fontWeight: 'bold'
-  },
-  loadingText: {
-    marginTop: 20,
-    color: '#94a3b8'
-  },
-  valueBetList: {
-    paddingBottom: 8
-  },
-  valueBetCard: {
-    backgroundColor: '#334155',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12
-  },
-  valueBetHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8
-  },
-  valueBetTeam: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: 'white'
-  },
-  valueBetLabel: {
-    fontSize: 12,
-    color: '#94a3b8'
-  },
-  valueBetBody: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center'
-  },
-  valueBetSelection: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#eab308'
-  },
-  valueBetOdds: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#10b981'
-  },
-  valueBetEdge: {
-    fontSize: 12,
-    color: '#3b82f6',
-    fontWeight: '500'
-  },
-  valueBetHigh: {
-    borderLeftWidth: 4,
-    borderLeftColor: '#fbbf24'
-  },
-  surebetCard: {
-    backgroundColor: '#10b98120',
-    borderRadius: 8,
-    padding: 12,
-    marginRight: 12,
-    minWidth: 100
-  },
-  surebetProfit: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#10b981'
-  },
-  surebetLabel: {
-    fontSize: 12,
-    color: '#10b981'
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    padding: 16,
-    backgroundColor: '#1e293b'
-  },
-  statBox: {
-    alignItems: 'center'
-  },
-  statValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: 'white'
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#94a3b8'
-  }
+  container: { flex: 1, backgroundColor: C.bg },
+  row: { flexDirection: 'row', alignItems: 'center' },
+  segment: { flexDirection: 'row', margin: 12, marginBottom: 0, backgroundColor: C.card, borderRadius: 10, padding: 3, borderWidth: 1, borderColor: C.line },
+  segBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 7, borderRadius: 8 },
+  segBtnActive: { backgroundColor: '#24324a' },
+  segText: { color: C.ink2, fontSize: 12, fontWeight: '600' },
+  message: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 12, marginTop: 8, padding: 8, borderRadius: 8, backgroundColor: '#2a2414' },
+  chip: { paddingHorizontal: 11, paddingVertical: 5, borderRadius: 14, borderWidth: 1, borderColor: C.line, marginRight: 6 },
+  chipActive: { backgroundColor: C.accent, borderColor: C.accent },
+  chipText: { color: C.ink2, fontSize: 12 },
+  chipTextActive: { color: '#fff', fontWeight: '600' },
+  card: { backgroundColor: C.card, borderRadius: 10, padding: 10, marginBottom: 10, borderWidth: 1, borderColor: C.line },
+  cardHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  cardTitle: { color: C.ink, fontSize: 13, fontWeight: '700' },
+  teamName: { color: C.ink, fontSize: 17, fontWeight: '700' },
+  kicker: { color: C.muted, fontSize: 10, textTransform: 'uppercase', marginTop: 2 },
+  kpi: { alignItems: 'center' },
+  kpiValue: { color: C.ink, fontSize: 15, fontWeight: '700' },
+  body: { color: C.ink, fontSize: 12, lineHeight: 17 },
+  small: { color: C.ink2, fontSize: 11, lineHeight: 15 },
+  tableHead: { flexDirection: 'row', paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: C.line },
+  th: { flex: 1, color: C.muted, fontSize: 10, textAlign: 'center', fontWeight: '600' },
+  tr: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.line },
+  td: { flex: 1, color: C.ink, fontSize: 12, textAlign: 'center' },
+  zone: { width: 3, height: 16, borderRadius: 2, marginRight: 3 },
+  logo: { width: 16, height: 16, marginRight: 6 },
+  formBadge: { width: 18, height: 18, borderRadius: 4, alignItems: 'center', justifyContent: 'center', marginRight: 3 },
+  formText: { color: '#fff', fontSize: 10, fontWeight: '700' },
+  legendDot: { width: 8, height: 8, borderRadius: 4, marginRight: 5 },
+  rateGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  rateCell: { width: '31%', marginBottom: 8 },
+  rateValue: { color: C.ink, fontSize: 14, fontWeight: '700' },
+  rateTrack: { height: 4, backgroundColor: C.line, borderRadius: 2, marginTop: 3, overflow: 'hidden' },
+  rateFill: { height: 4, backgroundColor: C.accent, borderRadius: 2 },
+  dualRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 3 },
+  dualVal: { width: 34, color: C.ink, fontSize: 11 },
+  dualHalfL: { flex: 1, height: 8, flexDirection: 'row', justifyContent: 'flex-end' },
+  dualHalfR: { flex: 1, height: 8, flexDirection: 'row', justifyContent: 'flex-start' },
+  dualFill: { height: 8 },
+  dualLabel: { width: 98, color: C.ink2, fontSize: 10, textAlign: 'center' },
+  timingWrap: { flexDirection: 'row', justifyContent: 'space-between' },
+  timingCol: { flex: 1, alignItems: 'center' },
+  timingBars: { flexDirection: 'row', alignItems: 'flex-end', height: 72, gap: 2 },
+  timingBarSlot: { alignItems: 'center', justifyContent: 'flex-end' },
+  timingBar: { width: 10, borderTopLeftRadius: 3, borderTopRightRadius: 3, minHeight: 1 },
+  timingNum: { color: C.ink2, fontSize: 9, marginBottom: 1 },
+  timingLabel: { color: C.muted, fontSize: 9, marginTop: 3 },
+  matchRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 5, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.line },
+  search: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.card, borderRadius: 8, borderWidth: 1, borderColor: C.line, paddingHorizontal: 10, marginBottom: 8 },
+  searchInput: { flex: 1, color: C.ink, fontSize: 13, paddingVertical: 7, marginLeft: 6 },
 });
