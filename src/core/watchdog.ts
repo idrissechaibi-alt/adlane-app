@@ -22,8 +22,11 @@ async function problems(): Promise<Array<{ id: string; text: string }>> {
   }
   try {
     const hub = await getHubStatus();
-    const down = Object.entries(hub).filter(([, v]) => !v.ok && Date.now() - Date.parse(v.at) < 2 * 3_600_000).map(([k]) => k);
-    if (down.length >= 2) out.push({ id: 'sources', text: `📡 Sources de matchs en panne : ${down.join(', ')}.` });
+    const entries = Object.entries(hub);
+    // En panne = au moins 3 échecs d'affilée (relance comprise) dans les 2 dernières heures.
+    const down = entries.filter(([, v]) => !v.ok && ((v as any).failStreak ?? 1) >= 3 && Date.now() - Date.parse(v.at) < 2 * 3_600_000).map(([k]) => k);
+    if (down.length === entries.length && entries.length > 0) out.push({ id: 'network', text: '📶 Aucune source ne répond : c\'est la connexion du téléphone (réseau ou économie de batterie), pas les sources.' });
+    else if (down.length >= 2) out.push({ id: 'sources', text: `📡 Sources de matchs en panne (3 échecs d'affilée) : ${down.join(', ')}. Les autres sources prennent le relais.` });
   } catch {
     // idem
   }

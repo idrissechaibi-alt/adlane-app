@@ -387,7 +387,7 @@ export default function DailyPlanScreen() {
       setOddsVersion((v) => v + 1);
     };
     const lineMissing = async () => {
-      if (!leg.projection || !parsed) {
+      if (!parsed) {
         await marketOff();
         return;
       }
@@ -396,7 +396,8 @@ export default function DailyPlanScreen() {
       setMinLineForm({ id: formId, low: '', lowOdds: '', high: '', highOdds: '' });
     };
     Alert.alert('Introuvable chez ton bookmaker', 'Que se passe-t-il ?', [
-      ...(leg.projection && parsed ? [{ text: "Cette ligne n'existe pas", onPress: () => void lineMissing() }] : []),
+      // Toute jambe qui a une ligne (buts, corners, cartons, fautes, tirs cadrés joueur…), simple ou dans un combiné.
+      ...(parsed ? [{ text: "Cette ligne n'existe pas", onPress: () => void lineMissing() }] : []),
       { text: 'Marché non proposé', onPress: () => void marketOff() },
       { text: 'Annuler', style: 'cancel' as const },
     ]);
@@ -410,7 +411,7 @@ export default function DailyPlanScreen() {
     const legIndex = Number((minLineForm?.id ?? '').split(':').pop()) || 0;
     const leg = proposal.legs[legIndex];
     const parsed = leg ? parseLine(leg.selection) : null;
-    if (!minLineForm || !leg?.projection || !parsed) return;
+    if (!minLineForm || !leg || !parsed) return;
     const num = (v: string) => Number(v.replace(',', '.'));
     const low = minLineForm.low.trim() ? num(minLineForm.low) : null;
     const high = minLineForm.high.trim() ? num(minLineForm.high) : null;
@@ -429,10 +430,11 @@ export default function DailyPlanScreen() {
       return;
     }
     try {
-      const unit = leg.projection.unit;
-      // Total attendu AU MOMENT de la saisie (situation actuelle du match), sinon celui du pari.
+      const unit = leg.projection?.unit ?? leg.market;
+      // Total attendu AU MOMENT de la saisie (situation actuelle du match), sinon celui du pari (ou la ligne elle-même
+      // pour un marché sans projection, comme les tirs cadrés d'un joueur).
       const ctx = await liveLegContext(leg).catch(() => null);
-      const expected = ctx?.count ? ctx.count.done + ctx.count.lambda : leg.projection.expected;
+      const expected = ctx?.count ? ctx.count.done + ctx.count.lambda : leg.projection?.expected ?? parsed.line;
       // Observations CONTEXTUELLES (situation du moment) : les lignes données existent, celles juste au-delà de
       // tes bornes n'existent pas, et la ligne du pari est notée selon qu'elle tombe dans le menu ou non.
       // Ce n'est pas une règle générale : le menu du bookmaker change avec le match.

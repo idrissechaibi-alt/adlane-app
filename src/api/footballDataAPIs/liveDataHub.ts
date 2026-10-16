@@ -537,7 +537,7 @@ const PROVIDERS: Provider[] = [liveScore, fotMob, scores365, espn, allSports, sp
 const LIVE_TTL_MS = 50_000;
 const TODAY_TTL_MS = 10 * 60_000;
 const PAST_TTL_MS = 6 * 3_600_000;
-const FAILURE_PAUSE_MS = 5 * 60_000;
+const FAILURE_PAUSE_MS = 2 * 60_000;
 
 const cache = new Map<string, { at: number; data: HubMatch[] }>();
 const pausedUntil = new Map<string, number>();
@@ -546,7 +546,9 @@ const status: Record<string, { ok: boolean; count?: number; error?: string; at: 
 let statusDirty = false;
 
 function noteStatus(provider: HubProviderName, ok: boolean, count?: number, error?: string) {
-  status[provider] = { ok, count, error, at: new Date().toISOString() };
+  // Échecs consécutifs : une coupure réseau d'un instant n'est pas une panne de la source.
+  const failStreak = ok ? 0 : ((status[provider] as any)?.failStreak ?? 0) + 1;
+  status[provider] = { ok, count, error, at: new Date().toISOString(), failStreak } as any;
   statusDirty = true;
 }
 
@@ -567,7 +569,12 @@ async function cachedList(provider: Provider, kind: 'live' | string): Promise<Hu
   if (hit && Date.now() - hit.at < ttl) return hit.data;
   if ((pausedUntil.get(key) ?? 0) > Date.now()) return hit?.data ?? [];
   try {
-    const data = kind === 'live' ? await provider.live() : await provider.byDate(kind);
+    const fetchOnce = () => (kind === 'live' ? provider.live() : provider.byDate(kind));
+    // Une relance après 2 s avant de conclure à un échec (réseau mobile instable, source lente un instant).
+    const data = await fetchOnce().catch(async () => {
+      await new Promise((r) => setTimeout(r, 2000));
+      return fetchOnce();
+    });
     cache.set(key, { at: Date.now(), data });
     if (kind === 'live') noteStatus(provider.name, true, data.length);
     return data;
