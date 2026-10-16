@@ -692,7 +692,8 @@ export async function runNightlyReviewIfDue(): Promise<number> {
     // moindre requête pour une proposition déjà réglée lors d'un passage
     // précédent.
     const unreviewedDayProposals = allProposals.filter(
-      (p) => p.createdAt.startsWith(day) && !p.reviewed
+      // Revu mais une jambe restée sans verdict (stat du joueur pas encore disponible…) : repris aux bilans suivants.
+      (p) => p.createdAt.startsWith(day) && (!p.reviewed || p.legs.some((l) => !l.settled))
     );
     if (unreviewedDayProposals.length === 0) continue;
 
@@ -948,7 +949,10 @@ export async function runNightlyReviewIfDue(): Promise<number> {
           real: proposal.real !== false,
         });
       }
-      proposal.reviewed = true;
+      // « Revu » seulement quand toutes les jambes ont un verdict : sinon la courbe ne compterait que les jambes réglées
+      // (1 tir cadré gagné sur 3 affiché 100 %). Au-delà de 3 jours sans verdict possible, on abandonne.
+      const stale = Date.now() - Date.parse(proposal.createdAt) > 3 * 86_400_000;
+      if (proposal.legs.every((l) => l.settled) || stale) proposal.reviewed = true;
     }
 
     if (settledOutcomes.length > 0) appendPredictionOutcomes(settledOutcomes);
