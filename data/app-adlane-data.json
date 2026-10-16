@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-10-16T15:50:20.386Z",
+  "exportedAt": "2026-10-16T15:53:26.134Z",
   "formatVersion": 1,
   "source": "APP adlane",
   "data": {
@@ -5949,14 +5949,17 @@
   },
   "health": {
     "nativeBackgroundTicks": {
-      "lastTickAt": "2026-10-16T15:47:17.967Z",
-      "ticksLast24h": 80
+      "lastTickAt": "2026-10-16T15:52:41.656Z",
+      "ticksLast24h": 82
     },
     "tickProgress": {
-      "startedAt": "2026-10-16T15:50:13.856Z",
-      "step": "scan matinal",
-      "at": "2026-10-16T15:50:13.856Z",
-      "stepDurationsSec": {}
+      "startedAt": "2026-10-16T15:53:19.421Z",
+      "step": "scan en direct 20e/60e",
+      "at": "2026-10-16T15:53:20.168Z",
+      "stepDurationsSec": {
+        "scan matinal": 1,
+        "relevé live partagé": 0
+      }
     },
     "lastTick": {
       "startedAt": "2026-10-16T15:33:23.530Z",
@@ -6076,27 +6079,12 @@
       "nightlyReviewPointsCreated": 16
     },
     "lastRealFastTick": {
-      "at": "2026-10-16T15:50:14.665Z",
+      "at": "2026-10-16T15:53:20.149Z",
       "liveFound": 0,
       "fresh": 0,
       "source": "api_football"
     },
     "abortedTicks": [
-      {
-        "startedAt": "2026-10-13T20:23:39.851Z",
-        "step": "scan matinal",
-        "at": "2026-10-13T20:23:39.851Z",
-        "stepDurationsSec": {}
-      },
-      {
-        "startedAt": "2026-10-14T11:23:39.952Z",
-        "step": "scan en direct 20e/60e",
-        "at": "2026-10-14T11:23:40.699Z",
-        "stepDurationsSec": {
-          "scan matinal": 1,
-          "relevé live partagé": 0
-        }
-      },
       {
         "startedAt": "2026-10-14T12:17:02.112Z",
         "step": "programme fictif",
@@ -6217,6 +6205,21 @@
           "scan matinal": 0,
           "relevé live partagé": 0
         }
+      },
+      {
+        "startedAt": "2026-10-16T15:50:13.856Z",
+        "step": "scan en direct 20e/60e",
+        "at": "2026-10-16T15:50:16.691Z",
+        "stepDurationsSec": {
+          "scan matinal": 3,
+          "relevé live partagé": 0
+        }
+      },
+      {
+        "startedAt": "2026-10-16T15:53:18.464Z",
+        "step": "scan matinal",
+        "at": "2026-10-16T15:53:18.464Z",
+        "stepDurationsSec": {}
       }
     ],
     "strategies": [
@@ -6523,7 +6526,7 @@
         {
           "name": "Principal",
           "ok": true,
-          "latencyMs": 82,
+          "latencyMs": 92,
           "readyModels": 27,
           "configuredReady": 12,
           "configuredTotal": 13
@@ -6531,8 +6534,8 @@
         {
           "name": "Omniroute",
           "ok": true,
-          "latencyMs": 2152,
-          "readyModels": 867,
+          "latencyMs": 2325,
+          "readyModels": 869,
           "configuredReady": 2,
           "configuredTotal": 2
         }
@@ -6553,6 +6556,13 @@
           "coolingDown": true
         },
         {
+          "label": "Principal · nemotron-3.5-content-safety",
+          "ok": 2396,
+          "fail": 2343,
+          "avgMs": 1313,
+          "coolingDown": false
+        },
+        {
           "label": "Principal · gpt-oss-120b",
           "ok": 1308,
           "fail": 1924,
@@ -6560,31 +6570,24 @@
           "coolingDown": true
         },
         {
-          "label": "Omniroute · Clodiko",
-          "ok": 9441,
-          "fail": 245,
-          "avgMs": 7532,
-          "coolingDown": false
-        },
-        {
-          "label": "Principal · nemotron-3.5-content-safety",
-          "ok": 2392,
-          "fail": 2339,
-          "avgMs": 3508,
-          "coolingDown": false
-        },
-        {
           "label": "Omniroute · Maximus appus",
-          "ok": 5009,
-          "fail": 89,
-          "avgMs": 9969,
+          "ok": 5012,
+          "fail": 90,
+          "avgMs": 9136,
           "coolingDown": false
         },
         {
           "label": "Principal · riva-translate-4b-instruct-v2",
-          "ok": 1106,
-          "fail": 1094,
-          "avgMs": 6327,
+          "ok": 1107,
+          "fail": 1095,
+          "avgMs": 5269,
+          "coolingDown": false
+        },
+        {
+          "label": "Omniroute · Clodiko",
+          "ok": 9446,
+          "fail": 245,
+          "avgMs": 13690,
           "coolingDown": false
         },
         {
@@ -6652,7 +6655,7 @@
         "apiFootball-autolearn": 42,
         "sportmonks-autolearn": 14,
         "sofaScore": 0,
-        "sportmonks": 91
+        "sportmonks": 92
       },
       "theOddsApiMonth": {
         "used": 500,
@@ -6668,40 +6671,40 @@
     },
     "sofaScore": null,
     "liveSources": {
+      "LiveScore": {
+        "ok": true,
+        "count": 13,
+        "at": "2026-10-16T15:53:19.443Z",
+        "failStreak": 0
+      },
       "TheSportsDB": {
         "ok": true,
         "count": 26,
-        "at": "2026-10-16T15:50:14.200Z",
-        "failStreak": 0
-      },
-      "365Scores": {
-        "ok": true,
-        "count": 23,
-        "at": "2026-10-16T15:50:14.253Z",
+        "at": "2026-10-16T15:53:19.444Z",
         "failStreak": 0
       },
       "FotMob": {
         "ok": true,
-        "count": 16,
-        "at": "2026-10-16T15:50:14.296Z",
+        "count": 15,
+        "at": "2026-10-16T15:53:19.451Z",
+        "failStreak": 0
+      },
+      "365Scores": {
+        "ok": true,
+        "count": 21,
+        "at": "2026-10-16T15:53:19.461Z",
         "failStreak": 0
       },
       "ESPN": {
         "ok": true,
         "count": 1,
-        "at": "2026-10-16T15:50:14.385Z",
+        "at": "2026-10-16T15:53:19.476Z",
         "failStreak": 0
       },
       "AllSportsApi": {
         "ok": true,
         "count": 0,
-        "at": "2026-10-16T15:50:14.386Z",
-        "failStreak": 0
-      },
-      "LiveScore": {
-        "ok": true,
-        "count": 13,
-        "at": "2026-10-16T15:50:14.387Z",
+        "at": "2026-10-16T15:53:19.889Z",
         "failStreak": 0
       }
     },
@@ -6716,7 +6719,7 @@
     },
     "settlementAudit": [],
     "unmatchedPlannedLive": {
-      "at": "2026-10-16T15:50:14.443Z",
+      "at": "2026-10-16T15:53:19.931Z",
       "unmatched": [],
       "sourceNames": [
         "Otelul Galati - Miercurea Ciuc",
@@ -6735,9 +6738,6 @@
         "SC Delhi - Mohun Bagan SG",
         "Bunyodkor Tashkent - Sogdiana",
         "Kokand 1912 - Neftchi Fargona",
-        "Surkhon-2011 - Xorazm",
-        "Surkhon Termez - Xorazm Urganch",
-        "Doqarah - Al Jazeera",
         "Be1 Nfa - Fk Neptunas",
         "Qatar U17 - China U17",
         "Taran Liptovsky Mikulas - Baník Lehota P.Vtáčnikom",
@@ -6747,21 +6747,22 @@
         "Karbalaa - Al Garaf",
         "Adama Kenema - Sheger Ketema",
         "Sporting Club Delhi - Mohun Bagan Super Giant",
-        "Gonio - Orbi Tbilisi",
-        "Pohronie - Dynamo Malženice",
-        "Adama Kenema - Shaggar City",
         "Be1 - Neptūnas",
         "Dinamo-2 Tbilisi - WIT Georgia",
+        "Dougra - Al-Jazeera Club",
         "Locomotive Tbilisi - Merani Tbilisi",
         "Rwanda Police - Gorilla",
-        "Dougra - Al-Jazeera Club",
+        "Surkhon Termez - Xorazm Urganch",
+        "Gonio - Orbi Tbilisi",
         "Hranice - Vitkovice",
-        "Sumqayıt - Araz-Naxçıvan"
+        "Pohronie - Dynamo Malženice",
+        "Sumqayıt - Araz-Naxçıvan",
+        "Adama Kenema - Shaggar City"
       ]
     },
     "liveStatsScan": {
       "lastScan": {
-        "at": "2026-10-16T15:50:14.508Z",
+        "at": "2026-10-16T15:53:19.964Z",
         "matches": 0,
         "sources": "6 sources gratuites"
       },
@@ -6784,68 +6785,13 @@
       "indexUpdatedAt": "2026-10-15T23:48:27Z",
       "teamsInIndex": 111,
       "summariesCached": 79,
-      "lookups": 5,
+      "lookups": 7,
       "withTrend": 0,
-      "unknownTeams": 5,
+      "unknownTeams": 7,
       "lastTrendAt": null,
       "lastUnknown": "Olympique Akbou - Ben Aknoun"
     },
     "teamStatsUsageLog": [
-      {
-        "at": "2026-10-16T14:19:28.336Z",
-        "match": "SC Delhi - Mohun Bagan SG",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-10-16T14:19:29.100Z",
-        "match": "Bunyodkor Tashkent - Sogdiana",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-10-16T14:19:29.822Z",
-        "match": "Surkhon-2011 - Xorazm",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-10-16T14:46:38.442Z",
-        "match": "Al Qadsiah - Abha",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-10-16T14:46:38.553Z",
-        "match": "El Merriekh FC Bentiu - Pyramids FC",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-10-16T14:46:41.930Z",
-        "match": "Olympique Akbou - Ben Aknoun",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-10-16T14:46:43.806Z",
-        "match": "Al-Ahli - Al-Wakra",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-10-16T15:33:28.105Z",
-        "match": "Gonio - Orbi Tbilisi",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-10-16T15:33:28.289Z",
-        "match": "Karbalaa - Al-Gharraf",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-10-16T15:33:28.449Z",
-        "match": "Locomotive Tbilisi - Merani Tbilisi",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-10-16T15:33:29.027Z",
-        "match": "Kokand 1912 - Neftchi Fargona",
-        "result": "équipe inconnue"
-      },
       {
         "at": "2026-10-16T15:33:29.483Z",
         "match": "Karbalaa - Al Garaf",
@@ -6913,6 +6859,61 @@
       },
       {
         "at": "2026-10-16T15:50:18.859Z",
+        "match": "Olympique Akbou - Ben Aknoun",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-16T15:52:22.654Z",
+        "match": "Al-Ahli - Al-Wakra",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-16T15:52:22.683Z",
+        "match": "Be1 Nfa - Fk Neptunas",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-16T15:52:22.914Z",
+        "match": "Olympique Akbou - Ben Aknoun",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-16T15:52:24.822Z",
+        "match": "Aluminij - Olimpija Ljubljana",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-16T15:53:22.295Z",
+        "match": "Be1 - Neptūnas",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-16T15:53:22.492Z",
+        "match": "Al-Ahli - Al-Wakra",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-16T15:53:22.702Z",
+        "match": "Be1 Nfa - Fk Neptunas",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-16T15:53:22.900Z",
+        "match": "Olympique Akbou - Ben Aknoun",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-16T15:53:23.012Z",
+        "match": "Aluminij - Olimpija Ljubljana",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-16T15:53:25.612Z",
+        "match": "Be1 Nfa - Fk Neptunas",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-16T15:53:25.649Z",
         "match": "Olympique Akbou - Ben Aknoun",
         "result": "équipe inconnue"
       }
