@@ -861,6 +861,18 @@ async function playerShotCandidates(live: LiveFixture): Promise<CandidateLeg[]> 
  * Motifs appris (patternEngine) : chaque jambe dont la situation actuelle correspond à un motif validé voit sa probabilité
  * corrigée — dès 100 matchs mesurés, sur les deux pipes.
  */
+/**
+ * Pipe FICTIF : un pari corners / cartons / fautes n'est proposé que si cette stat est réellement relevée pour ce match
+ * (sinon il ne pourra jamais être réglé et fausserait courbes et calibration). Les tirs cadrés joueur viennent déjà des
+ * stats ESPN du match ; les marchés de score se règlent toujours.
+ */
+function fictionalSettleable(leg: CandidateLeg, observed: ObservedLiveCounts | undefined): boolean {
+  if (leg.market === 'corners') return observed?.corners != null;
+  if (leg.market === 'cartons') return observed?.cards != null;
+  if (leg.market === 'fautes') return !!observed?.fouls;
+  return true;
+}
+
 async function applyPatterns(legs: CandidateLeg[], live: LiveFixture, observed: ObservedLiveCounts | undefined, stats: LiveMatchStats | undefined, real: boolean): Promise<void> {
   const point = {
     minute: live.minute,
@@ -2062,7 +2074,7 @@ export async function runInPlayComboTick(
         await applyPatterns(rawLegs, live, observedLive, currentStats, false);
         const window = kind === 'minute20' ? '20e → pause + match complet' : '60e → fin de match';
 
-        for (const leg of rawLegs.filter(worthProposing)) {
+        for (const leg of rawLegs.filter(worthProposing).filter((l) => fictionalSettleable(l, observedLive))) {
           const dedupKey = `${live.fixtureId}-${kind}-${legDedupSuffix(leg)}`;
           if (alreadyProposed.has(dedupKey)) continue;
           const proposal = buildProposalFromItems(kind, [{ leg, fixtureId: live.fixtureId, match, live }], window, false);
@@ -2274,7 +2286,7 @@ export async function runInPlayComboTick(
         await applyPatterns(rawLegs, live, observedLive, currentStats, false);
 
         const window = kind === 'minute20' ? '20e → pause + match complet' : '60e → fin de match';
-        for (const leg of rawLegs.filter(worthProposing)) {
+        for (const leg of rawLegs.filter(worthProposing).filter((l) => fictionalSettleable(l, observedLive))) {
           const dedupKey = `${live.fixtureId}-${kind}-${legDedupSuffix(leg)}`;
           if (alreadyProposed.has(dedupKey)) continue;
           const proposal = buildProposalFromItems(kind, [{ leg, fixtureId: live.fixtureId, match, live }], window, false);

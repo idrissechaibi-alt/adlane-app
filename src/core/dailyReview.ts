@@ -535,6 +535,7 @@ async function settlePlacedLiveBets(proposals: InPlayProposal[]): Promise<void> 
  * fenêtre de la 20e minute des matchs réels. */
 const REVIEW_TIME_BUDGET_MS = 3 * 60_000;
 const CATCHUP_KEY = '@review_catchup_attempts';
+const VOID_AFTER_MS = 48 * 3_600_000;
 let reviewDeadline = Infinity;
 const reviewTimeLeft = () => Date.now() < reviewDeadline;
 
@@ -689,7 +690,7 @@ export async function runNightlyReviewIfDue(): Promise<number> {
   try {
     const attempts: Record<string, number> = JSON.parse((await AsyncStorage.getItem(CATCHUP_KEY)) ?? '{}');
     const oldest = dayKey(new Date(Date.now() - 14 * 86_400_000));
-    const open = Array.from(new Set(allProposals.filter((p) => p.legs.some((l) => !l.settled)).map((p) => p.createdAt.slice(0, 10))))
+    const open = Array.from(new Set(allProposals.filter((p) => p.legs.some((l) => !l.settled && !l.voided)).map((p) => p.createdAt.slice(0, 10))))
       .filter((d) => d >= oldest && d < yesterday && !pendingDays.includes(d) && Date.now() - (attempts[d] ?? 0) >= 6 * 3_600_000)
       .sort()
       .slice(0, 2);
@@ -720,7 +721,7 @@ export async function runNightlyReviewIfDue(): Promise<number> {
     // précédent.
     const unreviewedDayProposals = allProposals.filter(
       // Revu mais une jambe restée sans verdict (stat du joueur pas encore disponible…) : repris aux bilans suivants.
-      (p) => p.createdAt.startsWith(day) && (!p.reviewed || p.legs.some((l) => !l.settled))
+      (p) => p.createdAt.startsWith(day) && (!p.reviewed || p.legs.some((l) => !l.settled && !l.voided))
     );
     if (unreviewedDayProposals.length === 0) continue;
 
@@ -939,8 +940,17 @@ export async function runNightlyReviewIfDue(): Promise<number> {
 
     const explanations: LegExplanation[] = [];
     for (const proposal of unreviewedDayProposals) {
+      // 48 h après le pari, une jambe toujours sans verdict est ANNULÉE : comptée à part, exclue des courbes et de la
+      // calibration, plus jamais retentée (au lieu de rester « en attente » et de fausser les taux).
+      const expired = Date.now() - Date.parse(proposal.createdAt) > VOID_AFTER_MS;
       const allResolved = proposal.legs.every((leg) => finals.has(leg.fixtureId));
-      if (!allResolved) continue; // au moins un match du combo n'a pas encore de score final
+      if (!allResolved) {
+        if (expired) {
+          for (const leg of proposal.legs) if (!leg.settled) leg.voided = true;
+          proposal.reviewed = true;
+        }
+        continue; // au moins un match du combo n'a pas encore de score final
+      }
 
       for (const leg of proposal.legs) {
         const result = finals.get(leg.fixtureId)!;
@@ -995,8 +1005,8 @@ export async function runNightlyReviewIfDue(): Promise<number> {
       }
       // « Revu » seulement quand toutes les jambes ont un verdict : sinon la courbe ne compterait que les jambes réglées
       // (1 tir cadré gagné sur 3 affiché 100 %). Au-delà de 3 jours sans verdict possible, on abandonne.
-      const stale = Date.now() - Date.parse(proposal.createdAt) > 3 * 86_400_000;
-      if (proposal.legs.every((l) => l.settled) || stale) proposal.reviewed = true;
+      if (expired) for (const leg of proposal.legs) if (!leg.settled) leg.voided = true;
+      if (proposal.legs.every((l) => l.settled || l.voided)) proposal.reviewed = true;
     }
 
     if (settledOutcomes.length > 0) appendPredictionOutcomes(settledOutcomes);

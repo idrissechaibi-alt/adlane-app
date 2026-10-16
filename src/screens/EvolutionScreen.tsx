@@ -63,6 +63,8 @@ export default function EvolutionScreen() {
   const [paperBetsSummary, setPaperBetsSummary] = useState<{ total: number; settled: number; matches: number; won: number } | null>(null);
   const [dailyReports, setDailyReports] = useState<DailyReport[]>([]);
   /** Batterie de paris fictifs du scan 20e/60e minute (inPlayCombos.ts, real:false) — distincte de paperBetsSummary (règles apprises d'autoLearn.ts). */
+  /** Paris annulés (toujours sans verdict 48 h après : stat introuvable), exclus des courbes et de la calibration. */
+  const [voidedCount, setVoidedCount] = useState<{ fictional: number; real: number; total: number } | null>(null);
   const [fictionalCounter, setFictionalCounter] = useState<{ matches: number; placed: number; won: number } | null>(null);
   const [forcingScan, setForcingScan] = useState(false);
   /** Fiabilité mesurée des pronos du scan 20e/60e — source distincte des paris
@@ -292,7 +294,14 @@ export default function EvolutionScreen() {
       console.warn('Calibration du scan indisponible:', error);
     }
     try {
-      const fictional = readInPlayProposals().filter((p) => p.real === false);
+      const allProps = readInPlayProposals();
+      const legs = allProps.flatMap((p) => p.legs.map((l) => ({ l, real: p.real !== false })));
+      setVoidedCount({
+        fictional: legs.filter((x) => !x.real && x.l.voided).length,
+        real: legs.filter((x) => x.real && x.l.voided).length,
+        total: legs.length,
+      });
+      const fictional = allProps.filter((p) => p.real === false);
       const cum = readCumulativeCounts('fictional');
       setFictionalCounter({
         matches: Math.max(new Set(fictional.map((p) => p.legs[0]?.fixtureId)).size, cum?.matches ?? 0),
@@ -936,6 +945,9 @@ export default function EvolutionScreen() {
               </View>
               <Text style={[styles.infoText, { marginBottom: 10, marginHorizontal: 4 }]}>
                 {all.ok} pronos gagnés sur {all.n} réglés. Réel : {pct(real)} ({real.n}) · Fictif : {pct(fict)} ({fict.n}).
+                {voidedCount && voidedCount.fictional + voidedCount.real > 0
+                  ? `\n⊘ ${voidedCount.fictional + voidedCount.real} paris annulés (stat introuvable 48 h après : ${voidedCount.fictional} fictifs, ${voidedCount.real} réels), exclus des taux.`
+                  : ''}
               </Text>
             </View>
           );

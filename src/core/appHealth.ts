@@ -184,6 +184,10 @@ export async function buildAppHealth(): Promise<Record<string, unknown>> {
     sofaScore: await section(async () => getSofaStatus()),
     liveSources: await section(async () => getHubStatus()),
     learnedTeamAliases: await section(readLearnedAliases),
+    voidedLegs: await section(async () => {
+      const legs = readInPlayProposals().flatMap((p) => p.legs.map((l) => ({ l, real: p.real !== false })));
+      return { fictional: legs.filter((x) => !x.real && x.l.voided).length, real: legs.filter((x) => x.real && x.l.voided).length, pendingNoVerdict: legs.filter((x) => !x.l.settled && !x.l.voided).length };
+    }),
     teamRegistry: await section(async () => { await loadTeamRegistry(); return { teams: teamRegistrySize() }; }),
     patternEngine: await section(async () => patternStatus()),
     settlementAudit: await section(async () => JSON.parse((await AsyncStorage.getItem('@settlement_audit')) ?? '[]').slice(-30)),

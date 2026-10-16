@@ -516,6 +516,8 @@ export interface InPlayProposalLeg {
   prob: number;
   evidence: string;
   /** Rempli au bilan de minuit : la jambe est-elle passée ? */
+  /** Annulé : toujours sans verdict 48 h après le pari (stat introuvable). Exclu des courbes et de la calibration. */
+  voided?: boolean;
   settled?: boolean;
   won?: boolean;
   fixtureId: number;
