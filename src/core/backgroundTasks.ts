@@ -200,7 +200,11 @@ async function fetchRealLiveFromFreeSources(): Promise<LiveFixture[]> {
   const unmatched: string[] = [];
   const same = (a: string, b: string) => namesLikelyMatch(normalizeTeamName(a), normalizeTeamName(b));
   for (const m of planned) {
-    let hit = live.find((e) => same(e.homeTeam, m.homeTeam) && same(e.awayTeam, m.awayTeam));
+    // Minute de jeu cohérente avec l'heure du coup d'envoi prévu : un match à la 60e alors que le coup d'envoi est dans 4 h
+    // n'est PAS ce match (U19, féminines, autre compétition…).
+    const sinceKickoff = (Date.now() - Date.parse((m as any).kickoff_utc)) / 60_000;
+    const plausible = (e: { minute: number }) => sinceKickoff >= -5 && e.minute <= sinceKickoff + 8;
+    let hit = live.find((e) => same(e.homeTeam, m.homeTeam) && same(e.awayTeam, m.awayTeam) && plausible(e));
     if (!hit) {
       // Repli par le CONTEXTE : une équipe reconnue + une minute de jeu cohérente avec l'heure du coup d'envoi. Le nom de
       // l'autre équipe est alors mémorisé (alias appris) : la prochaine fois, le nom suffit, pour toutes les sources.

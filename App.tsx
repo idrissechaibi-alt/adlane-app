@@ -11,6 +11,7 @@ import { setSnapshotHealthProvider, startAutoSync } from './src/core/gitAutoSync
 import { buildAppHealth } from './src/core/appHealth';
 import { ensureNotificationPermissions } from './src/core/notifications';
 import { registerBackgroundAutoLearn, runAutoLearnTick, runRealFastTick } from './src/core/backgroundTasks';
+import { keepScreenOn, releaseScreen } from './src/core/keepAwake';
 
 const REAL_FAST_TICK_INTERVAL_MS = 60_000;
 import DashboardScreen from './src/screens/DashboardScreen';
@@ -76,6 +77,8 @@ export default function App() {
       } catch (error) { console.error('Erreur initialisation App:', error); }
     };
     setupApp();
+    // Écran allumé tant que l'app est ouverte : le scan des stats en direct (60 s) ne s'interrompt pas.
+    keepScreenOn();
 
     const runTick = () => {
       runAutoLearnTick().catch((error) =>
@@ -92,6 +95,7 @@ export default function App() {
     return () => {
       clearInterval(interval);
       clearInterval(realInterval);
+      releaseScreen();
     };
   }, []);
 

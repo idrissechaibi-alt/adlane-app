@@ -126,6 +126,8 @@ function baseNormalize(name: string): string {
  */
 export function namesLikelyMatch(normalizedA: string, normalizedB: string): boolean {
   if (normalizedA === normalizedB) return true;
+  // Équipe de jeunes, réserve ou féminine ≠ équipe première (Man City U19 – PSG U19 pris pour Man City – PSG).
+  if (squadTag(normalizedA) !== squadTag(normalizedB)) return false;
   // Deux équipes DISTINCTES de la liste (AC Milan / Inter Milan, Paris FC / Paris Saint-Germain) ne se confondent jamais.
   if (!aliasReady) buildAliases();
   if (canonicals().has(normalizedA) && canonicals().has(normalizedB)) return false;
@@ -161,6 +163,15 @@ export function namesLikelyMatch(normalizedA: string, normalizedB: string): bool
     if (ja.length >= 6 && jb.length >= 6 && similarity(ja, jb) >= 0.84) return true;
   }
   return false;
+}
+
+/** Catégorie de l'équipe : '' pour l'équipe première, sinon jeunes / réserve / féminine. */
+function squadTag(n: string): string {
+  const t = n.split(' ');
+  if (t.some((w) => /^u-?(1[5-9]|2[0-3])$/.test(w) || ['youth', 'juniors', 'junior', 'primavera', 'academy', 'juvenil', 'jong'].includes(w))) return 'youth';
+  if (t.some((w) => ['women', 'woman', 'w', 'wfc', 'femenino', 'feminin', 'feminine', 'frauen', 'femminile', 'ladies', 'dames'].includes(w))) return 'women';
+  if (t.some((w) => ['ii', 'iii', 'b', 'reserves', 'reserve', 'res'].includes(w))) return 'reserve';
+  return '';
 }
 
 /** Mots qui ne distinguent pas deux clubs (statut juridique, sigles). */

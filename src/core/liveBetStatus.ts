@@ -6,7 +6,7 @@
 
 import { InPlayProposal, InPlayProposalLeg } from './learnStore';
 import { FinalResult, settleReprojectedLeg } from './dailyReview';
-import { HubPlayerShots, hubFinalResult, hubFirstHalfGoals, hubLiveStatus, hubPlayerShots, hubStats } from '../api/footballDataAPIs/liveDataHub';
+import { HubPlayerShots, hubFinalResult, hubLiveConsensus, hubFirstHalfGoals, hubLiveStatus, hubPlayerShots, hubStats } from '../api/footballDataAPIs/liveDataHub';
 import { playerSotFromSelection } from './playerShots';
 import { getHalfTimeGoals } from './liveStatsStore';
 
@@ -70,8 +70,13 @@ const CHECK_INTERVAL_MS = 50_000;
  * 'pending' si le match n'est pas en cours ou si rien n'est encore acquis.
  */
 export async function liveLegVerdict(leg: InPlayProposalLeg, dateKey: string): Promise<LegStatus> {
-  const live = await hubLiveStatus(leg.homeTeam, leg.awayTeam).catch(() => null);
-  if (!live || !['1H', 'HT', '2H'].includes(live.statusShort)) return 'pending';
+  const live0 = await hubLiveStatus(leg.homeTeam, leg.awayTeam).catch(() => null);
+  if (!live0 || !['1H', 'HT', '2H'].includes(live0.statusShort)) return 'pending';
+  // Score confirmé par AU MOINS 2 sources, sinon aucun verdict en cours de match (une source isolée peut se tromper :
+  // « Plus de 2.5 buts » donné gagné sur un match fini à 2-0). Le règlement final, lui, recalcule toujours tout.
+  const consensus = await hubLiveConsensus(leg.homeTeam, leg.awayTeam).catch(() => null);
+  if (!consensus || consensus.agree < 2) return 'pending';
+  const live = { ...live0, homeGoals: consensus.match.homeGoals, awayGoals: consensus.match.awayGoals };
   const stats = await hubStats(leg.homeTeam, leg.awayTeam, dateKey).catch(() => null);
   const htFromSource = live.hasHalfTime ? { goals: live.homeGoalsHT + live.awayGoalsHT, certain: true } : null;
   const htEspn = leg.market === 'buts_1ere_mt' && live.statusShort !== '1H' && !htFromSource ? await hubFirstHalfGoals(leg.homeTeam, leg.awayTeam, dateKey).catch(() => null) : null;
@@ -93,9 +98,9 @@ export async function checkLegStatus(leg: InPlayProposalLeg, dateKey: string): P
       // Match en cours : verdict certain d'après les sources gratuites, rien d'autre
       // (un verdict enregistré à tort ne s'affiche pas tant que le live ne le confirme pas).
       status = await liveLegVerdict(leg, dateKey);
-    } else if (leg.settled && leg.won != null) {
-      status = leg.won ? 'won' : 'lost';
     } else {
+      // Match terminé : le verdict se RECALCULE toujours sur le résultat final des sources ; la valeur enregistrée (réglée en
+      // cours de match) ne sert qu'aux jours passés sans résultat final disponible.
       // La mi-temps n'est exigée que des paris qui en dépendent : un score final suffit aux autres.
       const needsHalf = leg.market === 'buts_1ere_mt' || (['corners', 'cartons', 'fautes'].includes(leg.market) && !/sur le match/i.test(leg.selection));
       const final = await hubFinalResult(leg.homeTeam, leg.awayTeam, dateKey, { needHalfTime: needsHalf });
@@ -110,6 +115,8 @@ export async function checkLegStatus(leg: InPlayProposalLeg, dateKey: string): P
         if (leg.market === 'tirs_cadres') result.playerSot = (await hubPlayerShots(leg.homeTeam, leg.awayTeam, dateKey).catch(() => null)) ?? undefined;
         const won = settleReprojectedLeg(leg.market, leg.selection, result);
         if (won != null) status = won ? 'won' : 'lost';
+      } else if (leg.settled && leg.won != null && dateKey < new Date().toISOString().slice(0, 10)) {
+        status = leg.won ? 'won' : 'lost';
       }
     }
   } catch {

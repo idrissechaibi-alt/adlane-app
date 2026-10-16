@@ -329,9 +329,9 @@ export function appendPredictionOutcomes(outcomes: PredictionOutcome[]): void {
   const file = fileIn(`outcomes-${dayKey()}.jsonl`);
   const existing = readTextSafe(file) ?? '';
   // Ne réécrit pas ce qui est déjà enregistré (le bilan repasse plusieurs fois par jour sur les mêmes paris).
-  const known = new Set(readPredictionOutcomes(2).map(outcomeKey));
+  const known = new Set(readPredictionOutcomes(2).map((o) => `${outcomeKey(o)}|${o.won}`));
   const fresh = outcomes.filter((o) => {
-    const key = outcomeKey(o);
+    const key = `${outcomeKey(o)}|${o.won}`;
     if (known.has(key)) return false;
     known.add(key);
     return true;
@@ -348,7 +348,8 @@ export function readPredictionOutcomes(days: number = 30): PredictionOutcome[] {
   const outcomes: PredictionOutcome[] = [];
   // Un même pari (match, marché, sélection, checkpoint) n'est compté qu'une fois, même si le bilan l'a enregistré à plusieurs passages.
   const seen = new Set<string>();
-  for (let i = 0; i < days; i++) {
+  // Du plus ancien au plus récent : une correction écrite plus tard l'emporte toujours.
+  for (let i = days - 1; i >= 0; i--) {
     const date = new Date(Date.now() - i * 86_400_000);
     const content = readTextSafe(fileIn(`outcomes-${dayKey(date)}.jsonl`));
     if (!content) continue;
@@ -357,7 +358,12 @@ export function readPredictionOutcomes(days: number = 30): PredictionOutcome[] {
       try {
         const o: PredictionOutcome = JSON.parse(line);
         const key = outcomeKey(o);
-        if (seen.has(key)) continue;
+        // Une correction (même pari, verdict rectifié) remplace l'ancienne valeur.
+        if (seen.has(key)) {
+          const i = outcomes.findIndex((x) => outcomeKey(x) === key);
+          if (i >= 0) outcomes[i] = o;
+          continue;
+        }
         seen.add(key);
         outcomes.push(o);
       } catch {

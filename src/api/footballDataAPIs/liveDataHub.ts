@@ -742,6 +742,23 @@ export async function hubKnowsMatch(homeTeam: string, awayTeam: string, dateKey:
   return (await findEverywhere(homeTeam, awayTeam, dateKey, false)).length > 0;
 }
 
+/**
+ * Score en direct CROISÉ entre les sources : chaque fournisseur qui suit le match donne son score ; le score retenu est celui
+ * sur lequel le plus de sources s'accordent. `agree` = nombre de sources d'accord, `sources` = nombre de sources qui le suivent.
+ * Un verdict définitif (pari gagné / perdu) ne doit jamais reposer sur une source isolée.
+ */
+export async function hubLiveConsensus(homeTeam: string, awayTeam: string): Promise<{ match: HubMatch; agree: number; sources: number } | null> {
+  const found = (await findEverywhere(homeTeam, awayTeam, utcDay(), true)).filter((m) => ['1H', 'HT', '2H'].includes(m.statusShort));
+  if (found.length === 0) return null;
+  const votes = new Map<string, HubMatch[]>();
+  for (const m of found) {
+    const k = `${m.homeGoals}-${m.awayGoals}`;
+    votes.set(k, [...(votes.get(k) ?? []), m]);
+  }
+  const best = [...votes.values()].sort((a, b) => b.length - a.length || b[0].minute - a[0].minute)[0];
+  return { match: best[0], agree: best.length, sources: found.length };
+}
+
 /** Statut en direct d'un match (score, minute) depuis la première source qui le suit. */
 export async function hubLiveStatus(homeTeam: string, awayTeam: string): Promise<HubMatch | null> {
   const live = await hubLiveEvents();

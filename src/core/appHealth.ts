@@ -182,6 +182,7 @@ export async function buildAppHealth(): Promise<Record<string, unknown>> {
     sofaScore: await section(async () => getSofaStatus()),
     liveSources: await section(async () => getHubStatus()),
     learnedTeamAliases: await section(readLearnedAliases),
+    settlementAudit: await section(async () => JSON.parse((await AsyncStorage.getItem('@settlement_audit')) ?? '[]').slice(-30)),
     unmatchedPlannedLive: await section(readUnmatchedPlannedLive),
     liveStatsScan: await section(async () => getLiveStatsScanStatus()),
     backupOddsSources: await section(async () => probeBackupSources()),

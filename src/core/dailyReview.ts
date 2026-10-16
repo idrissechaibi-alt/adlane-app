@@ -488,13 +488,17 @@ function mergeDayPoints(series: MarketDayPoint[], points: MarketDayPoint[]): voi
 async function settlePlacedLiveBets(proposals: InPlayProposal[]): Promise<void> {
   const byId = new Map(proposals.map((p) => [`live-${p.id}`, p]));
   for (const bet of await getAllBets()) {
-    if (!bet.played || bet.status !== 'pending' || !bet.id.startsWith('live-')) continue;
+    if (!bet.played || !bet.id.startsWith('live-')) continue;
+    // Un pari déjà réglé est revérifié s'il date de moins de 2 jours : un verdict corrigé sur le résultat final le corrige aussi.
+    const recent = Date.now() - Date.parse(bet.createdAt) < 2 * 86_400_000;
+    if (bet.status !== 'pending' && !(recent && (bet.status === 'won' || bet.status === 'lost'))) continue;
     const proposal = byId.get(bet.id);
     if (!proposal) continue;
 
     const anyLost = proposal.legs.some((leg) => leg.settled && leg.won === false);
     const allWon = proposal.legs.every((leg) => leg.settled && leg.won === true);
     if (!anyLost && !allWon) continue;
+    if (bet.status === (allWon ? 'won' : 'lost')) continue;
 
     const stake = bet.stake ?? 0;
     const payout = allWon ? stake * (bet.odds ?? 0) : 0;
@@ -795,6 +799,33 @@ export async function runNightlyReviewIfDue(): Promise<number> {
           if (l.projection) l.projection.actual = undefined;
           p.reviewed = false;
         }
+      }
+    }
+
+    // CONTRÔLE DE COHÉRENCE (réel ET fictif) : toute jambe d'un match terminé est recalculée sur le résultat final ; une valeur
+    // enregistrée différente (réglée en cours de match sur un score faux) est corrigée, et la correction est journalisée et
+    // reversée dans les résultats mesurés pour que les courbes et la calibration ne gardent pas l'erreur.
+    const audit: Array<{ at: string; match: string; selection: string; was: string; now: string; real: boolean }> = [];
+    const corrected: PredictionOutcome[] = [];
+    for (const p of allProposals) {
+      if (!p.createdAt.startsWith(day)) continue;
+      for (const l of p.legs) {
+        const result = finals.get(l.fixtureId);
+        if (!result || !l.settled) continue;
+        const truth = settleReprojectedLeg(l.market, l.selection, result);
+        if (truth == null || truth === l.won) continue;
+        audit.push({ at: new Date().toISOString(), match: `${l.homeTeam} - ${l.awayTeam}`, selection: l.selection, was: l.won ? 'gagné' : 'perdu', now: truth ? 'gagné' : 'perdu', real: p.real !== false });
+        l.won = truth;
+        corrected.push({ ts: new Date().toISOString(), fixtureId: l.fixtureId, league: l.league, market: l.market, selection: l.selection, predictedProb: l.prob, won: truth, kind: p.kind, minute: p.minute, real: p.real !== false });
+      }
+    }
+    if (audit.length > 0) {
+      appendPredictionOutcomes(corrected);
+      try {
+        const old = JSON.parse((await AsyncStorage.getItem('@settlement_audit')) ?? '[]');
+        await AsyncStorage.setItem('@settlement_audit', JSON.stringify([...old, ...audit]));
+      } catch {
+        // journal best-effort
       }
     }
 
