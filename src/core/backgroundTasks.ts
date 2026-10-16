@@ -629,6 +629,16 @@ export async function readAbortedTicks(): Promise<unknown[]> {
   }
 }
 
+/**
+ * Un passage de plus de 8 min risque d'être coupé (Android limite le travail en arrière-plan, l'app peut être fermée) :
+ * au-delà, les étapes de préparation (programme fictif, univers, compositions, bilan Scouting) sont reportées au passage
+ * suivant, qui reprend sur ce qui est déjà enregistré. Les paris et les règlements passent toujours en premier.
+ */
+const TICK_SOFT_LIMIT_MS = 8 * 60_000;
+function tickTooLong(): boolean {
+  return !!currentTickStartedAt && Date.now() - Date.parse(currentTickStartedAt) > TICK_SOFT_LIMIT_MS;
+}
+
 async function runAutoLearnTickLocked(mode: TickMode): Promise<AutoLearnTickDiagnostics> {
   const doFast = mode !== 'slow';
   const doSlow = mode !== 'fast';
@@ -733,7 +743,7 @@ async function runAutoLearnTickLocked(mode: TickMode): Promise<AutoLearnTickDiag
   let fictionalSofascoreMatches = 0;
   let fictionalOmnirouteMatches = 0;
   let fictionalSportmonksError: string | undefined;
-  if (doSlow) try {
+  if (doSlow && !tickTooLong()) try {
     const omnirouteConfig = await loadOmnirouteConfig();
     omnirouteConfigured = Boolean(omnirouteConfig);
     const program = await ensureFictionalDailyProgram(omnirouteConfig);
@@ -759,7 +769,7 @@ async function runAutoLearnTickLocked(mode: TickMode): Promise<AutoLearnTickDiag
   // (20e/60e minute), pas seulement du Planning du Jour.
   await markTickStep('univers du jour');
   let universeSize = 0;
-  if (doSlow) try {
+  if (doSlow && !tickTooLong()) try {
     const model = readLearnedModel();
     const universe = await ensureDailyUniverse(model?.focusLeagues ?? []);
     universeSize = universe.length;
@@ -770,7 +780,7 @@ async function runAutoLearnTickLocked(mode: TickMode): Promise<AutoLearnTickDiag
   // Compositions confirmées à T-90 (recherche Google/Omniroute, gratuit) :
   // débloque le placement direct des paris du Planning dès que l'info est là.
   await markTickStep('compositions T-90');
-  if (doSlow) try {
+  if (doSlow && !tickTooLong()) try {
     // Recherche web des compositions : bornée à 90 s (27 min mesurées le 10/10).
     await Promise.race([refreshDueLineups(), new Promise((resolve) => setTimeout(resolve, 90_000))]);
   } catch (error: any) {
@@ -781,7 +791,7 @@ async function runAutoLearnTickLocked(mode: TickMode): Promise<AutoLearnTickDiag
   // score final réel, AVANT de consolider le digest : la fiabilité mesurée
   // doit être à jour pour la prochaine analyse.
   await markTickStep('bilan Scouting');
-  if (doSlow) try {
+  if (doSlow && !tickTooLong()) try {
     await reconcileScoutingAnalyses();
   } catch (error: any) {
     console.warn('[Tâche de fond] Bilan Scouting vs réalité échoué:', error.message);

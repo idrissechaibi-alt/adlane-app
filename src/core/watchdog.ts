@@ -14,8 +14,9 @@ const REPEAT_MS = 6 * 3_600_000;
 async function problems(): Promise<Array<{ id: string; text: string }>> {
   const out: Array<{ id: string; text: string }> = [];
   try {
-    const aborted = (await readAbortedTicks()) as Array<{ at?: string; step?: string }>;
-    const recent = aborted.filter((a) => a.at && Date.now() - Date.parse(a.at) < 3 * 3_600_000);
+    const aborted = (await readAbortedTicks()) as Array<{ at?: string; step?: string; startedAt?: string }>;
+    // Un passage coupé dans sa première minute = l'app fermée ou relancée (mise à jour) : normal, pas une anomalie.
+    const recent = aborted.filter((a) => a.at && Date.now() - Date.parse(a.at) < 3 * 3_600_000 && (!a.startedAt || Date.parse(a.at) - Date.parse(a.startedAt) >= 60_000));
     if (recent.length > 0) out.push({ id: 'aborted', text: `⏹️ ${recent.length} passage(s) de fond abandonné(s) ces 3 dernières heures (dernière étape : ${recent[recent.length - 1].step ?? '?'}).` });
   } catch {
     // lecture impossible : pas d'alerte pour ça
