@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-10-16T16:12:05.857Z",
+  "exportedAt": "2026-10-16T16:16:42.861Z",
   "formatVersion": 1,
   "source": "APP adlane",
   "data": {
@@ -5949,13 +5949,13 @@
   },
   "health": {
     "nativeBackgroundTicks": {
-      "lastTickAt": "2026-10-16T16:08:18.167Z",
-      "ticksLast24h": 83
+      "lastTickAt": "2026-10-16T16:14:15.817Z",
+      "ticksLast24h": 84
     },
     "tickProgress": {
-      "startedAt": "2026-10-16T16:11:59.159Z",
+      "startedAt": "2026-10-16T16:16:36.152Z",
       "step": "scan en direct 20e/60e",
-      "at": "2026-10-16T16:11:59.986Z",
+      "at": "2026-10-16T16:16:36.962Z",
       "stepDurationsSec": {
         "scan matinal": 1,
         "relevé live partagé": 0
@@ -6079,21 +6079,12 @@
       "nightlyReviewPointsCreated": 16
     },
     "lastRealFastTick": {
-      "at": "2026-10-16T16:11:59.958Z",
+      "at": "2026-10-16T16:16:36.947Z",
       "liveFound": 0,
       "fresh": 0,
       "source": "api_football"
     },
     "abortedTicks": [
-      {
-        "startedAt": "2026-10-14T15:32:26.472Z",
-        "step": "scan en direct 20e/60e",
-        "at": "2026-10-14T15:32:28.679Z",
-        "stepDurationsSec": {
-          "scan matinal": 2,
-          "relevé live partagé": 0
-        }
-      },
       {
         "startedAt": "2026-10-14T15:32:47.803Z",
         "step": "scan en direct 20e/60e",
@@ -6224,6 +6215,16 @@
           "relevé live partagé": 0,
           "scan en direct 20e/60e": 148,
           "bilan de minuit": 0
+        }
+      },
+      {
+        "startedAt": "2026-10-16T16:11:59.159Z",
+        "step": "bilan de minuit",
+        "at": "2026-10-16T16:16:30.070Z",
+        "stepDurationsSec": {
+          "scan matinal": 1,
+          "relevé live partagé": 0,
+          "scan en direct 20e/60e": 270
         }
       }
     ],
@@ -6531,7 +6532,7 @@
         {
           "name": "Principal",
           "ok": true,
-          "latencyMs": 142,
+          "latencyMs": 171,
           "readyModels": 27,
           "configuredReady": 12,
           "configuredTotal": 13
@@ -6539,8 +6540,8 @@
         {
           "name": "Omniroute",
           "ok": true,
-          "latencyMs": 2787,
-          "readyModels": 869,
+          "latencyMs": 2061,
+          "readyModels": 857,
           "configuredReady": 2,
           "configuredTotal": 2
         }
@@ -6548,44 +6549,44 @@
       "leaderboard": [
         {
           "label": "Principal · allam-2-7b",
-          "ok": 4047,
-          "fail": 4529,
-          "avgMs": 739,
+          "ok": 4052,
+          "fail": 4538,
+          "avgMs": 878,
           "coolingDown": false
         },
         {
           "label": "Principal · qwen3.8-27b",
           "ok": 1096,
-          "fail": 1672,
+          "fail": 1678,
           "avgMs": 743,
-          "coolingDown": false
+          "coolingDown": true
         },
         {
-          "label": "Omniroute · Maximus appus",
-          "ok": 5085,
-          "fail": 91,
-          "avgMs": 4791,
+          "label": "Principal · nemotron-3.5-content-safety",
+          "ok": 2448,
+          "fail": 2398,
+          "avgMs": 1362,
           "coolingDown": false
         },
         {
           "label": "Principal · gpt-oss-120b",
-          "ok": 1314,
-          "fail": 1930,
-          "avgMs": 1437,
-          "coolingDown": false
+          "ok": 1316,
+          "fail": 1939,
+          "avgMs": 1430,
+          "coolingDown": true
         },
         {
-          "label": "Principal · nemotron-3.5-content-safety",
-          "ok": 2442,
-          "fail": 2392,
-          "avgMs": 2276,
+          "label": "Omniroute · Maximus appus",
+          "ok": 5098,
+          "fail": 92,
+          "avgMs": 5106,
           "coolingDown": false
         },
         {
           "label": "Omniroute · Clodiko",
-          "ok": 9488,
+          "ok": 9495,
           "fail": 246,
-          "avgMs": 5648,
+          "avgMs": 9540,
           "coolingDown": false
         },
         {
@@ -6660,7 +6661,7 @@
         "apiFootball-autolearn": 44,
         "sportmonks-autolearn": 14,
         "sofaScore": 0,
-        "sportmonks": 97
+        "sportmonks": 98
       },
       "theOddsApiMonth": {
         "used": 500,
@@ -6678,38 +6679,38 @@
     "liveSources": {
       "LiveScore": {
         "ok": true,
-        "count": 24,
-        "at": "2026-10-16T16:11:59.173Z",
+        "count": 25,
+        "at": "2026-10-16T16:16:36.177Z",
         "failStreak": 0
       },
       "TheSportsDB": {
         "ok": true,
         "count": 36,
-        "at": "2026-10-16T16:11:59.177Z",
+        "at": "2026-10-16T16:16:36.181Z",
         "failStreak": 0
       },
       "FotMob": {
         "ok": true,
         "count": 26,
-        "at": "2026-10-16T16:11:59.181Z",
-        "failStreak": 0
-      },
-      "ESPN": {
-        "ok": true,
-        "count": 0,
-        "at": "2026-10-16T16:11:59.227Z",
+        "at": "2026-10-16T16:16:36.185Z",
         "failStreak": 0
       },
       "365Scores": {
         "ok": true,
         "count": 35,
-        "at": "2026-10-16T16:11:59.551Z",
+        "at": "2026-10-16T16:16:36.558Z",
         "failStreak": 0
       },
       "AllSportsApi": {
         "ok": true,
         "count": 0,
-        "at": "2026-10-16T16:11:59.614Z",
+        "at": "2026-10-16T16:16:36.574Z",
+        "failStreak": 0
+      },
+      "ESPN": {
+        "ok": true,
+        "count": 0,
+        "at": "2026-10-16T16:16:36.633Z",
         "failStreak": 0
       }
     },
@@ -6717,14 +6718,14 @@
       "aek athens": "pae aek"
     },
     "patternEngine": {
-      "matches": 637,
+      "matches": 642,
       "cells": 1183,
       "validated": 2,
       "realReady": 2
     },
     "settlementAudit": [],
     "unmatchedPlannedLive": {
-      "at": "2026-10-16T16:11:59.687Z",
+      "at": "2026-10-16T16:16:36.695Z",
       "unmatched": [],
       "sourceNames": [
         "APR FC - El Zamalek",
@@ -6733,6 +6734,7 @@
         "Yantra - Lokomotiv Plovdiv",
         "Otelul Galati - Miercurea Ciuc",
         "Olympique Akbou - Ben Aknoun",
+        "Gandzasar - Sardarapat",
         "Sumqayit - Araz PFK",
         "Sloga Doboj - Siroki Brijeg",
         "Enosis Paralimni - ASIL Lysi",
@@ -6752,7 +6754,6 @@
         "Geita Gold FC - Dodoma Jiji FC",
         "Baniyas - Al-Wasl",
         "FC Rotor Volgograd - PFC Sochi",
-        "Gandzasar - Sardarapat",
         "Aalesund (W) - Røa (W)",
         "Bodø/Glimt (W) - Lyn Fotball (W)",
         "Be1 Nfa - Fk Neptunas",
@@ -6770,10 +6771,10 @@
         "Ittifaq Maqaba - Manama Club",
         "Ali Csc - Sitra Club",
         "Aalesunds FK (W) - Roa (W)",
+        "Jonava - BFA",
         "Al-Ittifaq - Manama Club",
         "Triglav Kranj - Jadran Dekani",
         "Dravinja - Jesenice",
-        "Jonava - BFA",
         "Gonio - Orbi Tbilisi",
         "Sumqayıt - Araz-Naxçıvan",
         "Pohronie - Dynamo Malženice",
@@ -6784,7 +6785,7 @@
     },
     "liveStatsScan": {
       "lastScan": {
-        "at": "2026-10-16T16:11:59.757Z",
+        "at": "2026-10-16T16:16:36.755Z",
         "matches": 0,
         "sources": "6 sources gratuites"
       },
@@ -8467,7 +8468,7 @@
         }
       ],
       "samples": {
-        "pending": 92,
+        "pending": 75,
         "measured": 2575
       }
     },
