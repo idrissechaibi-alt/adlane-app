@@ -793,6 +793,7 @@ async function buildLegs20(
       legs.push(pickBinarySide('btts', bttsMarket, 'BTTS Non — au moins une des deux équipes ne marque pas (Non)'));
     }
     legs.push(...goalsTotalLegs(currentScore, fullEst.secondHalfExpectedGoals, situation?.features, sitFt.mult));
+    legs.push(...teamLegs(live, correctedGoals(sitFt.xg, 'goals_ft'), currentStats, trend));
   }
 
   return withLearnedExpertise(legs);
@@ -847,8 +848,57 @@ function buildLegs60(
     legs.push(pickBinarySide('btts', bttsMarket, 'BTTS Non — au moins une des deux équipes ne marque pas (Non)'));
   }
   legs.push(...goalsTotalLegs(currentScore, est.secondHalfExpectedGoals, situation?.features, sitFt.mult));
+  legs.push(...teamLegs(live, correctedGoals(sitFt.xg, 'goals_ft'), currentStats, trend));
 
   return withLearnedExpertise(legs);
+}
+
+/**
+ * MARCHÉS PAR ÉQUIPE (proposés par les bookmakers sur chaque match) : buts d'une équipe et corners d'une équipe.
+ * Buts : xG d'avant-match de l'équipe (corrigé par la situation) sur les minutes restantes, loi de Poisson.
+ * Corners : rythme de l'équipe dans CE match mêlé à son rythme habituel (fichier des équipes : corners obtenus par elle,
+ * concédés par l'adversaire), sur les minutes restantes. Un côté n'est gardé que s'il est assez probable (55-85 %).
+ */
+function teamLegs(
+  live: LiveFixture,
+  teamXg: { home: number; away: number } | null,
+  stats: LiveMatchStats | undefined,
+  trend: MatchTrend | null | undefined
+): CandidateLeg[] {
+  const out: CandidateLeg[] = [];
+  const minute = Math.min(90, Math.max(1, live.minute));
+  const remFrac = Math.max(0, 90 - minute) / 90;
+  if (remFrac <= 0.05) return out;
+  const sides: Array<['home' | 'away', string]> = [['home', live.homeTeam], ['away', live.awayTeam]];
+  const pick = (market: 'buts_equipe' | 'corners_equipe', team: string, label: 'domicile' | 'extérieur', done: number, lambda: number, unit: string, evidence: string) => {
+    const over = poissonOverProb(lambda, 0.5); // au moins un de plus
+    const atMostOne = 1 - poissonOverProb(lambda, 1.5); // au plus un de plus
+    const noun = market === 'buts_equipe' ? 'but' : 'corners';
+    if (over >= 0.55 && over <= 0.85) out.push({ market, selection: `Plus de ${done + 0.5} ${noun} — ${team} (${label})`, prob: over, evidence });
+    else if (atMostOne >= 0.55 && atMostOne <= 0.85) out.push({ market, selection: `Moins de ${done + 1.5} ${noun} — ${team} (${label})`, prob: atMostOne, evidence });
+    void unit;
+  };
+  for (const [side, team] of sides) {
+    const label = side === 'home' ? 'domicile' : 'extérieur';
+    if (teamXg) {
+      const done = side === 'home' ? live.homeGoals : live.awayGoals;
+      const lambda = (side === 'home' ? teamXg.home : teamXg.away) * remFrac;
+      pick('buts_equipe', team, label, done, lambda, 'goals_team', `${team} : ${done} but(s) à la ${minute}e, ${lambda.toFixed(2)} but(s) attendu(s) d'ici la fin (xG d'avant-match sur les ${Math.round(90 - minute)} min restantes).`);
+    }
+    const doneC = side === 'home' ? stats?.cornersHome : stats?.cornersAway;
+    if (doneC != null) {
+      const own = side === 'home' ? trend?.rates.home.corners_ft : trend?.rates.away.corners_ft;
+      const opp = side === 'home' ? trend?.rates.away.corners_ft : trend?.rates.home.corners_ft;
+      const habitual = own && opp ? (own[0] + opp[1]) / 2 : side === 'home' ? 5.2 : 4.3;
+      const livePace = (doneC / minute) * 90;
+      // Rythme du match pondéré par le temps déjà joué (plus le match avance, plus il compte).
+      const w = Math.min(0.7, minute / 90);
+      const per90 = livePace * w + habitual * (1 - w);
+      const lambda = per90 * remFrac;
+      pick('corners_equipe', team, label, doneC, lambda, 'corners_team', `${team} : ${doneC} corner(s) à la ${minute}e, rythme ${livePace.toFixed(1)}/90 dans ce match, ${habitual.toFixed(1)}/90 d'habitude → ${lambda.toFixed(1)} attendu(s) d'ici la fin.`);
+    }
+  }
+  return out;
 }
 
 /** Jambes « tirs cadrés joueur » (ESPN gratuit), passées par la même calibration que les autres marchés. */
@@ -870,6 +920,7 @@ function fictionalSettleable(leg: CandidateLeg, observed: ObservedLiveCounts | u
   if (leg.market === 'corners') return observed?.corners != null;
   if (leg.market === 'cartons') return observed?.cards != null;
   if (leg.market === 'fautes') return !!observed?.fouls;
+  if (leg.market === 'corners_equipe') return observed?.corners != null;
   return true;
 }
 

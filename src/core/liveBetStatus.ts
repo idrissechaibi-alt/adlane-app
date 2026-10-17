@@ -39,6 +39,17 @@ function decidedEarly(leg: InPlayProposalLeg, live: { homeGoals: number; awayGoa
     if (ht > 0) return wantsNone ? 'lost' : 'won';
     if (certain) return wantsNone ? 'won' : 'lost';
   }
+  // Par équipe : ligne franchie en cours de match → « Plus de » gagné, « Moins de » perdu.
+  if (leg.market === 'buts_equipe' || leg.market === 'corners_equipe') {
+    const l = lineOf(sel);
+    const side = /\(domicile\)/i.test(sel) ? 'home' : /\(extérieur\)/i.test(sel) ? 'away' : null;
+    if (!l || !side) return 'pending';
+    const all = counts.all as any;
+    const value = leg.market === 'buts_equipe' ? (side === 'home' ? live.homeGoals : live.awayGoals) : all ? (side === 'home' ? all.cornersHome : all.cornersAway) : null;
+    if (value == null) return 'pending';
+    if (value > l.line) return l.side === 'plus' ? 'won' : 'lost';
+    return 'pending';
+  }
   if (leg.market === 'tirs_cadres') {
     const l = lineOf(sel);
     const value = playerSotFromSelection(sel, counts.players ?? null);
@@ -113,6 +124,11 @@ export async function checkLegStatus(leg: InPlayProposalLeg, dateKey: string): P
       const final = await hubFinalResult(leg.homeTeam, leg.awayTeam, dateKey, { needHalfTime: needsHalf });
       if (final) {
         const result = { ...final } as FinalResult;
+        if (leg.market === 'corners_equipe') {
+          const st = await hubStats(leg.homeTeam, leg.awayTeam, dateKey).catch(() => null);
+          result.cornersHomeFT ??= st?.all?.cornersHome;
+          result.cornersAwayFT ??= st?.all?.cornersAway;
+        }
         if (['corners', 'cartons', 'fautes'].includes(leg.market) && /sur le match/i.test(leg.selection) && (leg.market === 'corners' ? result.cornersFT : leg.market === 'cartons' ? result.cardsFT : result.foulsFT) == null) {
           const st = await hubStats(leg.homeTeam, leg.awayTeam, dateKey).catch(() => null);
           result.cornersFT ??= st?.all?.corners;

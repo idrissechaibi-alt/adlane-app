@@ -102,6 +102,9 @@ export interface FinalResult {
   cards1H?: number;
   /** Corners / cartons du match entier. */
   cornersFT?: number;
+  /** Corners de chaque équipe sur le match (marché « corners par équipe »). */
+  cornersHomeFT?: number;
+  cornersAwayFT?: number;
   cardsFT?: number;
   fouls1H?: number;
   foulsFT?: number;
@@ -411,6 +414,18 @@ export function settleReprojectedLeg(
     return /\(non\)|ne marquent pas/i.test(selection) ? !bothScored : bothScored;
   }
   if (market === 'buts_1ere_mt') return /0-0 à la pause|pas de but/i.test(selection) ? htGoals === 0 : htGoals >= 1;
+
+  // Marchés par équipe : « Plus de 0.5 but — Arsenal (domicile) », « Moins de 4.5 corners — Lens (extérieur) ».
+  if (market === 'buts_equipe' || market === 'corners_equipe') {
+    const m = /^(plus|moins) de\s+(\d+(?:[.,]\d+)?)/i.exec(selection);
+    const side = /\(domicile\)/i.test(selection) ? 'home' : /\(extérieur\)/i.test(selection) ? 'away' : null;
+    if (!m || !side) return null;
+    const line = Number(m[2].replace(',', '.'));
+    const value =
+      market === 'buts_equipe' ? (side === 'home' ? result.goalsHome : result.goalsAway) : side === 'home' ? result.cornersHomeFT : result.cornersAwayFT;
+    if (value == null) return null;
+    return /^moins/i.test(selection) ? value < line : value > line;
+  }
 
   if (market === 'tirs_cadres') {
     const line = selection.match(/(plus|moins) de\s+(\d+(?:[.,]\d+)?)/i);
@@ -800,6 +815,7 @@ export async function runNightlyReviewIfDue(): Promise<number> {
       if (l.market === 'corners') return (ft ? final.cornersFT : final.corners1H) == null;
       if (l.market === 'cartons') return (ft ? final.cardsFT : final.cards1H) == null;
       if (l.market === 'fautes') return (ft ? final.foulsFT : final.fouls1H) == null;
+      if (l.market === 'corners_equipe') return final.cornersHomeFT == null || final.cornersAwayFT == null;
       return false;
     }));
     await mapWithConcurrency(needCounts.slice(0, HUB_FINAL_RESULT_MAX_PER_PASS), 4, async (leg) => {
@@ -808,6 +824,8 @@ export async function runNightlyReviewIfDue(): Promise<number> {
       const final = finals.get(leg.fixtureId);
       if (!final || !stats) return;
       final.cornersFT ??= stats.all?.corners;
+      final.cornersHomeFT ??= stats.all?.cornersHome;
+      final.cornersAwayFT ??= stats.all?.cornersAway;
       final.cardsFT ??= stats.all?.cards;
       final.foulsFT ??= stats.all?.fouls || undefined;
       final.corners1H ??= stats.firstHalf?.corners;
