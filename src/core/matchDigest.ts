@@ -6,7 +6,7 @@ import AsyncStorage from './kvStore';
 import { LiveStatsSample, listLiveStatsDays, readLiveStatsDay, removeLiveStatsMatch, takeLivePlayers } from './liveStatsStore';
 import { normalizeTeamName, sameTeamStrict, teamCoreKey } from './teamNameMatch';
 import { flushPatterns, ingestMatch } from './patternEngine';
-import { hubPlayerShots } from '../api/footballDataAPIs/liveDataHub';
+import { hubFinalResult, hubPlayerShots } from '../api/footballDataAPIs/liveDataHub';
 
 const DIGEST_KEY = '@match_digests';
 const TEAM_KEY = '@team_live_lessons';
@@ -314,7 +314,7 @@ export async function digestPlayers(day: string, homeTeam: string, awayTeam: str
   return null;
 }
 
-const REBUILT_KEY = '@team_live_rebuilt_v1';
+const REBUILT_KEY = '@team_live_rebuilt_v2';
 
 /**
  * Nettoyage, une seule fois : un match résumé deux fois sous deux noms (avant le registre des équipes) n'est gardé qu'une
@@ -335,10 +335,28 @@ async function dedupeAndRebuildTeamsOnce(digests: Record<string, MatchDigest>): 
   }
   const keep = new Set(best.values());
   for (const k of Object.keys(digests)) if (!keep.has(k)) delete digests[k];
+  // Résumés compilés sur un relevé arrêté avant la fin : score et totaux remplacés par le résultat final des sources ;
+  // sans résultat final retrouvable, le résumé est retiré (il fausserait les dossiers d'équipe et les motifs).
+  for (const [k, d] of Object.entries(digests)) {
+    const lastKey = d.key?.[d.key.length - 1];
+    if (!lastKey || lastKey[0] >= 85 || (d as any).completedFrom) continue;
+    const t = teamsOf(d.match);
+    const final = t ? await hubFinalResult(t[0], t[1], d.day, { needHalfTime: false }).catch(() => null) : null;
+    if (!final) {
+      (d as any).unreliable = true; // score final introuvable pour l'instant : tenu à l'écart des dossiers d'équipe
+      continue;
+    }
+    d.score = [final.goalsHome, final.goalsAway];
+    if (final.cornersFT != null) d.totals.corners = final.cornersFT;
+    if (final.cardsFT != null) d.totals.cards = final.cardsFT;
+    if (final.foulsFT != null) d.totals.fouls = final.foulsFT;
+    (d as any).completedFrom = `relevé arrêté à la ${lastKey[0]}e, score final des sources`;
+  }
   teamMemo = {};
   const toHub = (lines: PlayerLine[], team: 'home' | 'away') =>
     lines.map(([name, position, starter, shots, sot, goals, assists, fouls, yellow, red]) => ({ name, position, starter: !!starter, shots, sot, goals, assists, fouls, yellow, red, team }));
   for (const d of Object.values(digests).sort((a, b) => a.day.localeCompare(b.day))) {
+    if ((d as any).unreliable) continue;
     await updateTeams(d, d.players ? [...toHub(d.players.h, 'home'), ...toHub(d.players.a, 'away')] : null);
   }
   if (Object.keys(digests).length === 0) await AsyncStorage.setItem(TEAM_KEY, JSON.stringify({})).catch(() => {});
@@ -361,6 +379,24 @@ export async function digestFinishedMatches(liveKeys: Set<string>, idleMinutes =
       const finished = day < today || (!aliases.some((k) => liveKeys.has(k)) && (idle >= 25 || (idle >= idleMinutes && lastSample.minute >= 80)));
       if (!finished) continue;
       const d = analyse(day, match, samples);
+      // Relevés arrêtés avant la fin (app fermée à la 60e…) : le dernier score relevé N'EST PAS le score final
+      // (Betis-Porto compilé 1-1 au lieu de 3-2). Le résultat final des sources complète le résumé ; sans lui, le match
+      // n'est pas compilé (réessayé au passage suivant, abandonné au bout de 2 jours).
+      const lastS = last(samples);
+      const incomplete = d && lastS.minute < 85 && !['FT', 'AET', 'PEN'].includes(lastS.status);
+      if (d && incomplete) {
+        const t = teamsOf(match);
+        const final = t ? await hubFinalResult(t[0], t[1], day, { needHalfTime: false }).catch(() => null) : null;
+        if (!final) {
+          if (Date.now() - Date.parse(lastS.ts) > 2 * 86_400_000) for (const k of aliases) await removeLiveStatsMatch(day, k);
+          continue;
+        }
+        d.score = [final.goalsHome, final.goalsAway];
+        if (final.cornersFT != null) d.totals.corners = final.cornersFT;
+        if (final.cardsFT != null) d.totals.cards = final.cardsFT;
+        if (final.foulsFT != null) d.totals.fouls = final.foulsFT;
+        (d as any).completedFrom = `relevé arrêté à la ${lastS.minute}e, score final des sources`;
+      }
       if (d) {
         // Stats des joueurs : la copie la plus fournie parmi les noms du même match.
         let players: any[] | null = null;

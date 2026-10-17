@@ -4,7 +4,7 @@
 import { DailyScheduleSlot, ScheduledMatchDetail } from '../types/database';
 import AsyncStorage from './kvStore';
 import * as SecureStore from 'expo-secure-store';
-import { getAPIConfig, incrementRequestCount } from '../api/multiAPIManager';
+import { getAPIConfig, getQuotaUsage, incrementRequestCount } from '../api/multiAPIManager';
 import { fetchCompetitionOdds, FOOTBALL_DATA_TO_ODDS_SPORT_KEY, SimpleMatchOdds } from '../api/footballDataAPIs/theOddsAPI';
 import { normalizeTeamName, namesLikelyMatch } from './teamNameMatch';
 import { fetchWithTimeout } from './httpTimeout';
@@ -46,6 +46,9 @@ async function enrichWithRealOdds(
 ): Promise<void> {
   const apiConfig = await getAPIConfig();
   if (!apiConfig.theOddsApi) return;
+  // Quota mensuel épuisé (relevé gratuit sur /sports) : aucune requête de cotes envoyée pour rien.
+  const quota = await getQuotaUsage('theOddsApi', apiConfig).catch(() => null);
+  if (quota?.live && quota.used >= quota.limit) return;
 
   const competitionsPresent = Array.from(new Set(
     matches.map((m) => m.leagueId).filter((code) => FOOTBALL_DATA_TO_ODDS_SPORT_KEY[code])
@@ -369,6 +372,19 @@ export async function executeMorningScan(): Promise<DailyPlan> {
       },
       context: `Match de ${m.competition.name}. ${m.homeTeam.name} vs ${m.awayTeam.name}.`
     }));
+
+    // Planning déjà construit aujourd'hui (rafraîchissement manuel) : les cotes et compositions déjà trouvées sont gardées,
+    // seules les manquantes sont recherchées — un rafraîchissement ne doit jamais effacer ce que l'app avait déjà.
+    const previous = await getDailyPlan().catch(() => null);
+    if (previous?.date === localToday) {
+      const old = new Map(previous.slots.flatMap((s) => s.matches as ScheduledMatchDetail[]).map((m) => [m.id, m]));
+      for (const m of mappedMatches) {
+        const o = old.get(m.id);
+        if (!o) continue;
+        for (const k of Object.keys(m.odds) as Array<keyof ScheduledMatchDetail['odds']>) if (!(m.odds[k] > 1) && o.odds?.[k] > 1) m.odds[k] = o.odds[k];
+        if (o.lineups && !m.lineups) m.lineups = o.lineups;
+      }
+    }
 
     await enrichWithRealOdds(mappedMatches);
     await enrichWithApiFootballOdds(mappedMatches);
