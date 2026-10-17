@@ -873,6 +873,43 @@ function fictionalSettleable(leg: CandidateLeg, observed: ObservedLiveCounts | u
   return true;
 }
 
+/**
+ * Marchés SUSPENDUS au réel, d'après les résultats mesurés (16/10, 10 000 paris) : tirs cadrés joueur (33 % réussis pour
+ * 68 % annoncés), but avant la pause « oui » (39 % pour 59 %), corners « moins de » sur le match (46 % pour 59 %).
+ * Le fictif continue de les proposer et de les mesurer ; dès que, sur ses 150 derniers paris réglés de ce marché (au moins
+ * 100), le taux réel est à moins de 5 points de la probabilité annoncée, le marché revient automatiquement au réel.
+ */
+const WEAK_SEGMENTS = ['tirs_cadres', 'htgoal_yes', 'corners_under_ft'];
+function weakSegmentOf(l: { market: string; selection: string }): string | null {
+  if (l.market === 'tirs_cadres') return 'tirs_cadres';
+  if (l.market === 'buts_1ere_mt' && !/0-0|pas de but/i.test(l.selection)) return 'htgoal_yes';
+  if (l.market === 'corners' && /^moins/i.test(l.selection) && /sur le match/i.test(l.selection)) return 'corners_under_ft';
+  return null;
+}
+let suspendedMemo: { at: number; set: Set<string> } | null = null;
+async function suspendedRealSegments(): Promise<Set<string>> {
+  if (suspendedMemo && Date.now() - suspendedMemo.at < 30 * 60_000) return suspendedMemo.set;
+  const recent = new Map<string, Array<{ won: boolean; prob: number }>>();
+  for (const p of readInPlayProposals().filter((x) => x.real === false).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))) {
+    for (const l of p.legs) {
+      const seg = weakSegmentOf(l);
+      if (!seg || !l.settled) continue;
+      const list = recent.get(seg) ?? [];
+      if (list.length < 150) list.push({ won: !!l.won, prob: l.prob });
+      recent.set(seg, list);
+    }
+  }
+  const set = new Set<string>();
+  for (const seg of WEAK_SEGMENTS) {
+    const list = recent.get(seg) ?? [];
+    const rate = list.length ? list.filter((x) => x.won).length / list.length : 0;
+    const announced = list.length ? list.reduce((s, x) => s + x.prob, 0) / list.length : 1;
+    if (!(list.length >= 100 && Math.abs(rate - announced) <= 0.05)) set.add(seg);
+  }
+  suspendedMemo = { at: Date.now(), set };
+  return set;
+}
+
 async function applyPatterns(legs: CandidateLeg[], live: LiveFixture, observed: ObservedLiveCounts | undefined, stats: LiveMatchStats | undefined, real: boolean): Promise<void> {
   const point = {
     minute: live.minute,
@@ -1215,6 +1252,9 @@ async function bestLegFor(
     : buildLegs60(live, preMatchExpectedGoals, currentStats, observedLive, await getMatchTrend(match.homeTeam, match.awayTeam), situation);
   rawLegs.push(...(await playerShotCandidates(live)));
   await applyPatterns(rawLegs, live, observedLive, currentStats, true);
+  // Marchés où le modèle se trompe trop (mesuré) : retirés du pipe RÉEL tant que le fictif ne les a pas rendus fiables.
+  const suspended = await suspendedRealSegments();
+  for (let i = rawLegs.length - 1; i >= 0; i--) if (suspended.has(weakSegmentOf(rawLegs[i]) ?? '')) rawLegs.splice(i, 1);
 
   // Tous les marchés concourent ; les plus sûrs passent devant, un seul par
   // marché (et par fenêtre 1ère MT / match).
