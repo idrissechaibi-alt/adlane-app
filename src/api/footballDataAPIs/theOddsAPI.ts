@@ -286,16 +286,23 @@ export interface SimpleMatchOdds {
  * si la requête combinée échoue, pour ne jamais perdre 1X2/Over-Under (dont
  * dépend toute la génération de propositions) à cause d'un marché annexe.
  */
+/** Ordre de préférence des bookmakers (clés TheOddsAPI) : 1xBet = celui de l'utilisateur. */
+export const PREFERRED_BOOKMAKERS = ['onexbet', 'pinnacle', 'betfair_ex_eu', 'unibet_eu', 'williamhill', 'marathonbet', 'betsson', 'nordicbet', 'sport888', 'coolbet'];
+
 export async function fetchCompetitionOdds(
   apiKey: string,
   sportKey: string,
   region: 'us' | 'uk' | 'eu' | 'au' = 'eu'
 ): Promise<APIResponse<SimpleMatchOdds[]>> {
   try {
-    let response = await fetchWithTimeout(
-      `${BASE_URL}/sports/${sportKey}/odds?apiKey=${apiKey}&regions=${region}&markets=h2h,totals,btts&oddsFormat=decimal`
-    );
+    // Bookmaker de l'utilisateur : 1xBet (clé « onexbet »), puis Pinnacle (référence du marché) et d'autres européens en
+    // secours. Jusqu'à 10 bookmakers coûtent autant qu'une région : même consommation de crédits qu'avant.
+    const books = `bookmakers=${PREFERRED_BOOKMAKERS.join(',')}`;
+    let response = await fetchWithTimeout(`${BASE_URL}/sports/${sportKey}/odds?apiKey=${apiKey}&${books}&markets=h2h,totals,btts&oddsFormat=decimal`);
 
+    if (!response.ok) {
+      response = await fetchWithTimeout(`${BASE_URL}/sports/${sportKey}/odds?apiKey=${apiKey}&${books}&markets=h2h,totals&oddsFormat=decimal`);
+    }
     if (!response.ok) {
       response = await fetchWithTimeout(
         `${BASE_URL}/sports/${sportKey}/odds?apiKey=${apiKey}&regions=${region}&markets=h2h,totals&oddsFormat=decimal`
@@ -314,9 +321,12 @@ export async function fetchCompetitionOdds(
         kickoff_utc: event.commence_time
       };
 
-      // Prend le premier bookmaker disponible pour chaque marché (suffisant
-      // pour une estimation, pas pour un comparatif multi-bookmakers).
-      for (const bookmaker of event.bookmakers || []) {
+      // 1xBet d'abord (le bookmaker de l'utilisateur), puis l'ordre de préférence ; chaque marché vient du premier qui le cote.
+      const rank = (k: string) => {
+        const i = PREFERRED_BOOKMAKERS.indexOf(k);
+        return i < 0 ? 99 : i;
+      };
+      for (const bookmaker of [...(event.bookmakers || [])].sort((a: any, b: any) => rank(a.key) - rank(b.key))) {
         const h2h = bookmaker.markets?.find((m: any) => m.key === 'h2h');
         if (h2h && entry.home == null) {
           for (const o of h2h.outcomes || []) {

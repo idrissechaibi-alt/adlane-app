@@ -23,6 +23,7 @@ import {
   oddsSegment,
   recordBookieOdds,
   setRefCorrections,
+  setX1Ratios,
 } from './oddsLearning';
 
 const FILE_KEY = '@odds_learning_file';
@@ -284,4 +285,28 @@ export async function ensureRefCorrections(): Promise<void> {
     out.set(seg, Math.min(1.6, Math.max(0.6, Math.exp(mean * weight))));
   }
   setRefCorrections(out);
+
+  // 1xBet (cotes saisies) contre bet365 (cotes lues) sur le même pari, à moins de 6 minutes d'écart.
+  const obs = getAllObservations();
+  const refsByFixture = new Map<string, RefComparison[]>();
+  for (const r of refs) {
+    const fx = r.key.split('|')[0];
+    (refsByFixture.get(fx) ?? refsByFixture.set(fx, []).get(fx)!).push(r);
+  }
+  const x1 = new Map<string, number[]>();
+  for (const o of obs) {
+    const fx = /^inplay-[a-z0-9]+-(\d+)-/.exec(o.proposalId)?.[1];
+    if (!fx || !(o.odds > 1) || o.minute == null) continue;
+    const match = (refsByFixture.get(fx) ?? []).find((r) => r.selection === o.label && Math.abs(r.minute - (o.minute as number)) <= 6 && r.ref > 1);
+    if (!match) continue;
+    const v = Math.log(o.odds / match.ref);
+    (x1.get(o.segment) ?? x1.set(o.segment, []).get(o.segment)!).push(v);
+    (x1.get('*') ?? x1.set('*', []).get('*')!).push(v);
+  }
+  const ratios = new Map<string, { ratio: number; n: number }>();
+  for (const [seg, logs] of x1) {
+    const mean = logs.reduce((a, b) => a + b, 0) / logs.length;
+    ratios.set(seg, { ratio: Math.min(1.3, Math.max(0.75, Math.exp(mean))), n: logs.length });
+  }
+  setX1Ratios(ratios);
 }

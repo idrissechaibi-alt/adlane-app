@@ -111,7 +111,7 @@ import { DeltaUnit, LegProjection, PLAUSIBLE_MAX, describeCorrection, ensureDelt
 import { getRefOdds, legLineOffered, refOddsForLeg } from '../api/footballDataAPIs/refOdds';
 import { backupTotalGoalsOdds } from '../api/footballDataAPIs/backupOdds';
 import { ensureRefCorrections, recordRefComparison } from './oddsLoop';
-import { CountInfo, MIN_ESTIMATED_ODDS, OddsContext, ensureOddsLoaded, estimateLegOdds, featuresOf, parseLine, setOddsWatch } from './oddsLearning';
+import { toX1Odds, CountInfo, MIN_ESTIMATED_ODDS, OddsContext, ensureOddsLoaded, estimateLegOdds, featuresOf, parseLine, setOddsWatch } from './oddsLearning';
 import { ensureLineLimitsLoaded, ensureMarketOffLoaded, isMarketOff, lineAvailability } from './lineLimits';
 import { atLeastProb, pickHighestOverLine, pickLowestUnderLine } from './countModel';
 import AsyncStorage from './kvStore';
@@ -1255,7 +1255,10 @@ async function bestLegFor(
     // Vraie cote disponible : elle remplace l'estimation, et l'écart du modèle est mesuré.
     l.evidence += ` Cote bet365 lue : ${bet365.toFixed(2)} (estimation du modèle : ${model.toFixed(2)}).`;
     void recordRefComparison({ key: `${live.fixtureId}|${l.selection}`, market: l.market, selection: l.selection, minute: live.minute, modelProb: l.prob, estModel: modelOdds(l, true), ref: bet365 });
-    return bet365;
+    // Bookmaker de l'utilisateur = 1xBet : la cote bet365 est ramenée à son équivalent 1xBet quand l'écart est mesuré.
+    const x1 = toX1Odds(l.market, l.selection, bet365);
+    if (x1 !== bet365) l.evidence += ` Équivalent 1xBet estimé : ${x1.toFixed(2)}.`;
+    return x1;
   };
   // Secours : ni bet365 (MoviOdds, 365Scores) ne propose ce pari — cote juste Bet Better (sans marge, réduite de 7 %) pour un total de buts.
   const backup = new Map<CandidateLeg, number>();

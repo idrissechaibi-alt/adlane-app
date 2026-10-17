@@ -326,6 +326,27 @@ let refCorrections = new Map<string, number>();
 export function setRefCorrections(map: Map<string, number>): void {
   refCorrections = map;
 }
+
+/**
+ * Bookmaker de l'utilisateur = 1xBet. Rapport « cote 1xBet saisie / cote bet365 lue » au même moment sur le même pari, par
+ * segment (marché/côté/fenêtre) : sert à convertir une cote bet365 lue en ligne en son équivalent 1xBet.
+ */
+let x1Ratios = new Map<string, { ratio: number; n: number }>();
+export function setX1Ratios(map: Map<string, { ratio: number; n: number }>): void {
+  x1Ratios = map;
+}
+export function getX1Ratios(): Array<{ key: string; ratio: number; n: number }> {
+  return [...x1Ratios.entries()].map(([key, v]) => ({ key, ratio: Math.round(v.ratio * 1000) / 1000, n: v.n }));
+}
+/** Cote bet365 ramenée à son équivalent 1xBet (inchangée tant que l'écart n'est pas mesuré sur au moins 5 paires). */
+export function toX1Odds(market: TrackedMarket, selection: string, bet365: number): number {
+  const r = x1Ratios.get(oddsSegment(market, selection)) ?? x1Ratios.get('*');
+  return r && r.n >= 5 ? Math.max(1.01, Math.round(bet365 * r.ratio * 100) / 100) : bet365;
+}
+/** Nombre de cotes 1xBet saisies pour un segment : au-delà de 10, ce sont elles qui calibrent l'estimation (pas bet365). */
+function userObsCount(segment: string): number {
+  return (memo ?? []).filter((o) => o.segment === segment).length;
+}
 export function getRefCorrections(): Array<{ key: string; factor: number }> {
   return [...refCorrections.entries()].map(([key, factor]) => ({ key, factor: Math.round(factor * 1000) / 1000 }));
 }
@@ -339,8 +360,16 @@ export function estimateLegOdds(
 ): { odds: number; raw: number; observations: number } {
   const base = estimateLegOddsBase(leg, fano, minute, features);
   if (options.noRefCorrection) return base;
-  const factor = refCorrections.get(oddsSegment(leg.market, leg.selection));
-  return factor ? { ...base, odds: Math.round(base.odds * factor * 100) / 100 } : base;
+  const seg = oddsSegment(leg.market, leg.selection);
+  // Assez de cotes 1xBet saisies sur ce marché : l'estimation apprise sur elles fait foi, la correction vers bet365 n'est
+  // plus appliquée (ce n'est pas le bookmaker de l'utilisateur).
+  if (userObsCount(seg) >= 10) return base;
+  const factor = refCorrections.get(seg);
+  if (!factor) return base;
+  // Correction vers bet365, convertie en équivalent 1xBet quand l'écart entre les deux est connu.
+  const x1 = x1Ratios.get(seg) ?? x1Ratios.get('*');
+  const f = x1 && x1.n >= 5 ? factor * x1.ratio : factor;
+  return { ...base, odds: Math.round(base.odds * f * 100) / 100 };
 }
 
 function estimateLegOddsBase(

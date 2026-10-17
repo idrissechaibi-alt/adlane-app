@@ -12,7 +12,7 @@ import { estimateExpectedGoalsFromMarket } from './poisson';
 import { getNativeBackgroundTickStats, readAbortedTicks, readLastFastTick, readLastRealFastTick, readUnmatchedPlannedLive, readLastTickDiagnostics, readTickProgress } from './backgroundTasks';
 import { loadOmnirouteConfig } from './focusEnrichment';
 import { ensureRefCorrections } from './oddsLoop';
-import { getRefCorrections } from './oddsLearning';
+import { getRefCorrections, getX1Ratios } from './oddsLearning';
 import { readTeamStatsUsageLog } from './teamStats';
 import { getLiveStatsScanStatus } from './liveStatsStore';
 import { readLearnedAliases } from './teamAliasStore';
@@ -200,6 +200,7 @@ export async function buildAppHealth(): Promise<Record<string, unknown>> {
     exactDeltas: await section(async () => getDeltaReport().filter((r) => r.verified + r.pending > 0).map((r) => ({ ...r, meanPredicted: Math.round(r.meanPredicted * 10) / 10, meanActual: Math.round(r.meanActual * 10) / 10, meanError: Math.round(r.meanError * 100) / 100, meanAbsError: Math.round(r.meanAbsError * 100) / 100 }))),
     situationModel: await section(async () => getSituationReport().filter((r) => r.samples > 0)),
     refCorrections: await section(async () => { await ensureRefCorrections(); return getRefCorrections(); }),
+    oneXBetVsBet365: await section(async () => { await ensureRefCorrections(); return getX1Ratios(); }),
     bookieOdds: await section(async () => { await ensureOddsLoaded(); return getOddsLearningStatus(); }),
     oddsAlignment: await section(async () => {
       const f = await readOddsLoopFile(true);
