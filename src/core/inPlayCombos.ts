@@ -1257,7 +1257,7 @@ async function bestLegFor(
     void recordRefComparison({ key: `${live.fixtureId}|${l.selection}`, market: l.market, selection: l.selection, minute: live.minute, modelProb: l.prob, estModel: modelOdds(l, true), ref: bet365 });
     // Bookmaker de l'utilisateur = 1xBet : la cote bet365 est ramenée à son équivalent 1xBet quand l'écart est mesuré.
     const x1 = toX1Odds(l.market, l.selection, bet365);
-    if (x1 !== bet365) l.evidence += ` Équivalent 1xBet estimé : ${x1.toFixed(2)}.`;
+    if (x1 !== bet365) l.evidence += ` Cote ajustée à ton bookmaker : ${x1.toFixed(2)}.`;
     return x1;
   };
   // Secours : ni bet365 (MoviOdds, 365Scores) ne propose ce pari — cote juste Bet Better (sans marge, réduite de 7 %) pour un total de buts.

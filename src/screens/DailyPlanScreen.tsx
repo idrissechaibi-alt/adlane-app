@@ -629,7 +629,7 @@ export default function DailyPlanScreen() {
                 style={styles.stakeInput}
                 value={oddsNoteInput}
                 onChangeText={setOddsNoteInput}
-                placeholder="Cote 1xBet"
+                placeholder="Cote chez ton bookie"
                 placeholderTextColor="#64748b"
                 keyboardType="decimal-pad"
                 autoFocus
@@ -700,7 +700,7 @@ export default function DailyPlanScreen() {
               style={styles.stakeInput}
               value={oddsInput}
               onChangeText={setOddsInput}
-              placeholder="Cote 1xBet"
+              placeholder="Cote réelle"
               placeholderTextColor="#64748b"
               keyboardType="decimal-pad"
               autoFocus
@@ -955,7 +955,7 @@ export default function DailyPlanScreen() {
                               style={styles.stakeInput}
                               value={oddsInput}
                               onChangeText={setOddsInput}
-                              placeholder="Cote 1xBet"
+                              placeholder="Cote réelle"
                               placeholderTextColor="#64748b"
                               keyboardType="decimal-pad"
                               autoFocus
