@@ -1,41 +1,42 @@
 # Mémoire d'auto-apprentissage — marqueurs observés en direct
 
-Mis à jour : 2026-10-17T15:31:30.166Z
-Corpus : 13907 observations sur 661 ligues / 1 pays.
+Mis à jour : 2026-10-17T15:49:43.163Z
+Corpus : 14281 observations sur 663 ligues / 1 pays.
 
 ## Taux de base observés (par fenêtre)
-- `goals>=1@10` : 35.2%
-- `goals>=2@10` : 9.9%
-- `corners>=2@10` : 24.3%
-- `corners>=3@10` : 12.3%
-- `cards>=1@10` : 23.7%
+- `goals>=1@10` : 34.6%
+- `goals>=2@10` : 9.7%
+- `corners>=2@10` : 24.6%
+- `corners>=3@10` : 12.2%
+- `cards>=1@10` : 24.0%
 - `cards>=2@10` : 7.3%
-- `fouls>=3@10` : 23.0%
-- `fouls>=5@10` : 10.7%
-- `goals>=1@25` : 44.9%
-- `goals>=2@25` : 18.2%
-- `corners>=2@25` : 29.3%
+- `fouls>=3@10` : 22.6%
+- `fouls>=5@10` : 10.5%
+- `goals>=1@25` : 44.3%
+- `goals>=2@25` : 17.8%
+- `corners>=2@25` : 29.7%
 - `corners>=3@25` : 20.2%
-- `cards>=1@25` : 24.6%
+- `cards>=1@25` : 24.9%
 - `cards>=2@25` : 10.7%
-- `fouls>=3@25` : 24.3%
-- `fouls>=5@25` : 20.0%
+- `fouls>=3@25` : 24.0%
+- `fouls>=5@25` : 19.8%
 
 ## Marqueurs les plus informatifs
 
 ### Fenêtre 10 minutes
-- `fouls_total>=5` → `fouls>=3` : **38.4%** (×1.67 vs base 23.0%, n=1242)
-- `shots_on_target_total>=5` → `goals>=1` : **49.1%** (×1.40 vs base 35.2%, n=381)
-- `shots_on_target_total>=4` → `goals>=1` : **46.5%** (×1.32 vs base 35.2%, n=678)
-- `shots_total>=12` → `goals>=1` : **44.7%** (×1.27 vs base 35.2%, n=257)
+- `fouls_total>=5` → `fouls>=3` : **38.5%** (×1.70 vs base 22.6%, n=1246)
+- `shots_on_target_total>=5` → `goals>=1` : **49.1%** (×1.42 vs base 34.6%, n=381)
+- `shots_on_target_total>=4` → `goals>=1` : **46.5%** (×1.34 vs base 34.6%, n=678)
+- `shots_total>=12` → `goals>=1` : **44.7%** (×1.29 vs base 34.6%, n=257)
 
 ### Fenêtre 25 minutes
-- `possession_imbalance>=20` → `corners>=2` : **38.6%** (×1.31 vs base 29.3%, n=485)
-- `possession_imbalance>=10` → `corners>=2` : **35.1%** (×1.20 vs base 29.3%, n=1362)
-- `possession_imbalance>=20` → `goals>=1` : **52.8%** (×1.18 vs base 44.9%, n=485)
+- `possession_imbalance>=20` → `fouls>=3` : **35.1%** (×1.46 vs base 24.0%, n=499)
+- `possession_imbalance>=20` → `corners>=2` : **38.9%** (×1.31 vs base 29.7%, n=499)
+- `possession_imbalance>=20` → `goals>=1` : **52.7%** (×1.19 vs base 44.3%, n=499)
+- `possession_imbalance>=10` → `corners>=2` : **35.3%** (×1.19 vs base 29.7%, n=1400)
 
 ## Fiabilité mesurée du modèle (paris papier, aucun argent engagé)
-- Paris simulés réglés : 2920 / 5522
+- Paris simulés réglés : 2964 / 5653
 - Taux de réussite réel : 39.4%
 - Facteur de recalibrage appliqué : ×0.95 (<1 = le modèle était trop optimiste, ses probabilités sont rabotées)
 
@@ -44,13 +45,13 @@ Corpus : 13907 observations sur 661 ligues / 1 pays.
 - Pas encore assez fiable (seuil : 30 recoupements, 80% d'accord) — Omniroute élargit la couverture observée mais n'influence pas encore les probabilités.
 
 ## Fiabilité passée du scan en direct 20e/60e minute (par marché, 30 derniers jours, réel + fictif confondus)
-- `Total de buts` : réalisé **64.1%** vs annoncé 64.0% (n=2732)
-- `Cartons jaunes` : réalisé **60.5%** vs annoncé 61.6% (n=2086)
-- `Corners` : réalisé **66.2%** vs annoncé 65.7% (n=1511)
-- `Les deux marquent` : réalisé **63.0%** vs annoncé 62.8% (n=1024)
-- `Victoire (1X2)` : réalisé **61.8%** vs annoncé 64.0% (n=587)
-- `Fautes` : réalisé **62.4%** vs annoncé 67.4% (n=391)
-- `Buts 1ère mi-temps` : réalisé **56.8%** vs annoncé 61.9% (n=241)
+- `Total de buts` : réalisé **64.0%** vs annoncé 64.0% (n=2767)
+- `Cartons jaunes` : réalisé **60.1%** vs annoncé 61.5% (n=2142)
+- `Corners` : réalisé **66.9%** vs annoncé 65.8% (n=1558)
+- `Les deux marquent` : réalisé **62.7%** vs annoncé 62.8% (n=1039)
+- `Victoire (1X2)` : réalisé **61.5%** vs annoncé 64.0% (n=595)
+- `Fautes` : réalisé **62.8%** vs annoncé 67.5% (n=398)
+- `Buts 1ère mi-temps` : réalisé **56.3%** vs annoncé 62.0% (n=245)
 - `Tirs cadrés (joueur)` : réalisé **38.2%** vs annoncé 62.6% (n=68) — trop confiant sur ce marché, à corriger.
 
 ## Fiabilité passée de l'analyse Scouting IA (par marché, 30 derniers jours)
