@@ -1,7 +1,7 @@
 # Mémoire d'auto-apprentissage — marqueurs observés en direct
 
-Mis à jour : 2026-10-17T07:17:28.186Z
-Corpus : 9788 observations sur 620 ligues / 1 pays.
+Mis à jour : 2026-10-17T11:35:52.418Z
+Corpus : 9799 observations sur 621 ligues / 1 pays.
 
 ## Taux de base observés (par fenêtre)
 - `goals>=1@10` : 36.6%
@@ -11,9 +11,9 @@ Corpus : 9788 observations sur 620 ligues / 1 pays.
 - `cards>=1@10` : 24.1%
 - `cards>=2@10` : 7.9%
 - `fouls>=3@10` : 22.2%
-- `fouls>=5@10` : 11.4%
+- `fouls>=5@10` : 11.3%
 - `goals>=1@25` : 45.2%
-- `goals>=2@25` : 18.7%
+- `goals>=2@25` : 18.6%
 - `corners>=2@25` : 27.8%
 - `corners>=3@25` : 19.0%
 - `cards>=1@25` : 24.6%
@@ -31,12 +31,12 @@ Corpus : 9788 observations sur 620 ligues / 1 pays.
 
 ### Fenêtre 25 minutes
 - `possession_imbalance>=20` → `corners>=2` : **38.9%** (×1.40 vs base 27.8%, n=350)
-- `possession_imbalance>=10` → `corners>=2` : **35.2%** (×1.26 vs base 27.8%, n=1062)
+- `possession_imbalance>=10` → `corners>=2` : **35.2%** (×1.27 vs base 27.8%, n=1062)
 - `possession_imbalance>=20` → `goals>=1` : **54.6%** (×1.21 vs base 45.2%, n=350)
 - `fouls_total>=8` → `goals>=1` : **52.5%** (×1.16 vs base 45.2%, n=198)
 
 ## Fiabilité mesurée du modèle (paris papier, aucun argent engagé)
-- Paris simulés réglés : 2109 / 3937
+- Paris simulés réglés : 2109 / 4066
 - Taux de réussite réel : 40.1%
 - Facteur de recalibrage appliqué : ×0.96 (<1 = le modèle était trop optimiste, ses probabilités sont rabotées)
 
@@ -45,12 +45,12 @@ Corpus : 9788 observations sur 620 ligues / 1 pays.
 - Pas encore assez fiable (seuil : 30 recoupements, 80% d'accord) — Omniroute élargit la couverture observée mais n'influence pas encore les probabilités.
 
 ## Fiabilité passée du scan en direct 20e/60e minute (par marché, 30 derniers jours, réel + fictif confondus)
-- `Total de buts` : réalisé **63.9%** vs annoncé 64.0% (n=2360)
-- `Cartons jaunes` : réalisé **61.6%** vs annoncé 61.8% (n=1738)
-- `Corners` : réalisé **65.4%** vs annoncé 66.0% (n=1241)
-- `Les deux marquent` : réalisé **64.1%** vs annoncé 63.0% (n=871)
+- `Total de buts` : réalisé **63.9%** vs annoncé 64.0% (n=2372)
+- `Cartons jaunes` : réalisé **61.4%** vs annoncé 61.8% (n=1755)
+- `Corners` : réalisé **65.7%** vs annoncé 66.0% (n=1255)
+- `Les deux marquent` : réalisé **64.0%** vs annoncé 63.0% (n=875)
 - `Victoire (1X2)` : réalisé **61.7%** vs annoncé 64.1% (n=515)
-- `Fautes` : réalisé **61.3%** vs annoncé 67.5% (n=333)
+- `Fautes` : réalisé **61.5%** vs annoncé 67.5% (n=335)
 - `Buts 1ère mi-temps` : réalisé **54.0%** vs annoncé 61.6% (n=202)
 - `Tirs cadrés (joueur)` : réalisé **38.5%** vs annoncé 62.6% (n=65) — trop confiant sur ce marché, à corriger.
 
