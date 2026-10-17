@@ -205,6 +205,18 @@ export async function liveLegCounter(leg: InPlayProposalLeg, dateKey: string): P
             : [period.foulsHome ?? 0, period.foulsAway ?? 0, 'Fautes'];
           value = { ...base, what: String(what), label: `${h}-${a}`, current: Number(h) + Number(a) };
         }
+      } else if (leg.market === 'buts_equipe' || leg.market === 'corners_equipe') {
+        // Par équipe : le compteur suit l'équipe du pari (« … — Bologna (domicile) »).
+        const side = /\(domicile\)/i.test(leg.selection) ? 'home' : 'away';
+        const team = /—\s*(.+?)\s*\(/.exec(leg.selection)?.[1] ?? (side === 'home' ? leg.homeTeam : leg.awayTeam);
+        if (leg.market === 'buts_equipe') {
+          const g = side === 'home' ? live.homeGoals : live.awayGoals;
+          value = { ...base, what: `Buts ${team}`, label: `${g}`, current: g };
+        } else {
+          const stats = await hubStats(leg.homeTeam, leg.awayTeam, dateKey).catch(() => null);
+          const c = side === 'home' ? stats?.all?.cornersHome : stats?.all?.cornersAway;
+          if (c != null) value = { ...base, what: `Corners ${team}`, label: `${c}`, current: Number(c) };
+        }
       } else if (leg.market === 'tirs_cadres') {
         const players = await hubPlayerShots(leg.homeTeam, leg.awayTeam, dateKey).catch(() => null);
         const sot = playerSotFromSelection(leg.selection, players);
