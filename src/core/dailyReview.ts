@@ -554,6 +554,7 @@ async function settlePlacedLiveBets(proposals: InPlayProposal[]): Promise<void> 
 const REVIEW_TIME_BUDGET_MS = 3 * 60_000;
 const CATCHUP_KEY = '@review_catchup_attempts';
 const VOID_AFTER_MS = 48 * 3_600_000;
+const REVIEW_BUDGET_MS = 4 * 60_000;
 let reviewDeadline = Infinity;
 const reviewTimeLeft = () => Date.now() < reviewDeadline;
 
@@ -701,6 +702,7 @@ export async function runNightlyReviewIfDue(): Promise<number> {
   const retryDays = [yesterday, today].filter((day) => !closedPendingDays.includes(day));
   const pendingDays = todayDue ? [...closedPendingDays, ...retryDays] : [...closedPendingDays];
   const allProposals = readInPlayProposals();
+  const reviewStartedAt = Date.now();
 
   // RATTRAPAGE : jours passés (14 derniers) où des paris n'ont pas encore de verdict (stat manquante au premier bilan).
   // Chaque jour est retenté au plus toutes les 6 h, 2 jours par passage — les courbes et la calibration ne gardent
@@ -742,6 +744,9 @@ export async function runNightlyReviewIfDue(): Promise<number> {
       (p) => p.createdAt.startsWith(day) && (!p.reviewed || p.legs.some((l) => !l.settled && !l.voided))
     );
     if (unreviewedDayProposals.length === 0) continue;
+    // Budget : au-delà de 4 min, les jours de reprise (aujourd'hui, rattrapage) attendent le passage suivant — le tour de
+    // fond doit encore relever les matchs en direct. Le bilan de la veille (jour clos) passe toujours.
+    if (!closedPendingDays.includes(day) && Date.now() - reviewStartedAt > REVIEW_BUDGET_MS) continue;
 
     // Scans 20e/60e minute (et l'ancien combo mi-temps, pour les
     // enregistrements encore non réglés) : chaque jambe porte son propre

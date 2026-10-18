@@ -2006,7 +2006,10 @@ export async function runRealInPlayTick(liveFixtures: LiveFixture[]): Promise<nu
         const free = await fetchFreeLiveStats(live).catch(() => undefined);
         const xg = correctedGoals({ home: scheduled.expectedHomeGoals, away: scheduled.expectedAwayGoals }, 'goals_ft');
         const odds = scheduled.odds?.home > 1 && scheduled.odds?.away > 1 ? { home: scheduled.odds.home, away: scheduled.odds.away } : null;
+        const suspended = await suspendedRealSegments();
         for (const proposal of strategyProposals(live, matchRefOfScheduled(scheduled), free?.all, xg, odds, true, alreadyProposed)) {
+          // Marchés suspendus au réel : les stratégies y passaient à côté du filtre (but avant la pause « oui » le 18/10).
+          if (proposal.legs.some((l) => suspended.has(weakSegmentOf(l) ?? ''))) continue;
           if (!(await claimPick(proposal))) continue;
           fresh.push(proposal);
           appendInPlayProposals([proposal]);
@@ -2143,7 +2146,8 @@ export async function runInPlayComboTick(
         let observedLive: ObservedLiveCounts | undefined;
         const free = await fetchFreeLiveStats(live);
         if (free) {
-          currentStats = { shotsOnTargetHome: free.stats.shotsOnTargetHome, shotsOnTargetAway: free.stats.shotsOnTargetAway };
+          // Mêmes stats qu'au réel (corners par équipe compris : sans eux, aucun pari « corners d'une équipe » au fictif).
+          currentStats = free.stats;
           observedLive = free.observed;
         }
         fresh.push(...strategyProposals(live, match, free?.all, correctedGoals(expectedGoals, 'goals_ft'), null, false, alreadyProposed));
