@@ -61,6 +61,8 @@ export default function DailyPlanScreen() {
   const [proposalStatus, setProposalStatus] = useState<Record<string, LegStatus>>({});
   const [legStatuses, setLegStatuses] = useState<Record<string, LegStatus[]>>({});
   /** Compteur en direct de chaque jambe encore en cours (minute + score / corners / cartons / tirs du joueur). */
+  /** Paris dont l'historique des cotes saisies est déplié (replié par défaut pour alléger l'écran). */
+  const [expandedOdds, setExpandedOdds] = useState<Set<string>>(new Set());
   const [legCounters, setLegCounters] = useState<Record<string, Array<LegCounter | null>>>({});
 
   // État de chaque pari (en cours / réussi / perdu) revérifié à chaque
@@ -646,17 +648,43 @@ export default function DailyPlanScreen() {
           )}
         </View>
         {(() => {
+          // Compact par défaut : la dernière cote saisie seulement ; l'historique et les explications s'ouvrent d'un appui.
           const history = getObservedOddsList(proposal);
           const est = estimateProposalOdds(proposal);
+          const when = (o: (typeof history)[number]) =>
+            o.minute != null ? `${o.minute}e` : new Date(o.ts).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+          const last = history[history.length - 1];
+          const open = expandedOdds.has(proposal.id);
+          const moves = open ? explainOddsMoves(proposal) : [];
           return (
-            <Text style={styles.liveBetLeg}>
-              {history.length > 0
-                ? `Cotes saisies : ${history.map((o) => `${o.minute != null ? `${o.minute}e` : new Date(o.ts).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} → ${o.odds.toFixed(2)}`).join(' · ')} · `
-                : ''}
-              cote estimée à la création ≈ {est.odds.toFixed(2)}
-              {est.observations > 0 ? ` (${est.observations} cotes apprises)` : ''}
-              {explainOddsMoves(proposal).map((l) => `\n${l}`).join('')}
-            </Text>
+            <View>
+              <Text style={styles.liveBetLeg}>
+                {last ? `Dernière cote : ${when(last)} → ${last.odds.toFixed(2)} · ` : ''}cote estimée à la création ≈ {est.odds.toFixed(2)}
+              </Text>
+              {history.length > 0 && (
+                <TouchableOpacity
+                  onPress={() =>
+                    setExpandedOdds((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(proposal.id)) next.delete(proposal.id);
+                      else next.add(proposal.id);
+                      return next;
+                    })
+                  }
+                >
+                  <Text style={[styles.liveBetLeg, { textDecorationLine: 'underline' }]}>
+                    {open ? '▾ Masquer l\'historique' : `▸ Historique des cotes (${history.length})`}
+                  </Text>
+                </TouchableOpacity>
+              )}
+              {open && (
+                <Text style={styles.liveBetLeg}>
+                  {history.map((o) => `${when(o)} → ${o.odds.toFixed(2)}`).join(' · ')}
+                  {est.observations > 0 ? ` · ${est.observations} cotes apprises` : ''}
+                  {moves.map((l) => `\n${l}`).join('')}
+                </Text>
+              )}
+            </View>
           );
         })()}
         <View style={styles.liveBetStatusRow}>
