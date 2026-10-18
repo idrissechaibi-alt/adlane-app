@@ -67,6 +67,29 @@ export interface OddsContext {
   goalsNow: number;
   count?: CountInfo;
   stats?: OddsStats;
+  /** Combiné : situation de chaque match au moment de la saisie (pour expliquer la variation de la cote). */
+  legs?: LegSnapshot[];
+  /** Le score a changé depuis la création du pari : la probabilité d'origine ne vaut plus, la cote n'entre pas dans le rapport cote × probabilité. */
+  scoreChanged?: boolean;
+}
+
+export interface LegSnapshot {
+  match: string;
+  selection: string;
+  minute: number;
+  home: number;
+  away: number;
+}
+
+/** Effet d'un but sur une jambe : +1 favorable, -1 défavorable, 0 neutre / inconnu. */
+function goalEffect(selection: string, side: 'home' | 'away'): number {
+  if (/1 \(domicile\)|domicile\)$|Victoire domicile/i.test(selection) && !/—/.test(selection)) return side === 'home' ? 1 : -1;
+  if (/2 \(extérieur\)|Victoire extérieur/i.test(selection) && !/—/.test(selection)) return side === 'away' ? 1 : -1;
+  if (/X \(nul\)|^Nul/i.test(selection)) return 0;
+  if (/^plus de .*buts?/i.test(selection)) return 1;
+  if (/^moins de .*buts?/i.test(selection)) return -1;
+  if (/BTTS Oui|les deux équipes marquent \(Oui\)/i.test(selection)) return 1;
+  return 0;
 }
 
 const TYPICAL_PER_MIN: Record<string, number> = { corners: 10 / 90, cards: 4 / 90, fouls: 24 / 90, goals: 2.6 / 94 };
@@ -93,6 +116,8 @@ export interface OddsObservation {
   ts: string;
   odds: number;
   segment: string;
+  legs?: LegSnapshot[];
+  scoreChanged?: boolean;
   /** Probabilité du modèle à cet instant (recalculée pour un comptage, sinon celle de la proposition). */
   modelProb: number;
   minute?: number;
@@ -251,7 +276,8 @@ function fitReactions(obs: OddsObservation[]): Map<string, { b: number[]; meanF:
 function fitResiduals(obs: OddsObservation[]): Map<string, number> {
   const groups = new Map<string, number[]>();
   for (const o of obs) {
-    if (o.estRaw == null || !o.residKey) continue;
+    // Écart à l'estimation : faussé si le score a changé depuis la création (sauf comptages, recalculés à la saisie).
+    if (o.estRaw == null || !o.residKey || (o.scoreChanged && !o.count)) continue;
     groups.set(o.residKey, [...(groups.get(o.residKey) ?? []), Math.log(o.odds / Math.max(1.01, o.estRaw))]);
   }
   const out = new Map<string, number>();
@@ -273,6 +299,9 @@ function build() {
     if (o.count && o.k != null) {
       for (const key of [`${o.count.unit}|${bucket}`, `${o.count.unit}|*`]) kGroups.set(key, [...(kGroups.get(key) ?? []), o.k]);
     } else {
+      // Score changé depuis la création : la probabilité enregistrée est celle d'avant (Lyon-Nice 0-0 → 2-1), le rapport
+      // cote × probabilité serait faux et fausserait l'estimation des cotes suivantes.
+      if (o.scoreChanged) continue;
       const r = o.odds * o.modelProb;
       allRatios.push(r);
       for (const key of [`${o.segment}|${bucket}`, `${o.segment}|*`]) ratioGroups.set(key, [...(ratioGroups.get(key) ?? []), r]);
@@ -432,6 +461,8 @@ export async function recordBookieOdds(proposal: InPlayProposal, odds: number, c
     goalsNow: context?.goalsNow,
     count,
     stats: context?.stats,
+    legs: context?.legs,
+    scoreChanged: context?.scoreChanged,
     features,
     k: k ?? undefined,
     estRaw: est.raw,
@@ -492,9 +523,38 @@ export function explainOddsMoves(proposal: InPlayProposal): string[] {
       if (b.stats.reds !== a.stats.reds) changes.push(`${fmt(b.stats.reds - a.stats.reds)} rouge`);
     }
     const rhythm = a.k != null && b.k != null ? ` · rythme du bookmaker ×${a.k.toFixed(2)} → ×${b.k.toFixed(2)}` : '';
-    lines.push(`${a.minute}e → ${b.minute}e : cote ${a.odds.toFixed(2)} → ${b.odds.toFixed(2)} (${changes.join(', ')})${rhythm}`);
+    const legLines = a.legs && b.legs ? explainLegMoves(a.legs, b.legs) : [];
+    lines.push(`${a.minute}e → ${b.minute}e : cote ${a.odds.toFixed(2)} → ${b.odds.toFixed(2)} (${changes.join(', ')})${rhythm}${legLines.length ? ` — ${legLines.join(' ; ')}` : ''}`);
+  }
+  // Combiné : ce qui a changé dans chaque match depuis la création du pari jusqu'à la première cote saisie.
+  const first = obs[0];
+  if (first?.legs && proposal.legs.length > 1) {
+    const initial = proposal.legs.map((l) => {
+      const m = /(\d+)\s*-\s*(\d+)/.exec(l.scoreLabel ?? '');
+      return { match: `${l.homeTeam} - ${l.awayTeam}`, selection: l.selection, minute: proposal.minute ?? 0, home: m ? Number(m[1]) : 0, away: m ? Number(m[2]) : 0 };
+    });
+    const moves = explainLegMoves(initial, first.legs);
+    if (moves.length) lines.unshift(`Depuis la création (${proposal.minute ?? '?'}e) : ${moves.join(' ; ')} → cote ${first.odds.toFixed(2)}`);
   }
   return lines;
+}
+
+/** Pour chaque match d'un combiné : buts marqués entre deux instants et effet sur le pari (rapproche / éloigne). */
+function explainLegMoves(before: LegSnapshot[], after: LegSnapshot[]): string[] {
+  const out: string[] = [];
+  for (const b of after) {
+    const a = before.find((x) => x.match === b.match);
+    if (!a) continue;
+    const dh = b.home - a.home;
+    const da = b.away - a.away;
+    if (!dh && !da) continue;
+    const [home, away] = b.match.split(' - ');
+    const effect = dh * goalEffect(b.selection, 'home') + da * goalEffect(b.selection, 'away');
+    const who = [dh ? `${home} +${dh}` : '', da ? `${away} +${da}` : ''].filter(Boolean).join(', ');
+    const verdict = effect > 0 ? 'favorable' : effect < 0 ? 'défavorable' : 'neutre';
+    out.push(`${who} (${b.home}-${b.away}) : ${verdict} à « ${b.selection} »`);
+  }
+  return out;
 }
 
 /** Ce que l'app a appris de la réaction du bookmaker (coefficients par variable), pour le diagnostic. */

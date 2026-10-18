@@ -360,12 +360,22 @@ export default function DailyPlanScreen() {
    * avancé (sans compteur), pour que la cote du combiné soit datée (« 41e → 4.24 ») et non « ? ».
    */
   const oddsContextOf = async (proposal: InPlayProposal) => {
-    if (proposal.legs.length === 1) return liveLegContext(proposal.legs[0]);
     const ctxs = await Promise.all(proposal.legs.map((l) => liveLegContext(l).catch(() => null)));
+    // Score de chaque match changé depuis la création du pari (« 0-0 » → « 2-1 ») ?
+    const scoreChanged = proposal.legs.some((l, i) => {
+      const c = ctxs[i];
+      const m = /(\d+)\s*-\s*(\d+)/.exec(l.scoreLabel ?? '');
+      return !!c?.stats && !!m && (c.stats.goalsHome !== Number(m[1]) || c.stats.goalsAway !== Number(m[2]));
+    });
+    if (proposal.legs.length === 1) return ctxs[0] ? { ...ctxs[0], scoreChanged } : null;
     const known = ctxs.filter((c): c is NonNullable<typeof c> => !!c);
     if (!known.length) return null;
     const latest = known.reduce((a, b) => (b.minute > a.minute ? b : a));
-    return { minute: latest.minute, goalsNow: latest.goalsNow };
+    const legs = proposal.legs.flatMap((l, i) => {
+      const c = ctxs[i];
+      return c?.stats ? [{ match: `${l.homeTeam} - ${l.awayTeam}`, selection: l.selection, minute: c.minute, home: c.stats.goalsHome, away: c.stats.goalsAway }] : [];
+    });
+    return { minute: latest.minute, goalsNow: latest.goalsNow, legs, scoreChanged };
   };
 
   /** Enregistre la cote vue chez le bookmaker pour ce pari, sans le placer. */
@@ -377,8 +387,13 @@ export default function DailyPlanScreen() {
     }
     // Cote très éloignée de l'estimation (faute de frappe probable : 49.40 au lieu de 4.94) : confirmation avant
     // qu'elle n'entre dans l'apprentissage des cotes.
+    // Seulement si aucun but n'a changé la donne depuis la création du pari : sinon un gros écart est normal
+    // (Lyon mène 2-1, Juventus menée 0-1 → le combiné passe de 5.5 à 49).
     const est = estimateProposalOdds(proposal).odds;
-    if (est > 1 && (odds > est * 3 || odds < est / 3)) {
+    const ctxNow = await oddsContextOf(proposal).catch(() => null);
+    const prev = getObservedOddsList(proposal).slice(-1)[0];
+    const reference = prev && !(ctxNow as any)?.scoreChanged ? prev.odds : est;
+    if (!(ctxNow as any)?.scoreChanged && reference > 1 && (odds > reference * 3 || odds < reference / 3)) {
       const ok = await new Promise<boolean>((resolve) =>
         Alert.alert(
           'Cote inhabituelle',
