@@ -305,7 +305,7 @@ export default function DailyPlanScreen() {
       };
       await saveBet(bet);
       setLegBookOdds(proposal.id, odds);
-      await recordOddsAndLearn(proposal, odds, proposal.legs.length === 1 ? await liveLegContext(proposal.legs[0]) : null).catch(() => {});
+      await recordOddsAndLearn(proposal, odds, await oddsContextOf(proposal)).catch(() => {});
       setPlacedBetIds((prev) => new Set(prev).add(bet.id));
       setPlacingId(null);
       setStakeInput('');
@@ -355,6 +355,19 @@ export default function DailyPlanScreen() {
     }
   };
 
+  /**
+   * Contexte d'une cote saisie : pari simple → minute, score et compteur de la jambe ; combiné → minute du match le plus
+   * avancé (sans compteur), pour que la cote du combiné soit datée (« 41e → 4.24 ») et non « ? ».
+   */
+  const oddsContextOf = async (proposal: InPlayProposal) => {
+    if (proposal.legs.length === 1) return liveLegContext(proposal.legs[0]);
+    const ctxs = await Promise.all(proposal.legs.map((l) => liveLegContext(l).catch(() => null)));
+    const known = ctxs.filter((c): c is NonNullable<typeof c> => !!c);
+    if (!known.length) return null;
+    const latest = known.reduce((a, b) => (b.minute > a.minute ? b : a));
+    return { minute: latest.minute, goalsNow: latest.goalsNow };
+  };
+
   /** Enregistre la cote vue chez le bookmaker pour ce pari, sans le placer. */
   const handleSaveBookieOdds = async (proposal: InPlayProposal) => {
     const odds = Number(oddsNoteInput.replace(',', '.'));
@@ -362,9 +375,26 @@ export default function DailyPlanScreen() {
       Alert.alert('Cote invalide', 'Entre la cote affichée chez ton bookmaker (supérieure à 1).');
       return;
     }
+    // Cote très éloignée de l'estimation (faute de frappe probable : 49.40 au lieu de 4.94) : confirmation avant
+    // qu'elle n'entre dans l'apprentissage des cotes.
+    const est = estimateProposalOdds(proposal).odds;
+    if (est > 1 && (odds > est * 3 || odds < est / 3)) {
+      const ok = await new Promise<boolean>((resolve) =>
+        Alert.alert(
+          'Cote inhabituelle',
+          `Tu as saisi ${odds.toFixed(2)} alors que l'app estimait environ ${est.toFixed(2)}. C'est bien la cote affichée ?`,
+          [
+            { text: 'Corriger', style: 'cancel', onPress: () => resolve(false) },
+            { text: 'Oui, enregistrer', onPress: () => resolve(true) },
+          ],
+          { cancelable: true, onDismiss: () => resolve(false) }
+        )
+      );
+      if (!ok) return;
+    }
     try {
       // Minute, score et compteur au moment de la saisie : la cote du 30e et celle du 67e comptent toutes les deux.
-      const context = proposal.legs.length === 1 ? await liveLegContext(proposal.legs[0]) : null;
+      const context = await oddsContextOf(proposal);
       await recordOddsAndLearn(proposal, odds, context);
       setLegBookOdds(proposal.id, odds);
       // La ligne a une cote chez le bookmaker : elle existe.
@@ -606,7 +636,7 @@ export default function DailyPlanScreen() {
           return (
             <Text style={styles.liveBetLeg}>
               {history.length > 0
-                ? `Cotes saisies : ${history.map((o) => `${o.minute != null ? `${o.minute}e` : '?'} → ${o.odds.toFixed(2)}`).join(' · ')} · `
+                ? `Cotes saisies : ${history.map((o) => `${o.minute != null ? `${o.minute}e` : new Date(o.ts).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} → ${o.odds.toFixed(2)}`).join(' · ')} · `
                 : ''}
               cote estimée à la création ≈ {est.odds.toFixed(2)}
               {est.observations > 0 ? ` (${est.observations} cotes apprises)` : ''}
