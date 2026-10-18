@@ -1851,13 +1851,22 @@ function strategyKeys(proposals: InPlayProposal[]): string[] {
 /** Ajoute des propositions en relisant le fichier juste avant d'écrire : le
  * scan réel rapide et le tour complet peuvent écrire à quelques secondes
  * d'intervalle, aucun ne doit effacer ce que l'autre vient d'ajouter. */
+const dupIndex = new WeakMap<object, { ids: Set<string>; keys: Set<string> }>();
+
 function appendInPlayProposals(fresh: InPlayProposal[]): void {
   const current = readInPlayProposals();
-  const ids = new Set(current.map((p) => p.id));
+  // Identifiants et clés de doublon des paris déjà enregistrés : calculés une fois par version du fichier (même tableau
+  // tant qu'il n'a pas changé), plus à chaque passage sur les ~10 000 paris.
+  let idx = dupIndex.get(current);
+  if (!idx) {
+    idx = { ids: new Set(current.map((p) => p.id)), keys: new Set(current.map(proposalDuplicateKey).filter((k): k is string => k != null)) };
+    dupIndex.set(current, idx);
+  }
+  const ids = new Set(idx.ids);
   // Doublons : même match (noms normalisés, donc même si deux sources donnent deux
   // identifiants), même marché, même fenêtre, même côté, même checkpoint. Un pari de
   // stratégie qui reprend un pari déjà proposé n'est pas ajouté une seconde fois.
-  const keys = new Set(current.map(proposalDuplicateKey).filter((k): k is string => k != null));
+  const keys = new Set(idx.keys);
   const kept: InPlayProposal[] = [];
   for (const p of fresh) {
     if (ids.has(p.id)) continue;
@@ -1868,6 +1877,8 @@ function appendInPlayProposals(fresh: InPlayProposal[]): void {
     }
     kept.push(p);
   }
+  // Rien de nouveau : pas de réécriture du fichier (plus de 10 Mo, plusieurs secondes de blocage sur le téléphone).
+  if (kept.length === 0) return;
   writeInPlayProposals([...current, ...kept]);
 }
 

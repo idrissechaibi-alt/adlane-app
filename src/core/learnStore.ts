@@ -354,6 +354,28 @@ export function appendPredictionOutcomes(outcomes: PredictionOutcome[]): void {
 /** Corpus glissant des résultats mesurés (les deux pipelines confondus). */
 const outcomeKey = (o: PredictionOutcome) => `${o.fixtureId}|${o.market}|${o.selection}|${o.kind}|${o.real ? 1 : 0}`;
 
+/** Résultats d'un jour, décodés une fois puis gardés en mémoire tant que le fichier du jour ne change pas. */
+const outcomeDayCache = new Map<string, { stamp: string; data: PredictionOutcome[] }>();
+function readOutcomeDay(day: string): PredictionOutcome[] {
+  const file = fileIn(`outcomes-${day}.jsonl`);
+  const stamp = fileStamp(file);
+  if (!stamp) return [];
+  const hit = outcomeDayCache.get(day);
+  if (hit && hit.stamp === stamp) return hit.data;
+  const content = readTextSafe(file);
+  const data: PredictionOutcome[] = [];
+  for (const line of (content ?? '').split('\n')) {
+    if (!line.trim()) continue;
+    try {
+      data.push(JSON.parse(line));
+    } catch {
+      // ligne corrompue : ignorée sans casser la lecture
+    }
+  }
+  outcomeDayCache.set(day, { stamp, data });
+  return data;
+}
+
 export function readPredictionOutcomes(days: number = 30): PredictionOutcome[] {
   const outcomes: PredictionOutcome[] = [];
   // Un même pari (match, marché, sélection, checkpoint) n'est compté qu'une fois, même si le bilan l'a enregistré à plusieurs passages.
@@ -361,24 +383,16 @@ export function readPredictionOutcomes(days: number = 30): PredictionOutcome[] {
   // Du plus ancien au plus récent : une correction écrite plus tard l'emporte toujours.
   for (let i = days - 1; i >= 0; i--) {
     const date = new Date(Date.now() - i * 86_400_000);
-    const content = readTextSafe(fileIn(`outcomes-${dayKey(date)}.jsonl`));
-    if (!content) continue;
-    for (const line of content.split('\n')) {
-      if (!line.trim()) continue;
-      try {
-        const o: PredictionOutcome = JSON.parse(line);
-        const key = outcomeKey(o);
-        // Une correction (même pari, verdict rectifié) remplace l'ancienne valeur.
-        const at = seen.get(key);
-        if (at != null) {
-          outcomes[at] = o;
-          continue;
-        }
-        seen.set(key, outcomes.length);
-        outcomes.push(o);
-      } catch {
-        // ligne corrompue : ignorée sans casser la lecture
+    for (const o of readOutcomeDay(dayKey(date))) {
+      const key = outcomeKey(o);
+      // Une correction (même pari, verdict rectifié) remplace l'ancienne valeur.
+      const at = seen.get(key);
+      if (at != null) {
+        outcomes[at] = o;
+        continue;
       }
+      seen.set(key, outcomes.length);
+      outcomes.push(o);
     }
   }
   return outcomes;
@@ -680,11 +694,35 @@ export function recordAccuracySnapshot(snapshot: DailyAccuracySnapshot): void {
   writeText(fileIn('accuracy-snapshots.json'), JSON.stringify(updated));
 }
 
+// Fichier des propositions : plus de 10 Mo. Le relire et le décoder à chaque appel (une vingtaine d'endroits) bloquait
+// l'interface plusieurs secondes. Gardé décodé en mémoire tant que le fichier n'a pas changé (taille + date de
+// modification, lues sans ouvrir le fichier) : un écran qui s'ouvre ne le décode plus qu'une fois.
+let proposalsCache: { stamp: string; data: InPlayProposal[]; flat: FlatFictional[] } | null = null;
+type FlatFictional = { id: string; fixtureId: number; settled: boolean; won: boolean };
+// Valeurs comptées (compteurs cumulés), figées au moment de la lecture : les appelants modifient parfois les objets lus
+// avant de les réécrire, la comparaison « avant / après » doit porter sur l'état réellement enregistré.
+const flatFictional = (list: InPlayProposal[]): FlatFictional[] =>
+  list.filter((p) => p.real === false).map((p) => ({ id: p.id, fixtureId: p.legs[0]?.fixtureId ?? 0, settled: !!p.legs[0]?.settled, won: !!p.legs[0]?.won }));
+function fileStamp(file: File): string | null {
+  try {
+    if (!file.exists) return null;
+    return `${file.size}|${file.modificationTime ?? ''}`;
+  } catch {
+    return null;
+  }
+}
+
 export function readInPlayProposals(): InPlayProposal[] {
-  const content = readTextSafe(fileIn('inplay-proposals.json'));
+  const file = fileIn('inplay-proposals.json');
+  const stamp = fileStamp(file);
+  if (!stamp) return [];
+  if (proposalsCache && proposalsCache.stamp === stamp) return proposalsCache.data;
+  const content = readTextSafe(file);
   if (!content) return [];
   try {
-    return JSON.parse(content);
+    const data: InPlayProposal[] = JSON.parse(content);
+    proposalsCache = { stamp, data, flat: flatFictional(data) };
+    return data;
   } catch {
     return [];
   }
@@ -699,9 +737,13 @@ export function writeInPlayProposals(proposals: InPlayProposal[]): void {
     new Date(p.createdAt).getTime() > cutoff
       ? p
       : { ...p, legs: p.legs.map((l) => ({ ...l, evidence: l.evidence ? l.evidence.slice(0, 120) : l.evidence })) };
-  const flat = (list: InPlayProposal[]) => list.filter((p) => p.real === false).map((p) => ({ id: p.id, fixtureId: p.legs[0]?.fixtureId ?? 0, settled: !!p.legs[0]?.settled, won: !!p.legs[0]?.won }));
-  bumpCounter('fictional', flat(readInPlayProposals()), flat(proposals));
-  writeText(fileIn('inplay-proposals.json'), JSON.stringify(proposals.map(compact)));
+  readInPlayProposals(); // garantit l'instantané de l'état enregistré
+  bumpCounter('fictional', proposalsCache?.flat ?? [], flatFictional(proposals));
+  const file = fileIn('inplay-proposals.json');
+  const compacted = proposals.map(compact);
+  writeText(file, JSON.stringify(compacted));
+  const stamp = fileStamp(file);
+  proposalsCache = stamp ? { stamp, data: compacted, flat: flatFictional(compacted) } : null;
 }
 
 // ==================== MODÈLE APPRIS + DIGEST AGENTS ====================

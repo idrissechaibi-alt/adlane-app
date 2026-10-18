@@ -3,7 +3,7 @@
 
 import AsyncStorage from '../core/kvStore';
 import React, { useState, useEffect } from 'react';
-import {
+import { InteractionManager,
   StyleSheet,
   Text,
   View,
@@ -90,8 +90,11 @@ export default function DailyPlanScreen() {
   }, [inPlayProposals]);
 
   useEffect(() => {
-    loadDailyPlan();
-    loadInPlayProposals();
+    // Écran affiché d'abord, données lues juste après (l'ouverture ne reste plus figée).
+    InteractionManager.runAfterInteractions(() => {
+      loadDailyPlan();
+      loadInPlayProposals();
+    });
     loadPlacedBets();
     ensureOddsLoaded().then(() => setOddsVersion((v) => v + 1)).catch(() => {});
     AsyncStorage.getItem('@missing_combo_legs').then((raw) => raw && setMissingLegs(JSON.parse(raw))).catch(() => {});
@@ -124,9 +127,13 @@ export default function DailyPlanScreen() {
     // l'univers européen) ne sont jamais affichés ici, seulement les vrais
     // paris sur les 5 grands championnats.
     const seen = new Set<string>();
+    // Pré-filtre bon marché (date UTC d'hier, d'aujourd'hui ou de demain, pari réel) avant le calcul de la date locale :
+    // évite de convertir les dates des ~10 000 paris fictifs toutes les 30 s.
+    const near = new Set([-1, 0, 1].map((d) => new Date(Date.now() + d * 86_400_000).toISOString().slice(0, 10)));
     setInPlayProposals(
       readInPlayProposals()
-        .filter((p) => todayLocalDateString(new Date(p.createdAt)) === today && p.real !== false)
+        .filter((p) => p.real !== false && near.has(p.createdAt.slice(0, 10)))
+        .filter((p) => todayLocalDateString(new Date(p.createdAt)) === today)
         // Anciens paris créés avant le plancher de cote : cote estimée sous 1.40 et aucune cote saisie → masqués.
         .filter((p) => p.legs.every((l) => l.estOdds != null) || getObservedOddsList(p).length > 0 || estimateProposalOdds(p).odds >= MIN_ESTIMATED_ODDS)
         // Doublons déjà enregistrés (même match, marché, fenêtre, côté) : le plus ancien seul est affiché.

@@ -12,7 +12,7 @@ import {
   ActivityIndicator,
   Alert
 } from 'react-native';
-import { Dimensions, Linking } from 'react-native';
+import { Dimensions, InteractionManager, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import MarketTrendChart from '../components/MarketTrendChart';
 import { MarketDayPoint, TRACKED_MARKETS, TrackedMarket, marketLabel, readInPlayProposals, readMarketSeries, readMarketSeriesReal, readMarketSeriesFictional, readCumulativeCounts, readPaperBets, readPredictionOutcomes, historyDays, readAccuracySnapshots } from '../core/learnStore';
@@ -314,7 +314,9 @@ export default function EvolutionScreen() {
   };
 
   useEffect(() => {
-    if (isFocused) {
+    if (!isFocused) return;
+    // Écran affiché d'abord, calculs (des milliers de paris) juste après : l'onglet s'ouvre sans attendre.
+    const task = InteractionManager.runAfterInteractions(() => {
       void loadData();
       try {
         setMarketSeries(readMarketSeries());
@@ -329,7 +331,8 @@ export default function EvolutionScreen() {
         console.warn('Taux d\'erreur indisponible:', error);
       }
       refreshLiveCounters();
-    }
+    });
+    return () => task.cancel();
   }, [isFocused]);
 
   /**
