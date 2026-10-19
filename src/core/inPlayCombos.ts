@@ -226,8 +226,8 @@ interface RefereeEffect {
 
 /**
  * ARBITRE : ses cartons jaunes et fautes sifflées par match comparés à la moyenne de sa compétition (FotMob, sinon le fichier
- * des arbitres compilé chaque nuit). L'effet est LISSÉ par son nombre de matchs (poids n / (n + 20)) et plafonné : un
- * arbitre à 8 matchs pèse peu, un arbitre à 60 matchs pèse presque tout son écart.
+ * des arbitres compilé chaque nuit). Ce n'est qu'un CORRECTIF du rythme attendu (stats live + tendance des équipes) : son écart
+ * est lissé par son nombre de matchs (poids n / (n + 20)), plafonné à ±20 %, et s'efface au fil du match.
  */
 async function refereeEffect(homeTeam: string, awayTeam: string): Promise<RefereeEffect | null> {
   const r = await hubReferee(homeTeam, awayTeam, hubDateKey()).catch(() => null);
@@ -238,8 +238,9 @@ async function refereeEffect(homeTeam: string, awayTeam: string): Promise<Refere
   const yellowAvg = r.leagueYellowAvg ?? file?.leagueYellowAvg ?? null;
   const fouls = r.foulsPerMatch ?? file?.foulsPerMatch ?? null;
   const foulsAvg = r.leagueFoulsAvg ?? file?.leagueFoulsAvg ?? null;
+  // Lissage par le nombre de matchs (8 matchs → 29 % de son écart, 60 → 75 %), effet plafonné à ±20 %.
   const w = n / (n + 20);
-  const clamp = (x: number) => Math.max(0.75, Math.min(1.3, x));
+  const clamp = (x: number) => Math.max(0.8, Math.min(1.2, x));
   const ratio = yellow != null && yellowAvg ? yellow / yellowAvg : null;
   const foulRatio = fouls != null && foulsAvg ? fouls / foulsAvg : null;
   const cards = ratio != null ? clamp(1 + w * (ratio - 1)) : 1;
@@ -745,7 +746,10 @@ function countMarketLegs(
     // Situation du match (momentum, favori, état, rouges, occasions) : effet appris, plafonné.
     const sitMult = situationMultiplier(unit, situation?.features, situation?.real ?? false);
     const ref = situation?.referee;
-    const refMult = ref ? (spec.key === 'cards' ? ref.cards : spec.key === 'fouls' ? ref.fouls : 1) : 1;
+    // L'arbitre est un indice d'AVANT-MATCH, au même titre que la tendance des équipes : son poids fond à mesure que le
+    // match avance, car le rythme réel des cartons / fautes (qui reflète déjà sa façon d'arbitrer) prend le relais.
+    const refRaw = ref ? (spec.key === 'cards' ? ref.cards : spec.key === 'fouls' ? ref.fouls : 1) : 1;
+    const refMult = 1 + (refRaw - 1) * (1 - Math.min(0.7, elapsedMinutes / 90));
     rawLambda *= refMult;
     // Projection plafonnée au maximum réaliste de la fenêtre (done + reste ne dépasse jamais le record plausible).
     const lambda = Math.min(rawLambda * factor * sitMult, Math.max(0, PLAUSIBLE_MAX[unit] - done));
