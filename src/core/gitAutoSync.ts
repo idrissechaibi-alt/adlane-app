@@ -624,6 +624,21 @@ export async function syncFullBackupToGitHub(force = false): Promise<{ uploaded:
 
     const hashes: Record<string, string> = JSON.parse((await AsyncStorage.getItem(FULL_BACKUP_HASHES_KEY)) ?? '{}');
     const base = `${normalizeFolderPath(config.dataFolderPath)}/full-backup`;
+    // Garde-fou : un fichier deux fois plus petit que sa copie sur GitHub (reprise ratée, fichier perdu) ne remplace jamais
+    // la copie — sinon les paris de plusieurs semaines disparaîtraient de la sauvegarde et du téléphone qui la relit.
+    try {
+      const remote: { parts?: Record<string, number> } | null = await fetchRepoJson(`${base}/manifest.json`);
+      for (let i = entries.length - 1; i >= 0; i--) {
+        const remoteParts = remote?.parts?.[entries[i].name] ?? 0;
+        const localParts = Math.ceil(entries[i].text.length / CHUNK_CHARS);
+        if (remoteParts >= 4 && localParts * 2 < remoteParts) {
+          console.warn(`Sauvegarde complète : ${entries[i].name} (${localParts} morceaux) bien plus petit que la copie GitHub (${remoteParts}) : non envoyé.`);
+          entries.splice(i, 1);
+        }
+      }
+    } catch {
+      // manifeste illisible : pas de comparaison possible
+    }
     const manifest: Record<string, number> = {};
     let uploaded = 0, unchanged = 0, failed = 0;
     const deadline = Date.now() + 120_000;

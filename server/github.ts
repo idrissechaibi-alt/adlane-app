@@ -25,9 +25,10 @@ async function call(url: string, init: RequestInit, timeoutMs = 60_000): Promise
   }
 }
 
-export async function repoText(path: string): Promise<string | null> {
+/** Texte d'un fichier du dépôt, sur la branche ou à un commit précis (`ref`). */
+export async function repoText(path: string, ref?: string): Promise<string | null> {
   const { config, token, base } = await ctx();
-  const r = await call(`${base}/${path}?ref=${encodeURIComponent(config.branch)}`, { headers: headers(token, true) });
+  const r = await call(`${base}/${path}?ref=${encodeURIComponent(ref ?? config.branch)}`, { headers: headers(token, true) });
   if (r.status === 404) return null;
   if (!r.ok) throw new Error(`GitHub ${r.status} sur ${path}`);
   return r.text();
@@ -72,4 +73,16 @@ export async function repoDelete(path: string, sha: string, message: string): Pr
     body: JSON.stringify({ branch: config.branch, message, sha }),
   });
   return r.ok;
+}
+
+/** Dernier commit qui a modifié `path` (sha), pour relire un état cohérent du dépôt. */
+export async function lastCommitTouching(path: string): Promise<string | null> {
+  const { config, token } = await ctx();
+  const r = await call(
+    `https://api.github.com/repos/${config.repoOwner}/${config.repoName}/commits?path=${encodeURIComponent(path)}&sha=${encodeURIComponent(config.branch)}&per_page=1`,
+    { headers: headers(token) }
+  );
+  if (!r.ok) return null;
+  const j = await r.json();
+  return Array.isArray(j) && j[0]?.sha ? j[0].sha : null;
 }

@@ -105,11 +105,16 @@ async function main(): Promise<void> {
     return;
   }
 
+  const from = args.indexOf('--restore-from');
+  const localRepo = from >= 0 ? args[from + 1] : undefined;
   if (!alreadyRestored()) {
     log('Premier démarrage : reprise des données depuis la sauvegarde complète du téléphone…');
-    const from = args.indexOf('--restore-from');
-    const r = await restoreFromFullBackup(from >= 0 ? args[from + 1] : undefined);
-    log(`Reprise terminée : ${r.files} fichiers, ${r.keys} réglages d'apprentissage.`);
+    const r = await restoreFromFullBackup(localRepo);
+    log(`Reprise terminée : ${r.files} fichiers, ${r.keys} réglages d'apprentissage${r.missing.length ? ` ; illisibles : ${r.missing.join(', ')}` : ''}.`);
+  } else {
+    // Réparation : un fichier d'apprentissage absent (reprise faite pendant un envoi du téléphone) est repris.
+    const r = await restoreFromFullBackup(localRepo, true).catch(() => null);
+    if (r && r.files > 0) log(`Réparation : ${r.files} fichier(s) d'apprentissage repris.`);
   }
 
   await initDatabase();

@@ -14,7 +14,7 @@ import { FREE_LLM_PROVIDERS } from './freeLLMProviders';
 import { Directory, File, Paths } from 'expo-file-system';
 import { fetchRepoText, getServerStatus, listRepoDir, putRepoText } from './gitAutoSync';
 import { isRunningOnServer } from './serverMode';
-import { replaceLearningFile, setLegBookOdds } from './learnStore';
+import { readAllLearningFiles, replaceLearningFile, setLegBookOdds } from './learnStore';
 import { recordOddsAndLearn } from './oddsLoop';
 import { markLineAvailable, markLineUnavailable, markMarketOff } from './lineLimits';
 import { saveBet } from '../database/storage';
@@ -168,7 +168,12 @@ export function pullServerData(force = false): Promise<number> {
       if (!changed || !complete) continue;
       let text = '';
       for (let i = 1; i <= parts; i++) text += partFile(`${name}.part${i}`).textSync();
-      if (name.startsWith('files/')) replaceLearningFile(name.slice('files/'.length), text);
+      if (name.startsWith('files/')) {
+        // Garde-fou : jamais remplacer un fichier local par une version deux fois plus petite (copie du serveur incomplète).
+        const local = readAllLearningFiles().find((f) => `files/${f.name}` === name)?.text;
+        if (local && local.length > 1_000_000 && text.length * 2 < local.length) continue;
+        replaceLearningFile(name.slice('files/'.length), text);
+      }
       else if (name.startsWith('storage/')) await AsyncStorage.setItem(name.slice('storage/'.length).replace(/^_/, '@'), text);
       updated++;
     }

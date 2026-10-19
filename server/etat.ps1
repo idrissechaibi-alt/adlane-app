@@ -12,7 +12,14 @@ function Show-State {
   $task = Get-ScheduledTask -TaskName 'adlane-serveur' -ErrorAction SilentlyContinue
   if (-not $task) { Write-Host 'Tâche « adlane-serveur » absente : relance l''installation (server\bootstrap.ps1).' -ForegroundColor Red }
   elseif ($task.State -eq 'Running') { Write-Host 'Serveur : EN MARCHE' -ForegroundColor Green }
-  else { Write-Host "Serveur : ARRÊTÉ ($($task.State))" -ForegroundColor Yellow }
+  else {
+    Write-Host "Serveur : ARRÊTÉ ($($task.State))" -ForegroundColor Yellow
+    $console = Join-Path $Logs 'console.log'
+    if (Test-Path $console) {
+      Write-Host "`n--- Lanceur (console.log, dernières lignes) ---" -ForegroundColor DarkGray
+      Get-Content $console -Tail 10 -Encoding UTF8 | ForEach-Object { Write-Host $_ }
+    }
+  }
   $log = Get-ChildItem $Logs -Filter 'serveur-*.log' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime | Select-Object -Last 1
   if ($log) {
     $age = [int]((Get-Date) - $log.LastWriteTime).TotalMinutes
