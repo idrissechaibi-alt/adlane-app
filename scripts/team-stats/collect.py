@@ -14,6 +14,7 @@ import argparse, json, os, re, sys, time, urllib.request
 from datetime import datetime, timezone
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'data', 'team-stats')
+REF_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'data', 'referees')
 BASE = 'https://www.fotmob.com/api/data'
 LEAGUES = {47: 'Premier League', 87: 'LaLiga', 54: 'Bundesliga', 55: 'Serie A', 53: 'Ligue 1', 42: 'Champions League'}
 UA = {'user-agent': 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/124 Mobile Safari/537.36'}
@@ -171,14 +172,112 @@ def match_record(d, team_id, meta):
         'stats': periods,
         'players': players_of(d, team_id)[0],
         'lineup': players_of(d, team_id)[1],
+        'referee': referee_of(d),
     }
+
+
+# ---------------------------------------------------------------------------
+# Arbitres : désignation de chaque match + stats de carrière publiées par FotMob (cartons et fautes par match comparés à la
+# moyenne de la compétition). Les stats de carrière les plus récentes sont gardées dans REF_CAREER.
+REF_CAREER = {}
+
+
+def referee_of(d):
+    r = ((((d or {}).get('content') or {}).get('matchFacts') or {}).get('infoBox') or {}).get('Referee')
+    if not r or not r.get('text'):
+        return None
+    stats = {x.get('type'): x for x in (r.get('stats') or []) if isinstance(x, dict)}
+    val = lambda t: (stats.get(t) or {}).get('value')
+    avg = lambda t: (stats.get(t) or {}).get('average')
+    rid = r.get('id')
+    career = {
+        'matches': val('matches'), 'yellowPerMatch': val('yellowCards'), 'leagueYellowAvg': avg('yellowCards'),
+        'foulsPerMatch': val('fouls'), 'leagueFoulsAvg': avg('fouls'), 'reds': val('redCards'), 'penalties': val('penalties'),
+        'country': r.get('country'), 'league': r.get('leagueName'),
+    }
+    if rid is not None and any(v is not None for k, v in career.items() if k not in ('country', 'league')):
+        REF_CAREER[str(rid)] = career
+    return {'id': rid, 'name': r['text']}
+
+
+def build_referees(store):
+    """data/referees/referees.json : un arbitre par entrée, ses matchs mesurés ici (cartons jaunes, fautes, rouges, par
+    période) + ses stats de carrière FotMob ; et la liste des arbitres de chaque compétition."""
+    os.makedirs(REF_ROOT, exist_ok=True)
+    path = os.path.join(REF_ROOT, 'referees.json')
+    prev = {}
+    try:
+        with open(path) as f:
+            for x in json.load(f).get('referees', []):
+                prev[str(x.get('id') or x['name'])] = x
+    except Exception:  # noqa: BLE001
+        prev = {}
+    seen = set()
+    refs = {}
+    for tid, team in store.items():
+        for m in team['matches']:
+            ref = m.get('referee')
+            if not ref or m['matchId'] in seen:
+                continue
+            seen.add(m['matchId'])
+            key = str(ref.get('id') or ref['name'])
+            e = refs.setdefault(key, {'id': ref.get('id'), 'name': ref['name'], 'competitions': {}, 'games': []})
+            e['competitions'][m.get('competition') or '?'] = e['competitions'].get(m.get('competition') or '?', 0) + 1
+            y_ft, y_h1 = _cards(m, 'ft'), _cards(m, 'h1')
+            fouls = _stat(m, 'ft', 'fouls_committed')
+            e['games'].append({
+                'date': (m.get('date') or '')[:10], 'competition': m.get('competition'),
+                'yellow': sum(y_ft) if y_ft else None, 'yellow1h': sum(y_h1) if y_h1 else None,
+                'fouls': sum(fouls) if fouls else None, 'reds': sum(m.get('redCards') or [0, 0]),
+                'goals': m['goals']['for'] + m['goals']['against'],
+            })
+    out = []
+    for key, e in refs.items():
+        g = e['games']
+        career = REF_CAREER.get(str(e['id'])) or {k: prev.get(key, {}).get(k) for k in ('matches', 'yellowPerMatch', 'leagueYellowAvg', 'foulsPerMatch', 'leagueFoulsAvg', 'reds', 'penalties', 'country', 'league')}
+        out.append({
+            'id': e['id'], 'name': e['name'], 'country': career.get('country'), 'league': career.get('league'),
+            # Carrière (FotMob) : ce que l'app utilise en priorité, lissé par le nombre de matchs.
+            'matches': career.get('matches'), 'yellowPerMatch': career.get('yellowPerMatch'), 'leagueYellowAvg': career.get('leagueYellowAvg'),
+            'foulsPerMatch': career.get('foulsPerMatch'), 'leagueFoulsAvg': career.get('leagueFoulsAvg'),
+            'reds': career.get('reds'), 'penalties': career.get('penalties'),
+            # Mesuré sur les matchs de la saison compilés ici.
+            'season': {
+                'matches': len(g), 'competitions': e['competitions'],
+                'yellowPerMatch': _r(_avg([x['yellow'] for x in g])), 'yellow1hPerMatch': _r(_avg([x['yellow1h'] for x in g])),
+                'foulsPerMatch': _r(_avg([x['fouls'] for x in g])), 'redsTotal': sum(x['reds'] for x in g),
+                'goalsPerMatch': _r(_avg([x['goals'] for x in g])),
+            },
+            'lastMatch': max((x['date'] for x in g), default=None),
+        })
+    out.sort(key=lambda x: (-(x['season']['matches'] or 0), x['name']))
+    by_league = {}
+    for x in out:
+        for comp, n in x['season']['competitions'].items():
+            by_league.setdefault(comp, []).append({'id': x['id'], 'name': x['name'], 'matches': n})
+    for comp in by_league:
+        by_league[comp].sort(key=lambda r: -r['matches'])
+    data = {'source': 'FotMob', 'referees': out, 'byCompetition': by_league}
+    old = None
+    try:
+        with open(path) as f:
+            old = json.load(f)
+    except Exception:  # noqa: BLE001
+        old = None
+    if old and {k: v for k, v in old.items() if k != 'updatedAt'} == data:
+        return False
+    data['updatedAt'] = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+    with open(path, 'w') as f:
+        json.dump(data, f, separators=(',', ':'), ensure_ascii=False)
+    print(f'arbitres : {len(out)} ({len(by_league)} compétitions)')
+    return True
 
 
 
 # ---------------------------------------------------------------------------
 # Analyse par équipe : calculée (jamais devinée) à partir des matchs enregistrés,
 # recalculée à chaque passage. Sert de résumé des raisons et performances observées.
-ANALYSIS_VERSION = 3
+ANALYSIS_VERSION = 4  # 4 : arbitre de chaque match (fichier des arbitres)
 
 
 def _avg(xs):
@@ -525,7 +624,7 @@ def main():
     missing_players = {}
     for tid in ids:
         for rec in store[tid]['matches']:
-            if 'players' not in rec and rec.get('stats'):
+            if ('players' not in rec or 'referee' not in rec) and rec.get('stats'):
                 missing_players.setdefault(rec['matchId'], []).append((tid, rec))
     if missing_players:
         print(f'{len(missing_players)} matchs à compléter (joueurs, compos)')
@@ -536,6 +635,7 @@ def main():
             continue
         for tid, rec in items:
             rec['players'], rec['lineup'] = players_of(d, tid)
+            rec['referee'] = referee_of(d)
         done_fill += 1
         if done_fill % 50 == 0:
             print(f'  complétés : {done_fill}')
@@ -593,6 +693,7 @@ def main():
         index['updatedAt'] = now
         with open(os.path.join(ROOT, 'index.json'), 'w') as f:
             json.dump(index, f, separators=(',', ':'), ensure_ascii=False)
+    build_referees(store)
     print(f'terminé : {fetched} matchs téléchargés, {sum(t["matches"] for t in index["teams"])} enregistrements équipe-match')
 
 

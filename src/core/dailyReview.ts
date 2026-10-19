@@ -562,7 +562,7 @@ const PATTERN_BACKFILL_KEY = '@pattern_backfill';
 const PATTERN_BACKFILL_EVERY_MS = 20 * 60_000;
 
 const timelinePoints = (tl: MatchSample[]) =>
-  tl.map((x) => ({ minute: x.minute, h: x.homeGoals, a: x.awayGoals, sot: x.shotsOnTargetHome != null ? x.shotsOnTargetHome + (x.shotsOnTargetAway ?? 0) : undefined, corners: x.cornersTotal, cards: x.cardsTotal }));
+  tl.map((x) => ({ minute: x.minute, h: x.homeGoals, a: x.awayGoals, sot: x.shotsOnTargetHome != null ? x.shotsOnTargetHome + (x.shotsOnTargetAway ?? 0) : undefined, corners: x.cornersTotal, cards: x.cardsTotal, ...(x.adv ?? {}) }));
 
 /**
  * MOTIFS : tous les matchs fictifs terminés dont la chronologie est en mémoire (y compris les jours passés, avec ou sans
@@ -996,7 +996,7 @@ export async function runNightlyReviewIfDue(): Promise<number> {
           const at = [...tl].reverse().find((x) => x.minute <= (proposal.minute ?? 0));
           const [sh, sa] = (leg.scoreLabel ?? '0-0').split('-').map(Number);
           const point = at
-            ? { minute: at.minute, h: at.homeGoals, a: at.awayGoals, sot: at.shotsOnTargetHome != null ? at.shotsOnTargetHome + (at.shotsOnTargetAway ?? 0) : undefined, corners: at.cornersTotal, cards: at.cardsTotal }
+            ? { minute: at.minute, h: at.homeGoals, a: at.awayGoals, sot: at.shotsOnTargetHome != null ? at.shotsOnTargetHome + (at.shotsOnTargetAway ?? 0) : undefined, corners: at.cornersTotal, cards: at.cardsTotal, ...(at.adv ?? {}) }
             : { minute: proposal.minute ?? 0, h: sh || 0, a: sa || 0 };
           explanations.push(
             await explainSettledLeg({

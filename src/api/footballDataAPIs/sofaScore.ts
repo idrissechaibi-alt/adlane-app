@@ -584,6 +584,20 @@ export interface SofaPeriodStats {
   /** Grosses occasions (FotMob seulement). */
   bigChancesHome?: number;
   bigChancesAway?: number;
+  /** Marqueurs avancés (FotMob seulement ; absents = non publiés) : touches dans la surface adverse, passes dans le camp
+   * adverse, centres tentés, tirs dans la surface, duels gagnés. */
+  boxTouchesHome?: number;
+  boxTouchesAway?: number;
+  oppHalfPassesHome?: number;
+  oppHalfPassesAway?: number;
+  crossesHome?: number;
+  crossesAway?: number;
+  shotsInBoxHome?: number;
+  shotsInBoxAway?: number;
+  duelsWonHome?: number;
+  duelsWonAway?: number;
+  /** Momentum des 10 dernières minutes (FotMob), de -100 (extérieur domine) à +100 (domicile domine). */
+  momentum?: number;
 }
 
 export interface SofaStats {

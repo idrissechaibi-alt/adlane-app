@@ -32,6 +32,42 @@ interface HubDetail {
   stats: SofaStats;
   /** Score à la pause, quand le fournisseur le donne dans le détail. */
   ht?: [number, number];
+  /** Arbitre désigné et ses stats de carrière (FotMob), dès qu'il est connu (souvent 1-2 jours avant). */
+  referee?: RefereeInfo | null;
+}
+
+export interface RefereeInfo {
+  id: number | null;
+  name: string;
+  country: string | null;
+  /** Matchs arbitrés connus de FotMob. */
+  matches: number | null;
+  yellowPerMatch: number | null;
+  /** Moyenne de la compétition pour le même indicateur. */
+  leagueYellowAvg: number | null;
+  foulsPerMatch: number | null;
+  leagueFoulsAvg: number | null;
+  reds: number | null;
+  penalties: number | null;
+}
+
+function fotMobReferee(r: any): RefereeInfo | null {
+  if (!r?.text) return null;
+  const stat = (type: string) => (r.stats ?? []).find((x: any) => x?.type === type);
+  const val = (type: string) => (stat(type)?.value != null ? num(stat(type).value) : null);
+  const avg = (type: string) => (stat(type)?.average != null ? num(stat(type).average) : null);
+  return {
+    id: r.id != null ? Number(r.id) : null,
+    name: String(r.text),
+    country: r.country ?? null,
+    matches: val('matches'),
+    yellowPerMatch: val('yellowCards'),
+    leagueYellowAvg: avg('yellowCards'),
+    foulsPerMatch: val('fouls'),
+    leagueFoulsAvg: avg('fouls'),
+    reds: val('redCards'),
+    penalties: val('penalties'),
+  };
 }
 
 interface Provider {
@@ -77,6 +113,7 @@ function buildPeriod(p: {
   foulsHome?: number; foulsAway?: number; onTargetHome?: number; onTargetAway?: number;
   shotsHome?: number; shotsAway?: number; possessionHome?: number; redCards?: number;
   xgHome?: number; xgAway?: number; bigChancesHome?: number; bigChancesAway?: number;
+  advanced?: Partial<SofaPeriodStats>;
 }): SofaPeriodStats | null {
   const total = p.cornersHome + p.cornersAway + p.cardsHome + p.cardsAway + (p.foulsHome ?? 0) + (p.foulsAway ?? 0) + (p.onTargetHome ?? 0) + (p.onTargetAway ?? 0);
   if (total === 0) return null; // pas de statistiques publiées : jamais de faux zéro
@@ -100,6 +137,7 @@ function buildPeriod(p: {
     xgAway: p.xgAway,
     bigChancesHome: p.bigChancesHome,
     bigChancesAway: p.bigChancesAway,
+    ...(p.advanced ?? {}),
   };
 }
 
@@ -178,14 +216,42 @@ async function fotMobDate(dateKey: string): Promise<HubMatch[]> {
 
 function fotMobPeriod(period: any): SofaPeriodStats | null {
   const values = new Map<string, [number, number]>();
+  const rawValues = new Map<string, [unknown, unknown]>();
   for (const group of period?.stats ?? []) {
     for (const s of group.stats ?? []) {
-      if (Array.isArray(s.stats) && s.stats.length === 2 && !values.has(s.key)) values.set(s.key, [num(s.stats[0]), num(s.stats[1])]);
+      if (Array.isArray(s.stats) && s.stats.length === 2 && !values.has(s.key)) {
+        values.set(s.key, [num(s.stats[0]), num(s.stats[1])]);
+        rawValues.set(s.key, [s.stats[0], s.stats[1]]);
+      }
     }
   }
   if (values.size === 0) return null;
   const v = (k: string) => values.get(k) ?? [0, 0];
+  const pair = (k: string): [number, number] | undefined => (values.has(k) ? v(k) : undefined);
+  // « 4 (14%) » centres réussis → centres tentés ≈ 4 / 14 %.
+  const attempted = (k: string): [number, number] | undefined => {
+    const raw = rawValues.get(k);
+    if (!raw) return undefined;
+    const one = (x: unknown) => {
+      const m = /(\d+)\s*\((\d+)%\)/.exec(String(x));
+      return m ? (Number(m[2]) > 0 ? Math.round(Number(m[1]) / (Number(m[2]) / 100)) : Number(m[1])) : num(x);
+    };
+    return [one(raw[0]), one(raw[1])];
+  };
+  const box = pair('touches_opp_box');
+  const opp = pair('opposition_half_passes');
+  const cross = attempted('accurate_crosses');
+  const inBox = pair('shots_inside_box');
+  const duels = pair('duel_won');
+  const advanced: Partial<SofaPeriodStats> = {
+    ...(box ? { boxTouchesHome: box[0], boxTouchesAway: box[1] } : {}),
+    ...(opp ? { oppHalfPassesHome: opp[0], oppHalfPassesAway: opp[1] } : {}),
+    ...(cross ? { crossesHome: cross[0], crossesAway: cross[1] } : {}),
+    ...(inBox ? { shotsInBoxHome: inBox[0], shotsInBoxAway: inBox[1] } : {}),
+    ...(duels ? { duelsWonHome: duels[0], duelsWonAway: duels[1] } : {}),
+  };
   return buildPeriod({
+    advanced,
     cornersHome: v('corners')[0], cornersAway: v('corners')[1],
     cardsHome: v('yellow_cards')[0], cardsAway: v('yellow_cards')[1], // cartons JAUNES seulement : c'est le marché des bookmakers
     foulsHome: v('fouls')[0], foulsAway: v('fouls')[1],
@@ -211,9 +277,18 @@ const fotMob: Provider = {
     const periods = d?.content?.stats?.Periods ?? {};
     const events: any[] = d?.content?.matchFacts?.events?.events ?? [];
     const half = events.find((e) => e?.type === 'Half' && e?.halfStrShort === 'HT');
+    const all = fotMobPeriod(periods.All);
+    // Momentum minute par minute (positif = domicile domine) : moyenne des 10 dernières minutes relevées.
+    const mom: Array<{ minute: number; value: number }> = d?.content?.momentum?.main?.data ?? [];
+    if (all && mom.length >= 5) {
+      const lastMin = Math.max(...mom.map((x) => num(x.minute)));
+      const recent = mom.filter((x) => num(x.minute) > lastMin - 10);
+      all.momentum = Math.round(recent.reduce((a, x) => a + num(x.value), 0) / recent.length);
+    }
     return {
-      stats: { all: fotMobPeriod(periods.All), firstHalf: fotMobPeriod(periods.FirstHalf) },
+      stats: { all, firstHalf: fotMobPeriod(periods.FirstHalf) },
       ht: half ? [num(half.homeScore), num(half.awayScore)] : undefined,
+      referee: fotMobReferee(d?.content?.matchFacts?.infoBox?.Referee),
     };
   },
 };
@@ -723,6 +798,30 @@ async function detailOf(match: HubMatch): Promise<HubDetail | null> {
  * période par période, par les autres sources jusqu'à avoir le match entier
  * ET la 1ère mi-temps.
  */
+const ADVANCED_KEYS: Array<keyof SofaPeriodStats> = [
+  'boxTouchesHome', 'boxTouchesAway', 'oppHalfPassesHome', 'oppHalfPassesAway', 'crossesHome', 'crossesAway',
+  'shotsInBoxHome', 'shotsInBoxAway', 'duelsWonHome', 'duelsWonAway', 'momentum',
+];
+
+const refereeCache = new Map<string, { at: number; ref: RefereeInfo | null }>();
+
+/** Arbitre d'un match (FotMob) : mis en cache ; « inconnu » retenté au bout de 2 h (désignation souvent tardive). */
+export async function hubReferee(homeTeam: string, awayTeam: string, dateKey: string): Promise<RefereeInfo | null> {
+  const key = `${dateKey}|${homeTeam}|${awayTeam}`;
+  const hit = refereeCache.get(key);
+  if (hit && (hit.ref || Date.now() - hit.at < 2 * 3_600_000)) return hit.ref;
+  let ref: RefereeInfo | null = null;
+  try {
+    const fm = (await findEverywhere(homeTeam, awayTeam, dateKey, dateKey === utcDay())).find((m) => m.provider === 'FotMob');
+    ref = fm ? (await detailOf(fm))?.referee ?? null : null;
+  } catch {
+    ref = null;
+  }
+  refereeCache.set(key, { at: Date.now(), ref });
+  if (refereeCache.size > 600) refereeCache.delete(refereeCache.keys().next().value as string);
+  return ref;
+}
+
 export async function hubStats(
   homeTeam: string,
   awayTeam: string,
@@ -740,6 +839,19 @@ export async function hubStats(
     result.all ??= detail.stats.all;
     result.firstHalf ??= detail.stats.firstHalf;
     if (result.all && (result.firstHalf || !needFirstHalf)) break;
+  }
+  // Marqueurs avancés (touches dans la surface, passes dans le camp adverse, centres, momentum) : FotMob seulement.
+  // Quand une autre source a fourni les stats de base, FotMob complète ces marqueurs sans rien écraser.
+  if (result.all && result.all.boxTouchesHome == null) {
+    const fm = matches.find((m) => m.provider === 'FotMob');
+    const adv = fm ? (await detailOf(fm))?.stats.all : null;
+    if (adv) {
+      const extra: Partial<SofaPeriodStats> = {};
+      for (const k of ADVANCED_KEYS) if (adv[k] != null) (extra as any)[k] = adv[k];
+      if (result.all.xgHome == null && adv.xgHome != null) Object.assign(extra, { xgHome: adv.xgHome, xgAway: adv.xgAway });
+      if (result.all.bigChancesHome == null && adv.bigChancesHome != null) Object.assign(extra, { bigChancesHome: adv.bigChancesHome, bigChancesAway: adv.bigChancesAway });
+      result.all = { ...result.all, ...extra };
+    }
   }
   // Sources relevées à des instants différents : le match entier ne peut pas
   // compter moins que sa 1ère mi-temps — on garde la valeur la plus récente.

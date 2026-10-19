@@ -21,8 +21,40 @@ const COUNTS_KEY = '@pattern_counts';
 const INGESTED_KEY = '@pattern_ingested';
 const EXPLAIN_KEY = '@leg_explanations';
 
+/**
+ * Marqueurs avancés d'un instant (cumul des deux équipes depuis le coup d'envoi, FotMob) : xG, touches dans la surface
+ * adverse, passes dans le camp adverse, centres tentés, grosses occasions ; momentum des 10 dernières minutes (+ = domicile).
+ */
+export interface AdvancedPoint {
+  xg?: number;
+  box?: number;
+  opp?: number;
+  cross?: number;
+  big?: number;
+  mom?: number;
+}
+
+/** Marqueurs avancés tirés des stats d'une source (absents quand la source ne les publie pas). */
+export function advancedOf(a: {
+  xgHome?: number; xgAway?: number; boxTouchesHome?: number; boxTouchesAway?: number; oppHalfPassesHome?: number; oppHalfPassesAway?: number;
+  crossesHome?: number; crossesAway?: number; bigChancesHome?: number; bigChancesAway?: number; momentum?: number;
+} | null | undefined): AdvancedPoint | undefined {
+  if (!a) return undefined;
+  const sum = (x?: number, y?: number) => (x != null && y != null ? Math.round((x + y) * 100) / 100 : undefined);
+  const out: AdvancedPoint = {
+    xg: sum(a.xgHome, a.xgAway),
+    box: sum(a.boxTouchesHome, a.boxTouchesAway),
+    opp: sum(a.oppHalfPassesHome, a.oppHalfPassesAway),
+    cross: sum(a.crossesHome, a.crossesAway),
+    big: sum(a.bigChancesHome, a.bigChancesAway),
+    mom: a.momentum,
+  };
+  for (const k of Object.keys(out) as Array<keyof AdvancedPoint>) if (out[k] == null) delete out[k];
+  return Object.keys(out).length ? out : undefined;
+}
+
 /** Un instant du match (cumul depuis le coup d'envoi). */
-export interface MatchPoint {
+export interface MatchPoint extends AdvancedPoint {
   minute: number;
   h: number;
   a: number;
@@ -50,6 +82,8 @@ export interface MatchExtra {
   keyAbsent?: number | null;
   /** Système de jeu inhabituel pour au moins une équipe. */
   formationChanged?: boolean | null;
+  /** Sévérité de l'arbitre : ses cartons jaunes par match / la moyenne de sa compétition (lissé par son nombre de matchs). */
+  refereeCardRatio?: number | null;
 }
 
 const CONDITION_LABELS: Record<string, string> = {
@@ -72,6 +106,22 @@ const CONDITION_LABELS: Record<string, string> = {
   tight: 'deux équipes fermées (tendance)',
   keyAbsent: 'titulaires clés absents',
   formation: 'système de jeu inhabituel',
+  xgHigh: 'xG élevé (beaucoup d\'occasions)',
+  xgLow: 'xG faible (peu d\'occasions)',
+  xgDue: 'buts en retard sur les xG',
+  bigChHigh: 'beaucoup de grosses occasions',
+  boxHigh: 'beaucoup de touches dans la surface adverse',
+  boxLow: 'peu de touches dans la surface adverse',
+  oppHigh: 'beaucoup de passes dans le camp adverse',
+  oppLow: 'peu de passes dans le camp adverse',
+  crossHigh: 'beaucoup de centres',
+  crossLow: 'peu de centres',
+  momHome: 'momentum : domicile domine',
+  momAway: 'momentum : extérieur domine',
+  momLevel: 'momentum équilibré',
+  domNotLeading: 'l\'équipe qui domine (momentum) ne mène pas',
+  refStrict: 'arbitre sévère',
+  refLenient: 'arbitre clément',
 };
 
 const TARGET_LABELS = (t: string): string => {
@@ -116,6 +166,36 @@ export function conditionsAt(p: MatchPoint, extra?: MatchExtra): string[] {
   }
   if ((extra?.keyAbsent ?? 0) >= 2) out.push('keyAbsent');
   if (extra?.formationChanged) out.push('formation');
+  // Marqueurs avancés : seuils par minute jouée (tranches larges) ; c'est le moteur qui mesure ensuite, match après match,
+  // ce que chaque tranche annonce vraiment (buts, corners, cartons…) face au taux de base.
+  if (p.minute >= 10) {
+    if (p.xg != null) {
+      if (p.xg / min >= 0.032) out.push('xgHigh');
+      else if (p.xg / min <= 0.012) out.push('xgLow');
+      if (p.xg - g >= 1) out.push('xgDue');
+    }
+    if (p.big != null && p.big / min >= 0.045) out.push('bigChHigh');
+    if (p.box != null) {
+      if (p.box / min >= 0.5) out.push('boxHigh');
+      else if (p.box / min <= 0.28) out.push('boxLow');
+    }
+    if (p.opp != null) {
+      if (p.opp / min >= 4.5) out.push('oppHigh');
+      else if (p.opp / min <= 2.8) out.push('oppLow');
+    }
+    if (p.cross != null) {
+      if (p.cross / min >= 0.5) out.push('crossHigh');
+      else if (p.cross / min <= 0.25) out.push('crossLow');
+    }
+    if (p.mom != null) {
+      out.push(p.mom >= 30 ? 'momHome' : p.mom <= -30 ? 'momAway' : 'momLevel');
+      if ((p.mom >= 30 && p.h <= p.a) || (p.mom <= -30 && p.a <= p.h)) out.push('domNotLeading');
+    }
+  }
+  if (extra?.refereeCardRatio != null) {
+    if (extra.refereeCardRatio >= 1.12) out.push('refStrict');
+    else if (extra.refereeCardRatio <= 0.88) out.push('refLenient');
+  }
   return out;
 }
 

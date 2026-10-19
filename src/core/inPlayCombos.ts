@@ -95,12 +95,13 @@ import { sendLocalNotification } from './notifications';
 import { normalizeTeamName, namesLikelyMatch } from './teamNameMatch';
 import { OmnirouteConfig } from '../types';
 import { mapWithConcurrency } from './concurrency';
-import { hubDateKey, hubKnowsMatch, hubLiveStatus, hubStats } from '../api/footballDataAPIs/liveDataHub';
+import { RefereeInfo, hubDateKey, hubKnowsMatch, hubLiveStatus, hubReferee, hubStats } from '../api/footballDataAPIs/liveDataHub';
 import { playerShotLegs } from './playerShots';
 import { appendLiveStatsSample, hasLiveStats, noteLiveStatsScan } from './liveStatsStore';
 import { getOpeningProbabilities } from '../api/footballDataAPIs/refOdds';
 import { digestFinishedMatches } from './matchDigest';
-import { patternAdjust } from './patternEngine';
+import { advancedOf, patternAdjust } from './patternEngine';
+import { fetchRepoJson } from './gitAutoSync';
 import { getLineupCheck, runLineupChecks } from './lineupCheck';
 import { hubPlayerShots } from '../api/footballDataAPIs/liveDataHub';
 import { saveLivePlayers } from './liveStatsStore';
@@ -211,6 +212,55 @@ interface Situation {
   features: number[] | null;
   /** Pipe réel : les poids de situation ne comptent qu'une fois validés sur des matchs de test. */
   real: boolean;
+  /** Arbitre du match : multiplicateurs (lissés) des cartons et des fautes attendus. */
+  referee?: RefereeEffect | null;
+}
+
+interface RefereeEffect {
+  cards: number;
+  fouls: number;
+  /** Cartons jaunes par match de l'arbitre / moyenne de sa compétition (brut), pour les motifs. */
+  ratio: number | null;
+  note: string;
+}
+
+/**
+ * ARBITRE : ses cartons jaunes et fautes sifflées par match comparés à la moyenne de sa compétition (FotMob, sinon le fichier
+ * des arbitres compilé chaque nuit). L'effet est LISSÉ par son nombre de matchs (poids n / (n + 20)) et plafonné : un
+ * arbitre à 8 matchs pèse peu, un arbitre à 60 matchs pèse presque tout son écart.
+ */
+async function refereeEffect(homeTeam: string, awayTeam: string): Promise<RefereeEffect | null> {
+  const r = await hubReferee(homeTeam, awayTeam, hubDateKey()).catch(() => null);
+  if (!r) return null;
+  const file = await refereeFileEntry(r).catch(() => null);
+  const n = r.matches ?? file?.matches ?? 0;
+  const yellow = r.yellowPerMatch ?? file?.yellowPerMatch ?? null;
+  const yellowAvg = r.leagueYellowAvg ?? file?.leagueYellowAvg ?? null;
+  const fouls = r.foulsPerMatch ?? file?.foulsPerMatch ?? null;
+  const foulsAvg = r.leagueFoulsAvg ?? file?.leagueFoulsAvg ?? null;
+  const w = n / (n + 20);
+  const clamp = (x: number) => Math.max(0.75, Math.min(1.3, x));
+  const ratio = yellow != null && yellowAvg ? yellow / yellowAvg : null;
+  const foulRatio = fouls != null && foulsAvg ? fouls / foulsAvg : null;
+  const cards = ratio != null ? clamp(1 + w * (ratio - 1)) : 1;
+  const foulsMult = foulRatio != null ? clamp(1 + w * (foulRatio - 1)) : 1;
+  const note = ` Arbitre ${r.name}${n ? ` (${n} matchs)` : ''}${yellow != null ? ` : ${yellow.toFixed(1)} jaunes/match${yellowAvg ? ` (moyenne ${yellowAvg.toFixed(1)})` : ''}` : ''}${fouls != null ? `, ${fouls.toFixed(1)} fautes/match${foulsAvg ? ` (moyenne ${foulsAvg.toFixed(1)})` : ''}` : ''}.`;
+  return { cards, fouls: foulsMult, ratio: ratio != null ? 1 + w * (ratio - 1) : null, note };
+}
+
+/** Fichier des arbitres (compilé chaque nuit sur GitHub) : relu au plus toutes les 6 h. */
+let refereeFile: { at: number; byId: Record<string, any>; byName: Record<string, any> } | null = null;
+async function refereeFileEntry(r: RefereeInfo): Promise<any | null> {
+  if (!refereeFile || Date.now() - refereeFile.at > 6 * 3_600_000) {
+    const f = await fetchRepoJson<{ referees?: any[] }>('data/referees/referees.json').catch(() => null);
+    const list = f?.referees ?? [];
+    refereeFile = {
+      at: Date.now(),
+      byId: Object.fromEntries(list.filter((x) => x.id != null).map((x) => [String(x.id), x])),
+      byName: Object.fromEntries(list.map((x) => [String(x.name).toLowerCase(), x])),
+    };
+  }
+  return (r.id != null ? refereeFile.byId[String(r.id)] : null) ?? refereeFile.byName[r.name.toLowerCase()] ?? null;
 }
 
 /** Buts attendus multipliés par l'effet de situation appris pour ce compteur. */
@@ -694,13 +744,17 @@ function countMarketLegs(
     const factor = factorForRemaining(fix, rawLambda);
     // Situation du match (momentum, favori, état, rouges, occasions) : effet appris, plafonné.
     const sitMult = situationMultiplier(unit, situation?.features, situation?.real ?? false);
+    const ref = situation?.referee;
+    const refMult = ref ? (spec.key === 'cards' ? ref.cards : spec.key === 'fouls' ? ref.fouls : 1) : 1;
+    rawLambda *= refMult;
     // Projection plafonnée au maximum réaliste de la fenêtre (done + reste ne dépasse jamais le record plausible).
     const lambda = Math.min(rawLambda * factor * sitMult, Math.max(0, PLAUSIBLE_MAX[unit] - done));
     const fano = fix.dispersion;
     const projection: LegProjection = { unit, observed: done, expected: done + lambda, factorUsed: factor, features: situation?.features ?? undefined, situationUsed: sitMult };
     const evidence =
       `${done} ${spec.noun} à la ${elapsedMinutes}e minute + ${lambda.toFixed(1)} attendu(s) ${horizon} ` +
-      `(${(done + lambda).toFixed(1)} au total ; ${basis}).` + describeCorrection(fix, spec.noun) + (Math.abs(sitMult - 1) >= 0.03 ? ` Situation du match (momentum, favori, état) : ×${sitMult.toFixed(2)}.` : '') + (fano > 1.1 ? ` Dispersion mesurée ×${fano.toFixed(2)} : lignes élargies.` : '') + trendNote;
+      `(${(done + lambda).toFixed(1)} au total ; ${basis}).` + describeCorrection(fix, spec.noun) + (Math.abs(sitMult - 1) >= 0.03 ? ` Situation du match (momentum, favori, état) : ×${sitMult.toFixed(2)}.` : '') + (fano > 1.1 ? ` Dispersion mesurée ×${fano.toFixed(2)} : lignes élargies.` : '') + trendNote +
+      (ref && spec.key !== 'corners' ? `${ref.note}${Math.abs(refMult - 1) >= 0.02 ? ` Attendu ×${refMult.toFixed(2)}.` : ''}` : '');
 
     // La tendance seule contredit nettement la ligne (< 30 % pour le reste du match) : pas de pari.
     const contradicted = (side: 'over' | 'under', line: number): boolean =>
@@ -961,7 +1015,15 @@ async function suspendedRealSegments(): Promise<Set<string>> {
   return set;
 }
 
-async function applyPatterns(legs: CandidateLeg[], live: LiveFixture, observed: ObservedLiveCounts | undefined, stats: LiveMatchStats | undefined, real: boolean): Promise<void> {
+async function applyPatterns(
+  legs: CandidateLeg[],
+  live: LiveFixture,
+  observed: ObservedLiveCounts | undefined,
+  stats: LiveMatchStats | undefined,
+  real: boolean,
+  all?: SofaPeriodStats | null,
+  referee?: RefereeEffect | null
+): Promise<void> {
   const point = {
     minute: live.minute,
     h: live.homeGoals,
@@ -969,10 +1031,12 @@ async function applyPatterns(legs: CandidateLeg[], live: LiveFixture, observed: 
     sot: stats?.shotsOnTargetHome != null ? stats.shotsOnTargetHome + (stats.shotsOnTargetAway ?? 0) : undefined,
     corners: observed?.corners,
     cards: observed?.cards,
+    ...(advancedOf(all) ?? {}),
   };
+  const extra = { refereeCardRatio: referee?.ratio ?? null };
   for (const leg of legs) {
     const done = leg.market === 'total_buts' ? point.h + point.a : leg.market === 'corners' ? point.corners ?? 0 : leg.market === 'cartons' ? point.cards ?? 0 : 0;
-    const adj = await patternAdjust(leg.market, leg.selection, leg.prob, point, real, done).catch(() => null);
+    const adj = await patternAdjust(leg.market, leg.selection, leg.prob, point, real, done, extra).catch(() => null);
     if (!adj) continue;
     leg.prob = adj.prob;
     leg.evidence += adj.note;
@@ -1296,13 +1360,13 @@ async function bestLegFor(
   // pipe réel ne pouvait proposer que des marchés de buts.
   const freeStats = await fetchFreeLiveStats(live).catch(() => undefined);
   const observedLive = freeStats?.observed;
-  const situation: Situation = { features: freeStats?.features ?? null, real: true };
+  const situation: Situation = { features: freeStats?.features ?? null, real: true, referee: await refereeEffect(live.homeTeam, live.awayTeam) };
 
   const rawLegs = kind === 'minute20'
     ? await buildLegs20(match, live.fixtureId, live, preMatchExpectedGoals, currentStats, observedLive, situation)
     : buildLegs60(live, preMatchExpectedGoals, currentStats, observedLive, await getMatchTrend(match.homeTeam, match.awayTeam), situation);
   rawLegs.push(...(await playerShotCandidates(live)));
-  await applyPatterns(rawLegs, live, observedLive, currentStats, true);
+  await applyPatterns(rawLegs, live, observedLive, currentStats, true, freeStats?.all, situation.referee);
   // Marchés où le modèle se trompe trop (mesuré) : retirés du pipe RÉEL tant que le fictif ne les a pas rendus fiables.
   const suspended = await suspendedRealSegments();
   for (let i = rawLegs.length - 1; i >= 0; i--) if (suspended.has(weakSegmentOf(rawLegs[i]) ?? '')) rawLegs.splice(i, 1);
@@ -1743,6 +1807,7 @@ async function fetchSofaLiveDetail(scheduled: FictionalMatch): Promise<LiveFixtu
       shotsOnTargetAway: stats?.all?.shotsOnTargetAway,
       cornersTotal: stats?.all?.corners,
       cardsTotal: stats?.all?.cards,
+      adv: advancedOf(stats?.all),
     };
   } catch {
     return null;
@@ -1935,7 +2000,7 @@ export async function runLiveStatsScan(liveFixtures: LiveFixture[]): Promise<num
     if (!a) return;
     const mk = canonicalMatchKey(f, planned);
     // Premier relevé du match : favori (cotes d'ouverture bet365) et buts attendus d'après la tendance des équipes.
-    let ctx: { fav?: 'h' | 'a' | null; trendGoals?: number | null } | undefined;
+    let ctx: { fav?: 'h' | 'a' | null; trendGoals?: number | null; refRatio?: number | null } | undefined;
     if (!hasLiveStats(mk)) {
       const open = await getOpeningProbabilities(f.homeTeam, f.awayTeam).catch(() => null);
       const trend = await getMatchTrend(f.homeTeam, f.awayTeam).catch(() => null);
@@ -1945,6 +2010,7 @@ export async function runLiveStatsScan(liveFixtures: LiveFixture[]): Promise<num
         trendGoals: trend?.goals ? Math.round((trend.goals.home + trend.goals.away) * 10) / 10 : null,
         keyAbsent: lu ? lu.home.absentKey.length + lu.away.absentKey.length : null,
         formationChanged: lu ? lu.home.formationChanged || lu.away.formationChanged : null,
+        refRatio: (await refereeEffect(f.homeTeam, f.awayTeam).catch(() => null))?.ratio ?? null,
       } as any;
     }
     // Stats des joueurs (ESPN) : un relevé toutes les 5 minutes, le dernier gardé (compilé avec l'équipe en fin de match).
@@ -1967,6 +2033,7 @@ export async function runLiveStatsScan(liveFixtures: LiveFixture[]): Promise<num
       possessionHome: a.possessionHome ?? undefined,
       xg: a.xgHome != null && a.xgAway != null ? Math.round((a.xgHome + a.xgAway) * 100) / 100 : undefined,
       reds: a.redCards ?? undefined,
+      adv: advancedOf(a),
       side: {
         h: [a.shotsTotalHome, a.shotsOnTargetHome, a.cornersHome, a.cardsHome ?? 0, a.foulsHome ?? 0],
         a: [a.shotsTotalAway, a.shotsOnTargetAway, a.cornersAway, a.cardsAway ?? 0, a.foulsAway ?? 0],
@@ -2178,11 +2245,12 @@ export async function runInPlayComboTick(
           if (observedLive.fouls) await recordShadowProjection(live, projectFullMatchCount('fouls_ft', observedLive.fouls, live.minute, free?.features));
         }
 
+        const fictionalSituation: Situation = { features: free?.features ?? null, real: false, referee: await refereeEffect(live.homeTeam, live.awayTeam) };
         const rawLegs = kind === 'minute20'
-          ? await buildLegs20(match, live.fixtureId, live, expectedGoals, currentStats, observedLive, { features: free?.features ?? null, real: false })
-          : buildLegs60(live, expectedGoals, currentStats, observedLive, await getMatchTrend(match.homeTeam, match.awayTeam), { features: free?.features ?? null, real: false });
+          ? await buildLegs20(match, live.fixtureId, live, expectedGoals, currentStats, observedLive, fictionalSituation)
+          : buildLegs60(live, expectedGoals, currentStats, observedLive, await getMatchTrend(match.homeTeam, match.awayTeam), fictionalSituation);
         rawLegs.push(...(await playerShotCandidates(live)));
-        await applyPatterns(rawLegs, live, observedLive, currentStats, false);
+        await applyPatterns(rawLegs, live, observedLive, currentStats, false, free?.all, fictionalSituation.referee);
         const window = kind === 'minute20' ? '20e → pause + match complet' : '60e → fin de match';
 
         for (const leg of rawLegs.filter(worthProposing).filter((l) => fictionalSettleable(l, observedLive))) {
@@ -2346,6 +2414,7 @@ export async function runInPlayComboTick(
           shotsOnTargetAway: live.shotsOnTargetAway,
           cornersTotal: live.cornersTotal,
           cardsTotal: live.cardsTotal,
+          ...(live.adv ? { adv: live.adv } : {}),
         });
         timelines[scheduled.fixtureId] = timeline;
         timelinesTouched = true;

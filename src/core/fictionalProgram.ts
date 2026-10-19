@@ -1,3 +1,4 @@
+import type { AdvancedPoint } from './patternEngine';
 // Planning du jour de la boucle FICTIVE — les matchs à suivre et leurs
 // horaires. C'est la colonne vertébrale du pipeline fictif : sans lui, la
 // boucle n'a aucun match à suivre.
@@ -167,6 +168,8 @@ export interface MatchSample {
   shotsOnTargetAway?: number;
   cornersTotal?: number;
   cardsTotal?: number;
+  /** Marqueurs avancés (FotMob) au moment du relevé. */
+  adv?: AdvancedPoint;
 }
 
 export async function readMatchTimelines(date: string = todayKey()): Promise<Record<number, MatchSample[]>> {

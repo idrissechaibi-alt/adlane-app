@@ -15,7 +15,10 @@ const PERIODS = [15, 30, 45, 60, 75, 200];
 const TEAM_GOALS_KEPT = 80;
 const TEAM_LESSONS_KEPT = 8;
 
-type Compact = [number, number, number, number, number, number, number, number]; // minute, dom, ext, tirs, cadrés, corners, cartons, fautes
+// minute, dom, ext, tirs, cadrés, corners, cartons, fautes, puis marqueurs avancés (xG, touches surface, passes camp adverse…)
+import type { AdvancedPoint } from './patternEngine';
+
+type Compact = [number, number, number, number, number, number, number, number, AdvancedPoint?];
 
 export interface MatchDigest {
   day: string;
@@ -123,7 +126,7 @@ function analyse(day: string, match: string, raw: LiveStatsSample[]): MatchDiges
   for (const x of s) {
     const b = Math.floor(x.minute / 5);
     const changed = prev && (x.home !== prev.home || x.away !== prev.away || (x.cards ?? 0) !== (prev.cards ?? 0));
-    if (b !== bucket || changed) key.push([x.minute, x.home, x.away, x.shots ?? 0, x.sot ?? 0, x.corners ?? 0, x.cards ?? 0, x.fouls ?? 0]);
+    if (b !== bucket || changed) key.push(x.adv ? [x.minute, x.home, x.away, x.shots ?? 0, x.sot ?? 0, x.corners ?? 0, x.cards ?? 0, x.fouls ?? 0, x.adv] : [x.minute, x.home, x.away, x.shots ?? 0, x.sot ?? 0, x.corners ?? 0, x.cards ?? 0, x.fouls ?? 0]);
     bucket = b;
     prev = x;
   }
@@ -417,9 +420,10 @@ export async function digestFinishedMatches(liveKeys: Set<string>, idleMinutes =
         const ht = d.goals.filter((g) => g[0] <= 45);
         await ingestMatch(
           `r:${day}:${match}`,
-          d.key.map((k) => ({ minute: k[0], h: k[1], a: k[2], sot: k[4], corners: k[5], cards: k[6] })),
+          d.key.map((k) => ({ minute: k[0], h: k[1], a: k[2], sot: k[4], corners: k[5], cards: k[6], ...(k[8] ?? {}) })),
           { h: d.score[0], a: d.score[1], htH: ht.filter((g) => g[1] === 'h').length, htA: ht.filter((g) => g[1] === 'a').length, corners: d.totals.corners, cards: d.totals.cards },
-          ctx ?? undefined
+          // Contexte d'avant-match : `fav` du relevé devient `favSide` du moteur (sans ça « favori mené » ne se déclenchait jamais au réel).
+          ctx ? { favSide: ctx.fav ?? null, trendGoals: ctx.trendGoals ?? null, keyAbsent: ctx.keyAbsent ?? null, formationChanged: ctx.formationChanged ?? null, refereeCardRatio: ctx.refRatio ?? null } : undefined
         ).catch(() => false);
         await updateTeams(d, players);
         await updatePatterns(d);

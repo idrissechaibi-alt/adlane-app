@@ -210,6 +210,8 @@ const OMNIROUTE_MATCH_STATUS_MAP: Record<string, string> = { '1H': '1H', HT: 'HT
  * que le score évite de payer deux allers-retours par match et par
  * checkpoint. */
 export interface LiveFixtureDetail extends LiveFixture {
+  /** Marqueurs avancés (FotMob) : xG, touches dans la surface adverse, passes, centres, momentum. */
+  adv?: import('./patternEngine').AdvancedPoint;
   shotsOnTargetHome?: number;
   shotsOnTargetAway?: number;
   /** Corners/cartons cumulés depuis le coup d'envoi : suffisent à projeter

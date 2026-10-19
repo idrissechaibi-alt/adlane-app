@@ -4,6 +4,8 @@
 
 import AsyncStorage from './kvStore';
 
+import type { AdvancedPoint } from './patternEngine';
+
 export interface LiveStatsSample {
   ts: string;
   minute: number;
@@ -21,7 +23,9 @@ export interface LiveStatsSample {
   /** Détail par équipe (domicile / extérieur) : tirs, cadrés, corners, cartons, fautes. */
   side?: { h: [number, number, number, number, number]; a: [number, number, number, number, number] };
   /** Contexte d'avant-match (premier relevé seulement) : favori, buts attendus d'après la tendance des équipes. */
-  ctx?: { fav?: 'h' | 'a' | null; trendGoals?: number | null; keyAbsent?: number | null; formationChanged?: boolean | null };
+  ctx?: { fav?: 'h' | 'a' | null; trendGoals?: number | null; keyAbsent?: number | null; formationChanged?: boolean | null; refRatio?: number | null };
+  /** Marqueurs avancés (FotMob) : xG, touches dans la surface adverse, passes dans le camp adverse, centres, momentum. */
+  adv?: AdvancedPoint;
 }
 
 const KEY_PREFIX = '@real_live_stats_';
