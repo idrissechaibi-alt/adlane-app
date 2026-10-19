@@ -1,7 +1,8 @@
 # Installation du serveur adlane sur un PC Windows, en une commande (PowerShell) :
 #   irm https://raw.githubusercontent.com/idrissechaibi-alt/adlane-app/main/server/bootstrap.ps1 | iex
 # 1. installe Git et Node.js si besoin ; 2. récupère le code ; 3. importe la configuration envoyée par le téléphone ;
-# 4. crée la tâche planifiée « adlane-serveur » (démarre avec ta session Windows, relance automatique) ; 5. la lance.
+# 4. crée la tâche planifiée « adlane-serveur » (démarre avec ta session Windows, relance automatique) ; 5. la lance ;
+# 6. pose l'icône « adlane serveur » sur le bureau. Relançable sans risque (mise à jour de l'installation).
 $ErrorActionPreference = 'Stop'
 $Repo = Join-Path $env:USERPROFILE 'adlane-app'
 $ServerDir = Join-Path $env:USERPROFILE 'adlane-server'
@@ -51,7 +52,28 @@ Register-ScheduledTask -TaskName 'adlane-serveur' -Action $action -Trigger $trig
 # PC branché : jamais de mise en veille, sinon le serveur s'arrête.
 powercfg /change standby-timeout-ac 0
 powercfg /change hibernate-timeout-ac 0
-Start-ScheduledTask -TaskName 'adlane-serveur'
+try { Start-ScheduledTask -TaskName 'adlane-serveur' } catch { }
+
+Say 'Icône sur le bureau'
+# Icône de l'app (assets/icon.png) convertie en .ico, raccourci « adlane serveur » vers la fenêtre d'état.
+$ico = Join-Path $ServerDir 'adlane.ico'
+try {
+  Add-Type -AssemblyName System.Drawing
+  $bmp = New-Object System.Drawing.Bitmap (Join-Path $Repo 'assets\icon.png')
+  $small = New-Object System.Drawing.Bitmap $bmp, 256, 256
+  $icon = [System.Drawing.Icon]::FromHandle($small.GetHicon())
+  $fs = [System.IO.File]::Create($ico); $icon.Save($fs); $fs.Close()
+} catch { $ico = $null }
+$desktop = [Environment]::GetFolderPath('Desktop')
+$shell = New-Object -ComObject WScript.Shell
+$lnk = $shell.CreateShortcut((Join-Path $desktop 'adlane serveur.lnk'))
+$lnk.TargetPath = 'powershell.exe'
+$lnk.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$(Join-Path $Repo 'server\etat.ps1')`""
+$lnk.WorkingDirectory = $Repo
+if ($ico) { $lnk.IconLocation = $ico }
+$lnk.Description = 'État du serveur adlane, journal et sauvegardes'
+$lnk.Save()
+Write-Host "Raccourci créé : $desktop\adlane serveur.lnk"
 
 Say 'Vérification'
 $log = Join-Path $ServerDir ("logs\serveur-{0}.log" -f (Get-Date).ToUniversalTime().ToString('yyyy-MM-dd'))

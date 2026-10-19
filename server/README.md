@@ -39,3 +39,12 @@ paris posés) via `data/server/inbox/`. Si le PC s'arrête plus de 20 min, le t�
 données depuis la dernière sauvegarde complète du téléphone (`data/full-backup`).
 
 Test sans installer : `cd server && npm install && node build.mjs && node dist/server.js --once`.
+
+## Icône du bureau et sauvegardes sur le PC
+
+- **adlane serveur** (bureau) : état du serveur (en marche / arrêté), dernières lignes du journal, et boutons pour le
+  relancer, faire une sauvegarde tout de suite, ouvrir les sauvegardes ou le journal.
+- **Sauvegardes locales** : une archive .zip par jour de toutes les données (apprentissage, paris, base), dans
+  `%USERPROFILE%\adlane-server\sauvegardes`, 30 jours gardés. Les clés n'y sont pas (elles restent dans `secrets.json`).
+  Pour revenir à une sauvegarde : arrêter le serveur, remplacer le dossier `%USERPROFILE%\adlane-server\data` par celui
+  de l'archive, relancer.

@@ -5,6 +5,7 @@
 //   node server/dist/server.js                      démarrage normal
 //   node server/dist/server.js --import-config F    importe la configuration envoyée par le téléphone (fichier F)
 //   node server/dist/server.js --once               un seul tour puis arrêt (test)
+//   node server/dist/server.js --backup-now         sauvegarde locale immédiate (<serveur>/sauvegardes)
 //   --restore-from <dossier du dépôt>               premier démarrage : reprise depuis le clone local plutôt que GitHub
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -22,6 +23,7 @@ import { processInbox } from './inbox';
 import { alreadyRestored, restoreFromFullBackup } from './restore';
 import { log, pruneLogs } from './log';
 import { dataRoot, serverRoot } from './paths';
+import { backupDueToday, makeLocalBackup } from './backup';
 
 const REAL_TICK_MS = 60_000;
 const FULL_TICK_MS = 3 * 60_000;
@@ -116,6 +118,11 @@ async function main(): Promise<void> {
   // Sauvegarde complète toutes les 30 min (au lieu de 3 h) : le téléphone y relit ses écrans.
   setFullBackupMinInterval(30 * 60_000);
 
+  if (args.includes('--backup-now')) {
+    makeLocalBackup();
+    return;
+  }
+
   if (args.includes('--once')) {
     await runRealFastTick();
     const d = await runAutoLearnTick('all');
@@ -143,6 +150,10 @@ async function main(): Promise<void> {
     if (!r.skipped) lastFullBackupAt = new Date().toISOString();
   });
   every('Nettoyage des journaux', 24 * 3_600_000, async () => pruneLogs());
+  // Sauvegarde locale du jour (archive dans <serveur>/sauvegardes), vérifiée toutes les heures.
+  every('Sauvegarde locale', 3_600_000, async () => {
+    if (backupDueToday()) makeLocalBackup();
+  });
   log('Serveur démarré.');
 }
 
@@ -151,7 +162,7 @@ process.on('uncaughtException', (e: any) => log('Exception non gérée :', e?.me
 
 main().then(
   () => {
-    if (process.argv.includes('--import-config') || process.argv.includes('--once')) process.exit(0);
+    if (['--import-config', '--once', '--backup-now'].some((a) => process.argv.includes(a))) process.exit(0);
   },
   (e) => {
     log(`Arrêt : ${e?.message ?? e}`);
