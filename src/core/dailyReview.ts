@@ -1144,9 +1144,17 @@ function localDay(date: Date): string {
  */
 export async function sendEveningDigestIfDue(): Promise<boolean> {
   const now = new Date();
-  if (now.getHours() * 60 + now.getMinutes() < EVENING_DIGEST_HOUR * 60 + EVENING_DIGEST_MINUTE) return false;
-  const day = localDay(now);
-  if ((await AsyncStorage.getItem(EVENING_DIGEST_KEY)) === day) return false;
+  const lastSent = await AsyncStorage.getItem(EVENING_DIGEST_KEY);
+  let day = localDay(now);
+  let late = false;
+  if (now.getHours() * 60 + now.getMinutes() < EVENING_DIGEST_HOUR * 60 + EVENING_DIGEST_MINUTE) {
+    // Rapport de la veille manqué (téléphone éteint, tour de fond bloqué…) : envoyé le lendemain, signalé en retard.
+    const yesterday = localDay(new Date(now.getTime() - 86_400_000));
+    if (!lastSent || lastSent >= yesterday) return false;
+    day = yesterday;
+    late = true;
+  }
+  if (lastSent === day) return false;
 
   // 4 messages séparés ; chacun marqué envoyé seul, un échec Telegram n'en fait pas renvoyer un autre.
   let state: { day: string; sent: EveningPart[] } = { day, sent: [] };
@@ -1160,7 +1168,8 @@ export async function sendEveningDigestIfDue(): Promise<boolean> {
   let sentAny = false;
   for (const part of EVENING_PARTS) {
     if (state.sent.includes(part)) continue;
-    const text = await buildEveningMessage(part, day).catch((error: any) => `⚠️ Rapport « ${part} » indisponible : ${error?.message ?? error}`);
+    const body = await buildEveningMessage(part, day).catch((error: any) => `⚠️ Rapport « ${part} » indisponible : ${error?.message ?? error}`);
+    const text = late ? `⏰ Rapport du ${day.split('-').reverse().join('/')}, envoyé en retard\n\n${body}` : body;
     if (!(await sendTelegramMessage(text))) continue;
     state.sent.push(part);
     sentAny = true;

@@ -550,7 +550,11 @@ export async function runAutoLearnTick(mode: TickMode = 'all'): Promise<AutoLear
   if (existing && Date.now() - inFlightStartedAt[mode] < STALE_TICK_MS) return existing;
 
   // Les deux tâches (rapide / lente) partagent l'état du diagnostic : jamais deux tours en même temps, l'un attend l'autre.
-  const tick = tickChain.catch(() => {}).then(() => runAutoLearnTickLocked(mode));
+  // Attente du tour précédent BORNÉE : un tour accroché (18/10, 23h13 → 10h29 le lendemain) bloquait toute la chaîne —
+  // plus de scan, de bilan de minuit ni de rapport du soir. Au-delà de STALE_TICK_MS, le suivant part quand même.
+  const previous = tickChain.catch(() => {});
+  const waitLimit = new Promise<void>((resolve) => setTimeout(resolve, STALE_TICK_MS));
+  const tick = Promise.race([previous, waitLimit]).then(() => runAutoLearnTickLocked(mode));
   inFlightTicks[mode] = tick;
   inFlightStartedAt[mode] = Date.now();
   tickChain = tick;
@@ -681,7 +685,11 @@ async function runAutoLearnTickLocked(mode: TickMode): Promise<AutoLearnTickDiag
   let sofaScoreConfirmedMatches: number | null | undefined;
   let sportmonksError: string | undefined;
   try {
-    const result = await runInPlayComboTick(doFast ? liveFixtures : [], doSlow ? shared.fictionalFixtures : []);
+    // Plafond de 12 min : une requête qui ne rend jamais la main ne doit plus figer le tour (bilan, rapport du soir…).
+    const result = await Promise.race([
+      runInPlayComboTick(doFast ? liveFixtures : [], doSlow ? shared.fictionalFixtures : []),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('scan en direct bloqué plus de 12 min')), 12 * 60_000)),
+    ]);
     freshInPlayProposals = result.freshProposals;
     intlBreak = result.intlBreak;
     sportmonksConfirmedMatches = result.sportmonksConfirmedMatches;
