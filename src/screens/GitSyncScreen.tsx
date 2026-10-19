@@ -3,7 +3,7 @@
 
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator, Alert, SafeAreaView, ScrollView, StyleSheet,
+  ActivityIndicator, Alert, SafeAreaView, ScrollView, Share, StyleSheet,
   Switch, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,6 +14,8 @@ import {
   GitHubDataSyncConfig,
 } from '../core/gitAutoSync';
 import * as Updates from 'expo-updates';
+import { buildServerConfigExport } from '../core/serverLink';
+import { getServerStatus } from '../core/gitAutoSync';
 import Constants from 'expo-constants';
 import { FREE_LLM_PROVIDERS, getFreeLLMKey, setFreeLLMKey } from '../core/freeLLMProviders';
 
@@ -121,6 +123,24 @@ export default function GitSyncScreen({ navigation }: any) {
     } finally { setUpdating(false); }
   };
 
+  // Serveur PC : état (battement de cœur) et envoi de la configuration (clés) à coller une fois sur le PC.
+  const handleServerConfig = async () => {
+    const status = await getServerStatus(true).catch(() => ({ alive: false, info: null }));
+    const state = status.alive
+      ? `✅ Le serveur PC tourne (dernier signal ${new Date(status.info!.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}). Le téléphone est en retrait : il relit ses résultats et lui envoie tes saisies.`
+      : '⏸️ Aucun serveur PC actif : le téléphone fait tout le travail.';
+    Alert.alert('🖥️ Serveur PC', `${state}\n\nPour configurer le serveur, envoie-toi la configuration (elle contient tes clés : ne la partage avec personne) puis colle-la dans la session Claude de ton PC.`, [
+      { text: 'Fermer' },
+      {
+        text: 'Envoyer la configuration',
+        onPress: async () => {
+          const text = await buildServerConfigExport();
+          await Share.share({ message: text });
+        },
+      },
+    ]);
+  };
+
   if (loading || !config) {
     return <View style={styles.centered}><ActivityIndicator color="#3b82f6" /><Text style={styles.mutedText}>Chargement...</Text></View>;
   }
@@ -184,6 +204,7 @@ export default function GitSyncScreen({ navigation }: any) {
         <TouchableOpacity onPress={handleManualBackup} style={styles.btnSecondary}><Text style={styles.btnText}>SAUVEGARDER SUR GITHUB</Text></TouchableOpacity>
         <TouchableOpacity onPress={() => syncDataFromGitHub()} style={styles.btnWarning}><Text style={styles.btnText}>RESTAURER LE JSON</Text></TouchableOpacity>
         <TouchableOpacity onPress={handleCheckUpdate} style={styles.btnUpdate}><Text style={styles.btnText}>VÉRIFIER LES MISES À JOUR</Text></TouchableOpacity>
+        <TouchableOpacity onPress={handleServerConfig} style={[styles.btnUpdate, { backgroundColor: '#334155' }]}><Text style={styles.btnText}>🖥️ CONFIGURER LE SERVEUR PC</Text></TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );

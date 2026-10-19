@@ -837,3 +837,8 @@ export function writeScoutingRecords(records: ScoutingRecord[]): void {
   const fresh = records.filter((r) => new Date(r.analyzedAt).getTime() > cutoff);
   writeText(fileIn('scouting-records.json'), JSON.stringify(fresh));
 }
+
+/** Remplace un fichier d'apprentissage par la version du serveur PC (relecture des résultats sur le téléphone). */
+export function replaceLearningFile(name: string, text: string): void {
+  writeText(fileIn(name), text);
+}

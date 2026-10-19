@@ -6,6 +6,8 @@
 // réseau. Le pas de 3 minutes demandé n'est possible que pendant que l'app est
 // ouverte (boucle de premier plan dans App.tsx, qui appelle le même tick).
 
+import { phoneShouldStandBy } from './gitAutoSync';
+import { flushOutbox, pullServerData } from './serverLink';
 import * as BackgroundTask from 'expo-background-task';
 import * as TaskManager from 'expo-task-manager';
 import AsyncStorage from './kvStore';
@@ -389,6 +391,8 @@ export function runRealFastTick(): Promise<void> {
   if (realFastInFlight) return realFastInFlight;
   realFastInFlight = (async () => {
     try {
+      // Serveur PC actif : c'est lui qui scanne (voir serverLink.ts).
+      if (await phoneShouldStandBy()) return;
       const real = await fetchRealLiveFixturesShared();
       const fresh = await runRealInPlayTick(real.fixtures);
       await AsyncStorage.setItem(
@@ -644,6 +648,13 @@ function tickTooLong(): boolean {
 }
 
 async function runAutoLearnTickLocked(mode: TickMode): Promise<AutoLearnTickDiagnostics> {
+  // Serveur PC actif : le téléphone se met en retrait. Il envoie les saisies en attente et, app ouverte, relit les
+  // résultats du serveur ; il reprend tout seul si le PC s'arrête (battement de cœur trop vieux).
+  if (await phoneShouldStandBy()) {
+    await flushOutbox().catch(() => 0);
+    if (mode === 'all') await pullServerData().catch(() => 0);
+    return { standbyForServer: true } as unknown as AutoLearnTickDiagnostics;
+  }
   const doFast = mode !== 'slow';
   const doSlow = mode !== 'fast';
   await recordAbortedPreviousTick();

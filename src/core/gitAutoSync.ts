@@ -4,6 +4,7 @@
 import { Directory, EncodingType, File, Paths } from 'expo-file-system';
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from './kvStore';
+import { isRunningOnServer } from './serverMode';
 import { getAllBets, getAllCalibrations, getAllLessons, getDailyReports, restoreSnapshot } from '../database/storage';
 import { fetchWithTimeout } from './httpTimeout';
 import { readAllLearningFiles } from './learnStore';
@@ -162,7 +163,7 @@ export async function isGitHubTokenConfigured(): Promise<boolean> {
   return Boolean(token?.trim());
 }
 
-async function getGitHubToken(): Promise<string | null> {
+export async function getGitHubToken(): Promise<string | null> {
   const token = await SecureStore.getItemAsync(GITHUB_TOKEN_KEY);
   return token?.trim() || null;
 }
@@ -193,6 +194,85 @@ export async function fetchRepoJson<T>(repositoryPath: string): Promise<T | null
   } catch {
     return null;
   }
+}
+
+/** Texte brut d'un fichier du dépôt (null s'il n'existe pas ou si l'accès échoue). */
+export async function fetchRepoText(repositoryPath: string): Promise<string | null> {
+  try {
+    const config = await getGitHubSyncConfig();
+    const token = await getGitHubToken();
+    if (!token) return null;
+    const response = await fetchWithTimeout(
+      `https://api.github.com/repos/${encodeURIComponent(config.repoOwner)}/${encodeURIComponent(config.repoName)}` +
+        `/contents/${repositoryPath}?ref=${encodeURIComponent(config.branch)}&t=${Date.now()}`,
+      { headers: { ...githubHeaders(token), Accept: 'application/vnd.github.v3.raw', 'Cache-Control': 'no-cache' } },
+      60_000
+    );
+    return response.ok ? await response.text() : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Contenu d'un dossier du dépôt : nom, chemin et empreinte (sha) de chaque fichier. */
+export async function listRepoDir(repositoryPath: string): Promise<Array<{ name: string; path: string; sha: string }> | null> {
+  try {
+    const config = await getGitHubSyncConfig();
+    const token = await getGitHubToken();
+    if (!token) return null;
+    const response = await fetchWithTimeout(
+      `https://api.github.com/repos/${encodeURIComponent(config.repoOwner)}/${encodeURIComponent(config.repoName)}` +
+        `/contents/${repositoryPath}?ref=${encodeURIComponent(config.branch)}&t=${Date.now()}`,
+      { headers: { ...githubHeaders(token), 'Cache-Control': 'no-cache' } },
+      30_000
+    );
+    if (response.status === 404) return [];
+    if (!response.ok) return null;
+    const list = await response.json();
+    return Array.isArray(list) ? list.map((x: any) => ({ name: x.name, path: x.path, sha: x.sha })) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Écrit un fichier texte dans le dépôt (création ou remplacement). */
+export async function putRepoText(repositoryPath: string, text: string, message: string): Promise<boolean> {
+  const config = await getGitHubSyncConfig();
+  const token = await getGitHubToken();
+  if (!token) return false;
+  return putRepoFile(config, token, repositoryPath, text, message).catch(() => false);
+}
+
+/**
+ * SERVEUR PC : il écrit data/server/heartbeat.json toutes les 5 min. Tant qu'il est vivant (moins de 20 min), le téléphone
+ * ne fait plus le travail : il relit les résultats du serveur et lui transmet les saisies de l'utilisateur. Si le PC
+ * s'arrête, le téléphone reprend tout seul.
+ */
+export const SERVER_HEARTBEAT_PATH = 'data/server/heartbeat.json';
+const SERVER_ALIVE_MS = 20 * 60_000;
+let aliveMemo: { at: number; alive: boolean; info: ServerHeartbeat | null } | null = null;
+
+export interface ServerHeartbeat {
+  at: string;
+  host?: string;
+  startedAt?: string;
+  lastTickAt?: string | null;
+  lastFullBackupAt?: string | null;
+}
+
+export async function getServerStatus(force = false): Promise<{ alive: boolean; info: ServerHeartbeat | null }> {
+  if (isRunningOnServer()) return { alive: true, info: null };
+  if (!force && aliveMemo && Date.now() - aliveMemo.at < 3 * 60_000) return aliveMemo;
+  const info = await fetchRepoJson<ServerHeartbeat>(SERVER_HEARTBEAT_PATH);
+  const alive = !!info?.at && Date.now() - Date.parse(info.at) < SERVER_ALIVE_MS;
+  aliveMemo = { at: Date.now(), alive, info };
+  return aliveMemo;
+}
+
+/** Vrai sur le téléphone quand le serveur du PC tourne : le téléphone se met alors en retrait. */
+export async function phoneShouldStandBy(): Promise<boolean> {
+  if (isRunningOnServer()) return false;
+  return (await getServerStatus()).alive;
 }
 
 async function createSnapshot(): Promise<SyncPayload> {
@@ -283,6 +363,9 @@ export async function syncDataToGitHub(
 
   try {
     const config = await getGitHubSyncConfig();
+    if (await phoneShouldStandBy()) {
+      return { success: true, logs: ['🖥️ Le serveur PC tourne : c\'est lui qui sauvegarde.'], uploadedFiles: 0, failedFiles: 0 };
+    }
     if (!config.enabled) {
       return { success: true, logs: ['⏸️ Sauvegarde GitHub désactivée'], uploadedFiles: 0, failedFiles: 0 };
     }
@@ -487,7 +570,11 @@ export async function syncDataFromGitHub(): Promise<{
 
 const FULL_BACKUP_HASHES_KEY = '@full_backup_hashes';
 const FULL_BACKUP_LAST_KEY = '@full_backup_last';
-const FULL_BACKUP_MIN_INTERVAL_MS = 3 * 3_600_000;
+let FULL_BACKUP_MIN_INTERVAL_MS = 3 * 3_600_000;
+/** Serveur PC : sauvegarde complète plus fréquente (le téléphone y relit ses écrans). */
+export function setFullBackupMinInterval(ms: number): void {
+  FULL_BACKUP_MIN_INTERVAL_MS = ms;
+}
 const CHUNK_CHARS = 250_000; // ≈ 750 Ko en UTF-8 au pire des cas accentués
 const SECRET_KEY = /key|token|secret|password|config|credential|auth|telegram|omniroute|api/i;
 const LEARNING_KEY = /odds|bookie|delta|situation|learn|calib|market|strateg|expert|pending|missing|digest|stats|lesson|review|proposal|paper|pattern|venue|alias|players|lineup/i;
@@ -522,6 +609,8 @@ async function putRepoFile(config: GitHubDataSyncConfig, token: string, reposito
 /** Copie complète de l'apprentissage vers GitHub. `force` ignore le délai minimal de 3 h. */
 export async function syncFullBackupToGitHub(force = false): Promise<{ uploaded: number; unchanged: number; failed: number; skipped?: string }> {
   try {
+    // Serveur PC actif : c'est lui qui sauvegarde ; le téléphone écraserait ses données par une copie en retard.
+    if (await phoneShouldStandBy()) return { uploaded: 0, unchanged: 0, failed: 0, skipped: 'serveur PC actif' };
     const config = await getGitHubSyncConfig();
     if (!config.enabled) return { uploaded: 0, unchanged: 0, failed: 0, skipped: 'désactivée' };
     const token = await getGitHubToken();
