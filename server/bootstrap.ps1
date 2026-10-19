@@ -4,6 +4,8 @@
 # 4. crée la tâche planifiée « adlane-serveur » (démarre avec ta session Windows, relance automatique) ; 5. la lance ;
 # 6. pose l'icône « adlane serveur » sur le bureau. Relançable sans risque (mise à jour de l'installation).
 $ErrorActionPreference = 'Stop'
+# Scripts PowerShell autorisés pour CETTE fenêtre seulement (npm.ps1 est sinon bloqué par la stratégie par défaut).
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
 $Repo = Join-Path $env:USERPROFILE 'adlane-app'
 $ServerDir = Join-Path $env:USERPROFILE 'adlane-server'
 
@@ -25,7 +27,7 @@ if (Test-Path (Join-Path $Repo '.git')) {
   git clone --depth 1 https://github.com/idrissechaibi-alt/adlane-app.git $Repo
 }
 Push-Location (Join-Path $Repo 'server')
-npm install --no-audit --no-fund --silent
+npm.cmd install --no-audit --no-fund --silent
 node build.mjs
 Pop-Location
 
