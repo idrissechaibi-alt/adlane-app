@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-10-19T18:02:00.459Z",
+  "exportedAt": "2026-10-19T18:02:07.462Z",
   "formatVersion": 1,
   "source": "APP adlane",
   "data": {
@@ -5953,9 +5953,9 @@
       "ticksLast24h": 91
     },
     "tickProgress": {
-      "startedAt": "2026-10-19T18:01:57.213Z",
+      "startedAt": "2026-10-19T18:02:04.905Z",
       "step": "scan matinal",
-      "at": "2026-10-19T18:01:57.213Z",
+      "at": "2026-10-19T18:02:04.905Z",
       "stepDurationsSec": {}
     },
     "lastTick": {
@@ -6053,20 +6053,12 @@
       "nightlyReviewPointsCreated": 0
     },
     "lastRealFastTick": {
-      "at": "2026-10-19T18:01:32.617Z",
+      "at": "2026-10-19T18:02:01.506Z",
       "liveFound": 1,
       "fresh": 0,
       "source": "api_football"
     },
     "abortedTicks": [
-      {
-        "startedAt": "2026-10-19T17:02:28.054Z",
-        "step": "scan matinal",
-        "at": "2026-10-19T17:02:28.054Z",
-        "stepDurationsSec": {
-          "relevé live partagé": 0
-        }
-      },
       {
         "startedAt": "2026-10-19T17:02:28.061Z",
         "step": "scan matinal",
@@ -6175,6 +6167,15 @@
         "step": "scan matinal",
         "at": "2026-10-19T18:01:56.318Z",
         "stepDurationsSec": {}
+      },
+      {
+        "startedAt": "2026-10-19T18:01:57.213Z",
+        "step": "scan en direct 20e/60e",
+        "at": "2026-10-19T18:02:01.542Z",
+        "stepDurationsSec": {
+          "scan matinal": 4,
+          "relevé live partagé": 0
+        }
       }
     ],
     "strategies": [
@@ -6495,7 +6496,7 @@
         {
           "name": "Principal",
           "ok": true,
-          "latencyMs": 115,
+          "latencyMs": 69,
           "readyModels": 23,
           "configuredReady": 10,
           "configuredTotal": 13
@@ -6503,7 +6504,7 @@
         {
           "name": "Omniroute",
           "ok": true,
-          "latencyMs": 68,
+          "latencyMs": 98,
           "readyModels": 860,
           "configuredReady": 2,
           "configuredTotal": 2
@@ -6624,7 +6625,7 @@
         "apiFootball-autolearn": 18,
         "sportmonks-autolearn": 14,
         "sofaScore": 0,
-        "sportmonks": 63
+        "sportmonks": 64
       },
       "theOddsApiMonth": {
         "used": 500,
@@ -6640,40 +6641,34 @@
     },
     "sofaScore": null,
     "liveSources": {
-      "LiveScore": {
+      "ESPN": {
         "ok": true,
-        "count": 23,
-        "at": "2026-10-19T18:01:57.251Z",
-        "failStreak": 0
-      },
-      "TheSportsDB": {
-        "ok": true,
-        "count": 22,
-        "at": "2026-10-19T18:01:57.257Z",
+        "count": 10,
+        "at": "2026-10-19T18:02:05.676Z",
         "failStreak": 0
       },
       "FotMob": {
         "ok": true,
         "count": 26,
-        "at": "2026-10-19T18:01:57.269Z",
-        "failStreak": 0
-      },
-      "ESPN": {
-        "ok": true,
-        "count": 9,
-        "at": "2026-10-19T18:01:57.341Z",
+        "at": "2026-10-19T18:02:05.701Z",
         "failStreak": 0
       },
       "365Scores": {
         "ok": true,
         "count": 36,
-        "at": "2026-10-19T18:01:57.453Z",
+        "at": "2026-10-19T18:02:05.706Z",
         "failStreak": 0
       },
       "AllSportsApi": {
         "ok": true,
         "count": 0,
-        "at": "2026-10-19T18:01:57.661Z",
+        "at": "2026-10-19T18:02:05.701Z",
+        "failStreak": 0
+      },
+      "LiveScore": {
+        "ok": true,
+        "count": 23,
+        "at": "2026-10-19T18:02:06.316Z",
         "failStreak": 0
       }
     },
@@ -6900,7 +6895,7 @@
       "pendingNoVerdict": 2226
     },
     "teamRegistry": {
-      "teams": 5025
+      "teams": 5030
     },
     "patternEngine": {
       "matches": 1551,
@@ -7151,7 +7146,7 @@
       }
     ],
     "unmatchedPlannedLive": {
-      "at": "2026-10-19T18:01:57.690Z",
+      "at": "2026-10-19T18:02:05.929Z",
       "unmatched": [],
       "sourceNames": [
         "Monza - Cagliari",
@@ -7164,6 +7159,7 @@
         "Degerfors - Kalmar FF",
         "Viborg - FC Midtjylland",
         "Wisla Plock - Radomiak Radom",
+        "FC Voluntari - FCSB",
         "Clutch FC - P17 FC",
         "Dinamo Minsk - Arsenal Dzerzhinsk",
         "Omonia Nicosia - Olympiakos Nicosia",
@@ -7195,23 +7191,16 @@
         "China U17 - Oman U17",
         "USA (W) U17 - Samoa (W) U17",
         "Australia U17 (W) - Chile U17 (W)",
-        "FC Voluntari - FCSB",
         "Leixoes U23 - Estoril U23",
         "Defensor Sporting (Reserves) - Oriental (Reserves)",
         "La Luz Fc (Reserves) - Penarol Reserves",
-        "United States U17 - Samoa U17",
-        "Shahin Bandar Ameri - Kara Gostar",
-        "Hapoel Ra'anana - Bnei Yehuda",
-        "Bruk-Bet Termalica Nieciecza - Puszcza Niepołomice",
-        "Spartak Subotica - Borac 1926 Čačak",
-        "Al Masry - Abou Qir Fertilizers",
-        "ASC Police - Kaédi"
+        "United States U17 - Samoa U17"
       ]
     },
     "liveStatsScan": {
       "lastScan": null,
       "todaySamples": {
-        "AC Monza - Cagliari Calcio": 32
+        "AC Monza - Cagliari Calcio": 33
       }
     },
     "backupOddsSources": {
@@ -7231,10 +7220,10 @@
       "indexUpdatedAt": "2026-10-18T23:35:13Z",
       "teamsInIndex": 111,
       "summariesCached": 108,
-      "lookups": 1,
-      "withTrend": 1,
+      "lookups": 0,
+      "withTrend": 0,
       "unknownTeams": 0,
-      "lastTrendAt": "2026-10-19T18:02:00.109Z",
+      "lastTrendAt": null,
       "lastUnknown": null
     },
     "teamStatsUsageLog": [
