@@ -4,7 +4,8 @@
 
 import AsyncStorage from './kvStore';
 
-import type { AdvancedPoint } from './patternEngine';
+import { advancedOf, type AdvancedPoint } from './patternEngine';
+import type { SofaPeriodStats } from '../api/footballDataAPIs/sofaScore';
 
 export interface LiveStatsSample {
   ts: string;
@@ -162,5 +163,53 @@ export async function listLiveStatsDays(): Promise<string[]> {
     return (await AsyncStorage.getAllKeys()).filter((k) => k.startsWith(KEY_PREFIX)).map((k) => k.slice(KEY_PREFIX.length)).sort();
   } catch {
     return [];
+  }
+}
+
+/** Relevé normalisé à partir des stats d'une source (téléphone et serveur PC produisent exactement le même format). */
+export function buildLiveSample(
+  live: { minute: number; statusShort: string; homeGoals: number; awayGoals: number },
+  a: SofaPeriodStats
+): LiveStatsSample {
+  return {
+    ts: new Date().toISOString(),
+    minute: live.minute,
+    status: live.statusShort,
+    home: live.homeGoals,
+    away: live.awayGoals,
+    shots: a.shotsTotalHome + a.shotsTotalAway,
+    sot: a.shotsOnTargetHome + a.shotsOnTargetAway,
+    corners: a.corners,
+    cards: a.cards,
+    fouls: a.fouls || undefined,
+    possessionHome: a.possessionHome ?? undefined,
+    xg: a.xgHome != null && a.xgAway != null ? Math.round((a.xgHome + a.xgAway) * 100) / 100 : undefined,
+    reds: a.redCards ?? undefined,
+    adv: advancedOf(a),
+    side: {
+      h: [a.shotsTotalHome, a.shotsOnTargetHome, a.cornersHome, a.cardsHome ?? 0, a.foulsHome ?? 0],
+      a: [a.shotsTotalAway, a.shotsOnTargetAway, a.cornersAway, a.cardsAway ?? 0, a.foulsAway ?? 0],
+    },
+  };
+}
+
+/**
+ * Relevés venus du serveur PC (src/core/serverFeed.ts) : ajoutés au relevé du jour, sans doublon (seuls ceux plus récents
+ * que le dernier relevé déjà là pour ce match). Renvoie le nombre ajouté.
+ */
+export async function mergeLiveSamples(day: string, matchKey: string, samples: LiveStatsSample[]): Promise<number> {
+  try {
+    const key = `${KEY_PREFIX}${day}`;
+    const store: Record<string, LiveStatsSample[]> = JSON.parse((await AsyncStorage.getItem(key)) ?? '{}');
+    const list = (store[matchKey] ??= []);
+    const lastTs = list.length ? Date.parse(list[list.length - 1].ts) : 0;
+    const fresh = samples.filter((x) => Date.parse(x.ts) > lastTs + 30_000);
+    if (fresh.length === 0) return 0;
+    list.push(...fresh);
+    await AsyncStorage.setItem(key, JSON.stringify(store));
+    lastAt.set(matchKey, Date.now());
+    return fresh.length;
+  } catch {
+    return 0;
   }
 }

@@ -12,7 +12,7 @@ pushd server
 call npm install --no-audit --no-fund --silent >> "%LOGDIR%\console.log" 2>&1
 node build.mjs >> "%LOGDIR%\console.log" 2>&1
 popd
-node --no-warnings server\dist\server.js --restore-from "%CD%" >> "%LOGDIR%\console.log" 2>&1
+node --no-warnings server\dist\server.js >> "%LOGDIR%\console.log" 2>&1
 echo %date% %time% Serveur arrete (code %errorlevel%), relance dans 15 s >> "%LOGDIR%\console.log"
 ping -n 16 127.0.0.1 > nul
 goto loop

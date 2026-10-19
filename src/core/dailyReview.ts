@@ -15,6 +15,7 @@
 // au plus quelques minutes de retard.
 
 import AsyncStorage from './kvStore';
+import { serverFinalFor } from './serverFeed';
 import { getAPIConfig } from '../api/multiAPIManager';
 import { spendDirectBudget } from './requestBudget';
 import { syncEloForAllCoveredLeagues } from './eloRatings';
@@ -773,6 +774,14 @@ export async function runNightlyReviewIfDue(): Promise<number> {
     const finals = apiConfig.apiFootball
       ? await fetchFinalResults(apiConfig.apiFootball, Array.from(realFixtureIds).filter((id) => !isSyntheticFixtureId(id)))
       : new Map<number, FinalResult>();
+
+    // Serveur PC : résultat final noté dès le coup de sifflet (score croisé entre sources, mi-temps, corners par équipe,
+    // cartons, fautes de son relevé minute par minute). Premier recours après API-Football.
+    for (const leg of allLegs) {
+      if (finals.has(leg.fixtureId)) continue;
+      const f = await serverFinalFor(leg.homeTeam, leg.awayTeam, day).catch(() => null);
+      if (f) finals.set(leg.fixtureId, f);
+    }
 
     // SofaScore : résultat publié directement (score, mi-temps, corners et
     // cartons de 1ère MT) pour tout match du pipe fictif qu'il connaît.

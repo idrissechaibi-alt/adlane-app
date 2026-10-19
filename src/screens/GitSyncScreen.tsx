@@ -127,8 +127,8 @@ export default function GitSyncScreen({ navigation }: any) {
   const handleServerConfig = async () => {
     const status = await getServerStatus(true).catch(() => ({ alive: false, info: null }));
     const state = status.alive
-      ? `✅ Le serveur PC tourne (dernier signal ${new Date(status.info!.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}). Le téléphone est en retrait : il relit ses résultats et lui envoie tes saisies.`
-      : '⏸️ Aucun serveur PC actif : le téléphone fait tout le travail.';
+      ? `✅ Le serveur PC tourne (dernier signal ${new Date(status.info!.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}). Il collecte les stats minute par minute et les résultats finaux ; le téléphone analyse et propose les paris.`
+      : '⏸️ Aucun serveur PC actif : le téléphone collecte lui-même (app ouverte).';
     Alert.alert('🖥️ Serveur PC', `${state}\n\nPour configurer le serveur, envoie-toi la configuration (elle contient tes clés : ne la partage avec personne) puis colle-la dans la session Claude de ton PC.`, [
       { text: 'Fermer' },
       {

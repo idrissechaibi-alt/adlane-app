@@ -243,11 +243,7 @@ export async function putRepoText(repositoryPath: string, text: string, message:
   return putRepoFile(config, token, repositoryPath, text, message).catch(() => false);
 }
 
-/**
- * SERVEUR PC : il écrit data/server/heartbeat.json toutes les 5 min. Tant qu'il est vivant (moins de 20 min), le téléphone
- * ne fait plus le travail : il relit les résultats du serveur et lui transmet les saisies de l'utilisateur. Si le PC
- * s'arrête, le téléphone reprend tout seul.
- */
+/** SERVEUR PC : il écrit data/server/heartbeat.json toutes les 5 min (état affiché dans Paramètres). */
 export const SERVER_HEARTBEAT_PATH = 'data/server/heartbeat.json';
 const SERVER_ALIVE_MS = 20 * 60_000;
 let aliveMemo: { at: number; alive: boolean; info: ServerHeartbeat | null } | null = null;
@@ -269,10 +265,13 @@ export async function getServerStatus(force = false): Promise<{ alive: boolean; 
   return aliveMemo;
 }
 
-/** Vrai sur le téléphone quand le serveur du PC tourne : le téléphone se met alors en retrait. */
+/**
+ * Le téléphone se mettrait en retrait si le serveur faisait tout. Choix de l'utilisateur (20/10) : le serveur ne fait que
+ * COLLECTER (stats minute par minute, résultats finaux) ; l'analyse, les paris, les notifications et l'apprentissage
+ * restent sur le téléphone. Toujours faux, donc.
+ */
 export async function phoneShouldStandBy(): Promise<boolean> {
-  if (isRunningOnServer()) return false;
-  return (await getServerStatus()).alive;
+  return false;
 }
 
 async function createSnapshot(): Promise<SyncPayload> {

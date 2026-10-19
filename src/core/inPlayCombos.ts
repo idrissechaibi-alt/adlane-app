@@ -98,7 +98,7 @@ import { OmnirouteConfig } from '../types';
 import { mapWithConcurrency } from './concurrency';
 import { RefereeInfo, hubDateKey, hubKnowsMatch, hubLiveStatus, hubReferee, hubStats } from '../api/footballDataAPIs/liveDataHub';
 import { playerShotLegs } from './playerShots';
-import { appendLiveStatsSample, hasLiveStats, noteLiveStatsScan } from './liveStatsStore';
+import { appendLiveStatsSample, buildLiveSample, hasLiveStats, noteLiveStatsScan } from './liveStatsStore';
 import { getOpeningProbabilities } from '../api/footballDataAPIs/refOdds';
 import { digestFinishedMatches } from './matchDigest';
 import { advancedOf, patternAdjust } from './patternEngine';
@@ -1991,7 +1991,7 @@ function playersDue(mk: string): boolean {
  * Nom unique d'un match pour ses relevés : celui du planning du jour quand le match y est, quel que soit le nom donné par la
  * source du moment (API-Football, FotMob…). Sans ça, un même match était relevé sous deux noms et compté deux fois.
  */
-function canonicalMatchKey(f: LiveFixture, planned: Array<{ homeTeam: string; awayTeam: string }>): string {
+export function canonicalMatchKey(f: Pick<LiveFixture, 'homeTeam' | 'awayTeam'>, planned: Array<{ homeTeam: string; awayTeam: string }>): string {
   const h = normalizeTeamName(f.homeTeam);
   const a = normalizeTeamName(f.awayTeam);
   const m = planned.find((p) => namesLikelyMatch(h, normalizeTeamName(p.homeTeam)) && namesLikelyMatch(a, normalizeTeamName(p.awayTeam)));
@@ -2027,27 +2027,7 @@ export async function runLiveStatsScan(liveFixtures: LiveFixture[]): Promise<num
       const players = await hubPlayerShots(f.homeTeam, f.awayTeam, hubDateKey()).catch(() => null);
       if (players) await saveLivePlayers(mk, players).catch(() => {});
     }
-    const ok = await appendLiveStatsSample(mk, {
-      ctx,
-      ts: new Date().toISOString(),
-      minute: f.minute,
-      status: f.statusShort,
-      home: f.homeGoals,
-      away: f.awayGoals,
-      shots: a.shotsTotalHome + a.shotsTotalAway,
-      sot: a.shotsOnTargetHome + a.shotsOnTargetAway,
-      corners: a.corners,
-      cards: a.cards,
-      fouls: a.fouls || undefined,
-      possessionHome: a.possessionHome ?? undefined,
-      xg: a.xgHome != null && a.xgAway != null ? Math.round((a.xgHome + a.xgAway) * 100) / 100 : undefined,
-      reds: a.redCards ?? undefined,
-      adv: advancedOf(a),
-      side: {
-        h: [a.shotsTotalHome, a.shotsOnTargetHome, a.cornersHome, a.cardsHome ?? 0, a.foulsHome ?? 0],
-        a: [a.shotsTotalAway, a.shotsOnTargetAway, a.cornersAway, a.cardsAway ?? 0, a.foulsAway ?? 0],
-      },
-    });
+    const ok = await appendLiveStatsSample(mk, { ctx, ...buildLiveSample(f, a) });
     if (ok) recorded++;
   });
   noteLiveStatsScan(live.length, '6 sources gratuites');

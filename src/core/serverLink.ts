@@ -1,4 +1,5 @@
-// TÉLÉPHONE ↔ SERVEUR PC.
+// TÉLÉPHONE ↔ SERVEUR PC (mode « le PC fait tout », désactivé le 20/10 : le serveur ne fait que collecter, voir
+// serverFeed.ts). Gardé pour l'export de configuration et si ce mode est réactivé un jour.
 //
 // Quand le serveur du PC tourne (battement de cœur récent dans data/server/heartbeat.json), le téléphone ne fait plus le
 // travail lui-même :
@@ -12,7 +13,7 @@ import AsyncStorage from './kvStore';
 import * as SecureStore from 'expo-secure-store';
 import { FREE_LLM_PROVIDERS } from './freeLLMProviders';
 import { Directory, File, Paths } from 'expo-file-system';
-import { fetchRepoText, getServerStatus, listRepoDir, putRepoText } from './gitAutoSync';
+import { fetchRepoText, getServerStatus, listRepoDir, phoneShouldStandBy, putRepoText } from './gitAutoSync';
 import { isRunningOnServer } from './serverMode';
 import { readAllLearningFiles, replaceLearningFile, setLegBookOdds } from './learnStore';
 import { recordOddsAndLearn } from './oddsLoop';
@@ -45,7 +46,8 @@ async function readJson<T>(key: string, fallback: T): Promise<T> {
 /** Dépose une saisie pour le serveur (gardée sur le téléphone et renvoyée plus tard si le réseau manque). */
 async function forward(name: UserActionName, args: unknown[]): Promise<void> {
   if (isRunningOnServer()) return;
-  if (!(await getServerStatus()).alive) return;
+  // Le serveur ne fait que collecter (phoneShouldStandBy toujours faux) : rien à lui transmettre.
+  if (!(await phoneShouldStandBy())) return;
   const action: UserAction = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, at: new Date().toISOString(), name, args };
   const outbox = await readJson<UserAction[]>(OUTBOX_KEY, []);
   outbox.push(action);
