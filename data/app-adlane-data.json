@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-10-19T09:38:18.387Z",
+  "exportedAt": "2026-10-19T09:40:44.288Z",
   "formatVersion": 1,
   "source": "APP adlane",
   "data": {
@@ -5953,26 +5953,25 @@
       "ticksLast24h": 78
     },
     "tickProgress": {
-      "startedAt": "2026-10-19T09:38:13.275Z",
+      "startedAt": "2026-10-19T09:40:29.467Z",
       "step": "scan en direct 20e/60e",
-      "at": "2026-10-19T09:38:13.825Z",
+      "at": "2026-10-19T09:40:31.124Z",
       "stepDurationsSec": {
-        "scan matinal": 1,
+        "scan matinal": 2,
         "relevé live partagé": 0
       }
     },
     "lastTick": {
-      "startedAt": "2026-10-19T09:33:24.940Z",
-      "finishedAt": "2026-10-19T09:38:08.470Z",
-      "durationSec": 284,
+      "startedAt": "2026-10-19T09:38:13.275Z",
+      "finishedAt": "2026-10-19T09:40:26.021Z",
+      "durationSec": 133,
       "stepDurationsSec": {
-        "terminé": 0,
-        "scan matinal": 0,
+        "scan matinal": 1,
         "relevé live partagé": 0,
-        "scan en direct 20e/60e": 175,
-        "bilan de minuit": 0,
-        "marqueurs live": 1,
-        "programme fictif": 106,
+        "scan en direct 20e/60e": 129,
+        "bilan de minuit": 2,
+        "marqueurs live": 0,
+        "programme fictif": 1,
         "univers du jour": 0,
         "compositions T-90": 0,
         "bilan Scouting": 0,
@@ -6020,7 +6019,8 @@
         "matchesInCheckpointWindow": 0
       },
       "sportmonksConfirmedMatches": 0,
-      "sofaScoreConfirmedMatches": null
+      "sofaScoreConfirmedMatches": null,
+      "nightlyReviewPointsCreated": 0
     },
     "lastFastTick": {
       "startedAt": "2026-10-19T09:31:29.420Z",
@@ -6069,24 +6069,12 @@
       "nightlyReviewPointsCreated": 10
     },
     "lastRealFastTick": {
-      "at": "2026-10-19T09:38:13.820Z",
+      "at": "2026-10-19T09:40:31.076Z",
       "liveFound": 0,
       "fresh": 0,
       "source": "api_football"
     },
     "abortedTicks": [
-      {
-        "startedAt": "2026-10-18T16:26:43.501Z",
-        "step": "marqueurs live",
-        "at": "2026-10-18T16:28:17.472Z",
-        "stepDurationsSec": {
-          "terminé": 0,
-          "scan matinal": 0,
-          "relevé live partagé": 3,
-          "scan en direct 20e/60e": 91,
-          "bilan de minuit": 0
-        }
-      },
       {
         "startedAt": "2026-10-18T16:28:52.499Z",
         "step": "marqueurs live",
@@ -6212,6 +6200,15 @@
         "stepDurationsSec": {
           "terminé": 0,
           "scan matinal": 0,
+          "relevé live partagé": 0
+        }
+      },
+      {
+        "startedAt": "2026-10-19T09:40:27.500Z",
+        "step": "scan en direct 20e/60e",
+        "at": "2026-10-19T09:40:28.236Z",
+        "stepDurationsSec": {
+          "scan matinal": 1,
           "relevé live partagé": 0
         }
       }
@@ -6380,7 +6377,7 @@
       }
     },
     "model": {
-      "updatedAt": "2026-10-19T09:38:08.443Z",
+      "updatedAt": "2026-10-19T09:40:26.005Z",
       "totalRows": 21190,
       "markerRules": 7,
       "paperBets": {
@@ -6534,7 +6531,7 @@
         {
           "name": "Principal",
           "ok": true,
-          "latencyMs": 162,
+          "latencyMs": 170,
           "readyModels": 28,
           "configuredReady": 13,
           "configuredTotal": 13
@@ -6542,7 +6539,7 @@
         {
           "name": "Omniroute",
           "ok": true,
-          "latencyMs": 2239,
+          "latencyMs": 2238,
           "readyModels": 863,
           "configuredReady": 2,
           "configuredTotal": 2
@@ -6564,24 +6561,24 @@
           "coolingDown": true
         },
         {
-          "label": "Principal · diffusiongemma-26b-a4b-it",
-          "ok": 1855,
-          "fail": 1903,
-          "avgMs": 6349,
-          "coolingDown": false
-        },
-        {
           "label": "Principal · nemotron-3.5-content-safety",
-          "ok": 3260,
-          "fail": 2811,
-          "avgMs": 7506,
+          "ok": 3261,
+          "fail": 2812,
+          "avgMs": 5721,
           "coolingDown": false
         },
         {
           "label": "Principal · nemotron-3-super-120b",
-          "ok": 4667,
+          "ok": 4670,
           "fail": 642,
-          "avgMs": 13302,
+          "avgMs": 12667,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · diffusiongemma-26b-a4b-it",
+          "ok": 1856,
+          "fail": 1904,
+          "avgMs": 9432,
           "coolingDown": false
         },
         {
@@ -6657,13 +6654,13 @@
     "apiUsageToday": {
       "countsToday": {
         "footballData": 4,
-        "apiFootball": 7,
+        "apiFootball": 8,
         "theOddsApi": 0,
         "perplexity": 0,
-        "apiFootball-autolearn": 7,
+        "apiFootball-autolearn": 8,
         "sportmonks-autolearn": 2,
         "sofaScore": 0,
-        "sportmonks": 16
+        "sportmonks": 18
       },
       "theOddsApiMonth": {
         "used": 500,
@@ -6673,46 +6670,46 @@
       }
     },
     "apiFootballBudget": {
-      "usedToday": 7,
-      "autolearnUsedToday": 7,
-      "autolearnRemaining": 63
+      "usedToday": 8,
+      "autolearnUsedToday": 8,
+      "autolearnRemaining": 62
     },
     "sofaScore": null,
     "liveSources": {
+      "365Scores": {
+        "ok": true,
+        "count": 1,
+        "at": "2026-10-19T09:40:29.493Z",
+        "failStreak": 0
+      },
       "LiveScore": {
         "ok": true,
         "count": 1,
-        "at": "2026-10-19T09:38:13.323Z",
-        "failStreak": 0
-      },
-      "TheSportsDB": {
-        "ok": true,
-        "count": 2,
-        "at": "2026-10-19T09:38:13.324Z",
+        "at": "2026-10-19T09:40:29.493Z",
         "failStreak": 0
       },
       "FotMob": {
         "ok": true,
         "count": 0,
-        "at": "2026-10-19T09:38:13.331Z",
+        "at": "2026-10-19T09:40:29.494Z",
+        "failStreak": 0
+      },
+      "TheSportsDB": {
+        "ok": true,
+        "count": 2,
+        "at": "2026-10-19T09:40:29.494Z",
         "failStreak": 0
       },
       "ESPN": {
         "ok": true,
         "count": 0,
-        "at": "2026-10-19T09:38:13.367Z",
+        "at": "2026-10-19T09:40:29.716Z",
         "failStreak": 0
       },
       "AllSportsApi": {
         "ok": true,
         "count": 0,
-        "at": "2026-10-19T09:38:13.631Z",
-        "failStreak": 0
-      },
-      "365Scores": {
-        "ok": true,
-        "count": 1,
-        "at": "2026-10-19T09:38:13.644Z",
+        "at": "2026-10-19T09:40:29.830Z",
         "failStreak": 0
       }
     },
@@ -7173,7 +7170,7 @@
       }
     ],
     "unmatchedPlannedLive": {
-      "at": "2026-10-19T09:38:13.648Z",
+      "at": "2026-10-19T09:40:29.836Z",
       "unmatched": [],
       "sourceNames": [
         "Tai Po - Southern District RSA",
@@ -7182,7 +7179,7 @@
     },
     "liveStatsScan": {
       "lastScan": {
-        "at": "2026-10-19T09:38:13.692Z",
+        "at": "2026-10-19T09:40:29.905Z",
         "matches": 0,
         "sources": "6 sources gratuites"
       },
@@ -7195,7 +7192,7 @@
       },
       "fanLine": {
         "fixtures": 20,
-        "soccer": 5
+        "soccer": 4
       },
       "oddsmagnet": {
         "httpStatus": null
@@ -9004,7 +9001,7 @@
         }
       ],
       "samples": {
-        "pending": 38,
+        "pending": 34,
         "measured": 2852
       }
     },
