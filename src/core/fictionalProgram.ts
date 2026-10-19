@@ -762,11 +762,18 @@ export async function ensureFictionalDailyProgram(
   // d'attente d'un tour manuel. La concurrence reste bornée pour ne pas
   // envoyer d'un coup une rafale de requêtes au serveur Omniroute
   // auto-hébergé, qui l'encaisserait mal.
+  // Budget : les modèles IA mettent parfois plusieurs minutes à répondre (balayage de 8 min le 19/10). Aucun nouveau pays
+  // n'est lancé après 90 s, et une réponse qui dépasse 2 min est abandonnée : le pays sera retenté au tour suivant.
+  const sweepDeadline = Date.now() + 90_000;
   await mapWithConcurrency(pending.slice(0, maxCountriesPerRun), COUNTRY_SWEEP_CONCURRENCY, async (country) => {
+    if (Date.now() > sweepDeadline) return;
     const trace: OmnirouteAttempt[] = [];
     let matches: FictionalMatch[] = [];
     try {
-      matches = await fetchCountryFixtures(config, country, date, trace);
+      matches = await Promise.race([
+        fetchCountryFixtures(config, country, date, trace),
+        new Promise<FictionalMatch[]>((resolve) => setTimeout(() => resolve([]), 120_000)),
+      ]);
     } catch (error: any) {
       console.warn(`[Programme fictif] ${country} a échoué pendant le balayage parallèle:`, error?.message);
     }
@@ -830,4 +837,9 @@ function selectFromStored(stored: StoredProgram): FictionalMatch[] {
   }
 
   return selectBalanced(byCountry, MAX_FICTIONAL_MATCHES_PER_DAY);
+}
+
+/** Programme du jour tel qu'il est déjà stocké (aucun appel réseau) : pour le tour rapide, qui ne le reconstruit jamais. */
+export async function readStoredFictionalProgram(date: string = todayKey()): Promise<FictionalMatch[]> {
+  return selectFromStored(await readStoredProgram(date));
 }

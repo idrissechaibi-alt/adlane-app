@@ -60,6 +60,7 @@ import {
   FictionalMatch,
   MatchSample,
   ensureFictionalDailyProgram,
+  readStoredFictionalProgram,
   readCheckedCheckpoints,
   readMatchTimelines,
   writeCheckedCheckpoints,
@@ -2096,13 +2097,13 @@ export async function runRealInPlayTick(liveFixtures: LiveFixture[]): Promise<nu
 export async function runInPlayComboTick(
   liveFixtures: LiveFixture[],
   fictionalLiveFixtures: LiveFixture[] = [],
-  /** false au tour rapide (réel) : le programme fictif (appels IA lents) n'y a pas sa place. */
+  /** false au tour rapide (réel) : programme fictif relu tel quel (jamais reconstruit) et vérifications bornées à 75 s. */
   withFictionalProgram = true
 ): Promise<InPlayComboTickResult> {
   xgNewThisTick = 0;
   // Budget du scan fictif : au-delà, plus aucun nouveau match n'est lancé
   // (les autres passent au tour suivant) — le tour doit aller jusqu'au bilan.
-  const fictionalDeadline = Date.now() + 3 * 60_000;
+  const fictionalDeadline = Date.now() + (withFictionalProgram ? 3 * 60_000 : 75_000);
   await ensureDeltaSamplesLoaded();
   const existing = readInPlayProposals();
   // Réel : une jambe proposée bloque TOUT le match pour ce checkpoint (peu
@@ -2310,8 +2311,12 @@ export async function runInPlayComboTick(
   // nécessaire (statut, minute, score, tirs cadrés, corners, cartons) ; la
   // mémoire des checkpoints déjà consommés évite de réinterroger le même
   // match à chaque tour tant qu'il reste dans sa fenêtre.
-  if (omnirouteConfig && withFictionalProgram) {
-    const program = await ensureFictionalDailyProgram(omnirouteConfig).catch(() => [] as FictionalMatch[]);
+  if (omnirouteConfig) {
+    // Les fenêtres de la 20e / 60e ne durent que ~20 min : le fictif est vérifié à CHAQUE tour (rapide compris, sinon
+    // la moitié des matchs passaient entre deux tours lents — 19/10). Seul le tour lent reconstruit le programme.
+    const program = withFictionalProgram
+      ? await ensureFictionalDailyProgram(omnirouteConfig).catch(() => [] as FictionalMatch[])
+      : (await readStoredFictionalProgram().catch(() => null)) ?? [];
     const checked = await readCheckedCheckpoints();
     const timelines = await readMatchTimelines();
     let timelinesTouched = false;
