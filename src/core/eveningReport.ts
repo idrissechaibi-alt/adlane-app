@@ -86,6 +86,45 @@ function sinceCreationLines(day: string): string[] {
   return out;
 }
 
+const sens = (bias: number) => (Math.abs(bias) < 2 ? 'sans biais' : bias > 0 ? `cotes de l'app trop hautes de ${Math.abs(bias)} %` : `cotes de l'app trop basses de ${Math.abs(bias)} %`);
+
+/** Regroupe les lignes de même libellé (moyennes pondérées par le nombre de comparaisons). */
+function mergeByLabel(groups: Array<{ label: string; n: number; bias: number; mape: number }>) {
+  const by = new Map<string, { label: string; n: number; bias: number; mape: number }>();
+  for (const g of groups) {
+    const e = by.get(g.label) ?? { label: g.label, n: 0, bias: 0, mape: 0 };
+    e.bias += g.bias * g.n;
+    e.mape += g.mape * g.n;
+    e.n += g.n;
+    by.set(g.label, e);
+  }
+  return Array.from(by.values()).map((e) => ({ ...e, bias: Math.round((e.bias / e.n) * 10) / 10, mape: Math.round((e.mape / e.n) * 10) / 10 }));
+}
+
+/** Paris RÉELS perdus du jour, chacun avec sa raison (explication du bilan, sinon projection contre réel). */
+async function realMissLines(todays: InPlayProposal[], day: string): Promise<string[]> {
+  const real = todays.filter((p) => p.real !== false);
+  const legs = real.flatMap((p) => p.legs.filter((l) => l.settled && !l.voided));
+  if (legs.length === 0) return [];
+  const lost = legs.filter((l) => !l.won);
+  const ex = new Map((await readExplanations().catch(() => [])).filter((e) => e.day === day).map((e) => [`${e.match}|${e.selection}`, e.text]));
+  const out = [`🎯 Paris RÉELS : ${legs.length - lost.length}/${legs.length} réussis aujourd'hui.`];
+  if (lost.length === 0) return [...out, 'Aucun pari réel raté. ✅', ''];
+  out.push("Pourquoi des paris réels ont raté aujourd'hui :");
+  for (const l of lost.slice(0, 12)) {
+    const match = `${l.homeTeam} - ${l.awayTeam}`;
+    const pj = l.projection;
+    const text =
+      ex.get(`${match}|${l.selection}`) ??
+      (pj?.actual != null
+        ? `Raté — ${Math.abs(pj.actual - pj.expected) >= 1.5 ? `le match a été nettement ${pj.actual > pj.expected ? 'plus ouvert' : 'plus fermé'} que projeté` : 'projection proche du réel'} (${pj.expected.toFixed(1)} attendus, ${pj.actual} réels ; annoncé à ${Math.round(l.prob * 100)} %).`
+        : `Raté — annoncé à ${Math.round(l.prob * 100)} %, aucun écart mesurable : variance normale.`);
+    out.push(`• ${match} — ${l.selection} : ${text}`);
+  }
+  if (lost.length > 12) out.push(`… et ${lost.length - 12} autre(s)`);
+  return [...out, ''];
+}
+
 async function cotesMessage(day: string): Promise<string> {
   const f = await readOddsLoopFile(true);
   const lines = [`📐 Calibrage des cotes — ${day}`, ''];
@@ -97,14 +136,18 @@ async function cotesMessage(day: string): Promise<string> {
   lines.push(`Écart moyen : ${f.meanAbsDeltaPct ?? '—'} % (biais ${f.biasPct != null ? `${f.biasPct > 0 ? '+' : ''}${f.biasPct} %` : '—'} : ${f.biasPct != null && f.biasPct > 0 ? "les cotes de l'app sont trop hautes" : f.biasPct != null && f.biasPct < 0 ? "les cotes de l'app sont trop basses" : 'équilibré'})`);
   lines.push(`Saisies : ${f.observations} au total, ${f.scored} comparées à l'estimation de l'app.`);
   const b = f.vsBet365 as any;
-  if (b && (b.n ?? b.samples)) lines.push(`Face à bet365 (1X2 / total de buts, lues automatiquement) : ${JSON.stringify(b).slice(0, 200)}`);
-  const worst = [...(f.bySegment ?? [])].sort((x: any, y: any) => Math.abs(y.meanAbsDeltaPct ?? y.meanAbsPct ?? 0) - Math.abs(x.meanAbsDeltaPct ?? x.meanAbsPct ?? 0)).slice(0, 3);
-  if (worst.length) lines.push('', 'Marchés les moins alignés :', ...worst.map((w: any) => `• ${w.label ?? w.key}: ${w.meanAbsDeltaPct ?? w.meanAbsPct ?? '?'} % d'écart (${w.n} saisies)`));
+  if (b?.n) {
+    lines.push('', `Face à bet365 (cotes lues automatiquement, ${b.n} comparaisons) : score ${b.score ?? '—'}/100, écart moyen ${b.meanAbsDeltaPct ?? '—'} %${b.biasPct != null ? ` (${sens(b.biasPct)})` : ''}`);
+    for (const g of mergeByLabel(b.byMarket ?? [])) lines.push(`• ${g.label} : ${g.mape} % d'écart, ${sens(g.bias)} (${g.n})`);
+  }
+  // Écart absolu moyen (mape) de chaque marché, en ne gardant que ceux qui ont assez de saisies pour être parlants.
+  const worst = [...(f.bySegment ?? [])].filter((g) => g.n >= 3).sort((x, y) => y.mape - x.mape).slice(0, 3);
+  if (worst.length) lines.push('', 'Marchés les moins alignés avec ton bookmaker :', ...worst.map((w) => `• ${w.label} : ${w.mape} % d'écart, ${sens(w.bias)} (${w.n} saisies)`));
   if (f.reasons?.length) lines.push('', 'Pourquoi cela diverge encore :', ...f.reasons.slice(0, 4).map((r) => `- ${r}`));
   return lines.join('\n');
 }
 
-async function leconsMessage(day: string): Promise<string> {
+async function leconsMessage(day: string, todays: InPlayProposal[]): Promise<string> {
   const lines = [`🧠 Leçons apprises — ${day}`, ''];
   try {
     const today = (await getAllLessons()).filter((l) => l.derniere_maj === day);
@@ -135,8 +178,9 @@ async function leconsMessage(day: string): Promise<string> {
   try {
     const ps = (await getPatterns(100)).filter((p) => p.validated).slice(0, 6);
     if (ps.length) lines.push('Motifs validés (corrigent les pronos) :', ...ps.map((p) => `• ${describePattern(p)}`), '');
-    const ex = (await readExplanations()).filter((e) => e.day === day && !e.won).slice(-5);
-    if (ex.length) lines.push('Pourquoi des paris ont raté aujourd\'hui :', ...ex.map((e) => `• ${e.match} — ${e.selection} : ${e.text}`), '');
+    lines.push(...(await realMissLines(todays, day)));
+    const ex = (await readExplanations()).filter((e) => e.day === day && !e.won && !e.real).slice(-3);
+    if (ex.length) lines.push('Exemples de paris fictifs ratés :', ...ex.map((e) => `• ${e.match} — ${e.selection} : ${e.text}`), '');
   } catch {
     // best-effort
   }
@@ -167,6 +211,6 @@ export async function buildEveningMessage(part: EveningPart, day: string): Promi
   const todays = readInPlayProposals().filter((p) => localDay(new Date(p.createdAt)) === day);
   if (part === 'bilan') return bilanMessage(day, todays);
   if (part === 'cotes') return cotesMessage(day);
-  if (part === 'lecons') return leconsMessage(day);
+  if (part === 'lecons') return leconsMessage(day, todays);
   return statsMessage(day);
 }
