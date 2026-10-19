@@ -46,14 +46,18 @@ if (-not (Test-Path (Join-Path $ServerDir 'secrets.json'))) {
 }
 
 Say 'Démarrage automatique'
-$cmd = Join-Path $Repo 'server\run-server.cmd'
-$action = New-ScheduledTaskAction -Execute 'cmd.exe' -Argument "/c `"$cmd`""
+# Lancement sans fenêtre (wscript + run-hidden.vbs) : aucune console à fermer par erreur ; la tâche rend la main tout
+# de suite et la boucle du serveur (run-server.ps1) tourne seule.
+$vbs = Join-Path $Repo 'server\run-hidden.vbs'
+$action = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument "`"$vbs`""
 $trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero) -Hidden
 Register-ScheduledTask -TaskName 'adlane-serveur' -Action $action -Trigger $trigger -Settings $settings -Description 'Serveur de l''app adlane (scans, bilans, rapports)' -Force | Out-Null
 # PC branché : jamais de mise en veille, sinon le serveur s'arrête.
 powercfg /change standby-timeout-ac 0
 powercfg /change hibernate-timeout-ac 0
+# Ancienne boucle éventuelle arrêtée avant de relancer (une seule à la fois).
+Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*run-server*' -or ($_.Name -eq 'node.exe' -and $_.CommandLine -like '*server.js*') } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 try { Start-ScheduledTask -TaskName 'adlane-serveur' } catch { }
 
 Say 'Icône sur le bureau'

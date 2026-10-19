@@ -10,14 +10,21 @@ function Show-State {
   Clear-Host
   Write-Host '=== adlane · serveur PC ===' -ForegroundColor Cyan
   $task = Get-ScheduledTask -TaskName 'adlane-serveur' -ErrorAction SilentlyContinue
+  # La tâche ne fait que lancer la boucle puis rend la main : l'état se lit sur les processus eux-mêmes.
+  $running = @(Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Where-Object { $_.CommandLine -like '*server.js*' }).Count -gt 0
   if (-not $task) { Write-Host 'Tâche « adlane-serveur » absente : relance l''installation (server\bootstrap.ps1).' -ForegroundColor Red }
-  elseif ($task.State -eq 'Running') { Write-Host 'Serveur : EN MARCHE' -ForegroundColor Green }
+  if ($running) { Write-Host 'Serveur : EN MARCHE' -ForegroundColor Green }
   else {
-    Write-Host "Serveur : ARRÊTÉ ($($task.State))" -ForegroundColor Yellow
+    Write-Host 'Serveur : ARRÊTÉ' -ForegroundColor Yellow
     $console = Join-Path $Logs 'console.log'
     if (Test-Path $console) {
       Write-Host "`n--- Lanceur (console.log, dernières lignes) ---" -ForegroundColor DarkGray
       Get-Content $console -Tail 10 -Encoding UTF8 | ForEach-Object { Write-Host $_ }
+    }
+    $err = Join-Path $Logs 'node-erreurs.log'
+    if ((Test-Path $err) -and (Get-Item $err).Length -gt 0) {
+      Write-Host "`n--- Erreurs du serveur ---" -ForegroundColor DarkGray
+      Get-Content $err -Tail 10 -Encoding UTF8 | ForEach-Object { Write-Host $_ }
     }
   }
   $log = Get-ChildItem $Logs -Filter 'serveur-*.log' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime | Select-Object -Last 1
@@ -38,7 +45,7 @@ while ($true) {
   Write-Host "`n[1] Relancer le serveur   [2] Sauvegarder maintenant   [3] Ouvrir les sauvegardes   [4] Ouvrir le journal   [Entrée] Actualiser   [Q] Quitter"
   $c = Read-Host 'Choix'
   switch ($c.ToUpper()) {
-    '1' { Stop-ScheduledTask -TaskName 'adlane-serveur' -ErrorAction SilentlyContinue; Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Where-Object { $_.CommandLine -like '*server.js*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }; Start-ScheduledTask -TaskName 'adlane-serveur'; Start-Sleep 3 }
+    '1' { Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*run-server*' -or ($_.Name -eq 'node.exe' -and $_.CommandLine -like '*server.js*') } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }; Start-ScheduledTask -TaskName 'adlane-serveur'; Start-Sleep 5 }
     '2' { Write-Host 'Sauvegarde en cours…'; node --no-warnings $Server --backup-now | Select-Object -Last 1; Start-Sleep 2 }
     '3' { New-Item -ItemType Directory -Force -Path $Backups | Out-Null; Start-Process explorer.exe $Backups }
     '4' { Start-Process explorer.exe $Logs }
