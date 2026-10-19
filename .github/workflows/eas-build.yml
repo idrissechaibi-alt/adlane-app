@@ -9,9 +9,11 @@ on:
     # jour OTA (même bundle, juste un ID différent) — l'app affichait alors
     # en permanence "nouvelle mise à jour disponible" pour rien.
     paths-ignore:
-      - 'data/app-adlane-data.json'
-      # Stats d'équipes compilées chaque nuit (team-stats.yml) : données seules.
-      - 'data/team-stats/**'
+      # Tout le dossier data/ : instantanés et sauvegardes complètes poussés par l'app (des centaines par jour), stats
+      # d'équipes et arbitres compilés chaque nuit. Aucun ne change le code : sans ce filtre, chacun publiait une
+      # « nouvelle mise à jour » identique, et l'app en proposait une à chaque vérification.
+      - 'data/**'
+      - 'scripts/**'
 jobs:
   update:
     name: Publish Update
@@ -21,6 +23,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 30
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -35,6 +39,18 @@ jobs:
         with:
           eas-version: latest
           token: ${{ secrets.EAS_TOKEN }}
+
+      - name: Nom de la mise à jour (affiché dans l'app)
+        run: |
+          # Dernier commit de CODE (ni fusion, ni sauvegarde de l'app) : sa première phrase devient le nom de la mise à jour.
+          NAME=$(git log --no-merges --format=%s -n 30 | grep -v '^\[APP adlane\]' | grep -v "^Stats d'équipes" | head -1 | cut -c1-160)
+          node -e '
+            const fs = require("fs");
+            const app = JSON.parse(fs.readFileSync("app.json", "utf8"));
+            app.expo.extra = { ...(app.expo.extra || {}), updateName: process.argv[1], updatePublishedAt: new Date().toISOString() };
+            fs.writeFileSync("app.json", JSON.stringify(app, null, 2));
+          ' "$NAME"
+          echo "Nom : $NAME"
 
       - name: Publish update to production
         env:

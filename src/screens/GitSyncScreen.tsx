@@ -14,10 +14,24 @@ import {
   GitHubDataSyncConfig,
 } from '../core/gitAutoSync';
 import * as Updates from 'expo-updates';
+import Constants from 'expo-constants';
 import { FREE_LLM_PROVIDERS, getFreeLLMKey, setFreeLLMKey } from '../core/freeLLMProviders';
 
 const GEMINI_KEY_STORAGE = 'app-adlane.gemini-api-key';
 const FOOTBALL_DATA_KEY = 'app-adlane.football-data-api-key';
+
+
+/** Nom d'une mise à jour OTA (première phrase du dernier changement de code, inscrite au moment de la publication). */
+function updateNameOf(manifest: any): string | null {
+  const extra = manifest?.extra?.expoClient?.extra;
+  if (!extra?.updateName) return null;
+  const at = extra.updatePublishedAt ? new Date(extra.updatePublishedAt) : null;
+  return `${extra.updateName}${at ? ` (${at.toLocaleDateString('fr-FR')} ${at.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })})` : ''}`;
+}
+
+function currentUpdateName(): string {
+  return updateNameOf({ extra: { expoClient: Constants.expoConfig } }) ?? (Updates.updateId ? `mise à jour ${Updates.updateId.slice(0, 8)}` : 'version d’origine');
+}
 
 export default function GitSyncScreen({ navigation }: any) {
   const [config, setConfig] = useState<GitHubDataSyncConfig | null>(null);
@@ -96,11 +110,12 @@ export default function GitSyncScreen({ navigation }: any) {
     try {
       const update = await Updates.checkForUpdateAsync();
       if (update.isAvailable) {
-        Alert.alert('🚀 Mise à jour !', 'Nouvelle version disponible.', [
+        const next = updateNameOf(update.manifest);
+        Alert.alert('🚀 Mise à jour !', `${next ? `Nouvelle version : ${next}` : 'Nouvelle version disponible.'}\n\nVersion actuelle : ${currentUpdateName()}`, [
           { text: 'Plus tard' },
           { text: 'Installer', onPress: async () => { await Updates.fetchUpdateAsync(); await Updates.reloadAsync(); } }
         ]);
-      } else { Alert.alert('✅ À jour', 'L’application est déjà à la dernière version.'); }
+      } else { Alert.alert('✅ À jour', `L’application est déjà à la dernière version :\n${currentUpdateName()}`); }
     } catch (e) {
       Alert.alert('🔧 Diagnostic', `ID: ${(Updates as any).projectId || '6d5d5f...'}\nCanal: ${Updates.channel || '(non défini)'}\nErreur: ${e instanceof Error ? e.message : 'Timeout'}`);
     } finally { setUpdating(false); }
