@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-10-19T18:48:13.678Z",
+  "exportedAt": "2026-10-19T18:48:36.377Z",
   "formatVersion": 1,
   "source": "APP adlane",
   "data": {
@@ -5953,13 +5953,10 @@
       "ticksLast24h": 92
     },
     "tickProgress": {
-      "startedAt": "2026-10-19T18:48:09.286Z",
-      "step": "scan en direct 20e/60e",
-      "at": "2026-10-19T18:48:10.954Z",
-      "stepDurationsSec": {
-        "scan matinal": 0,
-        "relevé live partagé": 2
-      }
+      "startedAt": "2026-10-19T18:48:18.708Z",
+      "step": "scan matinal",
+      "at": "2026-10-19T18:48:18.708Z",
+      "stepDurationsSec": {}
     },
     "lastTick": {
       "startedAt": "2026-10-19T18:24:47.390Z",
@@ -6060,15 +6057,6 @@
       "source": "sources_live_gratuites"
     },
     "abortedTicks": [
-      {
-        "startedAt": "2026-10-19T17:59:33.382Z",
-        "step": "scan en direct 20e/60e",
-        "at": "2026-10-19T17:59:37.588Z",
-        "stepDurationsSec": {
-          "scan matinal": 4,
-          "relevé live partagé": 0
-        }
-      },
       {
         "startedAt": "2026-10-19T18:01:15.983Z",
         "step": "scan matinal",
@@ -6173,6 +6161,15 @@
         "step": "scan matinal",
         "at": "2026-10-19T18:48:04.698Z",
         "stepDurationsSec": {}
+      },
+      {
+        "startedAt": "2026-10-19T18:48:09.286Z",
+        "step": "scan en direct 20e/60e",
+        "at": "2026-10-19T18:48:10.954Z",
+        "stepDurationsSec": {
+          "scan matinal": 0,
+          "relevé live partagé": 2
+        }
       }
     ],
     "strategies": [
@@ -6493,7 +6490,7 @@
         {
           "name": "Principal",
           "ok": true,
-          "latencyMs": 90,
+          "latencyMs": 103,
           "readyModels": 28,
           "configuredReady": 13,
           "configuredTotal": 13
@@ -6501,7 +6498,7 @@
         {
           "name": "Omniroute",
           "ok": true,
-          "latencyMs": 41,
+          "latencyMs": 45,
           "readyModels": 863,
           "configuredReady": 2,
           "configuredTotal": 2
@@ -6530,18 +6527,18 @@
           "coolingDown": false
         },
         {
+          "label": "Principal · auto",
+          "ok": 2640,
+          "fail": 300,
+          "avgMs": 8474,
+          "coolingDown": false
+        },
+        {
           "label": "Principal · gpt-oss-120b",
           "ok": 1866,
           "fail": 2474,
           "avgMs": 3603,
           "coolingDown": true
-        },
-        {
-          "label": "Principal · auto",
-          "ok": 2639,
-          "fail": 300,
-          "avgMs": 12002,
-          "coolingDown": false
         },
         {
           "label": "Principal · nemotron-3-super-120b",
@@ -6641,31 +6638,31 @@
       "LiveScore": {
         "ok": true,
         "count": 32,
-        "at": "2026-10-19T18:48:09.647Z",
-        "failStreak": 0
-      },
-      "FotMob": {
-        "ok": true,
-        "count": 35,
-        "at": "2026-10-19T18:48:09.693Z",
-        "failStreak": 0
-      },
-      "AllSportsApi": {
-        "ok": true,
-        "count": 0,
-        "at": "2026-10-19T18:48:10.249Z",
-        "failStreak": 0
-      },
-      "365Scores": {
-        "ok": true,
-        "count": 49,
-        "at": "2026-10-19T18:48:10.374Z",
+        "at": "2026-10-19T18:48:20.076Z",
         "failStreak": 0
       },
       "ESPN": {
         "ok": true,
         "count": 13,
-        "at": "2026-10-19T18:48:10.429Z",
+        "at": "2026-10-19T18:48:19.204Z",
+        "failStreak": 0
+      },
+      "FotMob": {
+        "ok": true,
+        "count": 35,
+        "at": "2026-10-19T18:48:19.217Z",
+        "failStreak": 0
+      },
+      "365Scores": {
+        "ok": true,
+        "count": 49,
+        "at": "2026-10-19T18:48:19.192Z",
+        "failStreak": 0
+      },
+      "AllSportsApi": {
+        "ok": true,
+        "count": 0,
+        "at": "2026-10-19T18:48:19.510Z",
         "failStreak": 0
       }
     },
@@ -7144,7 +7141,7 @@
       }
     ],
     "unmatchedPlannedLive": {
-      "at": "2026-10-19T18:48:10.882Z",
+      "at": "2026-10-19T18:48:19.471Z",
       "unmatched": [],
       "sourceNames": [
         "Parma - Torino",
@@ -7222,7 +7219,7 @@
       },
       "fanLine": {
         "fixtures": 20,
-        "soccer": 9
+        "soccer": 8
       },
       "oddsmagnet": {
         "httpStatus": null
@@ -7233,57 +7230,12 @@
       "teamsInIndex": 111,
       "summariesCached": 111,
       "lookups": 1,
-      "withTrend": 0,
-      "unknownTeams": 1,
-      "lastTrendAt": null,
-      "lastUnknown": "Diosgyori VTK - Kazincbarcikai"
+      "withTrend": 1,
+      "unknownTeams": 0,
+      "lastTrendAt": "2026-10-19T18:48:20.518Z",
+      "lastUnknown": null
     },
     "teamStatsUsageLog": [
-      {
-        "at": "2026-10-19T18:26:19.699Z",
-        "match": "Esenler Erokspor - Mardin 1969 Spor",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-10-19T18:26:20.256Z",
-        "match": "FC Tzeiri Tira - Hapoel Hadera",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-10-19T18:26:20.580Z",
-        "match": "Beitar Kfar Saba FC - Bnei Jaffa",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-10-19T18:26:41.895Z",
-        "match": "Colon FC (Reserve) - Cerro Largo Fc (Reserves)",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-10-19T18:44:08.844Z",
-        "match": "Beitar Jerusalem - Maccabi Tel Aviv",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-10-19T18:44:09.156Z",
-        "match": "Diosgyori VTK - Kazincbarcikai",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-10-19T18:44:12.722Z",
-        "match": "Diosgyori VTK - Kazincbarcikai",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-10-19T18:44:13.596Z",
-        "match": "Beitar Jerusalem - Maccabi Tel Aviv",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-10-19T18:44:16.126Z",
-        "match": "Hapoel Tirat HaCarmel - Beitar Nahariya",
-        "result": "équipe inconnue"
-      },
       {
         "at": "2026-10-19T18:46:59.425Z",
         "match": "Beitar Jerusalem - Maccabi Tel Aviv",
@@ -7363,6 +7315,51 @@
         "at": "2026-10-19T18:48:13.313Z",
         "match": "Diosgyori VTK - Kazincbarcikai",
         "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-19T18:48:14.270Z",
+        "match": "Giana Erminio - Union Brescia",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-19T18:48:14.362Z",
+        "match": "Cittadella - FC Arzignano Valchiampo",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-19T18:48:14.423Z",
+        "match": "Beitar Jerusalem - Maccabi Tel Aviv",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-19T18:48:14.524Z",
+        "match": "Juventus Next Gen - Renate",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-19T18:48:14.713Z",
+        "match": "Giugliano - Foggia",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-19T18:48:14.818Z",
+        "match": "Cittadella - Union Arzignanochiampo",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-19T18:48:15.679Z",
+        "match": "Celta Fortuna - CD Tenerife",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-19T18:48:18.042Z",
+        "match": "Celta Vigo B - CD Tenerife",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-19T18:48:20.518Z",
+        "match": "Parma - Torino",
+        "result": "tendance"
       }
     ],
     "bookieLineMinimums": {
