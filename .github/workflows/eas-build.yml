@@ -43,7 +43,15 @@ jobs:
       - name: Nom de la mise à jour (affiché dans l'app)
         run: |
           # Dernier commit de CODE (ni fusion, ni sauvegarde de l'app) : sa première phrase devient le nom de la mise à jour.
-          NAME=$(git log --no-merges --format=%s -n 30 | grep -v '^\[APP adlane\]' | grep -v "^Stats d'équipes" | head -1 | cut -c1-160)
+          NAME=$(git log --no-merges --format=%s -n 30 | grep -v '^\[APP adlane\]' | grep -v "^Stats d'équipes" | head -1)
+          # Nom court : jusqu'au premier « : » ou « ; » s'il arrive assez tôt, sinon coupé sur un mot (pas au milieu).
+          NAME=$(node -e '
+            let s = process.argv[1].trim();
+            const cut = s.search(/ [:;] /);
+            if (cut >= 12 && cut <= 70) s = s.slice(0, cut);
+            if (s.length > 90) s = s.slice(0, 90).replace(/\s+\S*$/, "") + "…";
+            console.log(s);
+          ' "$NAME")
           node -e '
             const fs = require("fs");
             const app = JSON.parse(fs.readFileSync("app.json", "utf8"));

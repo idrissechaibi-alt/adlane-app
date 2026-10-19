@@ -279,7 +279,8 @@ const fotMob: Provider = {
     const half = events.find((e) => e?.type === 'Half' && e?.halfStrShort === 'HT');
     const all = fotMobPeriod(periods.All);
     // Momentum minute par minute (positif = domicile domine) : moyenne des 10 dernières minutes relevées.
-    const mom: Array<{ minute: number; value: number }> = d?.content?.momentum?.main?.data ?? [];
+    // Les minutes pas encore jouées sont présentes avec une valeur nulle : écartées.
+    const mom: Array<{ minute: number; value: number }> = (d?.content?.momentum?.main?.data ?? []).filter((x: any) => x?.value != null);
     if (all && mom.length >= 5) {
       const lastMin = Math.max(...mom.map((x) => num(x.minute)));
       const recent = mom.filter((x) => num(x.minute) > lastMin - 10);
@@ -831,14 +832,14 @@ export async function hubStats(
 ): Promise<SofaStats> {
   const needFirstHalf = options.needFirstHalf ?? true;
   const result: SofaStats = { all: primary?.all ?? null, firstHalf: primary?.firstHalf ?? null };
-  if (result.all && (result.firstHalf || !needFirstHalf)) return result;
+  const complete = () => !!result.all && (!!result.firstHalf || !needFirstHalf);
   const matches = await findEverywhere(homeTeam, awayTeam, dateKey, dateKey === utcDay());
-  for (const m of matches) {
+  for (const m of complete() ? [] : matches) {
     const detail = await detailOf(m);
     if (!detail) continue;
     result.all ??= detail.stats.all;
     result.firstHalf ??= detail.stats.firstHalf;
-    if (result.all && (result.firstHalf || !needFirstHalf)) break;
+    if (complete()) break;
   }
   // Marqueurs avancés (touches dans la surface, passes dans le camp adverse, centres, momentum) : FotMob seulement.
   // Quand une autre source a fourni les stats de base, FotMob complète ces marqueurs sans rien écraser.

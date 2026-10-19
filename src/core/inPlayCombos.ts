@@ -231,7 +231,11 @@ interface RefereeEffect {
  * est lissé par son nombre de matchs (poids n / (n + 20)), plafonné à ±20 %, et s'efface au fil du match.
  */
 async function refereeEffect(homeTeam: string, awayTeam: string): Promise<RefereeEffect | null> {
-  const r = await hubReferee(homeTeam, awayTeam, hubDateKey()).catch(() => null);
+  // Borné à 8 s : l'arbitre n'est qu'un correctif, jamais une raison de faire attendre le scan.
+  const r = await Promise.race([
+    hubReferee(homeTeam, awayTeam, hubDateKey()).catch(() => null),
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), 8_000)),
+  ]);
   if (!r) return null;
   const file = await refereeFileEntry(r).catch(() => null);
   const n = r.matches ?? file?.matches ?? 0;
