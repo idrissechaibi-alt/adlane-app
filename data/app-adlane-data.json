@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-10-19T09:33:38.173Z",
+  "exportedAt": "2026-10-19T09:38:18.387Z",
   "formatVersion": 1,
   "source": "APP adlane",
   "data": {
@@ -5953,44 +5953,59 @@
       "ticksLast24h": 78
     },
     "tickProgress": {
-      "startedAt": "2026-10-19T09:33:24.940Z",
+      "startedAt": "2026-10-19T09:38:13.275Z",
       "step": "scan en direct 20e/60e",
-      "at": "2026-10-19T09:33:25.050Z",
+      "at": "2026-10-19T09:38:13.825Z",
       "stepDurationsSec": {
-        "terminé": 0,
-        "scan matinal": 0,
+        "scan matinal": 1,
         "relevé live partagé": 0
       }
     },
     "lastTick": {
-      "startedAt": "2026-10-19T09:16:02.350Z",
-      "finishedAt": "2026-10-19T09:31:29.390Z",
-      "durationSec": 927,
+      "startedAt": "2026-10-19T09:33:24.940Z",
+      "finishedAt": "2026-10-19T09:38:08.470Z",
+      "durationSec": 284,
       "stepDurationsSec": {
         "terminé": 0,
         "scan matinal": 0,
         "relevé live partagé": 0,
-        "scan en direct 20e/60e": 12,
+        "scan en direct 20e/60e": 175,
         "bilan de minuit": 0,
-        "marqueurs live": 906,
-        "programme fictif": 0,
+        "marqueurs live": 1,
+        "programme fictif": 106,
         "univers du jour": 0,
         "compositions T-90": 0,
         "bilan Scouting": 0,
-        "consolidation apprentissage": 9,
+        "consolidation apprentissage": 1,
         "enrichissement matchs suivis": 0,
         "vérification accès internet des modèles": 0
       },
       "universeSize": 0,
-      "omnirouteConfigured": false,
-      "fictionalProgramSize": 0,
+      "omnirouteConfigured": true,
+      "fictionalProgramSize": 280,
       "fictionalProgramFromFeed": false,
-      "fictionalMatchesAhead": 0,
-      "fictionalCountriesTried": 0,
-      "fictionalCountriesTotal": 0,
-      "fictionalSportmonksMatches": 0,
-      "fictionalSofascoreMatches": 0,
-      "fictionalOmnirouteMatches": 0,
+      "fictionalMatchesAhead": 252,
+      "fictionalNextKickoffUtc": "2026-10-19T10:00:00.000Z",
+      "fictionalCountriesTried": 27,
+      "fictionalCountriesTotal": 60,
+      "fictionalLastTrace": {
+        "country": "Indonésie",
+        "attempts": [
+          {
+            "model": "Principal · gpt-oss-120b",
+            "outcome": "erreur",
+            "detail": "HTTP 429 : All models exhausted: 1 route checked (1 rate-limited or on cooldown). Add more API keys or wait for rate limits to reset. Soonest reset ~78s. 6 models skipped: no key configured for their "
+          },
+          {
+            "model": "Principal · nemotron-3-super-120b",
+            "outcome": "sans_contenu_utile",
+            "detail": "{\"matches\": []}"
+          }
+        ]
+      },
+      "fictionalSportmonksMatches": 1,
+      "fictionalSofascoreMatches": 231,
+      "fictionalOmnirouteMatches": 50,
       "liveFixturesFound": 0,
       "fictionalLiveFixturesFound": 2,
       "liveFixturesSource": "api_football",
@@ -6005,8 +6020,7 @@
         "matchesInCheckpointWindow": 0
       },
       "sportmonksConfirmedMatches": 0,
-      "sofaScoreConfirmedMatches": null,
-      "nightlyReviewPointsCreated": 0
+      "sofaScoreConfirmedMatches": null
     },
     "lastFastTick": {
       "startedAt": "2026-10-19T09:31:29.420Z",
@@ -6055,18 +6069,12 @@
       "nightlyReviewPointsCreated": 10
     },
     "lastRealFastTick": {
-      "at": "2026-10-19T09:33:27.885Z",
+      "at": "2026-10-19T09:38:13.820Z",
       "liveFound": 0,
       "fresh": 0,
       "source": "api_football"
     },
     "abortedTicks": [
-      {
-        "startedAt": "2026-10-18T15:52:25.433Z",
-        "step": "scan matinal",
-        "at": "2026-10-18T15:52:25.433Z",
-        "stepDurationsSec": {}
-      },
       {
         "startedAt": "2026-10-18T16:26:43.501Z",
         "step": "marqueurs live",
@@ -6194,6 +6202,16 @@
         "stepDurationsSec": {
           "terminé": 348,
           "scan matinal": 1,
+          "relevé live partagé": 0
+        }
+      },
+      {
+        "startedAt": "2026-10-19T09:38:08.472Z",
+        "step": "scan en direct 20e/60e",
+        "at": "2026-10-19T09:38:08.611Z",
+        "stepDurationsSec": {
+          "terminé": 0,
+          "scan matinal": 0,
           "relevé live partagé": 0
         }
       }
@@ -6350,8 +6368,8 @@
       "won": 1943,
       "lastPlacedAt": "2026-10-19T08:42:14.467Z",
       "lastSettledAt": "2026-10-19T08:36:47.756Z",
-      "placedLast24h": 2561,
-      "settledLast24h": 1486
+      "placedLast24h": 2557,
+      "settledLast24h": 1484
     },
     "trainingRows": {
       "last14Days": 21190,
@@ -6362,7 +6380,7 @@
       }
     },
     "model": {
-      "updatedAt": "2026-10-19T09:31:29.276Z",
+      "updatedAt": "2026-10-19T09:38:08.443Z",
       "totalRows": 21190,
       "markerRules": 7,
       "paperBets": {
@@ -6456,7 +6474,7 @@
       "fictionalReviewed": 19102,
       "fictionalSettledLegs": 18322,
       "lastCreatedAt": "2026-10-19T08:29:59.106Z",
-      "createdLast24h": 6572
+      "createdLast24h": 6521
     },
     "predictionOutcomes30d": 22287,
     "marketSeries": {
@@ -6516,7 +6534,7 @@
         {
           "name": "Principal",
           "ok": true,
-          "latencyMs": 5189,
+          "latencyMs": 162,
           "readyModels": 28,
           "configuredReady": 13,
           "configuredTotal": 13
@@ -6524,8 +6542,8 @@
         {
           "name": "Omniroute",
           "ok": true,
-          "latencyMs": 6752,
-          "readyModels": 851,
+          "latencyMs": 2239,
+          "readyModels": 863,
           "configuredReady": 2,
           "configuredTotal": 2
         }
@@ -6540,36 +6558,36 @@
         },
         {
           "label": "Principal · gpt-oss-120b",
-          "ok": 1791,
-          "fail": 2249,
-          "avgMs": 1495,
+          "ok": 1795,
+          "fail": 2253,
+          "avgMs": 1095,
+          "coolingDown": true
+        },
+        {
+          "label": "Principal · diffusiongemma-26b-a4b-it",
+          "ok": 1855,
+          "fail": 1903,
+          "avgMs": 6349,
           "coolingDown": false
         },
         {
           "label": "Principal · nemotron-3.5-content-safety",
-          "ok": 3252,
-          "fail": 2804,
-          "avgMs": 2954,
+          "ok": 3260,
+          "fail": 2811,
+          "avgMs": 7506,
           "coolingDown": false
         },
         {
           "label": "Principal · nemotron-3-super-120b",
-          "ok": 4656,
-          "fail": 640,
-          "avgMs": 11842,
-          "coolingDown": false
-        },
-        {
-          "label": "Principal · diffusiongemma-26b-a4b-it",
-          "ok": 1848,
-          "fail": 1894,
-          "avgMs": 16998,
+          "ok": 4667,
+          "fail": 642,
+          "avgMs": 13302,
           "coolingDown": false
         },
         {
           "label": "Principal · riva-translate-4b-instruct-v2",
           "ok": 2080,
-          "fail": 1679,
+          "fail": 1681,
           "avgMs": 24279,
           "coolingDown": false
         },
@@ -6639,13 +6657,13 @@
     "apiUsageToday": {
       "countsToday": {
         "footballData": 4,
-        "apiFootball": 6,
+        "apiFootball": 7,
         "theOddsApi": 0,
         "perplexity": 0,
-        "apiFootball-autolearn": 6,
+        "apiFootball-autolearn": 7,
         "sportmonks-autolearn": 2,
         "sofaScore": 0,
-        "sportmonks": 14
+        "sportmonks": 16
       },
       "theOddsApiMonth": {
         "used": 500,
@@ -6655,46 +6673,46 @@
       }
     },
     "apiFootballBudget": {
-      "usedToday": 6,
-      "autolearnUsedToday": 6,
-      "autolearnRemaining": 64
+      "usedToday": 7,
+      "autolearnUsedToday": 7,
+      "autolearnRemaining": 63
     },
     "sofaScore": null,
     "liveSources": {
       "LiveScore": {
         "ok": true,
         "count": 1,
-        "at": "2026-10-19T09:33:25.034Z",
-        "failStreak": 0
-      },
-      "FotMob": {
-        "ok": true,
-        "count": 0,
-        "at": "2026-10-19T09:33:27.748Z",
+        "at": "2026-10-19T09:38:13.323Z",
         "failStreak": 0
       },
       "TheSportsDB": {
         "ok": true,
         "count": 2,
-        "at": "2026-10-19T09:31:29.827Z",
+        "at": "2026-10-19T09:38:13.324Z",
+        "failStreak": 0
+      },
+      "FotMob": {
+        "ok": true,
+        "count": 0,
+        "at": "2026-10-19T09:38:13.331Z",
         "failStreak": 0
       },
       "ESPN": {
         "ok": true,
         "count": 0,
-        "at": "2026-10-19T09:33:27.686Z",
-        "failStreak": 0
-      },
-      "365Scores": {
-        "ok": true,
-        "count": 1,
-        "at": "2026-10-19T09:33:27.837Z",
+        "at": "2026-10-19T09:38:13.367Z",
         "failStreak": 0
       },
       "AllSportsApi": {
         "ok": true,
         "count": 0,
-        "at": "2026-10-19T09:33:27.837Z",
+        "at": "2026-10-19T09:38:13.631Z",
+        "failStreak": 0
+      },
+      "365Scores": {
+        "ok": true,
+        "count": 1,
+        "at": "2026-10-19T09:38:13.644Z",
         "failStreak": 0
       }
     },
@@ -7155,7 +7173,7 @@
       }
     ],
     "unmatchedPlannedLive": {
-      "at": "2026-10-19T09:33:25.048Z",
+      "at": "2026-10-19T09:38:13.648Z",
       "unmatched": [],
       "sourceNames": [
         "Tai Po - Southern District RSA",
@@ -7164,7 +7182,7 @@
     },
     "liveStatsScan": {
       "lastScan": {
-        "at": "2026-10-19T09:33:27.345Z",
+        "at": "2026-10-19T09:38:13.692Z",
         "matches": 0,
         "sources": "6 sources gratuites"
       },
@@ -7177,7 +7195,7 @@
       },
       "fanLine": {
         "fixtures": 20,
-        "soccer": 4
+        "soccer": 5
       },
       "oddsmagnet": {
         "httpStatus": null
