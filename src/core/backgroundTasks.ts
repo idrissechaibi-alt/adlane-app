@@ -687,7 +687,7 @@ async function runAutoLearnTickLocked(mode: TickMode): Promise<AutoLearnTickDiag
   try {
     // Plafond de 12 min : une requête qui ne rend jamais la main ne doit plus figer le tour (bilan, rapport du soir…).
     const result = await Promise.race([
-      runInPlayComboTick(doFast ? liveFixtures : [], doSlow ? shared.fictionalFixtures : []),
+      runInPlayComboTick(doFast ? liveFixtures : [], doSlow ? shared.fictionalFixtures : [], doSlow),
       new Promise<never>((_, reject) => setTimeout(() => reject(new Error('scan en direct bloqué plus de 12 min')), 12 * 60_000)),
     ]);
     freshInPlayProposals = result.freshProposals;

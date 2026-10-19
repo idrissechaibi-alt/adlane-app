@@ -2024,7 +2024,9 @@ export async function runRealInPlayTick(liveFixtures: LiveFixture[]): Promise<nu
 
 export async function runInPlayComboTick(
   liveFixtures: LiveFixture[],
-  fictionalLiveFixtures: LiveFixture[] = []
+  fictionalLiveFixtures: LiveFixture[] = [],
+  /** false au tour rapide (réel) : le programme fictif (appels IA lents) n'y a pas sa place. */
+  withFictionalProgram = true
 ): Promise<InPlayComboTickResult> {
   xgNewThisTick = 0;
   // Budget du scan fictif : au-delà, plus aucun nouveau match n'est lancé
@@ -2236,7 +2238,7 @@ export async function runInPlayComboTick(
   // nécessaire (statut, minute, score, tirs cadrés, corners, cartons) ; la
   // mémoire des checkpoints déjà consommés évite de réinterroger le même
   // match à chaque tour tant qu'il reste dans sa fenêtre.
-  if (omnirouteConfig) {
+  if (omnirouteConfig && withFictionalProgram) {
     const program = await ensureFictionalDailyProgram(omnirouteConfig).catch(() => [] as FictionalMatch[]);
     const checked = await readCheckedCheckpoints();
     const timelines = await readMatchTimelines();
