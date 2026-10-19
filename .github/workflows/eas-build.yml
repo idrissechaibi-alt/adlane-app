@@ -15,6 +15,8 @@ on:
       - 'data/**'
       - 'scripts/**'
       - '**/*.md'
+      # Serveur PC : il se met à jour tout seul sur le PC, rien à publier pour l'app.
+      - 'server/**'
 jobs:
   update:
     name: Publish Update
