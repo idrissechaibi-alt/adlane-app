@@ -29,6 +29,8 @@ import { ensureLineLimitsLoaded, ensureMarketOffLoaded, getLineLimits, getMarket
 import { getStrategyRecords } from './strategies';
 import { ensureDeltaSamplesLoaded, getAllDeltaCorrections, getDeltaReport, getShadowStats, getSituationReport } from './deltaLearning';
 import { loadTelegramConfig } from './telegram';
+import { getServerFeedStats } from './serverFeed';
+import { getServerStatus } from './gitAutoSync';
 import {
   readAccuracySnapshots,
   readInPlayProposals,
@@ -189,6 +191,7 @@ export async function buildAppHealth(): Promise<Record<string, unknown>> {
       return { fictional: legs.filter((x) => !x.real && x.l.voided).length, real: legs.filter((x) => x.real && x.l.voided).length, pendingNoVerdict: legs.filter((x) => !x.l.settled && !x.l.voided).length };
     }),
     teamRegistry: await section(async () => { await loadTeamRegistry(); return { teams: teamRegistrySize() }; }),
+    serverFeed: await section(async () => ({ ...(await getServerFeedStats()), server: (await getServerStatus(true)).info })),
     patternEngine: await section(async () => patternStatus()),
     settlementAudit: await section(async () => JSON.parse((await AsyncStorage.getItem('@settlement_audit')) ?? '[]').slice(-30)),
     unmatchedPlannedLive: await section(readUnmatchedPlannedLive),

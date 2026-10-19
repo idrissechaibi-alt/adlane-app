@@ -74,6 +74,16 @@ export async function serverFinalFor(homeTeam: string, awayTeam: string, day: st
 
 let pulling: Promise<number> | null = null;
 let lastPullAt = 0;
+const STATS_KEY = '@server_feed_stats';
+
+/** Diagnostic : dernière récupération de la collecte du PC et ce qu'elle a apporté. */
+export async function getServerFeedStats(): Promise<{ lastPullAt: string | null; slicesRead: number; samplesAdded: number; lastSlice: string | null } | null> {
+  try {
+    return JSON.parse((await AsyncStorage.getItem(STATS_KEY)) ?? 'null');
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Rapatrie les tranches nouvelles du serveur (aujourd'hui et hier, pour les matchs finis après minuit) et les verse dans
@@ -87,6 +97,8 @@ export function pullServerLiveFeed(): Promise<number> {
   pulling = (async () => {
     const seen: Record<string, string> = JSON.parse((await AsyncStorage.getItem(PULL_KEY)) ?? '{}');
     let added = 0;
+    let read = 0;
+    let lastSlice: string | null = null;
     for (const day of [utcDay(-1), utcDay()]) {
       const files = await listRepoDir(`${SERVER_LIVE_DIR}/${day}`);
       if (!files) continue;
@@ -97,6 +109,8 @@ export function pullServerLiveFeed(): Promise<number> {
         try {
           added += await mergeSlice(JSON.parse(raw) as FeedSlice);
           seen[f.path] = f.sha;
+          read++;
+          lastSlice = f.path;
         } catch {
           // tranche illisible : retentée au prochain passage
         }
@@ -106,6 +120,8 @@ export function pullServerLiveFeed(): Promise<number> {
     const keep = new Set([utcDay(-2), utcDay(-1), utcDay()]);
     for (const k of Object.keys(seen)) if (!keep.has(k.split('/')[3])) delete seen[k];
     await AsyncStorage.setItem(PULL_KEY, JSON.stringify(seen));
+    const prev = (await getServerFeedStats()) ?? { lastPullAt: null, slicesRead: 0, samplesAdded: 0, lastSlice: null };
+    await AsyncStorage.setItem(STATS_KEY, JSON.stringify({ lastPullAt: new Date().toISOString(), slicesRead: prev.slicesRead + read, samplesAdded: prev.samplesAdded + added, lastSlice: lastSlice ?? prev.lastSlice }));
     return added;
   })()
     .catch(() => 0)
