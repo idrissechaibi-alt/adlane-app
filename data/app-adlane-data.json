@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-10-19T18:44:18.147Z",
+  "exportedAt": "2026-10-19T18:47:25.429Z",
   "formatVersion": 1,
   "source": "APP adlane",
   "data": {
@@ -5953,13 +5953,10 @@
       "ticksLast24h": 92
     },
     "tickProgress": {
-      "startedAt": "2026-10-19T18:44:10.222Z",
-      "step": "scan en direct 20e/60e",
-      "at": "2026-10-19T18:44:11.229Z",
-      "stepDurationsSec": {
-        "scan matinal": 1,
-        "relevé live partagé": 0
-      }
+      "startedAt": "2026-10-19T18:47:17.612Z",
+      "step": "scan matinal",
+      "at": "2026-10-19T18:47:17.612Z",
+      "stepDurationsSec": {}
     },
     "lastTick": {
       "startedAt": "2026-10-19T18:24:47.390Z",
@@ -6054,29 +6051,12 @@
       "nightlyReviewPointsCreated": 0
     },
     "lastRealFastTick": {
-      "at": "2026-10-19T18:44:11.222Z",
-      "liveFound": 0,
+      "at": "2026-10-19T18:47:00.128Z",
+      "liveFound": 1,
       "fresh": 0,
-      "source": "api_football"
+      "source": "sources_live_gratuites"
     },
     "abortedTicks": [
-      {
-        "startedAt": "2026-10-19T17:02:28.101Z",
-        "step": "scan matinal",
-        "at": "2026-10-19T17:02:28.101Z",
-        "stepDurationsSec": {
-          "relevé live partagé": 0
-        }
-      },
-      {
-        "startedAt": "2026-10-19T17:28:17.592Z",
-        "step": "relevé live partagé",
-        "at": "2026-10-19T17:28:17.593Z",
-        "stepDurationsSec": {
-          "bilan de minuit": 0,
-          "scan matinal": 0
-        }
-      },
       {
         "startedAt": "2026-10-19T17:52:07.434Z",
         "step": "scan en direct 20e/60e",
@@ -6182,6 +6162,21 @@
           "scan matinal": 0,
           "relevé live partagé": 0
         }
+      },
+      {
+        "startedAt": "2026-10-19T18:44:10.222Z",
+        "step": "scan en direct 20e/60e",
+        "at": "2026-10-19T18:44:11.229Z",
+        "stepDurationsSec": {
+          "scan matinal": 1,
+          "relevé live partagé": 0
+        }
+      },
+      {
+        "startedAt": "2026-10-19T18:47:16.440Z",
+        "step": "scan matinal",
+        "at": "2026-10-19T18:47:16.440Z",
+        "stepDurationsSec": {}
       }
     ],
     "strategies": [
@@ -6502,7 +6497,7 @@
         {
           "name": "Principal",
           "ok": true,
-          "latencyMs": 139,
+          "latencyMs": 59,
           "readyModels": 27,
           "configuredReady": 12,
           "configuredTotal": 13
@@ -6510,7 +6505,7 @@
         {
           "name": "Omniroute",
           "ok": true,
-          "latencyMs": 2103,
+          "latencyMs": 1777,
           "readyModels": 863,
           "configuredReady": 2,
           "configuredTotal": 2
@@ -6518,10 +6513,24 @@
       ],
       "leaderboard": [
         {
+          "label": "Principal · gpt-oss-20b",
+          "ok": 3503,
+          "fail": 550,
+          "avgMs": 1431,
+          "coolingDown": true
+        },
+        {
+          "label": "Omniroute · Clodiko",
+          "ok": 11551,
+          "fail": 582,
+          "avgMs": 4287,
+          "coolingDown": false
+        },
+        {
           "label": "Omniroute · Maximus appus",
-          "ok": 7148,
+          "ok": 7180,
           "fail": 449,
-          "avgMs": 5295,
+          "avgMs": 5920,
           "coolingDown": false
         },
         {
@@ -6532,31 +6541,17 @@
           "coolingDown": true
         },
         {
-          "label": "Omniroute · Clodiko",
-          "ok": 11515,
-          "fail": 582,
-          "avgMs": 12756,
-          "coolingDown": false
-        },
-        {
-          "label": "Principal · gpt-oss-20b",
-          "ok": 3493,
-          "fail": 547,
-          "avgMs": 11597,
-          "coolingDown": false
-        },
-        {
           "label": "Principal · nemotron-3-super-120b",
-          "ok": 4891,
-          "fail": 894,
-          "avgMs": 31730,
+          "ok": 4905,
+          "fail": 897,
+          "avgMs": 19747,
           "coolingDown": false
         },
         {
           "label": "Principal · auto",
-          "ok": 2634,
+          "ok": 2636,
           "fail": 300,
-          "avgMs": 41015,
+          "avgMs": 30952,
           "coolingDown": false
         },
         {
@@ -6647,40 +6642,40 @@
     },
     "sofaScore": null,
     "liveSources": {
-      "LiveScore": {
-        "ok": true,
-        "count": 33,
-        "at": "2026-10-19T18:44:10.350Z",
-        "failStreak": 0
-      },
       "FotMob": {
         "ok": true,
-        "count": 36,
-        "at": "2026-10-19T18:44:10.364Z",
+        "count": 37,
+        "at": "2026-10-19T18:47:17.692Z",
+        "failStreak": 0
+      },
+      "365Scores": {
+        "ok": true,
+        "count": 49,
+        "at": "2026-10-19T18:47:17.789Z",
+        "failStreak": 0
+      },
+      "ESPN": {
+        "ok": true,
+        "count": 13,
+        "at": "2026-10-19T18:47:17.825Z",
         "failStreak": 0
       },
       "TheSportsDB": {
         "ok": true,
         "count": 33,
-        "at": "2026-10-19T18:44:10.662Z",
+        "at": "2026-10-19T18:47:17.918Z",
         "failStreak": 0
       },
-      "ESPN": {
+      "LiveScore": {
         "ok": true,
-        "count": 12,
-        "at": "2026-10-19T18:44:10.694Z",
-        "failStreak": 0
-      },
-      "365Scores": {
-        "ok": true,
-        "count": 47,
-        "at": "2026-10-19T18:44:10.774Z",
+        "count": 33,
+        "at": "2026-10-19T18:47:17.996Z",
         "failStreak": 0
       },
       "AllSportsApi": {
         "ok": true,
         "count": 0,
-        "at": "2026-10-19T18:44:11.246Z",
+        "at": "2026-10-19T18:47:18.330Z",
         "failStreak": 0
       }
     },
@@ -7159,9 +7154,10 @@
       }
     ],
     "unmatchedPlannedLive": {
-      "at": "2026-10-19T18:44:11.057Z",
+      "at": "2026-10-19T18:47:18.290Z",
       "unmatched": [],
       "sourceNames": [
+        "Parma - Torino",
         "Trabzonspor - Beşiktaş",
         "Al Hilal - Al Hazm",
         "Al Shabab - Al Faisaly",
@@ -7175,6 +7171,7 @@
         "Viborg - FC Midtjylland",
         "Wisla Plock - Radomiak Radom",
         "FC Voluntari - FCSB",
+        "Waterford FC - Galway United FC",
         "Deportrio - Gold Devils",
         "San Telmo - CA Defensores de Belgrano",
         "Dinamo Minsk - Arsenal Dzerzhinsk",
@@ -7194,7 +7191,6 @@
         "Celta Fortuna - Tenerife",
         "Åsane 2 - Varegg",
         "Brann 2 - Austevoll",
-        "Sarpsborg 08 2 - Bjørkelangen",
         "KFUM 2 - Frigg",
         "Melhus - Ranheim 2",
         "Rosenborg 2 - NTNUI",
@@ -7220,19 +7216,14 @@
         "Cittadella - Union Arzignanochiampo",
         "Redditch Utd - Worcester",
         "Aveley - Maldon & Tiptree",
-        "United States U17 - Samoa U17",
-        "Shahin Bandar Ameri - Kara Gostar",
-        "Al Masry - Abou Qir Fertilizers",
-        "ASC Police - Kaédi"
+        "United States U17 - Samoa U17"
       ]
     },
     "liveStatsScan": {
-      "lastScan": {
-        "at": "2026-10-19T18:44:11.088Z",
-        "matches": 0,
-        "sources": "6 sources gratuites"
-      },
-      "todaySamples": {}
+      "lastScan": null,
+      "todaySamples": {
+        "Parma Calcio 1913 - Torino FC": 1
+      }
     },
     "backupOddsSources": {
       "betBetter": {
@@ -7241,7 +7232,7 @@
       },
       "fanLine": {
         "fixtures": 20,
-        "soccer": 9
+        "soccer": 6
       },
       "oddsmagnet": {
         "httpStatus": null
@@ -7251,38 +7242,13 @@
       "indexUpdatedAt": "2026-10-19T18:10:42Z",
       "teamsInIndex": 111,
       "summariesCached": 111,
-      "lookups": 3,
-      "withTrend": 0,
-      "unknownTeams": 3,
-      "lastTrendAt": null,
-      "lastUnknown": "Hapoel Tirat HaCarmel - Beitar Nahariya"
+      "lookups": 1,
+      "withTrend": 1,
+      "unknownTeams": 0,
+      "lastTrendAt": "2026-10-19T18:47:20.635Z",
+      "lastUnknown": null
     },
     "teamStatsUsageLog": [
-      {
-        "at": "2026-10-19T18:16:47.922Z",
-        "match": "Al-Raed - Al-Saqer FC",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-10-19T18:16:51.680Z",
-        "match": "Brann - Austevoll",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-10-19T18:17:04.788Z",
-        "match": "Birmingham City U21 - Derby County U21",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-10-19T18:17:11.433Z",
-        "match": "Melhus - Ranheim",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-10-19T18:17:27.444Z",
-        "match": "Sarpsborg 08 - Bjørkelangen",
-        "result": "équipe inconnue"
-      },
       {
         "at": "2026-10-19T18:17:43.228Z",
         "match": "KFUM 2 - Frigg",
@@ -7382,6 +7348,31 @@
         "at": "2026-10-19T18:44:16.126Z",
         "match": "Hapoel Tirat HaCarmel - Beitar Nahariya",
         "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-19T18:46:59.425Z",
+        "match": "Beitar Jerusalem - Maccabi Tel Aviv",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-19T18:46:59.691Z",
+        "match": "Diosgyori VTK - Kazincbarcika SC",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-19T18:46:59.730Z",
+        "match": "Parma - Torino",
+        "result": "tendance"
+      },
+      {
+        "at": "2026-10-19T18:46:59.923Z",
+        "match": "Hapoel Tirat HaCarmel - Beitar Nahariya",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-19T18:47:20.636Z",
+        "match": "Parma - Torino",
+        "result": "tendance"
       }
     ],
     "bookieLineMinimums": {
@@ -7665,9 +7656,9 @@
       {
         "unit": "corners_1h",
         "label": "Corners 1ère mi-temps",
-        "samples": 678,
+        "samples": 677,
         "maeBase": 1.4092747513739021,
-        "maeNew": 1.3914701566452503,
+        "maeNew": 1.391907125595357,
         "promoted": false,
         "effects": [
           {
@@ -7688,7 +7679,7 @@
           },
           {
             "name": "favori mené",
-            "pct": 15
+            "pct": 16
           },
           {
             "name": "favori devant",
@@ -7723,9 +7714,9 @@
       {
         "unit": "cards_1h",
         "label": "Cartons 1ère mi-temps",
-        "samples": 595,
+        "samples": 594,
         "maeBase": 0.8828291786228891,
-        "maeNew": 0.8687149490383945,
+        "maeNew": 0.8693044634351341,
         "promoted": false,
         "effects": [
           {
@@ -7738,7 +7729,7 @@
           },
           {
             "name": "momentum (une équipe domine)",
-            "pct": -2
+            "pct": -1
           },
           {
             "name": "force du favori",
@@ -7746,7 +7737,7 @@
           },
           {
             "name": "favori mené",
-            "pct": 17
+            "pct": 18
           },
           {
             "name": "favori devant",
@@ -7899,7 +7890,7 @@
         "label": "Corners sur le match",
         "samples": 1430,
         "maeBase": 2.3925335021513177,
-        "maeNew": 2.408158420842058,
+        "maeNew": 2.408146909447436,
         "promoted": false,
         "effects": [
           {
@@ -7957,7 +7948,7 @@
         "label": "Cartons sur le match",
         "samples": 1407,
         "maeBase": 1.5493518285333545,
-        "maeNew": 1.5272997448564571,
+        "maeNew": 1.5273311325748848,
         "promoted": false,
         "effects": [
           {
@@ -8013,9 +8004,9 @@
       {
         "unit": "fouls_1h",
         "label": "Fautes 1ère mi-temps",
-        "samples": 527,
-        "maeBase": 2.8017970004186856,
-        "maeNew": 2.873574520498372,
+        "samples": 526,
+        "maeBase": 2.799490838927794,
+        "maeNew": 2.8722838508070248,
         "promoted": false,
         "effects": [
           {
