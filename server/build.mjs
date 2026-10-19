@@ -27,5 +27,7 @@ await build({
     'expo-modules-core': shim('expo-misc.ts'),
   },
   external: ['node:*'],
+  // Sans le tsconfig de l'app (il dépend d'expo, absent du PC) : avertissements inutiles évités.
+  tsconfigRaw: {},
 });
 console.log('server/dist/server.js prêt');
