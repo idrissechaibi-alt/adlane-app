@@ -1,7 +1,7 @@
 # Mémoire d'auto-apprentissage — marqueurs observés en direct
 
-Mis à jour : 2026-10-20T12:47:36.884Z
-Corpus : 21530 observations sur 664 ligues / 1 pays.
+Mis à jour : 2026-10-20T13:12:59.949Z
+Corpus : 21533 observations sur 664 ligues / 1 pays.
 
 ## Taux de base observés (par fenêtre)
 - `goals>=1@10` : 34.6%
@@ -26,7 +26,7 @@ Corpus : 21530 observations sur 664 ligues / 1 pays.
 ### Fenêtre 10 minutes
 - `fouls_total>=5` → `fouls>=3` : **38.6%** (×1.59 vs base 24.3%, n=1895)
 - `shots_on_target_total>=5` → `goals>=1` : **48.4%** (×1.40 vs base 34.6%, n=566)
-- `shots_total>=12` → `goals>=1` : **45.5%** (×1.31 vs base 34.6%, n=378)
+- `shots_total>=12` → `goals>=1` : **45.5%** (×1.32 vs base 34.6%, n=378)
 - `shots_on_target_total>=4` → `goals>=1` : **45.3%** (×1.31 vs base 34.6%, n=1016)
 
 ### Fenêtre 25 minutes
@@ -35,7 +35,7 @@ Corpus : 21530 observations sur 664 ligues / 1 pays.
 - `possession_imbalance>=20` → `goals>=1` : **52.4%** (×1.15 vs base 45.5%, n=870)
 
 ## Fiabilité mesurée du modèle (paris papier, aucun argent engagé)
-- Paris simulés réglés : 5113 / 9079
+- Paris simulés réglés : 5113 / 9081
 - Taux de réussite réel : 39.6%
 - Facteur de recalibrage appliqué : ×0.97 (<1 = le modèle était trop optimiste, ses probabilités sont rabotées)
 
@@ -56,13 +56,13 @@ Corpus : 21530 observations sur 664 ligues / 1 pays.
 - `Corners par équipe` : réalisé **71.9%** vs annoncé 65.0% (n=32)
 
 ## Fiabilité passée de l'analyse Scouting IA (par marché, 30 derniers jours)
-- `BTTS` : réalisé **60.0%** vs annoncé 55.2% (n=10)
-- `OU_2_5` : réalisé **60.0%** vs annoncé 67.6% (n=10)
-- `OU_1_5` : réalisé **50.0%** vs annoncé 68.9% (n=10) — l'IA est trop confiante sur ce marché, à corriger.
-- `1ere_mi_temps` : réalisé **55.6%** vs annoncé 62.6% (n=9)
-- `mi_temps_1X2` : réalisé **75.0%** vs annoncé 73.0% (n=8)
-- `1X2` : réalisé **85.7%** vs annoncé 59.0% (n=7)
-- `double_chance` : réalisé **100.0%** vs annoncé 84.2% (n=6)
+- `BTTS` : réalisé **55.6%** vs annoncé 53.1% (n=9)
+- `OU_2_5` : réalisé **55.6%** vs annoncé 65.3% (n=9)
+- `OU_1_5` : réalisé **44.4%** vs annoncé 69.7% (n=9) — l'IA est trop confiante sur ce marché, à corriger.
+- `1ere_mi_temps` : réalisé **50.0%** vs annoncé 57.9% (n=8)
+- `mi_temps_1X2` : réalisé **71.4%** vs annoncé 69.1% (n=7)
+- `1X2` : réalisé **83.3%** vs annoncé 61.2% (n=6)
+- `double_chance` : réalisé **100.0%** vs annoncé 84.8% (n=5)
 - `corners` : réalisé **100.0%** vs annoncé 58.0% (n=2)
 - `cartons` : réalisé **50.0%** vs annoncé 62.5% (n=2) — l'IA est trop confiante sur ce marché, à corriger.
 - `handicap` : réalisé **100.0%** vs annoncé 63.0% (n=1)
