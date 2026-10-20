@@ -1,0 +1,43 @@
+[
+  {
+    "id": "sofascore",
+    "name": "SofaScore : matchs de football en direct",
+    "url": "https://api.sofascore.com/api/v1/sport/football/events/live",
+    "every": 30,
+    "format": "json",
+    "items": "events",
+    "key": "id",
+    "fields": {
+      "id": "id",
+      "competition": "tournament.name",
+      "pays": "tournament.category.name",
+      "domicile": "homeTeam.name",
+      "exterieur": "awayTeam.name",
+      "butsDomicile": "homeScore.current",
+      "butsExterieur": "awayScore.current",
+      "butsMT": "homeScore.period1",
+      "butsMTExt": "awayScore.period1",
+      "statut": "status.description",
+      "debutPeriode": "time.currentPeriodStartTimestamp",
+      "tempsAdditionnel": "time.extra",
+      "coup_envoi": "startTimestamp"
+    }
+  },
+  {
+    "id": "matchendirect",
+    "name": "Match en direct : scores du jour",
+    "url": "https://www.matchendirect.fr/live-foot/",
+    "every": 30,
+    "format": "html",
+    "items": "tr[data-matchid]",
+    "key": "id",
+    "fields": {
+      "id": "@data-matchid",
+      "competition": ".lm3 a@data-competitionname",
+      "statut": ".lm2",
+      "domicile": ".lm3_eq1",
+      "score": ".lm3_score",
+      "exterieur": ".lm3_eq2"
+    }
+  }
+]

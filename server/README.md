@@ -61,6 +61,11 @@ gardés, et le tout est envoyé au téléphone toutes les 60 s (`data/server/web
 `src/core/serverFeed.ts` → `readWebFeed(id)`). Les adresses des sites ne sont jamais publiées : seulement l'identifiant et
 les valeurs lues. Les relevés de plus de 3 jours sont retirés du dépôt.
 
+Deux sites sont déjà lus sans rien faire (`server/sites.default.json`, mis à jour avec le code) : les matchs en direct de
+SofaScore et les scores de Match en direct. `sites.json` sur le PC ajoute ou remplace des sites (`"enabled": false` pour en
+retirer un). Avec `"key"`, un flux d'éléments identifiés n'envoie que les changements ; le téléphone en tient l'état
+courant à jour (`readWebState(id)`).
+
 Pour chaque site : `url`, `format` (`json`, `html` ou `text`) et ce qu'il faut en extraire :
 - json : `items` = chemin vers la liste (`"events"`), `fields` = nom → chemin relatif (`"odds.home"`) ;
 - html : `items` = sélecteur CSS de chaque ligne, `fields` = nom → `"sélecteur"` (texte) ou `"sélecteur@attribut"` ;

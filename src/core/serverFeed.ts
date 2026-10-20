@@ -80,9 +80,47 @@ let lastPullAt = 0;
 export interface WebSnapshot {
   at: string;
   items: unknown;
+  /** Flux d'éléments identifiés (champ `keyField`) : instantané complet (`full`) ou seulement les éléments changés. */
+  full?: boolean;
+  removed?: string[];
+  keyField?: string;
 }
 
 const WEB_KEY = (id: string) => `@web_feed_${id}`;
+const WEB_STATE_KEY = (id: string) => `@web_state_${id}`;
+
+/**
+ * État courant d'un site lu par le serveur quand ses éléments sont identifiés (ex. matchs en direct de SofaScore) :
+ * le dernier instantané complet, auquel s'ajoutent les changements relevés depuis. `at` = dernier relevé reçu.
+ */
+export async function readWebState<T = Record<string, unknown>>(id: string): Promise<{ at: string | null; items: T[] }> {
+  try {
+    const st: { at: string; items: Record<string, T> } = JSON.parse((await AsyncStorage.getItem(WEB_STATE_KEY(id))) ?? 'null');
+    return st ? { at: st.at, items: Object.values(st.items) } : { at: null, items: [] };
+  } catch {
+    return { at: null, items: [] };
+  }
+}
+
+async function foldWebState(id: string, snaps: WebSnapshot[]): Promise<void> {
+  const keyed = snaps.filter((x) => x.keyField);
+  if (!keyed.length) return;
+  let st: { at: string; items: Record<string, any> } = { at: '', items: {} };
+  try {
+    st = JSON.parse((await AsyncStorage.getItem(WEB_STATE_KEY(id))) ?? 'null') ?? st;
+  } catch {
+    // état illisible : reconstruit à partir du prochain instantané complet
+  }
+  for (const x of keyed.sort((a, b) => a.at.localeCompare(b.at))) {
+    if (x.at <= st.at) continue;
+    const k = x.keyField!;
+    if (x.full) st.items = {};
+    for (const it of (x.items as any[]) ?? []) if (it?.[k] != null) st.items[String(it[k])] = it;
+    for (const r of x.removed ?? []) delete st.items[r];
+    st.at = x.at;
+  }
+  await AsyncStorage.setItem(WEB_STATE_KEY(id), JSON.stringify(st));
+}
 
 /** Derniers relevés d'un site lu par le serveur PC (les plus récents en dernier). */
 export async function readWebFeed(id: string): Promise<WebSnapshot[]> {
@@ -115,7 +153,9 @@ async function pullWebFeed(seen: Record<string, string>): Promise<number> {
     if (!fresh.length) continue;
     const old = await readWebFeed(dir.name);
     const known = new Set(old.map((x) => x.at));
-    const merged = [...old, ...fresh.filter((x) => !known.has(x.at))].sort((a, b) => a.at.localeCompare(b.at)).slice(-600);
+    const novel = fresh.filter((x) => !known.has(x.at));
+    await foldWebState(dir.name, novel);
+    const merged = [...old, ...novel].sort((a, b) => a.at.localeCompare(b.at)).slice(-200);
     added += merged.length - old.length;
     await AsyncStorage.setItem(WEB_KEY(dir.name), JSON.stringify(merged));
   }

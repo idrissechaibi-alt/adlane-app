@@ -33,6 +33,12 @@ export interface SiteSource {
    */
   items?: string;
   fields?: Record<string, string>;
+  /**
+   * Nom d'un champ (de `fields`) qui identifie chaque élément. Avec lui, seuls les éléments NOUVEAUX ou CHANGÉS sont
+   * publiés à chaque relevé (plus la liste des disparus) : un flux de 50 matchs en direct reste léger. La première
+   * publication de chaque tranche de 10 min est complète.
+   */
+  key?: string;
   regex?: string;
   /** En-têtes ajoutés par l'utilisateur (jamais publiés). */
   headers?: Record<string, string>;
@@ -42,6 +48,11 @@ export interface SiteSource {
 interface Snapshot {
   at: string;
   items: unknown;
+  /** Instantané complet (sinon : seulement les éléments changés). */
+  full?: boolean;
+  /** Clés disparues depuis le relevé précédent. */
+  removed?: string[];
+  keyField?: string;
 }
 
 interface State {
@@ -49,23 +60,32 @@ interface State {
   failures: number;
   blockedUntil: number;
   lastHash: string;
+  /** Avec `key` : état courant du site, élément par élément (JSON). */
+  current: Map<string, string>;
   lastCheckAt: string | null;
   status: 'ok' | 'bloqué' | 'erreur' | 'attente';
   pending: Snapshot[];
 }
 
 const MIN_EVERY = 30;
-const MAX_SNAPSHOT_CHARS = 20_000;
+const MAX_SNAPSHOT_CHARS = 60_000;
 const states = new Map<string, State>();
 const sitesFile = () => path.join(serverRoot(), 'sites.json');
 
-export function loadSites(): SiteSource[] {
+function readList(file: string): SiteSource[] {
   try {
-    const list = JSON.parse(fs.readFileSync(sitesFile(), 'utf8').replace(/^﻿/, ''));
-    return (Array.isArray(list) ? list : list.sites ?? []).filter((s: SiteSource) => s?.id && s?.url && s.enabled !== false);
+    const list = JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, ''));
+    return Array.isArray(list) ? list : list.sites ?? [];
   } catch {
     return [];
   }
+}
+
+/** Sites par défaut du dépôt (sites.default.json, mis à jour avec le code) puis ceux du PC (sites.json : ajoute, remplace ou, avec "enabled": false, retire). */
+export function loadSites(): SiteSource[] {
+  const byId = new Map<string, SiteSource>();
+  for (const s of [...readList(path.join(__dirname, '..', 'sites.default.json')), ...readList(sitesFile())]) if (s?.id) byId.set(s.id, s);
+  return [...byId.values()].filter((s) => s.url && s.enabled !== false);
 }
 
 const getPath = (obj: any, p: string): any => p.split('.').filter(Boolean).reduce((o, k) => (o == null ? undefined : o[k]), obj);
@@ -125,21 +145,37 @@ export async function collectDueSites(): Promise<number> {
   let done = 0;
   await Promise.all(
     loadSites().map(async (s) => {
-      const st = states.get(s.id) ?? { nextAt: 0, failures: 0, blockedUntil: 0, lastHash: '', lastCheckAt: null, status: 'attente' as const, pending: [] };
+      const st = states.get(s.id) ?? { nextAt: 0, failures: 0, blockedUntil: 0, lastHash: '', current: new Map<string, string>(), lastCheckAt: null, status: 'attente' as const, pending: [] };
       states.set(s.id, st);
       if (now < st.nextAt || now < st.blockedUntil) return;
       st.nextAt = now + Math.max(MIN_EVERY, s.every ?? MIN_EVERY) * 1000;
       try {
         const { text, type } = await fetchText(s);
         let items = extract(s, text, type);
+        st.failures = 0;
+        st.status = 'ok';
+        st.lastCheckAt = new Date().toISOString();
+        if (s.key && Array.isArray(items)) {
+          // Flux d'éléments identifiés : seuls les nouveaux et les changés sont gardés.
+          const next = new Map<string, string>();
+          for (const it of items as any[]) {
+            const k = String(it?.[s.key] ?? '');
+            if (k) next.set(k, JSON.stringify(it));
+          }
+          const changed = [...next].filter(([k, v]) => st.current.get(k) !== v).map(([, v]) => JSON.parse(v));
+          const removed = [...st.current.keys()].filter((k) => !next.has(k));
+          st.current = next;
+          if (changed.length || removed.length) {
+            st.pending.push({ at: st.lastCheckAt, items: changed, ...(removed.length ? { removed } : {}), keyField: s.key });
+            done++;
+          }
+          return;
+        }
         let json = JSON.stringify(items);
         if (json.length > MAX_SNAPSHOT_CHARS) {
           items = { tronque: true, debut: json.slice(0, MAX_SNAPSHOT_CHARS) };
           json = JSON.stringify(items);
         }
-        st.failures = 0;
-        st.status = 'ok';
-        st.lastCheckAt = new Date().toISOString();
         // Seul ce qui a changé est gardé : le dépôt ne grossit pas de relevés identiques.
         if (json !== st.lastHash) {
           st.lastHash = json;
@@ -177,7 +213,10 @@ export async function publishWeb(): Promise<boolean> {
     if (!site || (st.pending.length === 0 && st.status === 'ok')) continue;
     const file = `${WEB_DIR}/${id}/${day}/${slice}.json`;
     const prev = sliceCache.get(id);
-    const snapshots = [...(prev && prev.path === file ? prev.snapshots : []), ...st.pending];
+    // Nouvelle tranche d'un flux identifié : elle commence par l'état complet (chaque tranche se lit seule).
+    const newSlice = !prev || prev.path !== file;
+    const head: Snapshot[] = newSlice && site.key && st.current.size ? [{ at: new Date().toISOString(), items: [...st.current.values()].map((v) => JSON.parse(v)), full: true, keyField: site.key }] : [];
+    const snapshots = newSlice && head.length ? head : [...(newSlice ? [] : prev!.snapshots), ...st.pending];
     const body = { id, name: site.name ?? id, slice: `${day} ${slice}`, status: st.status, lastCheckAt: st.lastCheckAt, snapshots };
     const done = await repoPut(file, JSON.stringify(body), `[serveur PC] Web ${id} ${day} ${slice}`).catch(() => false);
     if (done) {
