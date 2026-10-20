@@ -27,12 +27,23 @@ function Show-State {
       Get-Content $err -Tail 10 -Encoding UTF8 | ForEach-Object { Write-Host $_ }
     }
   }
+  # Etat de la collecte (statut.json, réécrit à chaque relevé) : le journal, lui, reste silencieux quand rien ne change.
+  $statutFile = Join-Path $ServerDir 'statut.json'
+  if (Test-Path $statutFile) {
+    try {
+      $st = Get-Content $statutFile -Raw -Encoding UTF8 | ConvertFrom-Json
+      # ConvertFrom-Json rend déjà des dates (Windows PowerShell) ; sinon le texte ISO est lu tel quel.
+      $ago = { param($t) if ($t) { $d = if ($t -is [datetime]) { $t } else { [datetime]::Parse([string]$t, [cultureinfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::RoundtripKind) }; [int]((Get-Date).ToUniversalTime() - $d.ToUniversalTime()).TotalSeconds } else { $null } }
+      $c = & $ago $st.lastCollectAt
+      $p = & $ago $st.lastPublishAt
+      Write-Host ("Dernière collecte : " + $(if ($null -ne $c) { "il y a $c s" } else { 'aucune' }) + "  ·  $($st.liveMatches) match(s) en direct  ·  $($st.samplesSinceStart) relevé(s) depuis le démarrage")
+      Write-Host ("Dernier envoi à l'app : " + $(if ($null -ne $p) { "il y a $p s" } else { 'aucun encore' }))
+    } catch { Write-Host 'État de la collecte illisible.' }
+  }
   $log = Get-ChildItem $Logs -Filter 'serveur-*.log' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime | Select-Object -Last 1
   if ($log) {
-    $age = [int]((Get-Date) - $log.LastWriteTime).TotalMinutes
-    Write-Host "Dernière activité : il y a $age min"
-    Write-Host "`n--- Journal (dernières lignes) ---" -ForegroundColor DarkGray
-    Get-Content $log.FullName -Tail 12 -Encoding UTF8 | ForEach-Object { Write-Host $_ }
+    Write-Host "`n--- Journal (dernières lignes ; il ne s'écrit que quand quelque chose change) ---" -ForegroundColor DarkGray
+    Get-Content $log.FullName -Tail 8 -Encoding UTF8 | ForEach-Object { Write-Host $_ }
   }
   $last = Get-ChildItem $Backups -Filter 'adlane-*' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime | Select-Object -Last 1
   $count = @(Get-ChildItem $Backups -Filter 'adlane-*' -ErrorAction SilentlyContinue).Count

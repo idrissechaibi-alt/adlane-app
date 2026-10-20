@@ -10,6 +10,7 @@
 //   node server/dist/server.js --backup-now         archive locale immédiate (<serveur>/sauvegardes)
 import * as fs from 'node:fs';
 import * as os from 'node:os';
+import * as path from 'node:path';
 import { execSync } from 'node:child_process';
 import { setRunningOnServer, setServerHttp } from '../src/core/serverMode';
 import { curlGet } from './curl';
@@ -46,7 +47,21 @@ async function importConfig(file: string): Promise<void> {
 
 const startedAt = new Date().toISOString();
 let lastCollectAt: string | null = null;
+let lastPublishAt: string | null = null;
 let liveNow = 0;
+let samplesSinceStart = 0;
+
+/** Etat lu par l'icône « adlane serveur » : le journal reste silencieux quand rien ne change, ce fichier non. */
+function writeStatus(): void {
+  try {
+    fs.writeFileSync(
+      path.join(serverRoot(), 'statut.json'),
+      JSON.stringify({ at: new Date().toISOString(), startedAt, lastCollectAt, lastPublishAt, liveMatches: liveNow, samplesSinceStart, sites: webStatus() })
+    );
+  } catch {
+    // disque inaccessible : l'icône retombera sur le journal
+  }
+}
 
 async function heartbeat(): Promise<void> {
   const ok = await putRepoText(
@@ -121,10 +136,17 @@ async function main(): Promise<void> {
   every('Collecte', 60_000, async () => {
     const r = await collectOnce();
     lastCollectAt = new Date().toISOString();
+    samplesSinceStart += r.sampled;
     if (r.live !== liveNow || r.finals) log(`Collecte : ${r.live} match(s) en direct, ${r.sampled} relevé(s)${r.finals ? `, ${r.finals} résultat(s) final(aux)` : ''}.`);
     liveNow = r.live;
+    writeStatus();
   });
-  every('Publication', 2 * 60_000, publish, false);
+  every('Publication', 2 * 60_000, async () => {
+    if (await publish()) lastPublishAt = new Date().toISOString();
+    writeStatus();
+  }, false);
+  // Une ligne de journal toutes les 15 min même quand rien ne change : on voit que le serveur est vivant.
+  every('Pouls', 15 * 60_000, async () => log(`Serveur actif : ${liveNow} match(s) en direct, ${samplesSinceStart} relevé(s) depuis le démarrage.`), false);
   // Sites web déclarés dans <serveur>/sites.json : relevés toutes les 30 s (échéance propre à chaque site), publiés toutes
   // les 60 s pour le téléphone.
   log(`Sites web à lire : ${loadSites().length}.`);
