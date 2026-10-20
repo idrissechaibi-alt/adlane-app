@@ -8,6 +8,7 @@ import type { FeedFinal, FeedMatch, FeedSlice } from '../src/core/serverFeed';
 import { SERVER_LIVE_DIR } from '../src/core/serverFeed';
 import { sendTelegramMessage } from '../src/core/telegram';
 import kvStore from '../src/core/kvStore';
+import { namesLikelyMatch, normalizeTeamName } from '../src/core/teamNameMatch';
 import { repoPut } from './github';
 import { log } from './log';
 
@@ -23,7 +24,30 @@ const isReal = (m: HubMatch) =>
   REAL_RE.some(([c, l]) => l.test(m.league ?? '') && c.test(m.country ?? '')) &&
   !/women|féminin|u19|u21|u23|youth|afc|caf|concacaf|asian|african|conmebol/i.test(`${m.league ?? ''} ${m.country ?? ''}`);
 
-const keyOf = (m: { homeTeam: string; awayTeam: string }) => `${m.homeTeam} - ${m.awayTeam}`;
+const rawKey = (m: { homeTeam: string; awayTeam: string }) => `${m.homeTeam} - ${m.awayTeam}`;
+const isWomen = (s: string) => /\(w\)|\bw\b|women|femenin|féminin|frauen/i.test(s);
+
+/**
+ * Un même match arrive sous plusieurs noms selon la source (« Goias - Nautico » / « Goiás - Náutico », « Patriotas » /
+ * « Patriotas Boyacá ») : il est rattaché au match déjà suivi dont les deux équipes correspondent, pour n'être relevé
+ * (et envoyé au téléphone) qu'une fois. Jamais un match féminin avec un masculin.
+ */
+function keyOf(m: { homeTeam: string; awayTeam: string }, alsoSeen: Array<{ key: string; home: string; away: string }> = []): string {
+  const raw = rawKey(m);
+  if (tracked.has(raw)) return raw;
+  const h = normalizeTeamName(m.homeTeam);
+  const a = normalizeTeamName(m.awayTeam);
+  const women = isWomen(raw);
+  const candidates = [
+    ...alsoSeen,
+    ...[...tracked.entries()].filter(([, t]) => !t.done).map(([key, t]) => ({ key, home: t.match.home, away: t.match.away })),
+  ];
+  for (const c of candidates) {
+    if (isWomen(c.key) !== women) continue;
+    if (namesLikelyMatch(h, normalizeTeamName(c.home)) && namesLikelyMatch(a, normalizeTeamName(c.away))) return c.key;
+  }
+  return raw;
+}
 
 interface Tracked {
   match: FeedMatch;
@@ -70,8 +94,28 @@ async function wakeIfDue(key: string, m: HubMatch): Promise<void> {
   await sendTelegramMessage(`⏱️ ${m.homeTeam} - ${m.awayTeam} (${m.homeGoals}-${m.awayGoals}) : ${m.minute}e minute. Ouvre l'app adlane pour l'analyse des paris de la ${moment}e.`).catch(() => false);
 }
 
+const TRACKED_KEY = '@server_tracked';
+let restored = false;
+
+/** Matchs suivis gardés sur disque : un redémarrage (mise à jour du code) ne fait plus manquer leur résultat final. */
+async function restoreTracked(): Promise<void> {
+  if (restored) return;
+  restored = true;
+  try {
+    const saved: Array<[string, Tracked]> = JSON.parse((await kvStore.getItem(TRACKED_KEY)) ?? '[]');
+    for (const [k, t] of saved) if (Date.now() - t.lastSampleAt < 6 * 3_600_000) tracked.set(k, t);
+  } catch {
+    // rien à reprendre
+  }
+}
+
+async function saveTracked(): Promise<void> {
+  await kvStore.setItem(TRACKED_KEY, JSON.stringify([...tracked.entries()])).catch(() => {});
+}
+
 /** Un passage de collecte (chaque minute). */
 export async function collectOnce(): Promise<{ live: number; sampled: number; finals: number }> {
+  await restoreTracked();
   const live = await hubLiveEvents();
   const now = Date.now();
   const day = hubDateKey();
@@ -79,15 +123,23 @@ export async function collectOnce(): Promise<{ live: number; sampled: number; fi
   let sampled = 0;
 
   // Réels chaque minute, les autres toutes les 5 min ; au plus 25 relevés détaillés par minute (sources gratuites).
-  const due = live
-    .map((m) => ({ m, key: keyOf(m), real: isReal(m) }))
+  // Une entrée par match, même quand plusieurs sources le donnent sous des noms différents.
+  const unique: Array<{ m: HubMatch; key: string; real: boolean }> = [];
+  const seenNames: Array<{ key: string; home: string; away: string }> = [];
+  for (const m of live) {
+    const key = keyOf(m, seenNames);
+    if (unique.some((u) => u.key === key)) continue;
+    unique.push({ m, key, real: isReal(m) });
+    seenNames.push({ key, home: m.homeTeam, away: m.awayTeam });
+  }
+  const due = unique
     .filter(({ key, real }) => {
       const t = tracked.get(key);
       return !t || now - t.lastSampleAt >= (real ? 55_000 : 5 * 60_000 - 5_000);
     })
     .sort((a, b) => Number(b.real) - Number(a.real))
     .slice(0, 25);
-  for (const m of live) liveKeys.add(keyOf(m));
+  for (const { key } of unique) liveKeys.add(key);
 
   for (const { m, key, real } of due) {
     let t = tracked.get(key);
@@ -124,7 +176,12 @@ export async function collectOnce(): Promise<{ live: number; sampled: number; fi
     }
     if (gone < waits[t.finalTries] * 60_000) continue;
     t.finalTries++;
-    const r = await hubFinalResult(t.match.home, t.match.away, t.day).catch(() => null);
+    // Score à la pause exigé d'abord ; à défaut (source sans mi-temps), score final seul et mi-temps de notre relevé.
+    let r = await hubFinalResult(t.match.home, t.match.away, t.day).catch(() => null);
+    if (!r) {
+      const noHt = await hubFinalResult(t.match.home, t.match.away, t.day, { needHalfTime: false }).catch(() => null);
+      if (noHt && t.htSample) r = { ...noHt, htHome: t.htSample.home, htAway: t.htSample.away };
+    }
     if (!r) continue;
     const last = t.lastSample;
     const final: FeedFinal = {
@@ -149,7 +206,8 @@ export async function collectOnce(): Promise<{ live: number; sampled: number; fi
   }
   // Mémoire bornée : matchs terminés depuis plus de 6 h oubliés.
   for (const [key, t] of tracked) if (t.done && now - t.lastSampleAt > 6 * 3_600_000) tracked.delete(key);
-  return { live: live.length, sampled, finals };
+  await saveTracked();
+  return { live: unique.length, sampled, finals };
 }
 
 /** Publie ce qui a été collecté depuis la dernière fois (tranche de 10 min, réécrite tant qu'elle est en cours). */
