@@ -8,6 +8,8 @@ import AsyncStorage from '../../core/kvStore';
 import { APIResponse, FootballMatch, MatchStatistics, Team, Player, MarketOdds } from '../types';
 import { syntheticFixtureId } from '../../core/halftimeMonitor';
 
+import { getServerHttp, isRunningOnServer } from '../../core/serverMode';
+
 // Vrai domaine de l'API publique SofaScore (le code précédent appelait
 // www.sofascore.com/api/... qui n'a jamais été un endpoint valide).
 const BASE_URL = 'https://api.sofascore.com/api/v1';
@@ -31,6 +33,8 @@ const LEAGUE_NAME_MATCH: Record<string, string[]> = {
 };
 
 function sofaScoreHeaders(): HeadersInit {
+  // Serveur PC : en-tête honnête (le serveur ne se fait pas passer pour un navigateur ; si SofaScore refuse, il s'arrête là).
+  if (isRunningOnServer()) return { 'User-Agent': 'adlane-collector/1.0 (usage personnel)', Accept: 'application/json' };
   return {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     'Accept': 'application/json, text/plain, */*',
@@ -60,6 +64,12 @@ let relayDownUntil = 0;
 let lastRoute: 'relais' | 'direct' | 'livescore' | null = null;
 
 async function sofaFetch(path: string): Promise<Response> {
+  // Serveur PC : lecteur curl (voir serverMode.ts), sans relais ni connexion directe du client de Node (refusé par SofaScore).
+  const serverHttp = isRunningOnServer() ? getServerHttp() : null;
+  if (serverHttp) {
+    const r = await serverHttp(`${BASE_URL}${path}`, { Accept: 'application/json' });
+    return new Response(r.text, { status: r.status });
+  }
   if (Date.now() >= relayDownUntil) {
     try {
       const response = await fetchWithTimeout(`${RELAY_BASE}${path}`, RELAY_TIMEOUT_MS);
@@ -541,6 +551,18 @@ export async function fetchSofaLiveEvents(): Promise<SofaEvent[]> {
     await recordSofaStatus({ error: `LiveScore : ${liveScoreError?.message || 'injoignable'} · SofaScore : ${error?.message || 'injoignable'}` });
     throw error;
   }
+}
+
+/** Matchs en direct d'après SofaScore SEUL (sans repli LiveScore, déjà source du hub) : fournisseur « SofaScore » du serveur PC. */
+export async function fetchSofaOnlyLive(): Promise<SofaEvent[]> {
+  const data = await getJson('/sport/football/events/live');
+  return ((data.events ?? []) as any[]).map(mapSofaEvent).filter((e): e is SofaEvent => e !== null);
+}
+
+/** Programme d'une date d'après SofaScore SEUL. */
+export async function fetchSofaOnlyScheduled(dateKey: string): Promise<SofaEvent[]> {
+  const data = await getJson(`/sport/football/scheduled-events/${dateKey}`);
+  return ((data.events ?? []) as any[]).map(mapSofaEvent).filter((e): e is SofaEvent => e !== null);
 }
 
 /** Programme (tous les matchs de football) d'une date UTC. */

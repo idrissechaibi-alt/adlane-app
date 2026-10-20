@@ -61,10 +61,16 @@ gardés, et le tout est envoyé au téléphone toutes les 60 s (`data/server/web
 `src/core/serverFeed.ts` → `readWebFeed(id)`). Les adresses des sites ne sont jamais publiées : seulement l'identifiant et
 les valeurs lues. Les relevés de plus de 3 jours sont retirés du dépôt.
 
-Deux sites sont déjà lus sans rien faire (`server/sites.default.json`, mis à jour avec le code) : les matchs en direct de
-SofaScore et les scores de Match en direct. `sites.json` sur le PC ajoute ou remplace des sites (`"enabled": false` pour en
-retirer un). Avec `"key"`, un flux d'éléments identifiés n'envoie que les changements ; le téléphone en tient l'état
-courant à jour (`readWebState(id)`).
+SofaScore et Match en direct ne passent PAS par ce module : ce sont deux sources de plus du hub de données du serveur
+(`src/api/footballDataAPIs/liveDataHub.ts`, serveur seulement), au même titre que LiveScore ou FotMob. Un match déjà connu
+d'une autre source n'est jamais compté deux fois ; elles ajoutent un vote au score, complètent les statistiques et font
+apparaître des matchs que les autres ne voient pas (+23 matchs en direct avec SofaScore, +9 avec Match en direct lors du
+test). SofaScore est lu avec `curl.exe` (présent sur Windows), qui s'annonce honnêtement : le client réseau de Node est
+refusé par SofaScore, curl non.
+
+`sites.json` sur le PC ajoute des sites à ce module (`"enabled": false` pour en retirer un ; `server/sites.default.json`
+liste ceux livrés avec le code, vide pour l'instant). Avec `"key"`, un flux d'éléments identifiés n'envoie que les
+changements ; le téléphone en tient l'état courant à jour (`readWebState(id)`).
 
 Pour chaque site : `url`, `format` (`json`, `html` ou `text`) et ce qu'il faut en extraire :
 - json : `items` = chemin vers la liste (`"events"`), `fields` = nom → chemin relatif (`"odds.home"`) ;

@@ -8,6 +8,7 @@
 import AsyncStorage from '../../core/kvStore';
 import { getAPIConfig } from '../multiAPIManager';
 import { namesLikelyMatch, normalizeTeamName } from '../../core/teamNameMatch';
+import { isRunningOnServer } from '../../core/serverMode';
 import {
   SofaEvent,
   SofaPeriodStats,
@@ -16,9 +17,13 @@ import {
   fetchLiveScoreEvent,
   fetchLiveScoreLive,
   fetchLiveScoreStats,
+  fetchSofaEvent,
+  fetchSofaOnlyLive,
+  fetchSofaOnlyScheduled,
+  fetchSofaStats,
 } from './sofaScore';
 
-export type HubProviderName = 'LiveScore' | 'FotMob' | '365Scores' | 'ESPN' | 'TheSportsDB' | 'AllSportsApi';
+export type HubProviderName = 'LiveScore' | 'FotMob' | '365Scores' | 'ESPN' | 'TheSportsDB' | 'AllSportsApi' | 'SofaScore' | 'MatchEnDirect';
 
 export interface HubMatch extends SofaEvent {
   provider: HubProviderName;
@@ -612,7 +617,117 @@ const allSports: Provider = {
 // ---------------------------------------------------------------- Agrégation
 
 /** Ordre de priorité : la source la plus complète d'abord. */
-const PROVIDERS: Provider[] = [liveScore, fotMob, scores365, espn, allSports, sportsDb];
+// ---------------------------------------------------------------- SofaScore et Match en direct (SERVEUR PC seulement)
+//
+// Deux sources de plus pour le serveur du PC (qui relève les matchs minute par minute quand l'app n'est pas allumée) :
+// SofaScore (scores, mi-temps, statistiques complètes) et Match en direct (scores et minutes, page HTML de près d'un Mo :
+// trop lourde pour le téléphone). Elles entrent dans le hub comme les autres : un match déjà connu d'une autre source n'est
+// jamais compté deux fois (même fusion par noms d'équipes), elles ajoutent un vote au score et complètent les statistiques.
+
+const sofaScoreProvider: Provider = {
+  name: 'SofaScore',
+  async live() {
+    return (await fetchSofaOnlyLive()).map((e) => ({ ...e, provider: 'SofaScore' as const, ref: String(e.eventId), hasHalfTime: true }));
+  },
+  async byDate(dateKey) {
+    return (await fetchSofaOnlyScheduled(dateKey)).map((e) => ({ ...e, provider: 'SofaScore' as const, ref: String(e.eventId), hasHalfTime: true }));
+  },
+  async detail(match) {
+    const eid = Number(match.ref);
+    const [stats, event] = await Promise.all([fetchSofaStats(eid), fetchSofaEvent(eid).catch(() => null)]);
+    return { stats, ht: event && event.statusShort !== '1H' ? [event.homeGoalsHT, event.awayGoalsHT] : undefined };
+  },
+};
+
+async function getText(url: string, timeoutMs = 20_000): Promise<string> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { headers: { 'User-Agent': 'adlane-collector/1.0 (usage personnel)', Accept: 'text/html' }, signal: controller.signal });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.text();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Heure de coup d'envoi « 21:00 » (heure de Paris, aujourd'hui) → secondes UTC. */
+function parisToUtcSeconds(hhmm: string): number {
+  const now = new Date();
+  const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+  // Décalage Paris / UTC à cet instant (heure d'été ou d'hiver).
+  const parisAsUtc = Date.parse(`${now.toLocaleString('sv-SE', { timeZone: 'Europe/Paris' }).replace(' ', 'T')}Z`);
+  const offsetMs = parisAsUtc - Math.floor(now.getTime() / 1000) * 1000;
+  return Math.floor((Date.parse(`${day}T${hhmm}:00Z`) - offsetMs) / 1000);
+}
+
+const decodeHtml = (t: string) =>
+  t.replace(/&amp;/g, '&').replace(/&#0?39;|&apos;/g, "'").replace(/&quot;/g, '"').replace(/&nbsp;/g, ' ').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+
+/** Page « live-foot » de Match en direct → matchs du jour (score, minute, statut). */
+function parseMatchEnDirect(html: string): HubMatch[] {
+  const out: HubMatch[] = [];
+  for (const row of html.matchAll(/<tr data-matchId="(\d+)"[^>]*>([\s\S]*?)<\/tr>/gi)) {
+    const id = Number(row[1]);
+    const body = row[2];
+    const comp = /data-competitionname="([^"]*)"/.exec(body)?.[1] ?? '';
+    const home = /class="lm3_eq1"[^>]*>([\s\S]*?)<\/span>/.exec(body)?.[1];
+    const away = /class="lm3_eq2"[^>]*>([\s\S]*?)<\/span>/.exec(body)?.[1];
+    const score = /class="lm3_score[^"]*"[^>]*>([\s\S]*?)<\/span>/.exec(body)?.[1];
+    const status = /class="lm2_timeXxX"[^>]*>([\s\S]*?)<\/span>/.exec(body)?.[1];
+    if (!home || !away || status == null) continue;
+    const st = decodeHtml(status);
+    const sc = /(\d+)\s*-\s*(\d+)/.exec(decodeHtml(score ?? ''));
+    let statusShort = 'OTHER';
+    let minute = 0;
+    if (/^\d{1,2}:\d{2}$/.test(st)) statusShort = 'NS';
+    else if (st === 'MT') {
+      statusShort = 'HT';
+      minute = 45;
+    } else if (st === 'TER') statusShort = 'FT';
+    else if (/^\d+'?$/.test(st)) {
+      minute = parseInt(st, 10);
+      statusShort = minute > 45 ? '2H' : '1H';
+    }
+    const [country, ...league] = decodeHtml(comp).split(' : ');
+    out.push({
+      eventId: id,
+      homeTeam: decodeHtml(home),
+      awayTeam: decodeHtml(away),
+      league: league.join(' : ') || country,
+      country: league.length ? country : '',
+      statusShort,
+      minute,
+      homeGoals: sc ? Number(sc[1]) : 0,
+      awayGoals: sc ? Number(sc[2]) : 0,
+      homeGoalsHT: 0,
+      awayGoalsHT: 0,
+      startTimestamp: statusShort === 'NS' ? parisToUtcSeconds(st) : 0,
+      provider: 'MatchEnDirect',
+      ref: String(id),
+      hasHalfTime: false,
+    });
+  }
+  return out;
+}
+
+const matchEnDirectProvider: Provider = {
+  name: 'MatchEnDirect',
+  minTtlMs: 45_000,
+  async live() {
+    return parseMatchEnDirect(await getText('https://www.matchendirect.fr/live-foot/')).filter((m) => ['1H', 'HT', '2H'].includes(m.statusShort));
+  },
+  async byDate(dateKey) {
+    // La page ne donne que les matchs du jour (heure de Paris) : aucune autre date.
+    const parisToday = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' });
+    return dateKey === parisToday || dateKey === utcDay() ? parseMatchEnDirect(await getText('https://www.matchendirect.fr/live-foot/')) : [];
+  },
+};
+
+const BASE_PROVIDERS: Provider[] = [liveScore, fotMob, scores365, espn, allSports, sportsDb];
+const SERVER_PROVIDERS: Provider[] = [...BASE_PROVIDERS, sofaScoreProvider, matchEnDirectProvider];
+/** Sources utilisées : les 6 habituelles ; sur le serveur PC, plus SofaScore et Match en direct (jamais de doublon, voir plus haut). */
+const providers = (): Provider[] => (isRunningOnServer() ? SERVER_PROVIDERS : BASE_PROVIDERS);
 
 const LIVE_TTL_MS = 50_000;
 const TODAY_TTL_MS = 10 * 60_000;
@@ -733,7 +848,7 @@ function findInList(list: HubMatch[], target: { homeTeam: string; awayTeam: stri
 let liveMergedMemo: { lists: HubMatch[][]; merged: HubMatch[] } | null = null;
 
 export async function hubLiveEvents(): Promise<HubMatch[]> {
-  const lists = await Promise.all(PROVIDERS.map((p) => cachedList(p, 'live')));
+  const lists = await Promise.all(providers().map((p) => cachedList(p, 'live')));
   await flushStatus();
   // Mêmes listes en cache qu'au dernier appel : fusion déjà faite.
   if (liveMergedMemo && liveMergedMemo.lists.every((l, i) => l === lists[i])) return liveMergedMemo.merged;
@@ -763,7 +878,7 @@ async function findEverywhere(homeTeam: string, awayTeam: string, dateKey: strin
   const target = { homeTeam, awayTeam };
   const found: HubMatch[] = [];
   await Promise.all(
-    PROVIDERS.map(async (p, index) => {
+    providers().map(async (p, index) => {
       const lists = await Promise.all([cachedList(p, dateKey), includeLive ? cachedList(p, 'live') : Promise.resolve([])]);
       const live = findInList(lists[1], target);
       const dated = findInList(lists[0], target);
@@ -778,7 +893,7 @@ const detailCache = new Map<string, { at: number; data: HubDetail }>();
 const DETAIL_TTL_MS = 50_000;
 
 async function detailOf(match: HubMatch): Promise<HubDetail | null> {
-  const provider = PROVIDERS.find((p) => p.name === match.provider);
+  const provider = providers().find((p) => p.name === match.provider);
   if (!provider?.detail) return null;
   const key = `${match.provider}|${match.ref}|${match.statusShort}`;
   const hit = detailCache.get(key);
@@ -1097,10 +1212,10 @@ export async function getHubStatus(): Promise<Record<string, { ok: boolean; coun
 
 export { utcDay as hubDateKey };
 
-/** Programme d'une date (UTC), toutes sources réunies sans doublon :
+/** Programme d'une date (UTC), toutes sources réunies sans doublon (Match en direct exclu : pas d'heure de coup d'envoi fiable) :
  * LiveScore d'abord, complété par FotMob, 365Scores, ESPN, AllSportsApi. */
 export async function hubScheduled(dateKey: string): Promise<HubMatch[]> {
-  const lists = await Promise.all(PROVIDERS.filter((p) => p.name !== 'TheSportsDB').map((p) => cachedList(p, dateKey)));
+  const lists = await Promise.all(providers().filter((p) => p.name !== 'TheSportsDB' && p.name !== 'MatchEnDirect').map((p) => cachedList(p, dateKey)));
   const merged: HubMatch[] = [];
   // Un même match a la même heure de coup d'envoi partout (±3 h selon les
   // fuseaux) et partage au moins un mot de nom : on ne compare qu'à ces

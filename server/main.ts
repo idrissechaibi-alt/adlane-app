@@ -11,8 +11,10 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import { execSync } from 'node:child_process';
-import { setRunningOnServer } from '../src/core/serverMode';
+import { setRunningOnServer, setServerHttp } from '../src/core/serverMode';
+import { curlGet } from './curl';
 setRunningOnServer();
+setServerHttp(curlGet);
 
 import kvStore from '../src/core/kvStore';
 import * as SecureStore from 'expo-secure-store';
