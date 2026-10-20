@@ -2423,7 +2423,6 @@ export async function runInPlayComboTick(
           for (const leg of rawLegs.filter(worthProposing).filter((l) => fictionalSettleable(l, observed))) {
             const dedupKey = `${scheduled.fixtureId}-${kind}-${legDedupSuffix(leg)}`;
             if (alreadyProposed.has(dedupKey)) continue;
-            leg.evidence += ` (Rejoué à la ${at.minute}e d'après la collecte du PC.)`;
             const proposal = buildProposalFromItems(kind, [{ leg, fixtureId: scheduled.fixtureId, match, live }], window, false);
             if (proposal) {
               fresh.push(proposal);
