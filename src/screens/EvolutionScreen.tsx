@@ -12,7 +12,7 @@ import {
   ActivityIndicator,
   Alert
 } from 'react-native';
-import { Dimensions, InteractionManager, Linking } from 'react-native';
+import { AppState, Dimensions, InteractionManager, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import MarketTrendChart from '../components/MarketTrendChart';
 import { MarketDayPoint, TRACKED_MARKETS, TrackedMarket, marketLabel, readInPlayProposals, readMarketSeries, readMarketSeriesReal, readMarketSeriesFictional, readCumulativeCounts, readPaperBets, readPredictionOutcomes, historyDays, readAccuracySnapshots } from '../core/learnStore';
@@ -333,6 +333,32 @@ export default function EvolutionScreen() {
       refreshLiveCounters();
     });
     return () => task.cancel();
+  }, [isFocused]);
+
+  // L'app reste ouverte en arrière-plan : l'écran gardait les chiffres lus à son ouverture. Compteurs relus toutes les
+  // minutes tant que l'onglet est affiché, et tout de suite quand on revient dans l'app.
+  useEffect(() => {
+    if (!isFocused) return;
+    const refresh = () => {
+      InteractionManager.runAfterInteractions(() => {
+        refreshLiveCounters();
+        try {
+          setMarketSeries(readMarketSeries());
+          setMarketSeriesReal(readMarketSeriesReal());
+          setMarketSeriesFictional(readMarketSeriesFictional());
+        } catch {
+          // série indisponible : on garde l'affichage actuel
+        }
+      });
+    };
+    const timer = setInterval(refresh, 60_000);
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') refresh();
+    });
+    return () => {
+      clearInterval(timer);
+      sub.remove();
+    };
   }, [isFocused]);
 
   /**
