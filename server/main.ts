@@ -18,6 +18,7 @@ import kvStore from '../src/core/kvStore';
 import * as SecureStore from 'expo-secure-store';
 import { putRepoText, SERVER_HEARTBEAT_PATH } from '../src/core/gitAutoSync';
 import { collectOnce, publish } from './collector';
+import { collectDueSites, loadSites, publishWeb, pruneWebFeed, webStatus } from './webCollector';
 import { mirrorPhoneBackup } from './restore';
 import { log, pruneLogs } from './log';
 import { dataRoot, serverRoot } from './paths';
@@ -48,7 +49,7 @@ let liveNow = 0;
 async function heartbeat(): Promise<void> {
   const ok = await putRepoText(
     SERVER_HEARTBEAT_PATH,
-    JSON.stringify({ at: new Date().toISOString(), host: os.hostname(), role: 'collecte', startedAt, lastTickAt: lastCollectAt, liveMatches: liveNow }, null, 2),
+    JSON.stringify({ at: new Date().toISOString(), host: os.hostname(), role: 'collecte', startedAt, lastTickAt: lastCollectAt, liveMatches: liveNow, sites: webStatus() }, null, 2),
     '[serveur PC] Battement de cœur'
   ).catch(() => false);
   if (!ok) log('Battement de cœur non envoyé (réseau ou jeton GitHub ?)');
@@ -122,6 +123,12 @@ async function main(): Promise<void> {
     liveNow = r.live;
   });
   every('Publication', 2 * 60_000, publish, false);
+  // Sites web déclarés dans <serveur>/sites.json : relevés toutes les 30 s (échéance propre à chaque site), publiés toutes
+  // les 60 s pour le téléphone.
+  log(`Sites web à lire : ${loadSites().length}.`);
+  every('Sites web', 10_000, collectDueSites);
+  every('Publication web', 60_000, publishWeb, false);
+  every('Nettoyage des relevés web', 24 * 3_600_000, pruneWebFeed, false);
   every('Battement de cœur', 5 * 60_000, heartbeat);
   every('Mise à jour du code', 30 * 60_000, async () => {
     if (codeUpdateAvailable()) {

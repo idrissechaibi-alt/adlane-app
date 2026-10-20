@@ -52,3 +52,22 @@ Test sans installer : `cd server && npm install && node build.mjs && node dist/s
   apprentissage, paris, motifs, cotes saisies ; et collecte du serveur), dans
   `%USERPROFILE%\adlane-server\sauvegardes`, 30 jours gardés. Les clés n'y sont pas (elles restent dans `secrets.json`).
   La copie du téléphone est dans le dossier `copie-telephone` de chaque archive.
+
+## Lire des sites web (module de collecte)
+
+Le serveur peut lire des sites que tu déclares dans `%USERPROFILE%\adlane-server\sites.json` (modèle :
+`server/sites.example.json`). Chaque site est relevé toutes les 30 s (`"every"` pour espacer), seuls les changements sont
+gardés, et le tout est envoyé au téléphone toutes les 60 s (`data/server/web/<id>/…`, lu par
+`src/core/serverFeed.ts` → `readWebFeed(id)`). Les adresses des sites ne sont jamais publiées : seulement l'identifiant et
+les valeurs lues. Les relevés de plus de 3 jours sont retirés du dépôt.
+
+Pour chaque site : `url`, `format` (`json`, `html` ou `text`) et ce qu'il faut en extraire :
+- json : `items` = chemin vers la liste (`"events"`), `fields` = nom → chemin relatif (`"odds.home"`) ;
+- html : `items` = sélecteur CSS de chaque ligne, `fields` = nom → `"sélecteur"` (texte) ou `"sélecteur@attribut"` ;
+- text : `regex` à groupes nommés.
+
+**Limite volontaire** : si un site refuse la lecture (403, 429, captcha, « accès refusé », blocage par pays), le module
+s'arrête pour ce site et réessaie plus tard (5 min, puis jusqu'à 1 h). Il ne contourne rien : pas de VPN, de proxy,
+d'imitation de navigateur ni de connexion à un compte.
+
+Le dépôt GitHub est public : tout ce que le serveur y publie est lisible par n'importe qui.

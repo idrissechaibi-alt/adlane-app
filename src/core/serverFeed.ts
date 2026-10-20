@@ -16,6 +16,7 @@ import { canonicalMatchKey } from './inPlayCombos';
 import { getDailyPlan } from './scheduler';
 
 export const SERVER_LIVE_DIR = 'data/server/live';
+export const SERVER_WEB_DIR = 'data/server/web';
 
 /** Match suivi par le serveur. `real` : 5 grands championnats et Ligue des champions. */
 export interface FeedMatch {
@@ -74,6 +75,52 @@ export async function serverFinalFor(homeTeam: string, awayTeam: string, day: st
 
 let pulling: Promise<number> | null = null;
 let lastPullAt = 0;
+
+/** Relevé d'un site web lu par le serveur : valeurs extraites selon les règles de server/sites.json. */
+export interface WebSnapshot {
+  at: string;
+  items: unknown;
+}
+
+const WEB_KEY = (id: string) => `@web_feed_${id}`;
+
+/** Derniers relevés d'un site lu par le serveur PC (les plus récents en dernier). */
+export async function readWebFeed(id: string): Promise<WebSnapshot[]> {
+  try {
+    return JSON.parse((await AsyncStorage.getItem(WEB_KEY(id))) ?? '[]');
+  } catch {
+    return [];
+  }
+}
+
+/** Rapatrie les relevés des sites web lus par le serveur (aujourd'hui et hier) : gardés par site, sans doublon. */
+async function pullWebFeed(seen: Record<string, string>): Promise<number> {
+  let added = 0;
+  const ids = (await listRepoDir(SERVER_WEB_DIR)) ?? [];
+  for (const dir of ids) {
+    const fresh: WebSnapshot[] = [];
+    for (const day of [utcDay(-1), utcDay()]) {
+      for (const f of ((await listRepoDir(`${dir.path}/${day}`)) ?? []).sort((a, b) => a.name.localeCompare(b.name))) {
+        if (seen[f.path] === f.sha) continue;
+        const raw = await fetchRepoText(f.path);
+        if (!raw) continue;
+        try {
+          fresh.push(...((JSON.parse(raw).snapshots ?? []) as WebSnapshot[]));
+          seen[f.path] = f.sha;
+        } catch {
+          // tranche illisible : retentée au prochain passage
+        }
+      }
+    }
+    if (!fresh.length) continue;
+    const old = await readWebFeed(dir.name);
+    const known = new Set(old.map((x) => x.at));
+    const merged = [...old, ...fresh.filter((x) => !known.has(x.at))].sort((a, b) => a.at.localeCompare(b.at)).slice(-600);
+    added += merged.length - old.length;
+    await AsyncStorage.setItem(WEB_KEY(dir.name), JSON.stringify(merged));
+  }
+  return added;
+}
 const STATS_KEY = '@server_feed_stats';
 
 /** Diagnostic : dernière récupération de la collecte du PC et ce qu'elle a apporté. */
@@ -116,9 +163,10 @@ export function pullServerLiveFeed(): Promise<number> {
         }
       }
     }
+    await pullWebFeed(seen).catch(() => 0);
     // Mémoire des tranches lues : seuls les 3 derniers jours.
     const keep = new Set([utcDay(-2), utcDay(-1), utcDay()]);
-    for (const k of Object.keys(seen)) if (!keep.has(k.split('/')[3])) delete seen[k];
+    for (const k of Object.keys(seen)) if (!keep.has(k.startsWith(SERVER_WEB_DIR) ? k.split('/')[4] : k.split('/')[3])) delete seen[k];
     await AsyncStorage.setItem(PULL_KEY, JSON.stringify(seen));
     const prev = (await getServerFeedStats()) ?? { lastPullAt: null, slicesRead: 0, samplesAdded: 0, lastSlice: null };
     await AsyncStorage.setItem(STATS_KEY, JSON.stringify({ lastPullAt: new Date().toISOString(), slicesRead: prev.slicesRead + read, samplesAdded: prev.samplesAdded + added, lastSlice: lastSlice ?? prev.lastSlice }));
