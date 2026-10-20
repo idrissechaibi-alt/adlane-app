@@ -1,6 +1,7 @@
 // APP adlane - Point d'entrée principal (Fix Football Data Button)
 
 import React, { useEffect } from 'react';
+import { AppState } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
@@ -95,9 +96,18 @@ export default function App() {
     const realInterval = setInterval(() => {
       runRealFastTick().catch(() => undefined);
     }, REAL_FAST_TICK_INTERVAL_MS);
+    // L'app n'est jamais fermée (elle reste en arrière-plan) : une mise à jour publiée est appliquée quand elle revient au
+    // premier plan, au plus une vérification toutes les 15 min — plus besoin de la fermer et la rouvrir.
+    let lastUpdateCheck = Date.now();
+    const appStateSub = AppState.addEventListener('change', (state) => {
+      if (state !== 'active' || Date.now() - lastUpdateCheck < 15 * 60_000) return;
+      lastUpdateCheck = Date.now();
+      void applyPendingUpdate();
+    });
     return () => {
       clearInterval(interval);
       clearInterval(realInterval);
+      appStateSub.remove();
       releaseScreen();
     };
   }, []);
