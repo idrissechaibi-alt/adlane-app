@@ -25,26 +25,44 @@ const isReal = (m: HubMatch) =>
   !/women|féminin|u19|u21|u23|youth|afc|caf|concacaf|asian|african|conmebol/i.test(`${m.league ?? ''} ${m.country ?? ''}`);
 
 const rawKey = (m: { homeTeam: string; awayTeam: string }) => `${m.homeTeam} - ${m.awayTeam}`;
-const isWomen = (s: string) => /\(w\)|\bw\b|women|femenin|féminin|frauen/i.test(s);
+
+interface Seen {
+  key: string;
+  home: string;
+  away: string;
+  minute: number;
+  score: string;
+}
+
+const firstWord = (n: string) => n.split(' ')[0] ?? '';
 
 /**
- * Un même match arrive sous plusieurs noms selon la source (« Goias - Nautico » / « Goiás - Náutico », « Patriotas » /
- * « Patriotas Boyacá ») : il est rattaché au match déjà suivi dont les deux équipes correspondent, pour n'être relevé
- * (et envoyé au téléphone) qu'une fois. Jamais un match féminin avec un masculin.
+ * Un même match arrive sous plusieurs noms selon la source (« Goias - Nautico » / « Goiás - Náutico », « LDU (W) - Olimpia
+ * (W) » / « LDU Quito - Olimpia », « Antigua GFC » / « Antigua Guatemala »). Deux entrées sont le MÊME match quand leurs
+ * deux équipes correspondent (ou une équipe correspond et l'autre commence par le même mot) ET qu'elles en sont à la même
+ * minute (±6) : deux équipes ne peuvent pas jouer deux matchs en même temps, donc le genre (W) n'a pas à être comparé —
+ * il n'est pas fiable, les sources l'omettent souvent. Une seule entrée est alors relevée et envoyée.
  */
-function keyOf(m: { homeTeam: string; awayTeam: string }, alsoSeen: Array<{ key: string; home: string; away: string }> = []): string {
+function keyOf(m: { homeTeam: string; awayTeam: string; minute: number; homeGoals: number; awayGoals: number }, seen: Seen[] = []): string {
   const raw = rawKey(m);
   if (tracked.has(raw)) return raw;
   const h = normalizeTeamName(m.homeTeam);
   const a = normalizeTeamName(m.awayTeam);
-  const women = isWomen(raw);
-  const candidates = [
-    ...alsoSeen,
-    ...[...tracked.entries()].filter(([, t]) => !t.done).map(([key, t]) => ({ key, home: t.match.home, away: t.match.away })),
+  const score = `${m.homeGoals}-${m.awayGoals}`;
+  const candidates: Seen[] = [
+    ...seen,
+    ...[...tracked.entries()].filter(([, t]) => !t.done).map(([key, t]) => ({ key, home: t.match.home, away: t.match.away, minute: t.lastMinute, score: '' })),
   ];
   for (const c of candidates) {
-    if (isWomen(c.key) !== women) continue;
-    if (namesLikelyMatch(h, normalizeTeamName(c.home)) && namesLikelyMatch(a, normalizeTeamName(c.away))) return c.key;
+    if (Math.abs(c.minute - m.minute) > 6) continue;
+    const ch = normalizeTeamName(c.home);
+    const ca = normalizeTeamName(c.away);
+    const homeSame = namesLikelyMatch(h, ch);
+    const awaySame = namesLikelyMatch(a, ca);
+    if (homeSame && awaySame) return c.key;
+    // Une équipe identique, l'autre de même début, au même score (quand il est connu) : même match sous un autre nom.
+    const sameScore = c.score === '' || c.score === score;
+    if (sameScore && ((homeSame && firstWord(a) === firstWord(ca) && firstWord(a).length >= 5) || (awaySame && firstWord(h) === firstWord(ch) && firstWord(h).length >= 5))) return c.key;
   }
   return raw;
 }
@@ -125,12 +143,12 @@ export async function collectOnce(): Promise<{ live: number; sampled: number; fi
   // Réels chaque minute, les autres toutes les 5 min ; au plus 25 relevés détaillés par minute (sources gratuites).
   // Une entrée par match, même quand plusieurs sources le donnent sous des noms différents.
   const unique: Array<{ m: HubMatch; key: string; real: boolean }> = [];
-  const seenNames: Array<{ key: string; home: string; away: string }> = [];
+  const seenNames: Seen[] = [];
   for (const m of live) {
     const key = keyOf(m, seenNames);
     if (unique.some((u) => u.key === key)) continue;
     unique.push({ m, key, real: isReal(m) });
-    seenNames.push({ key, home: m.homeTeam, away: m.awayTeam });
+    seenNames.push({ key, home: m.homeTeam, away: m.awayTeam, minute: m.minute, score: `${m.homeGoals}-${m.awayGoals}` });
   }
   const due = unique
     .filter(({ key, real }) => {
