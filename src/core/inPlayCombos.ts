@@ -101,7 +101,7 @@ import { playerShotLegs } from './playerShots';
 import { appendLiveStatsSample, buildLiveSample, hasLiveStats, noteLiveStatsScan } from './liveStatsStore';
 import { getOpeningProbabilities } from '../api/footballDataAPIs/refOdds';
 import { digestFinishedMatches } from './matchDigest';
-import { advancedOf, patternAdjust } from './patternEngine';
+import { AdvancedPoint, advancedOf, patternAdjust } from './patternEngine';
 import { fetchRepoJson } from './gitAutoSync';
 import { getLineupCheck, runLineupChecks } from './lineupCheck';
 import { hubPlayerShots } from '../api/footballDataAPIs/liveDataHub';
@@ -137,6 +137,8 @@ const CHECKPOINT20_MIN_MINUTE = 15;
 const CHECKPOINT20_MAX_MINUTE = 35;
 const CHECKPOINT60_MIN_MINUTE = 55;
 const CHECKPOINT60_MAX_MINUTE = 70;
+/** Matchs rejoués au plus par tour (rattrapage depuis la collecte du serveur PC). */
+const MAX_REPLAYS_PER_TICK = 80;
 
 /** Matchs fictifs vérifiés par tour : le statut vient d'abord des sources
  * live gratuites (rapides, en cache), les fournisseurs IA seulement en repli. */
@@ -1031,7 +1033,8 @@ async function applyPatterns(
   stats: LiveMatchStats | undefined,
   real: boolean,
   all?: SofaPeriodStats | null,
-  referee?: RefereeEffect | null
+  referee?: RefereeEffect | null,
+  adv?: AdvancedPoint
 ): Promise<void> {
   const point = {
     minute: live.minute,
@@ -1040,7 +1043,7 @@ async function applyPatterns(
     sot: stats?.shotsOnTargetHome != null ? stats.shotsOnTargetHome + (stats.shotsOnTargetAway ?? 0) : undefined,
     corners: observed?.corners,
     cards: observed?.cards,
-    ...(advancedOf(all) ?? {}),
+    ...(adv ?? advancedOf(all) ?? {}),
   };
   const extra = { refereeCardRatio: referee?.ratio ?? null };
   for (const leg of legs) {
@@ -2364,11 +2367,85 @@ export async function runInPlayComboTick(
       eligible.push({ scheduled, confirmedLive: matchConfirmedBy(liveFixtures, scheduled) });
     }
 
+    // RATTRAPAGE (collecte du serveur PC) : un match passé par la 20e ou la 60e entre deux réveils du téléphone est
+    // rejoué tel qu'il était À CE MOMENT-LÀ — chronologie coupée au relevé du checkpoint, rien de ce qui a suivi n'est
+    // utilisé. Pipe fictif seulement (un pari réel se prend en direct). Sans ça, l'app fermée ratait la plupart des
+    // checkpoints (980 paris fictifs en 24 h contre ~6 500 app ouverte).
+    let replayed = 0;
+    for (const scheduled of program) {
+      if (replayed >= MAX_REPLAYS_PER_TICK || Date.now() > fictionalDeadline) break;
+      const tl = timelines[scheduled.fixtureId] ?? [];
+      if (tl.length < 2) continue;
+      for (const kind of ['minute20', 'minute60'] as const) {
+        if (checked.has(`${scheduled.fixtureId}-${kind}`)) continue;
+        const inWindow = (x: MatchSample) =>
+          kind === 'minute20'
+            ? x.statusShort === '1H' && x.minute >= CHECKPOINT20_MIN_MINUTE && x.minute <= CHECKPOINT20_MAX_MINUTE
+            : x.statusShort === '2H' && x.minute >= CHECKPOINT60_MIN_MINUTE && x.minute <= CHECKPOINT60_MAX_MINUTE;
+        // Relevé le plus proche du checkpoint (20e / 60e) dans la fenêtre ; rejoué seulement une fois le match passé au-delà
+        // (sinon le scan en direct ci-dessous le prend normalement).
+        const target = kind === 'minute20' ? 20 : 60;
+        const inWin = tl.filter(inWindow);
+        if (!inWin.length) continue;
+        const at = inWin.reduce((b, x) => (Math.abs(x.minute - target) < Math.abs(b.minute - target) ? x : b));
+        const last = tl[tl.length - 1];
+        const passed = last !== at && (!inWindow(last) || Date.now() - Date.parse(last.ts) > 10 * 60_000);
+        if (!passed) continue;
+        try {
+          const upTo = tl.slice(0, tl.indexOf(at) + 1);
+          const live: LiveFixtureDetail = {
+            fixtureId: scheduled.fixtureId,
+            homeTeam: scheduled.homeTeam,
+            awayTeam: scheduled.awayTeam,
+            league: scheduled.league,
+            statusShort: at.statusShort,
+            minute: at.minute,
+            homeGoals: at.homeGoals,
+            awayGoals: at.awayGoals,
+            shotsOnTargetHome: at.shotsOnTargetHome,
+            shotsOnTargetAway: at.shotsOnTargetAway,
+            cornersTotal: at.cornersTotal,
+            cardsTotal: at.cardsTotal,
+            ...(at.adv ? { adv: at.adv } : {}),
+          };
+          const match: MatchRef = { homeTeam: scheduled.homeTeam, awayTeam: scheduled.awayTeam, league: scheduled.league, leagueId: '' };
+          const xg = await cachedExpectedGoals(omnirouteConfig, match.homeTeam, match.awayTeam, match.league);
+          if (xg === undefined) break; // budget IA du tour épuisé : la suite au prochain réveil
+          const stats: LiveMatchStats | undefined =
+            at.shotsOnTargetHome != null || at.shotsOnTargetAway != null ? { shotsOnTargetHome: at.shotsOnTargetHome, shotsOnTargetAway: at.shotsOnTargetAway } : undefined;
+          const observed = observedFromTimeline(upTo);
+          const rawLegs = kind === 'minute20'
+            ? await buildLegs20(match, scheduled.fixtureId, live, xg, stats, observed)
+            : buildLegs60(live, xg, stats, observed, await getMatchTrend(match.homeTeam, match.awayTeam));
+          // Pas de tirs cadrés joueur ici : la feuille de match ESPN donnerait les chiffres d'APRÈS le checkpoint.
+          await applyPatterns(rawLegs, live, observed, stats, false, null, null, at.adv);
+          const window = kind === 'minute20' ? '20e → pause + match complet' : '60e → fin de match';
+          for (const leg of rawLegs.filter(worthProposing).filter((l) => fictionalSettleable(l, observed))) {
+            const dedupKey = `${scheduled.fixtureId}-${kind}-${legDedupSuffix(leg)}`;
+            if (alreadyProposed.has(dedupKey)) continue;
+            leg.evidence += ` (Rejoué à la ${at.minute}e d'après la collecte du PC.)`;
+            const proposal = buildProposalFromItems(kind, [{ leg, fixtureId: scheduled.fixtureId, match, live }], window, false);
+            if (proposal) {
+              fresh.push(proposal);
+              alreadyProposed.add(dedupKey);
+            }
+          }
+          checked.add(`${scheduled.fixtureId}-${kind}`);
+          replayed++;
+        } catch (error: any) {
+          console.warn(`[Rattrapage] ${scheduled.homeTeam} vs ${scheduled.awayTeam} échoué:`, error?.message);
+        }
+      }
+    }
+
     // Tri stable : confirmés d'abord, à l'intérieur de chaque groupe l'ordre
     // de découverte (déjà équitable entre pays, voir selectBalanced) est
     // conservé.
     eligible.sort((a, b) => Number(b.confirmedLive) - Number(a.confirmedLive));
-    const candidates = eligible.slice(0, MAX_FICTIONAL_CHECKS_PER_TICK).map((e) => e.scheduled);
+    const candidates = eligible
+      .filter((e) => !(checked.has(`${e.scheduled.fixtureId}-minute20`) && checked.has(`${e.scheduled.fixtureId}-minute60`)))
+      .slice(0, MAX_FICTIONAL_CHECKS_PER_TICK)
+      .map((e) => e.scheduled);
 
     // Phase 2 — les vérifications sont INDÉPENDANTES les unes des autres :
     // interrogées en parallèle (bornées à FICTIONAL_CHECK_CONCURRENCY à la
