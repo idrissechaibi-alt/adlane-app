@@ -1,23 +1,23 @@
 {
-  "updatedAt": "2026-10-21T23:13:33.112Z",
-  "totalRows": 22484,
+  "updatedAt": "2026-10-22T16:07:45.433Z",
+  "totalRows": 22532,
   "baselines": {
-    "goals>=1@10": 0.351742696053306,
-    "goals>=2@10": 0.08956945156330087,
-    "corners>=2@10": 0.2501281394156843,
-    "corners>=3@10": 0.12211686314710404,
-    "cards>=1@10": 0.2438493080471553,
-    "cards>=2@10": 0.0717580727831881,
-    "fouls>=3@10": 0.23936442849820605,
-    "fouls>=5@10": 0.11071245515120451,
-    "goals>=1@25": 0.46050019849146484,
-    "goals>=2@25": 0.18082572449384676,
-    "corners>=2@25": 0.32135768161969036,
-    "corners>=3@25": 0.21337832473203652,
-    "cards>=1@25": 0.2687574434299325,
-    "cards>=2@25": 0.10996427153632393,
-    "fouls>=3@25": 0.25843588725684796,
-    "fouls>=5@25": 0.21179039301310043
+    "goals>=1@10": 0.3518850987432675,
+    "goals>=2@10": 0.08951013080276994,
+    "corners>=2@10": 0.2507053090536035,
+    "corners>=3@10": 0.12233906129776866,
+    "cards>=1@10": 0.24442164657604515,
+    "cards>=2@10": 0.07219799948704796,
+    "fouls>=3@10": 0.23993331623493203,
+    "fouls>=5@10": 0.11118235444985894,
+    "goals>=1@25": 0.4610790364324109,
+    "goals>=2@25": 0.18116663348596457,
+    "corners>=2@25": 0.32271550866016324,
+    "corners>=3@25": 0.21421461278120646,
+    "cards>=1@25": 0.27035636074059327,
+    "cards>=2@25": 0.11088990643042007,
+    "fouls>=3@25": 0.2600039816842524,
+    "fouls>=5@25": 0.21321919171809675
   },
   "markerRules": [
     {
@@ -25,10 +25,20 @@
       "threshold": 5,
       "target": "fouls>=3",
       "horizon": 10,
-      "samples": 2025,
-      "hitRate": 0.37876543209876545,
-      "baseline": 0.23936442849820605,
-      "lift": 1.5823797816374547
+      "samples": 2031,
+      "hitRate": 0.37813884785819796,
+      "baseline": 0.23993331623493203,
+      "lift": 1.5760164273640982
+    },
+    {
+      "marker": "shots_on_target_total>=5",
+      "threshold": 5,
+      "target": "goals>=1",
+      "horizon": 10,
+      "samples": 626,
+      "hitRate": 0.48242811501597443,
+      "baseline": 0.3518850987432675,
+      "lift": 1.3709819391015192
     },
     {
       "marker": "possession_imbalance>=20",
@@ -37,38 +47,28 @@
       "horizon": 25,
       "samples": 919,
       "hitRate": 0.3558215451577802,
-      "baseline": 0.25843588725684796,
-      "lift": 1.3768271463171249
-    },
-    {
-      "marker": "shots_on_target_total>=5",
-      "threshold": 5,
-      "target": "goals>=1",
-      "horizon": 10,
-      "samples": 626,
-      "hitRate": 0.4840255591054313,
-      "baseline": 0.351742696053306,
-      "lift": 1.3760784929904504
+      "baseline": 0.2600039816842524,
+      "lift": 1.3685234466520138
     },
     {
       "marker": "shots_on_target_total>=4",
       "threshold": 4,
       "target": "goals>=1",
       "horizon": 10,
-      "samples": 1109,
-      "hitRate": 0.45356176735798015,
-      "baseline": 0.351742696053306,
-      "lift": 1.289470321479664
+      "samples": 1113,
+      "hitRate": 0.4528301886792453,
+      "baseline": 0.3518850987432675,
+      "lift": 1.286869464767039
     },
     {
       "marker": "shots_total>=12",
       "threshold": 12,
       "target": "goals>=1",
       "horizon": 10,
-      "samples": 418,
-      "hitRate": 0.4473684210526316,
-      "baseline": 0.351742696053306,
-      "lift": 1.2718627169015435
+      "samples": 420,
+      "hitRate": 0.44047619047619047,
+      "baseline": 0.3518850987432675,
+      "lift": 1.2517614188532555
     },
     {
       "marker": "possession_imbalance>=20",
@@ -77,16 +77,16 @@
       "horizon": 25,
       "samples": 919,
       "hitRate": 0.3928182807399347,
-      "baseline": 0.32135768161969036,
-      "lift": 1.2223709069597226
+      "baseline": 0.32271550866016324,
+      "lift": 1.2172277755439185
     }
   ],
   "paperBets": {
-    "total": 9539,
-    "settled": 5457,
-    "won": 2136,
-    "hitRate": 0.3914238592633315,
-    "calibrationFactor": 0.9610339959766148
+    "total": 9572,
+    "settled": 5482,
+    "won": 2140,
+    "hitRate": 0.3903684786574243,
+    "calibrationFactor": 0.9585600087505738
   },
   "focusLeagues": [
     "UEFA Champions League",
@@ -99,17 +99,17 @@
     "Championship / FA Cup"
   ],
   "omnirouteTrust": {
-    "samples": 38,
-    "agreeRate": 0.5789473684210527,
+    "samples": 25,
+    "agreeRate": 0.6,
     "trusted": false
   },
   "marketExpertise": [
     {
       "market": "total_buts",
-      "samples": 7151,
-      "meanPredicted": 0.6562801831157754,
-      "hitRate": 0.6420081107537408,
-      "calibrationFactor": 0.9782530804232483,
+      "samples": 7222,
+      "meanPredicted": 0.6561896253838492,
+      "hitRate": 0.6419274439213515,
+      "calibrationFactor": 0.978265152463886,
       "cells": [
         {
           "segment": "non|ft",
@@ -124,18 +124,18 @@
           "segment": "non|ft",
           "lo": 0.55,
           "hi": 0.65,
-          "samples": 2134,
-          "hits": 1252,
-          "meanPredicted": 0.6029613987976283,
+          "samples": 2157,
+          "hits": 1264,
+          "meanPredicted": 0.6029678334248989,
           "realSamples": 25
         },
         {
           "segment": "non|ft",
           "lo": 0.65,
           "hi": 0.75,
-          "samples": 2609,
-          "hits": 1750,
-          "meanPredicted": 0.6903403550141137,
+          "samples": 2633,
+          "hits": 1765,
+          "meanPredicted": 0.6902903540062512,
           "realSamples": 21
         },
         {
@@ -169,18 +169,18 @@
           "segment": "oui|ft",
           "lo": 0.55,
           "hi": 0.65,
-          "samples": 924,
-          "hits": 597,
-          "meanPredicted": 0.6177936646291499,
+          "samples": 938,
+          "hits": 607,
+          "meanPredicted": 0.6178981125710871,
           "realSamples": 20
         },
         {
           "segment": "oui|ft",
           "lo": 0.65,
           "hi": 0.75,
-          "samples": 1065,
-          "hits": 695,
-          "meanPredicted": 0.6826184732500926,
+          "samples": 1075,
+          "hits": 703,
+          "meanPredicted": 0.6826650865751124,
           "realSamples": 30
         },
         {
@@ -205,27 +205,27 @@
     },
     {
       "market": "corners",
-      "samples": 5701,
-      "meanPredicted": 0.6689200578279044,
-      "hitRate": 0.6765479740396422,
-      "calibrationFactor": 1.0114033300728145,
+      "samples": 5780,
+      "meanPredicted": 0.6683846863658001,
+      "hitRate": 0.6766435986159169,
+      "calibrationFactor": 1.012356525244501,
       "cells": [
         {
           "segment": "oui|1h",
           "lo": 0.55,
           "hi": 0.65,
-          "samples": 197,
-          "hits": 134,
-          "meanPredicted": 0.6191463724379287,
+          "samples": 202,
+          "hits": 138,
+          "meanPredicted": 0.6196329506181856,
           "realSamples": 2
         },
         {
           "segment": "oui|1h",
           "lo": 0.65,
           "hi": 0.75,
-          "samples": 679,
-          "hits": 478,
-          "meanPredicted": 0.7003659377905878,
+          "samples": 688,
+          "hits": 485,
+          "meanPredicted": 0.7003360607098595,
           "realSamples": 8
         },
         {
@@ -241,45 +241,45 @@
           "segment": "oui|ft",
           "lo": 0.55,
           "hi": 0.65,
-          "samples": 506,
-          "hits": 334,
-          "meanPredicted": 0.6175624183906018,
+          "samples": 522,
+          "hits": 344,
+          "meanPredicted": 0.6169800765020298,
           "realSamples": 11
         },
         {
           "segment": "oui|ft",
           "lo": 0.65,
           "hi": 0.75,
-          "samples": 2745,
-          "hits": 1977,
-          "meanPredicted": 0.6968144237489776,
+          "samples": 2764,
+          "hits": 1992,
+          "meanPredicted": 0.6967064759470634,
           "realSamples": 34
         },
         {
           "segment": "oui|ft",
           "lo": 0.75,
           "hi": 0.85,
-          "samples": 207,
-          "hits": 163,
-          "meanPredicted": 0.7721223561607836,
+          "samples": 208,
+          "hits": 164,
+          "meanPredicted": 0.7720685562699288,
           "realSamples": 2
         },
         {
           "segment": "non|1h",
           "lo": 0.55,
           "hi": 0.65,
-          "samples": 834,
-          "hits": 476,
-          "meanPredicted": 0.5851068574713415,
+          "samples": 849,
+          "hits": 485,
+          "meanPredicted": 0.5854282467173114,
           "realSamples": 24
         },
         {
           "segment": "non|1h",
           "lo": 0.65,
           "hi": 0.75,
-          "samples": 61,
-          "hits": 35,
-          "meanPredicted": 0.6880574641387147,
+          "samples": 62,
+          "hits": 36,
+          "meanPredicted": 0.6875725869176172,
           "realSamples": 1
         },
         {
@@ -295,9 +295,9 @@
           "segment": "non|ft",
           "lo": 0.55,
           "hi": 0.65,
-          "samples": 301,
-          "hits": 150,
-          "meanPredicted": 0.5778844592380116,
+          "samples": 314,
+          "hits": 157,
+          "meanPredicted": 0.577166207460381,
           "realSamples": 3
         },
         {
@@ -322,10 +322,10 @@
     },
     {
       "market": "cartons",
-      "samples": 5600,
-      "meanPredicted": 0.6321400536408944,
-      "hitRate": 0.6058928571428571,
-      "calibrationFactor": 0.9584788270465333,
+      "samples": 5664,
+      "meanPredicted": 0.632215625782922,
+      "hitRate": 0.6048728813559322,
+      "calibrationFactor": 0.9567509196041633,
       "cells": [
         {
           "segment": "oui|1h",
@@ -367,27 +367,27 @@
           "segment": "non|ft",
           "lo": 0.45,
           "hi": 0.55,
-          "samples": 138,
-          "hits": 60,
-          "meanPredicted": 0.5015231314064129,
+          "samples": 140,
+          "hits": 61,
+          "meanPredicted": 0.5011622634754302,
           "realSamples": 9
         },
         {
           "segment": "non|ft",
           "lo": 0.55,
           "hi": 0.65,
-          "samples": 2359,
-          "hits": 1340,
-          "meanPredicted": 0.589950855749184,
+          "samples": 2387,
+          "hits": 1354,
+          "meanPredicted": 0.5900328334032694,
           "realSamples": 54
         },
         {
           "segment": "non|ft",
           "lo": 0.65,
           "hi": 0.75,
-          "samples": 144,
+          "samples": 145,
           "hits": 81,
-          "meanPredicted": 0.6850460887846876,
+          "meanPredicted": 0.68480612227962,
           "realSamples": 10
         },
         {
@@ -403,27 +403,27 @@
           "segment": "non|1h",
           "lo": 0.55,
           "hi": 0.65,
-          "samples": 318,
+          "samples": 319,
           "hits": 179,
-          "meanPredicted": 0.6017759493979878,
+          "meanPredicted": 0.6017914567889665,
           "realSamples": 1
         },
         {
           "segment": "non|1h",
           "lo": 0.65,
           "hi": 0.75,
-          "samples": 514,
-          "hits": 342,
-          "meanPredicted": 0.6945958312797653,
+          "samples": 518,
+          "hits": 344,
+          "meanPredicted": 0.6948031528224987,
           "realSamples": 1
         },
         {
           "segment": "non|1h",
           "lo": 0.75,
           "hi": 0.85,
-          "samples": 186,
-          "hits": 144,
-          "meanPredicted": 0.7851702873971526,
+          "samples": 196,
+          "hits": 150,
+          "meanPredicted": 0.7859981486479432,
           "realSamples": 2
         },
         {
@@ -448,18 +448,18 @@
           "segment": "oui|ft",
           "lo": 0.55,
           "hi": 0.65,
-          "samples": 913,
-          "hits": 556,
-          "meanPredicted": 0.6087166786828723,
+          "samples": 927,
+          "hits": 564,
+          "meanPredicted": 0.6084732729724242,
           "realSamples": 6
         },
         {
           "segment": "oui|ft",
           "lo": 0.65,
           "hi": 0.75,
-          "samples": 819,
-          "hits": 544,
-          "meanPredicted": 0.6928391267571236,
+          "samples": 823,
+          "hits": 546,
+          "meanPredicted": 0.692831482092061,
           "realSamples": 25
         },
         {
@@ -484,36 +484,36 @@
     },
     {
       "market": "btts",
-      "samples": 2848,
-      "meanPredicted": 0.6557868776372533,
-      "hitRate": 0.6362359550561798,
-      "calibrationFactor": 0.9701870786870365,
+      "samples": 2870,
+      "meanPredicted": 0.6557342277744261,
+      "hitRate": 0.6358885017421603,
+      "calibrationFactor": 0.969735107316843,
       "cells": [
         {
           "segment": "non|ft",
           "lo": 0.55,
           "hi": 0.65,
-          "samples": 1155,
-          "hits": 679,
-          "meanPredicted": 0.5981354330338119,
+          "samples": 1161,
+          "hits": 683,
+          "meanPredicted": 0.5980980946983514,
           "realSamples": 18
         },
         {
           "segment": "non|ft",
           "lo": 0.65,
           "hi": 0.75,
-          "samples": 703,
-          "hits": 471,
-          "meanPredicted": 0.6985602768477671,
+          "samples": 706,
+          "hits": 473,
+          "meanPredicted": 0.6985417528813512,
           "realSamples": 12
         },
         {
           "segment": "non|ft",
           "lo": 0.75,
           "hi": 0.85,
-          "samples": 229,
-          "hits": 175,
-          "meanPredicted": 0.8001165665705782,
+          "samples": 231,
+          "hits": 176,
+          "meanPredicted": 0.8001918285076216,
           "realSamples": 1
         },
         {
@@ -529,37 +529,37 @@
           "segment": "oui|ft",
           "lo": 0.55,
           "hi": 0.65,
-          "samples": 372,
-          "hits": 224,
-          "meanPredicted": 0.6036293105005471,
+          "samples": 380,
+          "hits": 227,
+          "meanPredicted": 0.6032416826894867,
           "realSamples": 11
         },
         {
           "segment": "oui|ft",
           "lo": 0.65,
           "hi": 0.75,
-          "samples": 304,
-          "hits": 202,
-          "meanPredicted": 0.6943275146846868,
+          "samples": 305,
+          "hits": 203,
+          "meanPredicted": 0.6944029055677088,
           "realSamples": 7
         },
         {
           "segment": "oui|ft",
           "lo": 0.75,
           "hi": 0.85,
-          "samples": 81,
-          "hits": 58,
-          "meanPredicted": 0.7818408407931235,
+          "samples": 83,
+          "hits": 60,
+          "meanPredicted": 0.782657497765728,
           "realSamples": 0
         }
       ]
     },
     {
       "market": "fautes",
-      "samples": 2264,
-      "meanPredicted": 0.7169781322659533,
-      "hitRate": 0.6718197879858657,
-      "calibrationFactor": 0.9370157299813759,
+      "samples": 2277,
+      "meanPredicted": 0.7171421732218759,
+      "hitRate": 0.6723759332454985,
+      "calibrationFactor": 0.9375768966769059,
       "cells": [
         {
           "segment": "non|ft",
@@ -592,18 +592,18 @@
           "segment": "oui|1h",
           "lo": 0.65,
           "hi": 0.75,
-          "samples": 190,
-          "hits": 153,
-          "meanPredicted": 0.730999432085064,
+          "samples": 192,
+          "hits": 155,
+          "meanPredicted": 0.7311006930058573,
           "realSamples": 2
         },
         {
           "segment": "oui|1h",
           "lo": 0.75,
           "hi": 0.85,
-          "samples": 481,
+          "samples": 482,
           "hits": 376,
-          "meanPredicted": 0.7879214594475742,
+          "meanPredicted": 0.7879095480773832,
           "realSamples": 0
         },
         {
@@ -637,54 +637,54 @@
           "segment": "oui|ft",
           "lo": 0.65,
           "hi": 0.75,
-          "samples": 1114,
-          "hits": 696,
-          "meanPredicted": 0.7074541900704907,
+          "samples": 1120,
+          "hits": 701,
+          "meanPredicted": 0.7075196585569089,
           "realSamples": 18
         },
         {
           "segment": "oui|ft",
           "lo": 0.75,
           "hi": 0.85,
-          "samples": 182,
-          "hits": 121,
-          "meanPredicted": 0.7601217878021509,
+          "samples": 186,
+          "hits": 124,
+          "meanPredicted": 0.7605093084456711,
           "realSamples": 0
         }
       ]
     },
     {
       "market": "1X2",
-      "samples": 2131,
-      "meanPredicted": 0.686187108938776,
-      "hitRate": 0.644298451431253,
-      "calibrationFactor": 0.9389544674304564,
+      "samples": 2148,
+      "meanPredicted": 0.6861012124464357,
+      "hitRate": 0.6447858472998138,
+      "calibrationFactor": 0.9397824046990043,
       "cells": [
         {
           "segment": "oui|ft",
           "lo": 0.55,
           "hi": 0.65,
-          "samples": 825,
-          "hits": 525,
-          "meanPredicted": 0.6012983283673073,
+          "samples": 833,
+          "hits": 531,
+          "meanPredicted": 0.6014952340421063,
           "realSamples": 20
         },
         {
           "segment": "oui|ft",
           "lo": 0.65,
           "hi": 0.75,
-          "samples": 803,
-          "hits": 480,
-          "meanPredicted": 0.7020176586523104,
+          "samples": 811,
+          "hits": 485,
+          "meanPredicted": 0.7021226216041068,
           "realSamples": 32
         },
         {
           "segment": "oui|ft",
           "lo": 0.75,
           "hi": 0.85,
-          "samples": 492,
-          "hits": 360,
-          "meanPredicted": 0.7964930730954138,
+          "samples": 493,
+          "hits": 361,
+          "meanPredicted": 0.796510328341145,
           "realSamples": 1
         },
         {
@@ -700,45 +700,45 @@
     },
     {
       "market": "buts_equipe",
-      "samples": 1118,
-      "meanPredicted": 0.7139387815601422,
-      "hitRate": 0.6958855098389982,
-      "calibrationFactor": 0.9747131376142742,
+      "samples": 1151,
+      "meanPredicted": 0.713589100674755,
+      "hitRate": 0.6959165942658557,
+      "calibrationFactor": 0.9752343380915032,
       "cells": [
         {
           "segment": "oui|ft",
           "lo": 0.55,
           "hi": 0.65,
-          "samples": 123,
-          "hits": 91,
-          "meanPredicted": 0.6301424704180122,
+          "samples": 127,
+          "hits": 93,
+          "meanPredicted": 0.6298702440679352,
           "realSamples": 6
         },
         {
           "segment": "oui|ft",
           "lo": 0.65,
           "hi": 0.75,
-          "samples": 608,
-          "hits": 400,
-          "meanPredicted": 0.7021949078526258,
+          "samples": 626,
+          "hits": 413,
+          "meanPredicted": 0.7017587748659379,
           "realSamples": 21
         },
         {
           "segment": "oui|ft",
           "lo": 0.75,
           "hi": 0.85,
-          "samples": 186,
-          "hits": 141,
-          "meanPredicted": 0.7861859822642092,
+          "samples": 193,
+          "hits": 146,
+          "meanPredicted": 0.7856298185180512,
           "realSamples": 0
         },
         {
           "segment": "non|ft",
           "lo": 0.65,
           "hi": 0.75,
-          "samples": 179,
-          "hits": 132,
-          "meanPredicted": 0.7236389719131698,
+          "samples": 183,
+          "hits": 135,
+          "meanPredicted": 0.7237181670225535,
           "realSamples": 5
         },
         {
@@ -826,27 +826,27 @@
     },
     {
       "market": "corners_equipe",
-      "samples": 149,
-      "meanPredicted": 0.7035293982204078,
-      "hitRate": 0.6174496644295302,
-      "calibrationFactor": 0.8776458609851726,
+      "samples": 161,
+      "meanPredicted": 0.7035219792467694,
+      "hitRate": 0.6335403726708074,
+      "calibrationFactor": 0.9005267658433526,
       "cells": [
         {
           "segment": "oui|ft",
           "lo": 0.55,
           "hi": 0.65,
-          "samples": 29,
-          "hits": 19,
-          "meanPredicted": 0.6172783326268095,
+          "samples": 31,
+          "hits": 21,
+          "meanPredicted": 0.6183617108912572,
           "realSamples": 7
         },
         {
           "segment": "oui|ft",
           "lo": 0.65,
           "hi": 0.75,
-          "samples": 80,
-          "hits": 53,
-          "meanPredicted": 0.701650034892172,
+          "samples": 88,
+          "hits": 61,
+          "meanPredicted": 0.7029859024777102,
           "realSamples": 3
         },
         {
@@ -862,9 +862,9 @@
           "segment": "non|ft",
           "lo": 0.65,
           "hi": 0.75,
-          "samples": 9,
+          "samples": 11,
           "hits": 2,
-          "meanPredicted": 0.739692227900415,
+          "meanPredicted": 0.7363173051705992,
           "realSamples": 0
         },
         {
