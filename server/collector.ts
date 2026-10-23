@@ -6,23 +6,55 @@ import { hubDateKey, hubFinalResult, hubLiveEvents, hubStats, HubMatch } from '.
 import { buildLiveSample, LiveStatsSample } from '../src/core/liveStatsStore';
 import type { FeedFinal, FeedMatch, FeedSlice } from '../src/core/serverFeed';
 import { SERVER_LIVE_DIR } from '../src/core/serverFeed';
+import { fetchRepoJson } from '../src/core/gitAutoSync';
 import { sendTelegramMessage } from '../src/core/telegram';
 import kvStore from '../src/core/kvStore';
 import { namesLikelyMatch, normalizeTeamName } from '../src/core/teamNameMatch';
 import { repoPut } from './github';
 import { log } from './log';
 
-const REAL_RE: Array<[RegExp, RegExp]> = [
-  [/england/i, /^premier league$/i],
-  [/spain/i, /laliga|la liga|primera divisi/i],
-  [/italy/i, /^serie a$/i],
-  [/germany/i, /^bundesliga$/i],
-  [/france/i, /^ligue 1$/i],
-  [/./, /champions league/i],
-];
-const isReal = (m: HubMatch) =>
-  REAL_RE.some(([c, l]) => l.test(m.league ?? '') && c.test(m.country ?? '')) &&
-  !/women|féminin|u19|u21|u23|youth|afc|caf|concacaf|asian|african|conmebol/i.test(`${m.league ?? ''} ${m.country ?? ''}`);
+/**
+ * Match « réel » = un match que le pipe réel de l'app analyse vraiment : ceux du PLAN DU JOUR de l'app (relu depuis sa
+ * dernière sauvegarde), ou à défaut un match de première division des 5 grands championnats / de la Ligue des champions.
+ * Jamais les divisions inférieures (« LaLiga 2 », Segunda División, Championship…) : une alerte « Ouvre l'app » pour un match
+ * que l'app n'analysera pas n'a aucun sens.
+ */
+let plan: { loadedAt: number; matches: Array<{ home: string; away: string }> } | null = null;
+
+async function refreshPlan(): Promise<void> {
+  if (plan && Date.now() - plan.loadedAt < 30 * 60_000) return;
+  const json: any = await fetchRepoJson<any>('data/app-adlane-data.json').catch(() => null);
+  const dp = json?.health?.dailyPlan;
+  const day = Date.parse(`${dp?.date}T12:00:00Z`);
+  const fresh = Number.isFinite(day) && Math.abs(Date.now() - day) <= 36 * 3_600_000;
+  plan = {
+    loadedAt: Date.now(),
+    matches: fresh
+      ? (dp.matches as Array<{ match: string }>).map((x) => {
+          const i = x.match.indexOf(' - ');
+          return { home: x.match.slice(0, i), away: x.match.slice(i + 3) };
+        })
+      : [],
+  };
+}
+
+const ALLOWED_COUNTRY = /england|angleterre|spain|espagne|italy|italie|germany|allemagne|france|europe/i;
+const FIRST_DIVISION = /premier league|laliga|la liga|primera divisi[oó]n|serie a|bundesliga|ligue 1|champions league|ligue des champions/i;
+const NOT_FIRST_DIVISION = /\b(2|ii|iii|b|c|d1|u\d\d|youth|women|womens|femenin|f[ée]minin|femenil|qualif\w*|reserves?|cup|coupe|copa|trophy)\b|2\.|(liga|ligue)\s*2|serie [bc]|segunda|hypermotion|championship|league (one|two)|regionalliga|3\. liga|federaci|nacional|premier league 2|national league|afc|caf|concacaf|conmebol|asian|african/i;
+
+function isFirstDivision(m: { league?: string; country?: string }): boolean {
+  const league = m.league ?? '';
+  const country = m.country ?? '';
+  if (!FIRST_DIVISION.test(league) || NOT_FIRST_DIVISION.test(`${league} ${country}`)) return false;
+  // Champions League : seule la compétition européenne principale ; les autres ligues exigent le bon pays.
+  if (/champions league|ligue des champions/i.test(league)) return !country || /europe|uefa/i.test(country);
+  return ALLOWED_COUNTRY.test(country);
+}
+
+function isReal(m: HubMatch): boolean {
+  if (plan?.matches.some((p) => namesLikelyMatch(normalizeTeamName(m.homeTeam), normalizeTeamName(p.home)) && namesLikelyMatch(normalizeTeamName(m.awayTeam), normalizeTeamName(p.away)))) return true;
+  return isFirstDivision(m);
+}
 
 const rawKey = (m: { homeTeam: string; awayTeam: string }) => `${m.homeTeam} - ${m.awayTeam}`;
 
@@ -134,6 +166,7 @@ async function saveTracked(): Promise<void> {
 /** Un passage de collecte (chaque minute). */
 export async function collectOnce(): Promise<{ live: number; sampled: number; finals: number }> {
   await restoreTracked();
+  await refreshPlan();
   const live = await hubLiveEvents();
   const now = Date.now();
   const day = hubDateKey();

@@ -12,3 +12,8 @@ Read the exact versioned docs at https://docs.expo.dev/versions/v57.0.0/ before 
 - Une session Claude **dans le cloud** (machine Linux « vm », effacée après inactivité) n'est PAS ce PC : ne jamais y installer un serveur « permanent ». Le serveur s'installe depuis une session Claude ouverte sur le PC lui-même (app Claude Desktop, ou `claude remote-control` dans un terminal du PC).
 - Le serveur est dans `server/` (voir `server/README.md`) : installation sur le PC par `server/bootstrap.ps1`, tâche planifiée « adlane-serveur », icône « adlane serveur » sur le bureau, archive quotidienne dans `%USERPROFILE%\adlane-server\sauvegardes`.
 - Choix de l'utilisateur (20/10) : le serveur ne fait que COLLECTER (stats minute par minute, résultats finaux, alerte Telegram 20e/60e des matchs réels) ; le téléphone garde l'analyse, les paris, les notifications, le règlement, l'apprentissage et le rapport du soir (`src/core/serverFeed.ts`).
+
+# Combinés (règle de l'utilisateur, 23/10)
+
+- Le pipe réel ne propose des combinés que si une « recette » validée par le fictif existe : plus de 50 % sur 200 combinés ou plus (`src/core/comboTrainer.ts`). Sinon, paris simples seulement. Le fictif s'entraîne sur des combinés VIRTUELS composés à partir de ses paris simples (aucun doublon dans les courbes ni la calibration). Cote minimale d'un combiné : 1,4.
+- Aucune mention ajoutée dans l'interface sans demande de l'utilisateur (il l'a refusé, ex. « Rejoué à la 21e… »).

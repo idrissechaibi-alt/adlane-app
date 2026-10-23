@@ -102,6 +102,7 @@ import { appendLiveStatsSample, buildLiveSample, hasLiveStats, noteLiveStatsScan
 import { getOpeningProbabilities } from '../api/footballDataAPIs/refOdds';
 import { digestFinishedMatches } from './matchDigest';
 import { AdvancedPoint, advancedOf, patternAdjust } from './patternEngine';
+import { ComboLeg, bestValidatedRecipe, pickCombos } from './comboTrainer';
 import { fetchRepoJson } from './gitAutoSync';
 import { getLineupCheck, runLineupChecks } from './lineupCheck';
 import { hubPlayerShots } from '../api/footballDataAPIs/liveDataHub';
@@ -1479,8 +1480,8 @@ function legDedupSuffix(leg: CandidateLeg): string {
 }
 
 /**
- * Paris RÉELS d'un créneau, pour un checkpoint donné, selon les règles des
- * combinés du planning (voir le détail dans le corps de la fonction).
+ * Paris RÉELS d'un créneau, pour un checkpoint donné : paris simples ; des combinés seulement avec une recette validée
+ * par l'entraînement du fictif (comboTrainer.ts), voir le détail dans le corps de la fonction.
  */
 async function processRealSlotCheckpoint(
   kind: 'minute20' | 'minute60',
@@ -1530,110 +1531,32 @@ async function processRealSlotCheckpoint(
   };
 
   const liveMatches = perMatchLegs.length;
-  // Mêmes règles que les combinés du planning (dailyWorkflow.ts) :
-  //  - créneau d'1 match en direct : paris simples (les plus sûrs) ;
-  //  - 2 matchs : UN combiné, une jambe par match, jambes ≥ 55 % ;
-  //  - 3 matchs ou plus : AUCUN pari simple, combinés de 3 matchs distincts
-  //    (variantes de marché comprises), classés du plus sûr au moins sûr,
-  //    max(4, min(n + 2, 8)) combinés dont un dernier "risqué" ;
-  //  - jamais deux combinés identiques, jamais deux sélections opposées sur
-  //    un même match (ERROR_AUTO_ANNULATION), un match dans 2 combinés au
-  //    plus, et un MARCHÉ jamais répété d'un combiné à l'autre du créneau.
+  // Créneau d'un seul match en direct : paris simples.
   if (slotMatchCount < 2 || liveMatches === 1) {
     for (const items of perMatchLegs) for (const item of items) await emit([item], '');
     return;
   }
 
-  if (slotMatchCount === 2 || liveMatches === 2) {
-    const legs = perMatchLegs.map((r) => r[0]).filter((l) => l.leg.prob >= 0.55).slice(0, 4);
-    if (legs.length >= 2) {
-      const prob = legs.reduce((acc, l) => acc * l.leg.prob, 1);
-      await emit(legs, `Combiné (${(prob * 100).toFixed(1)}%)`);
+  // Plusieurs matchs en direct : des combinés SEULEMENT si une recette validée par le fictif existe (plus de 50 % sur 200
+  // combinés ou plus, voir comboTrainer.ts) ; la même fonction de choix sert à l'entraînement et ici. Sinon, paris simples.
+  // (Les combinés réels n'avaient réussi que 20 fois sur 67 avant ce changement, contre 61 % pour les paris simples.)
+  const validated = await bestValidatedRecipe().catch(() => null);
+  if (validated) {
+    type Candidate = ComboLeg & { item: LegWithContext };
+    const candidates: Candidate[] = perMatchLegs.flat().map((item) => ({ fixtureId: item.fixtureId, market: item.leg.market, selection: item.leg.selection, prob: item.leg.prob, item }));
+    let sent = 0;
+    for (const combo of pickCombos(validated.recipe, candidates, 2)) {
+      const prob = combo.reduce((acc, c) => acc * c.prob, 1);
+      const before = fresh.length;
+      await emit(combo.map((c) => c.item), `Combiné (${(prob * 100).toFixed(1)}%)`);
+      if (fresh.length > before) sent++;
     }
-    return;
+    if (sent > 0) return;
   }
 
-  // 3 matchs ou plus en direct.
-  const byMatch = perMatchLegs.map((r) => [...r].sort((x, y) => y.leg.prob - x.leg.prob));
-  interface LiveComboCandidate { legs: LegWithContext[]; prob: number }
-  const combos: LiveComboCandidate[] = [];
-  const signatures = new Set<string>();
-  const signatureOf = (legs: LegWithContext[]) => legs.map((l) => `${l.fixtureId}:${l.leg.selection}`).sort().join('|');
-  const addCandidate = (legs: LegWithContext[]) => {
-    const sig = signatureOf(legs);
-    if (signatures.has(sig)) return;
-    signatures.add(sig);
-    combos.push({ legs, prob: legs.reduce((acc, l) => acc * l.leg.prob, 1) });
-  };
-  for (let i = 0; i < byMatch.length; i++) {
-    for (let j = i + 1; j < byMatch.length; j++) {
-      for (let k = j + 1; k < byMatch.length; k++) {
-        const triple = [byMatch[i], byMatch[j], byMatch[k]];
-        const base = triple.map((alts) => alts[0]);
-        addCandidate(base);
-        for (let pos = 0; pos < 3; pos++) {
-          for (let alt = 1; alt < Math.min(triple[pos].length, 3); alt++) {
-            const legs = [...base];
-            legs[pos] = triple[pos][alt];
-            addCandidate(legs);
-          }
-        }
-      }
-    }
-  }
-  combos.sort((x, y) => y.prob - x.prob);
-
-  const target = Math.max(4, Math.min(liveMatches + 2, 8));
-  const exposure = new Map<number, number>();
-  const usedMarkets = new Set<string>();
-  const chosenSides = new Map<string, string>(); // match|marché|fenêtre -> sélection retenue
-  const compatible = (legs: LegWithContext[]) =>
-    legs.every((l) => {
-      if ((exposure.get(l.fixtureId) ?? 0) >= 2) return false;
-      // Un marché déjà utilisé par un autre combiné du créneau ne se répète
-      // pas (demande explicite) — corners 1ère MT et corners du match
-      // comptent comme deux marchés distincts.
-      if (usedMarkets.has(legMarketWindow(l.leg))) return false;
-      const key = `${l.fixtureId}|${legMarketWindow(l.leg)}`;
-      const side = chosenSides.get(key);
-      return side == null || side === l.leg.selection;
-    });
-  const take = (legs: LegWithContext[]) => {
-    for (const l of legs) usedMarkets.add(legMarketWindow(l.leg));
-    for (const l of legs) {
-      exposure.set(l.fixtureId, (exposure.get(l.fixtureId) ?? 0) + 1);
-      chosenSides.set(`${l.fixtureId}|${legMarketWindow(l.leg)}`, l.leg.selection);
-    }
-  };
-
-  let rank = 0;
-  const emitted = new Set<string>();
-  for (const cand of combos) {
-    if (rank >= target - 1) break;
-    if (!compatible(cand.legs)) continue;
-    take(cand.legs);
-    emitted.add(signatureOf(cand.legs));
-    rank++;
-    const level = cand.prob > 0.68 ? 'Élevé' : cand.prob >= 0.6 ? 'Moyen' : 'Faible';
-    await emit(cand.legs, `Combiné #${rank} (${(cand.prob * 100).toFixed(1)}%, confiance ${level})`);
-  }
-
-  // Dernier : combiné risqué (libre), sur les jambes qualifiées les moins
-  // probables, une par match, sans contredire les combinés déjà proposés.
-  const risky: LegWithContext[] = [];
-  const pool = byMatch.flat().sort((x, y) => x.leg.prob - y.leg.prob);
-  for (const l of pool) {
-    if (risky.length >= 3) break;
-    if (risky.some((r) => r.fixtureId === l.fixtureId)) continue;
-    if (usedMarkets.has(legMarketWindow(l.leg))) continue; // marché déjà pris par un autre combiné
-    const side = chosenSides.get(`${l.fixtureId}|${legMarketWindow(l.leg)}`);
-    if (side != null && side !== l.leg.selection) continue;
-    risky.push(l);
-  }
-  if (risky.length >= 2 && !emitted.has(signatureOf(risky))) {
-    const prob = risky.reduce((acc, l) => acc * l.leg.prob, 1);
-    await emit(risky, `Combiné #${rank + 1} 🔥 Risqué (libre, ${(prob * 100).toFixed(1)}%)`);
-  }
+  // Paris simples d'un créneau à plusieurs matchs : les 2 jambes les plus probables de chaque match, 6 au plus au total.
+  const singles = perMatchLegs.flatMap((items) => [...items].sort((x, y) => y.leg.prob - x.leg.prob).slice(0, 2)).sort((x, y) => y.leg.prob - x.leg.prob).slice(0, 6);
+  for (const item of singles) await emit([item], '');
 }
 
 /**

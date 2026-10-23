@@ -8,6 +8,7 @@ import { getAllBets, getAllLessons } from '../database/storage';
 import { fetchRepoJson } from './gitAutoSync';
 import { InPlayProposal, MarketDayPoint, readInPlayProposals, readMarketSeries, readMarketSeriesFictional, readMarketSeriesReal, marketLabel } from './learnStore';
 import { buildFictionalMarketStats, formatFictionalDigestMessage } from './dailyDigest';
+import { getComboTrainerStatus } from './comboTrainer';
 import { readOddsLoopFile } from './oddsLoop';
 import { getDeltaReport, getSituationReport } from './deltaLearning';
 import { getPatternLessons, getTodaysMatchLessons } from './matchDigest';
@@ -56,6 +57,24 @@ async function bilanMessage(day: string, todays: InPlayProposal[]): Promise<stri
   const detail = formatFictionalDigestMessage(day, buildFictionalMarketStats(todays), readMarketSeries().filter((p) => p.date < day));
   if (detail) lines.push('', detail.split('\n').slice(1).join('\n'));
   lines.push('', ...sinceCreationLines(day));
+  try {
+    const c = await getComboTrainerStatus();
+    const label = (id: string) => {
+      const [size, prob, family, side] = id.split('|');
+      return `${size.replace('j', '')} jambes, chacune ≥ ${prob} %${family !== 'tous' ? `, ${family === 'sans1x2' ? 'sans 1X2' : family}` : ''}${side !== 'tous' ? `, « ${side} »` : ''}`;
+    };
+    lines.push('', '🧩 COMBINÉS (entraînement du fictif)');
+    if (c.validated.length) {
+      const top = [...c.validated].sort((a, b) => b.rate - a.rate)[0];
+      lines.push(`✅ ${c.validated.length} recette(s) validée(s) pour le réel (plus de 50 % sur 200+ combinés). Meilleure : ${label(top.id)} → ${Math.round(top.rate * 100)} % sur ${top.n}.`);
+    } else if (c.best) {
+      lines.push(`⏳ Aucune recette validée : le réel ne propose que des paris simples. La plus proche : ${label(c.best.id)} → ${Math.round(c.best.rate * 100)} % sur ${c.best.n} combinés (${Math.round(c.best.recentRate * 100)} % sur les 100 derniers).`);
+    } else {
+      lines.push('⏳ Pas encore assez de combinés mesurés.');
+    }
+  } catch {
+    // entraînement indisponible : rien à ajouter
+  }
   return lines.join('\n');
 }
 
