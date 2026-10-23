@@ -564,6 +564,18 @@ export default function DailyPlanScreen() {
     );
   };
 
+  /** Les mots « moins » et « plus » d'une jambe en rouge et en gras : on ne les confond plus en lisant vite. */
+  const emphasize = (text: string) =>
+    text.split(/(\bmoins\b|\bplus\b)/i).map((part, i) =>
+      /^(moins|plus)$/i.test(part) ? (
+        <Text key={i} style={styles.sideWord}>
+          {part}
+        </Text>
+      ) : (
+        part
+      )
+    );
+
   /** Un pari en direct (simple ou combiné) avec son bouton "Placer". */
   const renderLiveProposal = (proposal: InPlayProposal, showMatch = true) => {
     const played = placedBetIds.has(`live-${proposal.id}`);
@@ -581,7 +593,7 @@ export default function DailyPlanScreen() {
           </Text>
         )}
         <Text style={styles.liveBetTitle}>
-          {minuteLabel} · {proposal.legs.length === 1 ? first.selection : `Combiné ${proposal.legs.length} matchs`} — {confidence}%
+          {minuteLabel} · {proposal.legs.length === 1 ? emphasize(first.selection) : `Combiné ${proposal.legs.length} matchs`} — {confidence}%
         </Text>
         {proposal.legs.length === 1 && renderCounter(legCounters[proposal.id]?.[0])}
         {proposal.legs.some((l) => l.waitForOdds) && (
@@ -598,7 +610,7 @@ export default function DailyPlanScreen() {
                   const st = legStatuses[proposal.id]?.[i];
                   return st === 'won' ? '✅' : st === 'lost' ? '❌' : '⏳';
                 })()}{' '}
-                {leg.homeTeam} - {leg.awayTeam} : {leg.selection} ({Math.round(leg.prob * 100)}%)
+                {leg.homeTeam} - {leg.awayTeam} : {emphasize(leg.selection)} ({Math.round(leg.prob * 100)}%)
                 {leg.waitForOdds ? `  ⏳ cote ≥ ${leg.waitForOdds.min.toFixed(2)}` : ''}
                 {missingLegs[`${proposal.id}:${i}`] ? '  ⚠️ non proposée' : ''}
               </Text>
@@ -903,7 +915,7 @@ export default function DailyPlanScreen() {
               {waiting.map((w, i) => (
                 <Text key={i} style={styles.liveBetLeg}>
                   {slot.matches.length > 1 ? `${w.homeTeam} - ${w.awayTeam} : ` : ''}
-                  {w.selection} ({Math.round(w.prob * 100)}%) · cote estimée {w.estimatedOdds.toFixed(2)}
+                  {emphasize(w.selection)} ({Math.round(w.prob * 100)}%) · cote estimée {w.estimatedOdds.toFixed(2)}
                 </Text>
               ))}
             </View>
@@ -1497,6 +1509,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   liveBetTitle: { color: '#ede9fe', fontSize: 14, fontWeight: '600' },
+  sideWord: { color: '#ef4444', fontWeight: '800' },
   liveBetLeg: { color: '#c4b5fd', fontSize: 12, marginTop: 2 },
   liveBetStatusRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' },
   liveBetBadge: { fontSize: 12, fontWeight: '600', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, overflow: 'hidden' },
