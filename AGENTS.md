@@ -15,5 +15,5 @@ Read the exact versioned docs at https://docs.expo.dev/versions/v57.0.0/ before 
 
 # Combinés (règle de l'utilisateur, 23/10)
 
-- Le pipe réel ne propose des combinés que si une « recette » validée par le fictif existe : plus de 50 % sur 200 combinés ou plus (`src/core/comboTrainer.ts`). Sinon, paris simples seulement. Le fictif s'entraîne sur des combinés VIRTUELS composés à partir de ses paris simples (aucun doublon dans les courbes ni la calibration). Cote minimale d'un combiné : 1,4.
+- Le pipe réel ne propose des combinés que si une « recette » validée par le fictif existe : plus de 50 % sur 200 combinés ou plus (`src/core/comboTrainer.ts`). Sinon, paris simples seulement. Le fictif s'entraîne sur des combinés VIRTUELS composés à partir de ses paris simples (aucun doublon dans les courbes ni la calibration), UNIQUEMENT sur les matchs en direct à venir : aucun rattrapage sur l'historique (choix explicite, 23/10). Cote minimale d'un combiné : 1,4.
 - Aucune mention ajoutée dans l'interface sans demande de l'utilisateur (il l'a refusé, ex. « Rejoué à la 21e… »).

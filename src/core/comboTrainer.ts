@@ -4,9 +4,11 @@
 // ne propose donc plus de combiné tant que le fictif n'a pas PROUVÉ qu'une façon de les choisir (une « recette ») dépasse
 // 50 % sur 200 combinés ou plus.
 //
-// Comment le fictif s'entraîne : à partir de ses paris simples (déjà proposés et réglés, aucun pari de plus, aucun doublon
-// dans les courbes ni la calibration), il compose des combinés VIRTUELS créneau par créneau (matchs du même moment, une
-// jambe par match) avec chacune des recettes ci-dessous, et note si chaque combiné serait passé. Une recette =
+// Comment le fictif s'entraîne : à partir de ses paris simples (aucun pari de plus, aucun doublon dans les courbes ni la
+// calibration), il compose des combinés VIRTUELS créneau par créneau (matchs du même moment, une jambe par match) avec
+// chacune des recettes ci-dessous, et note si chaque combiné serait passé. Seuls comptent les matchs suivis EN DIRECT à
+// partir du démarrage de l'entraînement (choix de l'utilisateur, 23/10) : aucun rattrapage sur l'historique, les 200 combinés
+// se font sur des matchs à venir. Une recette =
 //   taille (2 ou 3 jambes) · probabilité minimale d'une jambe · familles de marchés autorisées · sens (moins / plus).
 // Les jambes sont choisies pour maximiser la probabilité du combiné, avec la cote minimale de l'utilisateur : cote ≥ 1,4,
 // donc probabilité combinée ≤ 71 % (en dessous de 1,4 le combiné n'est pas jouable).
@@ -126,23 +128,32 @@ export interface RecipeStats {
 }
 
 interface TrainerState {
+  /** Début de l'entraînement : seuls les paris simples créés après comptent. */
+  startedAt: string;
   recipes: Record<string, RecipeStats>;
   /** Créneaux déjà comptés. */
   done: string[];
 }
 
-const KEY = '@combo_trainer';
+const KEY = '@combo_trainer_v2';
+/** Première version (entraînement sur l'historique) : abandonnée, jamais relue. */
+const OLD_KEY = '@combo_trainer';
 const SLOT_MS = 20 * 60_000;
 let memo: TrainerState | null = null;
 
 async function load(): Promise<TrainerState> {
   if (memo) return memo;
   try {
-    memo = JSON.parse((await AsyncStorage.getItem(KEY)) ?? 'null') ?? { recipes: {}, done: [] };
+    memo = JSON.parse((await AsyncStorage.getItem(KEY)) ?? 'null');
   } catch {
-    memo = { recipes: {}, done: [] };
+    memo = null;
   }
-  return memo!;
+  if (!memo) {
+    memo = { startedAt: new Date().toISOString(), recipes: {}, done: [] };
+    await AsyncStorage.setItem(KEY, JSON.stringify(memo));
+    await AsyncStorage.removeItem(OLD_KEY).catch(() => {});
+  }
+  return memo;
 }
 
 const wilsonLow = (won: number, n: number): number => {
@@ -195,7 +206,7 @@ export async function trainCombos(maxSlots = 800): Promise<{ slots: number; comb
     if (p.real !== false || p.strategy || p.legs.length !== 1 || (p.kind !== 'minute20' && p.kind !== 'minute60')) continue;
     const l = p.legs[0];
     const at = Date.parse(p.createdAt);
-    if (!Number.isFinite(at)) continue;
+    if (!Number.isFinite(at) || at < Date.parse(st.startedAt)) continue;
     const key = `${p.kind}|${Math.floor(at / SLOT_MS)}`;
     if (done.has(key)) continue;
     const state = l.voided ? 'void' : !l.settled ? 'pending' : l.won ? 'won' : 'lost';
@@ -247,6 +258,7 @@ export async function getComboTrainerStatus(): Promise<{
   validated: Array<{ id: string; n: number; rate: number }>;
   best: { id: string; n: number; rate: number; recentRate: number } | null;
   slotsDone: number;
+  since: string;
 }> {
   const st = await load();
   const validated = RECIPES.filter((r) => isValidated(st.recipes[r.id])).map((r) => ({ id: r.id, n: st.recipes[r.id].n, rate: rateOf(st.recipes[r.id]) }));
@@ -256,5 +268,5 @@ export async function getComboTrainerStatus(): Promise<{
     if (!s || s.n < 50) continue;
     if (!best || wilsonLow(s.won, s.n) > wilsonLow(Math.round(best.rate * best.n), best.n)) best = { id: r.id, n: s.n, rate: rateOf(s), recentRate: recentRate(s) };
   }
-  return { validated, best, slotsDone: st.done.length };
+  return { validated, best, slotsDone: st.done.length, since: st.startedAt };
 }

@@ -63,7 +63,8 @@ async function bilanMessage(day: string, todays: InPlayProposal[]): Promise<stri
       const [size, prob, family, side] = id.split('|');
       return `${size.replace('j', '')} jambes, chacune ≥ ${prob} %${family !== 'tous' ? `, ${family === 'sans1x2' ? 'sans 1X2' : family}` : ''}${side !== 'tous' ? `, « ${side} »` : ''}`;
     };
-    lines.push('', '🧩 COMBINÉS (entraînement du fictif)');
+    const since = c.since.slice(0, 10).split('-').reverse().join('/');
+    lines.push('', `🧩 COMBINÉS (entraînement du fictif sur les matchs en direct depuis le ${since})`);
     if (c.validated.length) {
       const top = [...c.validated].sort((a, b) => b.rate - a.rate)[0];
       lines.push(`✅ ${c.validated.length} recette(s) validée(s) pour le réel (plus de 50 % sur 200+ combinés). Meilleure : ${label(top.id)} → ${Math.round(top.rate * 100)} % sur ${top.n}.`);
