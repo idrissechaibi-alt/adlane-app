@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-10-23T00:02:28.551Z",
+  "exportedAt": "2026-10-23T01:23:49.862Z",
   "formatVersion": 1,
   "source": "APP adlane",
   "data": {
@@ -6321,16 +6321,25 @@
   },
   "health": {
     "nativeBackgroundTicks": {
-      "lastTickAt": "2026-10-23T00:00:48.132Z",
-      "ticksLast24h": 85
+      "lastTickAt": "2026-10-23T00:26:15.843Z",
+      "ticksLast24h": 86
     },
     "tickProgress": {
       "startedAt": "2026-10-23T00:00:02.180Z",
-      "step": "scan en direct 20e/60e",
-      "at": "2026-10-23T00:00:03.125Z",
+      "step": "vérification accès internet des modèles",
+      "at": "2026-10-23T01:23:34.133Z",
       "stepDurationsSec": {
         "scan matinal": 0,
-        "relevé live partagé": 1
+        "relevé live partagé": 1,
+        "scan en direct 20e/60e": 144,
+        "bilan de minuit": 0,
+        "marqueurs live": 4866,
+        "programme fictif": 0,
+        "univers du jour": 0,
+        "compositions T-90": 0,
+        "bilan Scouting": 0,
+        "consolidation apprentissage": 1,
+        "enrichissement matchs suivis": 0
       }
     },
     "lastTick": {
@@ -6748,35 +6757,35 @@
     ],
     "paperBets": {
       "total": 9605,
-      "settled": 5521,
+      "settled": 5525,
       "won": 2151,
       "lastPlacedAt": "2026-10-22T23:56:17.084Z",
-      "lastSettledAt": "2026-10-22T23:26:10.401Z",
+      "lastSettledAt": "2026-10-23T01:23:33.983Z",
       "placedLast24h": 53,
-      "settledLast24h": 53
+      "settledLast24h": 57
     },
     "trainingRows": {
-      "last14Days": 22441,
-      "lastClosedAt": "2026-10-22T23:22:37.897Z",
+      "last14Days": 22517,
+      "lastClosedAt": "2026-10-23T01:23:32.583Z",
       "bySource": {
-        "omniroute": 12411,
-        "api_football": 10030
+        "api_football": 10035,
+        "omniroute": 12482
       }
     },
     "model": {
-      "updatedAt": "2026-10-22T23:56:28.177Z",
-      "totalRows": 22637,
+      "updatedAt": "2026-10-23T01:23:34.122Z",
+      "totalRows": 22517,
       "markerRules": 6,
       "paperBets": {
         "total": 9605,
-        "settled": 5521,
+        "settled": 5525,
         "won": 2151,
-        "hitRate": 0.389603332729578,
-        "calibrationFactor": 0.9561613526592586
+        "hitRate": 0.3893212669683258,
+        "calibrationFactor": 0.955554565674384
       },
       "omnirouteTrust": {
-        "samples": 25,
-        "agreeRate": 0.6,
+        "samples": 22,
+        "agreeRate": 0.5909090909090909,
         "trusted": false
       },
       "marketExpertise": [
@@ -6854,11 +6863,11 @@
     },
     "inPlayProposals": {
       "real": 424,
-      "fictional": 28582,
+      "fictional": 28587,
       "fictionalReviewed": 28008,
       "fictionalSettledLegs": 24947,
-      "lastCreatedAt": "2026-10-22T23:59:26.727Z",
-      "createdLast24h": 1521
+      "lastCreatedAt": "2026-10-23T00:00:17.985Z",
+      "createdLast24h": 1448
     },
     "predictionOutcomes30d": 28972,
     "marketSeries": {
@@ -6906,8 +6915,8 @@
       },
       {
         "date": "2026-10-23",
-        "hitRate": 0.389603332729578,
-        "total": 5521,
+        "hitRate": 0.3893212669683258,
+        "total": 5525,
         "won": 2151
       }
     ],
@@ -6918,53 +6927,53 @@
         {
           "name": "Principal",
           "ok": true,
-          "latencyMs": 41,
-          "readyModels": 28,
-          "configuredReady": 13,
+          "latencyMs": 5368,
+          "readyModels": 27,
+          "configuredReady": 12,
           "configuredTotal": 13
         },
         {
           "name": "Omniroute",
           "ok": true,
-          "latencyMs": 2422,
-          "readyModels": 921,
+          "latencyMs": 7683,
+          "readyModels": 908,
           "configuredReady": 2,
           "configuredTotal": 2
         }
       ],
       "leaderboard": [
         {
-          "label": "Omniroute · Clodiko",
-          "ok": 15682,
-          "fail": 842,
-          "avgMs": 2286,
-          "coolingDown": false
-        },
-        {
           "label": "Principal · allam-2-7b",
-          "ok": 7252,
-          "fail": 7259,
-          "avgMs": 960,
+          "ok": 7257,
+          "fail": 7262,
+          "avgMs": 1106,
           "coolingDown": false
         },
         {
           "label": "Principal · gpt-oss-120b",
-          "ok": 2603,
-          "fail": 3184,
-          "avgMs": 1080,
-          "coolingDown": false
+          "ok": 2615,
+          "fail": 3187,
+          "avgMs": 1276,
+          "coolingDown": true
         },
         {
           "label": "Omniroute · Maximus appus",
-          "ok": 11163,
+          "ok": 11167,
           "fail": 720,
-          "avgMs": 4466,
+          "avgMs": 4784,
+          "coolingDown": false
+        },
+        {
+          "label": "Omniroute · Clodiko",
+          "ok": 15701,
+          "fail": 842,
+          "avgMs": 5612,
           "coolingDown": false
         },
         {
           "label": "Principal · qwen3.8-27b",
           "ok": 1591,
-          "fail": 2906,
+          "fail": 2907,
           "avgMs": 2437,
           "coolingDown": true
         },
@@ -7357,7 +7366,7 @@
     "voidedLegs": {
       "fictional": 3061,
       "real": 3,
-      "pendingNoVerdict": 574
+      "pendingNoVerdict": 579
     },
     "teamRegistry": {
       "teams": 5792
@@ -7368,12 +7377,12 @@
       "samplesAdded": 7567,
       "lastSlice": "data/server/live/2026-10-22/2350-mviqn8lv.json",
       "server": {
-        "at": "2026-10-22T23:58:26.102Z",
+        "at": "2026-10-23T01:23:26.223Z",
         "host": "DESKTOP-OSPJN0K",
         "role": "collecte",
         "startedAt": "2026-10-21T23:23:28.014Z",
-        "lastTickAt": "2026-10-22T23:58:06.452Z",
-        "liveMatches": 39,
+        "lastTickAt": "2026-10-23T01:22:57.977Z",
+        "liveMatches": 28,
         "sites": {}
       }
     },
@@ -8220,18 +8229,18 @@
       {
         "unit": "goals_1h",
         "label": "Buts à la pause",
-        "samples": 489,
-        "maeBase": 0.7222127576677628,
-        "maeNew": 0.7142657609423231,
+        "samples": 486,
+        "maeBase": 0.7241207389868085,
+        "maeNew": 0.7160563393589747,
         "promoted": false,
         "effects": [
           {
             "name": "intensité récente 10 min",
-            "pct": 6
+            "pct": 7
           },
           {
             "name": "intensité récente 20 min",
-            "pct": 10
+            "pct": 9
           },
           {
             "name": "momentum (une équipe domine)",
@@ -8243,7 +8252,7 @@
           },
           {
             "name": "favori mené",
-            "pct": 1
+            "pct": 2
           },
           {
             "name": "favori devant",
@@ -8251,7 +8260,7 @@
           },
           {
             "name": "écart de buts",
-            "pct": -2
+            "pct": -4
           },
           {
             "name": "cartons rouges",
@@ -8267,7 +8276,7 @@
           },
           {
             "name": "vent",
-            "pct": 5
+            "pct": 6
           },
           {
             "name": "chaleur ou froid",
@@ -8338,7 +8347,7 @@
         "label": "Corners sur le match",
         "samples": 1726,
         "maeBase": 2.3434836793438127,
-        "maeNew": 2.3351674667459936,
+        "maeNew": 2.3357710165473287,
         "promoted": false,
         "effects": [
           {
@@ -8363,11 +8372,11 @@
           },
           {
             "name": "favori devant",
-            "pct": -2
+            "pct": -1
           },
           {
             "name": "écart de buts",
-            "pct": -18
+            "pct": -19
           },
           {
             "name": "cartons rouges",
@@ -8396,7 +8405,7 @@
         "label": "Cartons sur le match",
         "samples": 1680,
         "maeBase": 1.4200850136752934,
-        "maeNew": 1.4040857261100526,
+        "maeNew": 1.4041918070396968,
         "promoted": false,
         "effects": [
           {
@@ -8429,7 +8438,7 @@
           },
           {
             "name": "cartons rouges",
-            "pct": -19
+            "pct": -20
           },
           {
             "name": "qualité des occasions",
@@ -8452,18 +8461,18 @@
       {
         "unit": "fouls_1h",
         "label": "Fautes 1ère mi-temps",
-        "samples": 613,
+        "samples": 611,
         "maeBase": 2.8375054196712863,
-        "maeNew": 2.9231869672084168,
+        "maeNew": 2.9081928839551163,
         "promoted": false,
         "effects": [
           {
             "name": "intensité récente 10 min",
-            "pct": -11
+            "pct": -9
           },
           {
             "name": "intensité récente 20 min",
-            "pct": 20
+            "pct": 18
           },
           {
             "name": "momentum (une équipe domine)",
@@ -8471,19 +8480,19 @@
           },
           {
             "name": "force du favori",
-            "pct": -14
+            "pct": -13
           },
           {
             "name": "favori mené",
-            "pct": 15
+            "pct": 14
           },
           {
             "name": "favori devant",
-            "pct": 11
+            "pct": 8
           },
           {
             "name": "écart de buts",
-            "pct": -7
+            "pct": -5
           },
           {
             "name": "cartons rouges",
@@ -8491,15 +8500,15 @@
           },
           {
             "name": "qualité des occasions",
-            "pct": -8
+            "pct": -9
           },
           {
             "name": "pluie",
-            "pct": 1
+            "pct": 2
           },
           {
             "name": "vent",
-            "pct": -13
+            "pct": -14
           },
           {
             "name": "chaleur ou froid",
@@ -8512,7 +8521,7 @@
         "label": "Fautes sur le match",
         "samples": 915,
         "maeBase": 3.4808701759498923,
-        "maeNew": 3.420088262622134,
+        "maeNew": 3.4202784416754985,
         "promoted": false,
         "effects": [
           {
