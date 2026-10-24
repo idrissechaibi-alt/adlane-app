@@ -19,7 +19,8 @@ import { log } from './log';
  * Jamais les divisions inférieures (« LaLiga 2 », Segunda División, Championship…) : une alerte « Ouvre l'app » pour un match
  * que l'app n'analysera pas n'a aucun sens.
  */
-let plan: { loadedAt: number; matches: Array<{ home: string; away: string }> } | null = null;
+/** `known` : le plan du jour a été lu (même vide) ; alors seuls les matchs du plan comptent. */
+let plan: { loadedAt: number; known: boolean; matches: Array<{ home: string; away: string }> } | null = null;
 
 async function refreshPlan(): Promise<void> {
   if (plan && Date.now() - plan.loadedAt < 30 * 60_000) return;
@@ -29,6 +30,7 @@ async function refreshPlan(): Promise<void> {
   const fresh = Number.isFinite(day) && Math.abs(Date.now() - day) <= 36 * 3_600_000;
   plan = {
     loadedAt: Date.now(),
+    known: fresh,
     matches: fresh
       ? (dp.matches as Array<{ match: string }>).map((x) => {
           const i = x.match.indexOf(' - ');
@@ -42,9 +44,13 @@ const ALLOWED_COUNTRY = /england|angleterre|spain|espagne|italy|italie|germany|a
 const FIRST_DIVISION = /premier league|laliga|la liga|primera divisi[oó]n|serie a|bundesliga|ligue 1|champions league|ligue des champions/i;
 const NOT_FIRST_DIVISION = /\b(2|ii|iii|b|c|d1|u\d\d|youth|women|womens|femenin|f[ée]minin|femenil|qualif\w*|reserves?|cup|coupe|copa|trophy)\b|2\.|(liga|ligue)\s*2|serie [bc]|segunda|hypermotion|championship|league (one|two)|regionalliga|3\. liga|federaci|nacional|premier league 2|national league|afc|caf|concacaf|conmebol|asian|african/i;
 
-function isFirstDivision(m: { league?: string; country?: string }): boolean {
+/** Équipe féminine ou de jeunes d'après son nom (« Wolfsburg W », « Club León (W) », « Barcelona Femení », « Real Madrid II »). */
+const NOT_SENIOR_MEN_TEAM = /\(w\)|\bw$|\bw\b|women|femen|f[ée]minin|femení|frauen|ladies|\bu\d\d\b|\b(ii|iii)$/i;
+
+function isFirstDivision(m: { league?: string; country?: string; homeTeam?: string; awayTeam?: string }): boolean {
   const league = m.league ?? '';
   const country = m.country ?? '';
+  if (NOT_SENIOR_MEN_TEAM.test(m.homeTeam ?? '') || NOT_SENIOR_MEN_TEAM.test(m.awayTeam ?? '')) return false;
   if (!FIRST_DIVISION.test(league) || NOT_FIRST_DIVISION.test(`${league} ${country}`)) return false;
   // Champions League : seule la compétition européenne principale ; les autres ligues exigent le bon pays.
   if (/champions league|ligue des champions/i.test(league)) return !country || /europe|uefa/i.test(country);
@@ -52,6 +58,10 @@ function isFirstDivision(m: { league?: string; country?: string }): boolean {
 }
 
 function isReal(m: HubMatch): boolean {
+  // Plan du jour lu : l'app n'analyse QUE ces matchs (même vide : aucun match du plan, aucune alerte).
+  if (plan?.known) {
+    return plan.matches.some((p) => namesLikelyMatch(normalizeTeamName(m.homeTeam), normalizeTeamName(p.home)) && namesLikelyMatch(normalizeTeamName(m.awayTeam), normalizeTeamName(p.away)));
+  }
   if (plan?.matches.some((p) => namesLikelyMatch(normalizeTeamName(m.homeTeam), normalizeTeamName(p.home)) && namesLikelyMatch(normalizeTeamName(m.awayTeam), normalizeTeamName(p.away)))) return true;
   return isFirstDivision(m);
 }
