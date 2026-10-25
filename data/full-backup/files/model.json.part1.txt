@@ -1,23 +1,23 @@
 {
-  "updatedAt": "2026-10-24T17:22:52.524Z",
-  "totalRows": 26951,
+  "updatedAt": "2026-10-25T10:21:13.163Z",
+  "totalRows": 22256,
   "baselines": {
-    "goals>=1@10": 0.3493537015276146,
-    "goals>=2@10": 0.08801410105757931,
-    "corners>=2@10": 0.26474735605170385,
-    "corners>=3@10": 0.12843713278495889,
-    "cards>=1@10": 0.2464159811985899,
-    "cards>=2@10": 0.0717978848413631,
-    "fouls>=3@10": 0.2527614571092832,
-    "fouls>=5@10": 0.11562867215041128,
-    "goals>=1@25": 0.4662332972192127,
-    "goals>=2@25": 0.18129288551823763,
-    "corners>=2@25": 0.3557240881184543,
-    "corners>=3@25": 0.23889490790899243,
-    "cards>=1@25": 0.28530155290718673,
-    "cards>=2@25": 0.11412062116287468,
-    "fouls>=3@25": 0.29433008306247743,
-    "fouls>=5@25": 0.24106175514626219
+    "goals>=1@10": 0.3470877192982456,
+    "goals>=2@10": 0.09024561403508773,
+    "corners>=2@10": 0.25235087719298244,
+    "corners>=3@10": 0.1191578947368421,
+    "cards>=1@10": 0.2286315789473684,
+    "cards>=2@10": 0.0616140350877193,
+    "fouls>=3@10": 0.24140350877192981,
+    "fouls>=5@10": 0.10764912280701755,
+    "goals>=1@25": 0.45526203664252235,
+    "goals>=2@25": 0.18363868768640818,
+    "corners>=2@25": 0.33766510438858116,
+    "corners>=3@25": 0.2258201959948871,
+    "cards>=1@25": 0.2643800596506178,
+    "cards>=2@25": 0.10055389859394973,
+    "fouls>=3@25": 0.28227524499360884,
+    "fouls>=5@25": 0.227950575202386
   },
   "markerRules": [
     {
@@ -25,78 +25,98 @@
       "threshold": 5,
       "target": "fouls>=3",
       "horizon": 10,
-      "samples": 2219,
-      "hitRate": 0.3749436683190626,
-      "baseline": 0.2527614571092832,
-      "lift": 1.4833894083659798
+      "samples": 1897,
+      "hitRate": 0.3510806536636795,
+      "baseline": 0.24140350877192981,
+      "lift": 1.4543311961358818
     },
     {
       "marker": "possession_imbalance>=20",
       "threshold": 20,
       "target": "fouls>=3",
       "horizon": 25,
-      "samples": 1095,
-      "hitRate": 0.3963470319634703,
-      "baseline": 0.29433008306247743,
-      "lift": 1.3466072779225144
+      "samples": 955,
+      "hitRate": 0.3832460732984293,
+      "baseline": 0.28227524499360884,
+      "lift": 1.3577034475945866
     },
     {
       "marker": "shots_on_target_total>=5",
       "threshold": 5,
       "target": "goals>=1",
       "horizon": 10,
-      "samples": 672,
-      "hitRate": 0.46130952380952384,
-      "baseline": 0.3493537015276146,
-      "lift": 1.3204655390578701
+      "samples": 624,
+      "hitRate": 0.44711538461538464,
+      "baseline": 0.3470877192982456,
+      "lift": 1.2881913123269775
     },
     {
       "marker": "possession_imbalance>=15",
       "threshold": 15,
       "target": "fouls>=3",
       "horizon": 25,
-      "samples": 1769,
-      "hitRate": 0.3708309779536461,
-      "baseline": 0.29433008306247743,
-      "lift": 1.2599153103725718
-    },
-    {
-      "marker": "shots_on_target_total>=4",
-      "threshold": 4,
-      "target": "goals>=1",
-      "horizon": 10,
-      "samples": 1193,
-      "hitRate": 0.4300083822296731,
-      "baseline": 0.3493537015276146,
-      "lift": 1.2308682585854416
+      "samples": 1527,
+      "hitRate": 0.35821872953503603,
+      "baseline": 0.28227524499360884,
+      "lift": 1.2690405407075165
     },
     {
       "marker": "possession_imbalance>=20",
       "threshold": 20,
       "target": "corners>=2",
       "horizon": 25,
-      "samples": 1095,
-      "hitRate": 0.43105022831050227,
-      "baseline": 0.3557240881184543,
-      "lift": 1.2117543981642445
+      "samples": 955,
+      "hitRate": 0.42198952879581153,
+      "baseline": 0.33766510438858116,
+      "lift": 1.2497279799164287
+    },
+    {
+      "marker": "shots_on_target_total>=4",
+      "threshold": 4,
+      "target": "goals>=1",
+      "horizon": 10,
+      "samples": 1062,
+      "hitRate": 0.4227871939736347,
+      "baseline": 0.3470877192982456,
+      "lift": 1.2180989717194286
     },
     {
       "marker": "shots_total>=12",
       "threshold": 12,
       "target": "goals>=1",
       "horizon": 10,
-      "samples": 464,
-      "hitRate": 0.4202586206896552,
-      "baseline": 0.3493537015276146,
-      "lift": 1.2029602630571696
+      "samples": 436,
+      "hitRate": 0.4105504587155963,
+      "baseline": 0.3470877192982456,
+      "lift": 1.1828435173265766
+    },
+    {
+      "marker": "possession_imbalance>=20",
+      "threshold": 20,
+      "target": "goals>=1",
+      "horizon": 25,
+      "samples": 955,
+      "hitRate": 0.5319371727748691,
+      "baseline": 0.45526203664252235,
+      "lift": 1.168419788958931
+    },
+    {
+      "marker": "possession_imbalance>=15",
+      "threshold": 15,
+      "target": "corners>=2",
+      "horizon": 25,
+      "samples": 1527,
+      "hitRate": 0.3889980353634578,
+      "baseline": 0.33766510438858116,
+      "lift": 1.15202320378301
     }
   ],
   "paperBets": {
-    "total": 11708,
-    "settled": 6657,
-    "won": 2632,
-    "hitRate": 0.3953732912723449,
-    "calibrationFactor": 0.9818492880100308
+    "total": 11739,
+    "settled": 6789,
+    "won": 2638,
+    "hitRate": 0.38856974517602005,
+    "calibrationFactor": 0.9655890082528754
   },
   "focusLeagues": [
     "Serie A",
@@ -109,8 +129,8 @@
     "Championship / FA Cup"
   ],
   "omnirouteTrust": {
-    "samples": 18,
-    "agreeRate": 0.6666666666666666,
+    "samples": 16,
+    "agreeRate": 0.6875,
     "trusted": false
   },
   "marketExpertise": [
