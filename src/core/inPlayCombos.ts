@@ -94,6 +94,7 @@ import {
 } from './learnStore';
 import { sendLocalNotification } from './notifications';
 import { normalizeTeamName, namesLikelyMatch } from './teamNameMatch';
+import { recordShadowVerdict } from './coaches/coachDesk';
 import { OmnirouteConfig } from '../types';
 import { mapWithConcurrency } from './concurrency';
 import { RefereeInfo, hubDateKey, hubKnowsMatch, hubLiveStatus, hubReferee, hubStats } from '../api/footballDataAPIs/liveDataHub';
@@ -1526,6 +1527,7 @@ async function processRealSlotCheckpoint(
     if (!(await claimPick(proposal))) return;
     fresh.push(proposal);
     appendInPlayProposals([proposal]);
+    void recordShadowVerdict(proposal);
     for (const item of items) alreadyProposed.add(`${item.fixtureId}-${kind}`);
     await notifyProposal(proposal);
   };
