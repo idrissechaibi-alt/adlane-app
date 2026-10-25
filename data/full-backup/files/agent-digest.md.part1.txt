@@ -1,14 +1,14 @@
 # Mémoire d'auto-apprentissage — marqueurs observés en direct
 
-Mis à jour : 2026-10-25T18:23:10.987Z
-Corpus : 24572 observations sur 633 ligues / 1 pays.
+Mis à jour : 2026-10-25T18:45:17.955Z
+Corpus : 24596 observations sur 633 ligues / 1 pays.
 
 ## Taux de base observés (par fenêtre)
 - `goals>=1@10` : 35.4%
 - `goals>=2@10` : 9.5%
 - `corners>=2@10` : 25.7%
-- `corners>=3@10` : 12.4%
-- `cards>=1@10` : 22.5%
+- `corners>=3@10` : 12.3%
+- `cards>=1@10` : 22.6%
 - `cards>=2@10` : 6.1%
 - `fouls>=3@10` : 24.8%
 - `fouls>=5@10` : 11.1%
@@ -24,18 +24,18 @@ Corpus : 24572 observations sur 633 ligues / 1 pays.
 ## Marqueurs les plus informatifs
 
 ### Fenêtre 10 minutes
-- `shots_on_target_total>=5` → `goals>=1` : **43.9%** (×1.24 vs base 35.4%, n=663)
-- `shots_on_target_total>=4` → `goals>=1` : **42.6%** (×1.20 vs base 35.4%, n=1149)
+- `shots_on_target_total>=5` → `goals>=1` : **43.8%** (×1.24 vs base 35.4%, n=664)
+- `shots_on_target_total>=4` → `goals>=1` : **42.6%** (×1.20 vs base 35.4%, n=1153)
 
 ### Fenêtre 25 minutes
 - `possession_imbalance>=20` → `fouls>=3` : **39.7%** (×1.38 vs base 28.8%, n=1073)
 - `possession_imbalance>=20` → `corners>=2` : **43.3%** (×1.28 vs base 34.0%, n=1073)
-- `possession_imbalance>=15` → `fouls>=3` : **36.6%** (×1.27 vs base 28.8%, n=1699)
-- `possession_imbalance>=15` → `corners>=2` : **39.7%** (×1.17 vs base 34.0%, n=1699)
+- `possession_imbalance>=15` → `fouls>=3` : **36.6%** (×1.27 vs base 28.8%, n=1701)
+- `possession_imbalance>=15` → `corners>=2` : **39.7%** (×1.17 vs base 34.0%, n=1701)
 - `possession_imbalance>=20` → `goals>=1` : **54.5%** (×1.16 vs base 46.9%, n=1073)
 
 ## Fiabilité mesurée du modèle (paris papier, aucun argent engagé)
-- Paris simulés réglés : 7324 / 12718
+- Paris simulés réglés : 7332 / 12763
 - Taux de réussite réel : 39.6%
 - Facteur de recalibrage appliqué : ×0.98 (<1 = le modèle était trop optimiste, ses probabilités sont rabotées)
 
