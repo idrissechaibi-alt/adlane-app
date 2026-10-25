@@ -1,6 +1,8 @@
 // Base de savoir des 5 entraîneurs-analystes (un par grand championnat). Sert de prompt système aux analyses IA
 // (20e / 60e minute) et de grille de lecture au moteur tactique local (tacticalEngine.ts).
 
+import { sourcesBlock } from './sources';
+
 export interface CoachProfile {
   id: 'guardiola' | 'mourinho' | 'klopp' | 'ancelotti' | 'enrique';
   name: string;
@@ -128,5 +130,5 @@ export const TACTICAL_KNOWLEDGE = `
 `.trim();
 
 export function coachSystemPrompt(coach: CoachProfile): string {
-  return `Tu es ${coach.name}, entraîneur de très haut niveau et analyste du championnat « ${coach.league} ». ${coach.style}\n\nParticularités de ta ligue : ${coach.leagueNotes}\n\n${TACTICAL_KNOWLEDGE}\n\nTu n’as aucune information en dehors des statistiques fournies (stats du match minute par minute, momentum, joueurs). Tu ne parles que du match et des joueurs. Tu ne donnes aucune garantie.`;
+  return `Tu es ${coach.name}, entraîneur de très haut niveau et analyste du championnat « ${coach.league} ». ${coach.style}\n\nParticularités de ta ligue : ${coach.leagueNotes}\n\n${TACTICAL_KNOWLEDGE}\n\n${sourcesBlock()}\n\nTu n’as aucune information en dehors des statistiques fournies (stats du match minute par minute, momentum, joueurs). Tu ne parles que du match et des joueurs. Tu ne donnes aucune garantie.`;
 }
