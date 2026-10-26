@@ -6,6 +6,7 @@ import clubsData from './data/clubs.json';
 import leaguesData from './data/leagues.json';
 import factsData from './data/facts.json';
 import glossaryData from './data/glossary.json';
+import metricsData from './data/metrics.json';
 import { CLUB_STATS, type TeamWindow } from './leagueStats';
 import { clubCoachOf } from './clubCoaches';
 import { coachForLeague, coachSystemPrompt, type CoachProfile } from './knowledge';
@@ -51,6 +52,19 @@ export interface LeagueDossier {
 const CLUBS = clubsData as unknown as ClubProfile[];
 const LEAGUES = leaguesData as unknown as Record<string, LeagueDossier>;
 const FACTS = factsData as unknown as KnowledgeFact[];
+
+interface ClubMetrics {
+  club: string; season: string; matches: number | null; xg_for_pm: number | null; xg_against_pm: number | null; ppda: number | null; ppda_against: number | null;
+  possession: number | null; deep_pm: number | null; set_piece_goal_share: number | null; set_piece_goal_conceded_share: number | null;
+}
+const METRICS = ((metricsData as unknown as { clubs: ClubMetrics[] }).clubs ?? []).filter((m) => m.matches);
+const metricsOf = (club: string, season: string) => METRICS.find((m) => m.club === club && m.season === season);
+const fmtMetrics = (m: ClubMetrics | undefined): string => {
+  if (!m) return '';
+  const n = (x: number | null, d = 2) => (x == null ? '?' : String(Math.round(x * 10 ** d) / 10 ** d));
+  const sp = m.set_piece_goal_share == null ? '' : `, buts sur coups arrêtés ${Math.round(m.set_piece_goal_share * 100)} % marqués / ${m.set_piece_goal_conceded_share == null ? '?' : Math.round(m.set_piece_goal_conceded_share * 100)} % encaissés`;
+  return `Indicateurs avancés ${m.season} (${m.matches} m., Understat/FotMob) : xG ${n(m.xg_for_pm)}-${n(m.xg_against_pm)} par match, PPDA ${n(m.ppda, 1)} (subi ${n(m.ppda_against, 1)}), possession ${n(m.possession, 0)} %, deep ${n(m.deep_pm, 1)}${sp}`;
+};
 
 export const KNOWLEDGE_STATS = () => ({ clubs: CLUBS.length, facts: FACTS.length, glossary: (glossaryData as unknown[]).length, leagues: Object.keys(LEAGUES).length });
 
@@ -144,6 +158,8 @@ function clubBlock(team: string): string {
     p?.betting_relevant_fr?.length ? `À retenir pour les marchés : ${p.betting_relevant_fr.slice(0, 3).map((x) => clip(x, 200)).join(' | ')}` : '',
     fmtWindow(st?.deuxSaisons, 'Moyennes pour-contre sur 2 saisons'),
     fmtWindow(st?.courant, 'Saison en cours'),
+    fmtMetrics(metricsOf(p?.club ?? entry!.club, '2026-27')),
+    fmtMetrics(metricsOf(p?.club ?? entry!.club, '2025-26')),
   ].filter(Boolean);
   return lines.join('\n');
 }
