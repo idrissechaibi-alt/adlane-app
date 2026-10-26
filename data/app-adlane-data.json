@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-10-26T21:26:01.806Z",
+  "exportedAt": "2026-10-26T21:26:50.795Z",
   "formatVersion": 1,
   "source": "APP adlane",
   "data": {
@@ -6620,16 +6620,10 @@
       "ticksLast24h": 50
     },
     "tickProgress": {
-      "startedAt": "2026-10-26T19:51:09.413Z",
-      "step": "programme fictif",
-      "at": "2026-10-26T19:57:10.996Z",
-      "stepDurationsSec": {
-        "scan matinal": 0,
-        "relevé live partagé": 1,
-        "scan en direct 20e/60e": 231,
-        "bilan de minuit": 0,
-        "marqueurs live": 130
-      }
+      "startedAt": "2026-10-26T21:25:52.777Z",
+      "step": "scan matinal",
+      "at": "2026-10-26T21:25:52.777Z",
+      "stepDurationsSec": {}
     },
     "lastTick": {
       "startedAt": "2026-10-26T19:02:26.575Z",
@@ -6729,12 +6723,6 @@
       "source": "api_football"
     },
     "abortedTicks": [
-      {
-        "startedAt": "2026-10-23T20:50:13.827Z",
-        "step": "scan matinal",
-        "at": "2026-10-23T20:50:13.827Z",
-        "stepDurationsSec": {}
-      },
       {
         "startedAt": "2026-10-23T23:16:22.045Z",
         "step": "scan en direct 20e/60e",
@@ -6885,6 +6873,18 @@
           "scan matinal": 0,
           "relevé live partagé": 1,
           "scan en direct 20e/60e": 334,
+          "bilan de minuit": 0,
+          "marqueurs live": 130
+        }
+      },
+      {
+        "startedAt": "2026-10-26T19:51:09.413Z",
+        "step": "programme fictif",
+        "at": "2026-10-26T19:57:10.996Z",
+        "stepDurationsSec": {
+          "scan matinal": 0,
+          "relevé live partagé": 1,
+          "scan en direct 20e/60e": 231,
           "bilan de minuit": 0,
           "marqueurs live": 130
         }
@@ -7148,7 +7148,7 @@
       "fictionalReviewed": 42074,
       "fictionalSettledLegs": 38140,
       "lastCreatedAt": "2026-10-26T19:51:43.908Z",
-      "createdLast24h": 1406
+      "createdLast24h": 1349
     },
     "predictionOutcomes30d": 42377,
     "marketSeries": {
@@ -7208,7 +7208,7 @@
         {
           "name": "Principal",
           "ok": true,
-          "latencyMs": 125,
+          "latencyMs": 271,
           "readyModels": 28,
           "configuredReady": 13,
           "configuredTotal": 13
@@ -7216,7 +7216,7 @@
         {
           "name": "Omniroute",
           "ok": true,
-          "latencyMs": 4272,
+          "latencyMs": 160,
           "readyModels": 860,
           "configuredReady": 2,
           "configuredTotal": 2
@@ -7319,7 +7319,7 @@
     "apiUsageToday": {
       "countsToday": {
         "footballData": 1,
-        "apiFootball": 13,
+        "apiFootball": 14,
         "theOddsApi": 0,
         "perplexity": 1,
         "apiFootball-autolearn": 11,
@@ -7335,7 +7335,7 @@
       }
     },
     "apiFootballBudget": {
-      "usedToday": 13,
+      "usedToday": 14,
       "autolearnUsedToday": 11,
       "autolearnRemaining": 59
     },
@@ -7344,31 +7344,31 @@
       "LiveScore": {
         "ok": true,
         "count": 10,
-        "at": "2026-10-26T21:25:53.951Z",
+        "at": "2026-10-26T21:26:45.363Z",
         "failStreak": 0
       },
       "ESPN": {
         "ok": true,
         "count": 7,
-        "at": "2026-10-26T21:25:54.114Z",
+        "at": "2026-10-26T21:26:45.356Z",
         "failStreak": 0
       },
       "FotMob": {
         "ok": true,
         "count": 7,
-        "at": "2026-10-26T21:25:54.250Z",
+        "at": "2026-10-26T21:26:45.576Z",
         "failStreak": 0
       },
       "AllSportsApi": {
         "ok": true,
         "count": 0,
-        "at": "2026-10-26T21:25:54.293Z",
+        "at": "2026-10-26T21:26:46.606Z",
         "failStreak": 0
       },
       "365Scores": {
         "ok": true,
         "count": 9,
-        "at": "2026-10-26T21:25:54.562Z",
+        "at": "2026-10-26T21:26:45.682Z",
         "failStreak": 0
       },
       "TheSportsDB": {
@@ -8166,7 +8166,11 @@
       ]
     },
     "liveStatsScan": {
-      "lastScan": null,
+      "lastScan": {
+        "at": "2026-10-26T21:26:04.135Z",
+        "matches": 2,
+        "sources": "6 sources gratuites"
+      },
       "todaySamples": {
         "Sevilla FC - CA Osasuna": 3,
         "Paris Saint-Germain FC - Olympique Lyonnais": 3
@@ -8179,7 +8183,7 @@
       },
       "fanLine": {
         "fixtures": 20,
-        "soccer": 5
+        "soccer": 6
       },
       "oddsmagnet": {
         "httpStatus": null
@@ -8189,18 +8193,13 @@
       "indexUpdatedAt": "2026-10-25T23:30:46Z",
       "teamsInIndex": 111,
       "summariesCached": 111,
-      "lookups": 0,
-      "withTrend": 0,
+      "lookups": 1,
+      "withTrend": 1,
       "unknownTeams": 0,
-      "lastTrendAt": null,
+      "lastTrendAt": "2026-10-26T21:26:49.271Z",
       "lastUnknown": null
     },
     "teamStatsUsageLog": [
-      {
-        "at": "2026-10-26T18:59:30.537Z",
-        "match": "Shinnik Yaroslavl - Spartak Kostroma",
-        "result": "équipe inconnue"
-      },
       {
         "at": "2026-10-26T18:59:32.601Z",
         "match": "FK Kauno Zalgiris - Zalgiris Vilnius",
@@ -8320,6 +8319,11 @@
         "at": "2026-10-26T19:51:42.746Z",
         "match": "CA Defensores de Belgrano - CA San Miguel",
         "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-26T21:26:49.272Z",
+        "match": "Sevilla FC - CA Osasuna",
+        "result": "tendance"
       }
     ],
     "bookieLineMinimums": {
