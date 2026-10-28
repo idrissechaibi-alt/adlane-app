@@ -1,40 +1,40 @@
 # Mémoire d'auto-apprentissage — marqueurs observés en direct
 
-Mis à jour : 2026-10-28T15:44:35.246Z
-Corpus : 24451 observations sur 634 ligues / 1 pays.
+Mis à jour : 2026-10-28T18:52:40.993Z
+Corpus : 24557 observations sur 644 ligues / 1 pays.
 
 ## Taux de base observés (par fenêtre)
 - `goals>=1@10` : 34.7%
 - `goals>=2@10` : 9.2%
-- `corners>=2@10` : 25.4%
+- `corners>=2@10` : 25.2%
 - `corners>=3@10` : 12.0%
-- `cards>=1@10` : 22.6%
-- `cards>=2@10` : 6.3%
-- `fouls>=3@10` : 24.9%
-- `fouls>=5@10` : 11.0%
-- `goals>=1@25` : 46.9%
-- `goals>=2@25` : 18.5%
-- `corners>=2@25` : 34.1%
-- `corners>=3@25` : 22.8%
-- `cards>=1@25` : 26.1%
-- `cards>=2@25` : 9.7%
-- `fouls>=3@25` : 29.3%
-- `fouls>=5@25` : 23.7%
+- `cards>=1@10` : 22.4%
+- `cards>=2@10` : 6.2%
+- `fouls>=3@10` : 24.7%
+- `fouls>=5@10` : 10.9%
+- `goals>=1@25` : 46.8%
+- `goals>=2@25` : 18.4%
+- `corners>=2@25` : 33.8%
+- `corners>=3@25` : 22.6%
+- `cards>=1@25` : 26.0%
+- `cards>=2@25` : 9.6%
+- `fouls>=3@25` : 29.1%
+- `fouls>=5@25` : 23.5%
 
 ## Marqueurs les plus informatifs
 
 ### Fenêtre 10 minutes
-- `shots_on_target_total>=5` → `goals>=1` : **40.4%** (×1.16 vs base 34.7%, n=644)
+- `shots_on_target_total>=5` → `goals>=1` : **40.5%** (×1.17 vs base 34.7%, n=654)
 
 ### Fenêtre 25 minutes
-- `possession_imbalance>=20` → `fouls>=3` : **40.6%** (×1.39 vs base 29.3%, n=1091)
-- `possession_imbalance>=15` → `fouls>=3` : **37.2%** (×1.27 vs base 29.3%, n=1747)
-- `possession_imbalance>=20` → `corners>=2` : **43.1%** (×1.26 vs base 34.1%, n=1091)
-- `possession_imbalance>=15` → `corners>=2` : **40.0%** (×1.17 vs base 34.1%, n=1747)
+- `possession_imbalance>=20` → `fouls>=3` : **40.3%** (×1.38 vs base 29.1%, n=1100)
+- `possession_imbalance>=15` → `fouls>=3` : **36.8%** (×1.27 vs base 29.1%, n=1764)
+- `possession_imbalance>=20` → `corners>=2` : **42.8%** (×1.27 vs base 33.8%, n=1100)
+- `possession_imbalance>=15` → `corners>=2` : **39.6%** (×1.17 vs base 33.8%, n=1764)
 
 ## Fiabilité mesurée du modèle (paris papier, aucun argent engagé)
-- Paris simulés réglés : 7850 / 13507
-- Taux de réussite réel : 39.2%
+- Paris simulés réglés : 7894 / 13663
+- Taux de réussite réel : 39.1%
 - Facteur de recalibrage appliqué : ×0.97 (<1 = le modèle était trop optimiste, ses probabilités sont rabotées)
 
 ## Couverture élargie via Omniroute (matchs au-delà du quota API-Football)
@@ -42,15 +42,15 @@ Corpus : 24451 observations sur 634 ligues / 1 pays.
 - Pas encore assez fiable (seuil : 30 recoupements, 80% d'accord) — Omniroute élargit la couverture observée mais n'influence pas encore les probabilités.
 
 ## Fiabilité passée du scan en direct 20e/60e minute (par marché, 30 derniers jours, réel + fictif confondus)
-- `Total de buts` : réalisé **62.6%** vs annoncé 64.0% (n=8591)
-- `Corners` : réalisé **64.0%** vs annoncé 63.6% (n=7385)
-- `Cartons jaunes` : réalisé **58.8%** vs annoncé 61.0% (n=7164)
-- `Les deux marquent` : réalisé **59.9%** vs annoncé 62.4% (n=2816)
-- `Victoire (1X2)` : réalisé **60.3%** vs annoncé 63.0% (n=1944)
-- `Buts par équipe` : réalisé **68.1%** vs annoncé 67.3% (n=1394)
-- `Fautes` : réalisé **62.1%** vs annoncé 68.2% (n=874)
-- `Buts 1ère mi-temps` : réalisé **57.0%** vs annoncé 60.9% (n=574)
-- `Corners par équipe` : réalisé **73.4%** vs annoncé 66.9% (n=357)
+- `Total de buts` : réalisé **62.7%** vs annoncé 64.0% (n=8685)
+- `Corners` : réalisé **64.1%** vs annoncé 63.6% (n=7485)
+- `Cartons jaunes` : réalisé **58.7%** vs annoncé 61.0% (n=7235)
+- `Les deux marquent` : réalisé **59.9%** vs annoncé 62.4% (n=2843)
+- `Victoire (1X2)` : réalisé **60.3%** vs annoncé 63.0% (n=1965)
+- `Buts par équipe` : réalisé **68.2%** vs annoncé 67.3% (n=1415)
+- `Fautes` : réalisé **62.2%** vs annoncé 68.2% (n=875)
+- `Buts 1ère mi-temps` : réalisé **56.8%** vs annoncé 60.9% (n=577)
+- `Corners par équipe` : réalisé **73.1%** vs annoncé 66.9% (n=360)
 - `Tirs cadrés (joueur)` : réalisé **34.7%** vs annoncé 62.2% (n=124) — trop confiant sur ce marché, à corriger.
 
 ## Fiabilité passée de l'analyse Scouting IA (par marché, 30 derniers jours)
