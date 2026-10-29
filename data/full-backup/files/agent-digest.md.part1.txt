@@ -1,7 +1,7 @@
 # Mémoire d'auto-apprentissage — marqueurs observés en direct
 
-Mis à jour : 2026-10-29T07:57:57.107Z
-Corpus : 24732 observations sur 655 ligues / 1 pays.
+Mis à jour : 2026-10-29T09:05:02.867Z
+Corpus : 24735 observations sur 655 ligues / 1 pays.
 
 ## Taux de base observés (par fenêtre)
 - `goals>=1@10` : 34.9%
@@ -12,7 +12,7 @@ Corpus : 24732 observations sur 655 ligues / 1 pays.
 - `cards>=2@10` : 6.2%
 - `fouls>=3@10` : 24.4%
 - `fouls>=5@10` : 10.8%
-- `goals>=1@25` : 46.7%
+- `goals>=1@25` : 46.6%
 - `goals>=2@25` : 18.5%
 - `corners>=2@25` : 33.2%
 - `corners>=3@25` : 22.2%
@@ -24,7 +24,7 @@ Corpus : 24732 observations sur 655 ligues / 1 pays.
 ## Marqueurs les plus informatifs
 
 ### Fenêtre 10 minutes
-- `shots_on_target_total>=5` → `goals>=1` : **40.7%** (×1.17 vs base 34.9%, n=671)
+- `shots_on_target_total>=5` → `goals>=1` : **40.6%** (×1.16 vs base 34.9%, n=672)
 
 ### Fenêtre 25 minutes
 - `possession_imbalance>=20` → `fouls>=3` : **39.6%** (×1.39 vs base 28.5%, n=1122)
@@ -33,7 +33,7 @@ Corpus : 24732 observations sur 655 ligues / 1 pays.
 - `possession_imbalance>=15` → `corners>=2` : **38.7%** (×1.17 vs base 33.2%, n=1812)
 
 ## Fiabilité mesurée du modèle (paris papier, aucun argent engagé)
-- Paris simulés réglés : 8044 / 13781
+- Paris simulés réglés : 8045 / 13782
 - Taux de réussite réel : 38.6%
 - Facteur de recalibrage appliqué : ×0.96 (<1 = le modèle était trop optimiste, ses probabilités sont rabotées)
 
@@ -43,8 +43,8 @@ Corpus : 24732 observations sur 655 ligues / 1 pays.
 
 ## Fiabilité passée du scan en direct 20e/60e minute (par marché, 30 derniers jours, réel + fictif confondus)
 - `Total de buts` : réalisé **62.6%** vs annoncé 64.0% (n=8956)
-- `Corners` : réalisé **63.9%** vs annoncé 63.5% (n=7863)
-- `Cartons jaunes` : réalisé **58.8%** vs annoncé 61.0% (n=7508)
+- `Corners` : réalisé **63.9%** vs annoncé 63.5% (n=7865)
+- `Cartons jaunes` : réalisé **58.8%** vs annoncé 61.0% (n=7509)
 - `Les deux marquent` : réalisé **59.9%** vs annoncé 62.4% (n=2927)
 - `Victoire (1X2)` : réalisé **60.4%** vs annoncé 63.0% (n=2024)
 - `Buts par équipe` : réalisé **68.2%** vs annoncé 67.4% (n=1505)
