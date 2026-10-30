@@ -33,8 +33,10 @@ for f in sorted(glob.glob(os.path.join(out, 'league-*.json'))):
     d = load(f)
     if d: leagues[d.get('league', os.path.basename(f))] = d
 facts = []
-for name in ('facts-tactique', 'facts-evenements', 'facts-rapports', 'wave2-facts', 'wave3-youtube', 'wave3-livres'):
-    for x in load(os.path.join(out, name + '.json')) or []:
+for name in ('facts-tactique', 'facts-evenements', 'facts-rapports', 'wave2-facts', 'wave3-youtube', 'wave3-livres', 'wave4-friendsoftracking'):
+    path = os.path.join(out, name + '.json')
+    if not os.path.exists(path): path = os.path.join(os.path.dirname(__file__), 'inbox', name + '.json')
+    for x in load(path) or []:
         if isinstance(x, dict) and x.get('fact_fr'):
             x['origin'] = name
             if not x.get('use_fr') and x.get('how_to_read_live_fr'): x['use_fr'] = x['how_to_read_live_fr']
