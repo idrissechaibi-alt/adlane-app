@@ -5,7 +5,6 @@
 import { hubDateKey, hubFinalResult, hubLiveEvents, hubStats, HubMatch } from '../src/api/footballDataAPIs/liveDataHub';
 import { buildLiveSample, LiveStatsSample } from '../src/core/liveStatsStore';
 import type { FeedFinal, FeedMatch, FeedSlice } from '../src/core/serverFeed';
-import { runCoachAnalysis, type CoachAnalysis, type Checkpoint } from '../src/core/coaches/coachAnalysis';
 import { SERVER_LIVE_DIR } from '../src/core/serverFeed';
 import { fetchRepoJson } from '../src/core/gitAutoSync';
 import { sendTelegramMessage } from '../src/core/telegram';
@@ -125,50 +124,19 @@ interface Tracked {
 
 const tracked = new Map<string, Tracked>();
 /** Ce qui reste à publier, par jour : relevés et résultats. */
-const pending = new Map<string, { samples: Record<string, LiveStatsSample[]>; finals: Record<string, FeedFinal>; analyses: Record<string, CoachAnalysis> }>();
-/** Derniers relevés de chaque match (fenêtre donnée à l'entraîneur IA). */
-const recent = new Map<string, LiveStatsSample[]>();
-/** Analyses IA déjà tentées : clé du moment → essais et dernier essai (3 au plus, espacés de 3 min). */
-const coachTries = new Map<string, { n: number; at: number; done: boolean }>();
+const pending = new Map<string, { samples: Record<string, LiveStatsSample[]>; finals: Record<string, FeedFinal> }>();
 /** Tout ce qui a été publié dans la tranche en cours (fichier réécrit à chaque publication de la tranche). */
 let slice: { id: string; day: string; data: FeedSlice } | null = null;
 const startStamp = Date.now().toString(36);
 
 function queueSample(t: Tracked, key: string, s: LiveStatsSample): void {
-  const p = pending.get(t.day) ?? { samples: {}, finals: {}, analyses: {} };
+  const p = pending.get(t.day) ?? { samples: {}, finals: {} };
   (p.samples[key] ??= []).push(s);
   pending.set(t.day, p);
-  const list = recent.get(key) ?? [];
-  list.push(s);
-  if (list.length > 60) list.splice(0, list.length - 60);
-  recent.set(key, list);
-}
-
-/** Moment d'analyse d'un match réel : 20e (18-30e de la 1re mi-temps) ou 60e (58-72e de la 2e), sinon null. */
-const checkpointOf = (m: HubMatch): Checkpoint | null => (m.statusShort === '1H' && m.minute >= 18 && m.minute <= 30 ? '20' : m.statusShort === '2H' && m.minute >= 58 && m.minute <= 72 ? '60' : null);
-
-/** Analyse IA de l'entraîneur de la ligue pour un match réel au bon moment ; publiée avec le flux, sans jamais bloquer la collecte. */
-async function coachIfDue(key: string, m: HubMatch, t: Tracked): Promise<void> {
-  const cp = checkpointOf(m);
-  const samples = recent.get(key);
-  if (!cp || !samples?.length) return;
-  const id = `${t.day}|${key}|${cp}`;
-  const tries = coachTries.get(id) ?? { n: 0, at: 0, done: false };
-  if (tries.done || tries.n >= 3 || Date.now() - tries.at < 180_000) return;
-  tries.n++;
-  tries.at = Date.now();
-  coachTries.set(id, tries);
-  const analysis = await runCoachAnalysis({ homeTeam: t.match.home, awayTeam: t.match.away, league: t.match.league, day: t.day, checkpoint: cp, minute: m.minute, samples, source: 'serveur' }).catch(() => null);
-  if (!analysis) return;
-  tries.done = true;
-  const p = pending.get(t.day) ?? { samples: {}, finals: {}, analyses: {} };
-  p.analyses[analysis.key] = analysis;
-  pending.set(t.day, p);
-  log(`Entraîneur ${analysis.coach} : analyse de la ${cp}e pour ${t.match.home} - ${t.match.away} (${analysis.model}).`);
 }
 
 function queueFinal(t: Tracked, key: string, f: FeedFinal): void {
-  const p = pending.get(t.day) ?? { samples: {}, finals: {}, analyses: {} };
+  const p = pending.get(t.day) ?? { samples: {}, finals: {} };
   p.finals[key] = f;
   pending.set(t.day, p);
 }
@@ -250,7 +218,6 @@ export async function collectOnce(): Promise<{ live: number; sampled: number; fi
     t.lastSample = s;
     if (m.statusShort === 'HT' || (m.statusShort === '1H' && m.minute >= 44)) t.htSample = s;
     queueSample(t, key, s);
-    if (real) void coachIfDue(key, m, t);
     sampled++;
   }
 
@@ -307,8 +274,6 @@ export async function collectOnce(): Promise<{ live: number; sampled: number; fi
 /** Publie ce qui a été collecté depuis la dernière fois (tranche de 10 min, réécrite tant qu'elle est en cours). */
 export async function publish(): Promise<boolean> {
   if (pending.size === 0) return true;
-  for (const [d, p] of [...pending]) if (!Object.keys(p.samples).length && !Object.keys(p.finals).length && !Object.keys(p.analyses).length) pending.delete(d);
-  if (pending.size === 0) return true;
   const d = new Date();
   const id = `${String(d.getUTCHours()).padStart(2, '0')}${String(Math.floor(d.getUTCMinutes() / 10) * 10).padStart(2, '0')}`;
   const days = [...pending.keys()];
@@ -316,8 +281,8 @@ export async function publish(): Promise<boolean> {
   for (const day of days) {
     const p = pending.get(day)!;
     // Copie de la tranche + nouveautés : la tranche n'est mise à jour qu'une fois l'envoi réussi (jamais de doublon).
-    const base: FeedSlice = slice && slice.id === id && slice.day === day ? slice.data : { day, matches: {}, samples: {}, finals: {}, analyses: {} };
-    const next: FeedSlice = { day, matches: { ...base.matches }, samples: Object.fromEntries(Object.entries(base.samples).map(([k, v]) => [k, [...v]])), finals: { ...base.finals }, analyses: { ...(base.analyses ?? {}), ...p.analyses } };
+    const base = slice && slice.id === id && slice.day === day ? slice.data : { day, matches: {}, samples: {}, finals: {} };
+    const next: FeedSlice = { day, matches: { ...base.matches }, samples: Object.fromEntries(Object.entries(base.samples).map(([k, v]) => [k, [...v]])), finals: { ...base.finals } };
     for (const [k, list] of Object.entries(p.samples)) (next.samples[k] ??= []).push(...list);
     Object.assign(next.finals, p.finals);
     for (const k of [...Object.keys(p.samples), ...Object.keys(p.finals)]) {

@@ -42,7 +42,7 @@ export interface CoachAnalysis {
   momentum_fr: string;
   risks_fr: string[];
   opinions: AiOpinion[];
-  source: 'telephone' | 'serveur';
+  source: 'telephone';
 }
 
 const STORE_KEY = '@coach_analyses_v1';
@@ -90,20 +90,6 @@ export async function getAnalysis(key: string): Promise<CoachAnalysis | null> {
 
 export async function listAnalyses(): Promise<CoachAnalysis[]> {
   return Object.values(await load());
-}
-
-/** Analyses reçues du serveur PC : ajoutées sans écraser une analyse locale plus récente. Renvoie le nombre ajouté. */
-export async function mergeAnalyses(list: CoachAnalysis[]): Promise<number> {
-  const all = await load();
-  let added = 0;
-  for (const a of list) {
-    if (!a?.key || !Array.isArray(a.opinions)) continue;
-    if (all[a.key] && Date.parse(all[a.key].at) >= Date.parse(a.at)) continue;
-    all[a.key] = a;
-    added++;
-  }
-  if (added) await save();
-  return added;
 }
 
 // ---------------------------------------------------------------- lecture de la réponse de l'IA
@@ -250,7 +236,6 @@ export interface AnalyzeInput {
   checkpoint: Checkpoint;
   minute: number;
   samples: LiveStatsSample[];
-  source: 'telephone' | 'serveur';
 }
 
 /**
@@ -269,7 +254,7 @@ export async function runCoachAnalysis(input: AnalyzeInput): Promise<CoachAnalys
   const job = (async () => {
     if (!(await takeBudget())) return null;
     await loadNotes();
-    const briefing = coachBriefing(input.homeTeam, input.awayTeam, input.league, ['total_buts', 'corners', 'cartons', '1X2']);
+    const briefing = coachBriefing(input.homeTeam, input.awayTeam, input.league, ['total_buts', 'corners', 'cartons', '1X2'], 5);
     const last = [...input.samples].sort((a, b) => a.minute - b.minute).slice(-1)[0];
     const user =
       `Match : ${input.homeTeam} (domicile) contre ${input.awayTeam}, ${input.league}. Moment : ${input.checkpoint}e minute (relevé à la ${last.minute}e, score ${last.home}-${last.away}).\n\n` +
@@ -288,7 +273,7 @@ export async function runCoachAnalysis(input: AnalyzeInput): Promise<CoachAnalys
       minute: last.minute,
       at: new Date().toISOString(),
       model: result.model,
-      source: input.source,
+      source: 'telephone',
       ...result.value,
     };
     const all = await load();

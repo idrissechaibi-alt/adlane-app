@@ -171,10 +171,10 @@ function clubBlock(team: string): string {
  * Dossier remis à l'entraîneur d'une ligue avant une analyse (20e / 60e minute) : fiches des deux clubs, dossier de ligue, faits de
  * recherche utiles aux marchés concernés. Borné (~9 000 caractères) pour les modèles gratuits.
  */
-export function coachBriefing(homeTeam: string, awayTeam: string, league: string | undefined | null, markets: string[] = []): { coach: CoachProfile | null; system: string; context: string } {
+export function coachBriefing(homeTeam: string, awayTeam: string, league: string | undefined | null, markets: string[] = [], maxFacts = 8): { coach: CoachProfile | null; system: string; context: string } {
   const coach = coachForLeague(league ?? clubCoachOf(homeTeam)?.league ?? null);
   const dossier = leagueDossierOf(league ?? clubCoachOf(homeTeam)?.league ?? null);
-  const facts = factsFor(marketTags(markets), 8);
+  const facts = factsFor(marketTags(markets), maxFacts);
   const league_ = dossier
     ? [
         `# Ligue — ${dossier.league}`,

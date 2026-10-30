@@ -988,16 +988,36 @@ export const CLUB_COACHES: ClubCoachFile[] = [
 
 const strip = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
 
-/** Fiche de l'entraîneur d'un club d'après le nom d'équipe (comparaison souple : « Man City », « Manchester City »…). */
+/** Autres noms sous lesquels les sources et l'app écrivent un club (les fiches portent parfois le nom français). */
+const CLUB_ALIASES: Record<string, string[]> = {
+  'Manchester City': ['Man City'], 'Manchester United': ['Man United', 'Man Utd'], 'Tottenham Hotspur': ['Tottenham', 'Spurs'], 'Newcastle United': ['Newcastle'],
+  'Nottingham Forest': ["Nott'm Forest", 'Nottm Forest'], 'Brighton & Hove Albion': ['Brighton', 'Brighton and Hove Albion'], 'Coventry City': ['Coventry'], 'Hull City': ['Hull'],
+  'Ipswich Town': ['Ipswich'], 'Leeds United': ['Leeds'],
+  'Athletic Club': ['Athletic Bilbao', 'Ath Bilbao'], 'Atlético Madrid': ['Atletico Madrid', 'Atlético de Madrid', 'Club Atlético de Madrid', 'Ath Madrid'], 'Celta Vigo': ['Celta', 'RC Celta'],
+  'Deportivo Alavés': ['Alaves', 'Alavés'], 'Deportivo La Corogne': ['Deportivo La Coruña', 'Deportivo La Coruna', 'La Coruna'], 'Espanyol': ['Espanol', 'RCD Espanyol'],
+  'FC Barcelone': ['Barcelona', 'FC Barcelona', 'Barça'], 'Málaga': ['Malaga'], 'Racing Santander': ['Racing de Santander', 'Santander'], 'Rayo Vallecano': ['Vallecano'],
+  'Real Betis': ['Betis', 'Real Betis Balompié'], 'Real Sociedad': ['Sociedad'], 'Séville FC': ['Sevilla', 'Sevilla FC'], 'Valence CF': ['Valencia', 'Valencia CF'],
+  '1. FC Cologne': ['FC Köln', '1. FC Köln', 'Koln', 'Cologne'], 'Bayer Leverkusen': ['Leverkusen'], 'Bayern Munich': ['Bayern München', 'Bayern Munchen', 'FC Bayern', 'Bayern'],
+  'Borussia Dortmund': ['Dortmund', 'BVB'], 'Borussia Mönchengladbach': ["Borussia M'gladbach", "M'gladbach", 'Gladbach', 'Monchengladbach'], 'Eintracht Francfort': ['Eintracht Frankfurt', 'Ein Frankfurt', 'Frankfurt'],
+  'FC Augsburg': ['Augsburg'], 'Hambourg SV': ['Hamburger SV', 'Hamburg', 'HSV'], 'Mayence 05': ['Mainz 05', 'Mainz', '1. FSV Mainz 05'], 'SC Fribourg': ['SC Freiburg', 'Freiburg'],
+  'SC Paderborn': ['Paderborn', 'SC Paderborn 07'], 'SV Elversberg': ['Elversberg'], 'TSG Hoffenheim': ['Hoffenheim', 'TSG 1899 Hoffenheim'], 'VfB Stuttgart': ['Stuttgart'], 'Werder Brême': ['Werder Bremen', 'Bremen'],
+  'Union Berlin': ['1. FC Union Berlin'], 'RB Leipzig': ['Leipzig'],
+  'AC Milan': ['Milan'], 'AS Rome': ['Roma', 'AS Roma'], 'Bologne': ['Bologna', 'Bologna FC'], 'Côme': ['Como', 'Como 1907'], 'Inter Milan': ['Inter', 'Internazionale', 'FC Internazionale'],
+  'Naples': ['Napoli', 'SSC Napoli'], 'Parme': ['Parma', 'Parma Calcio'], 'Venise': ['Venezia', 'Venezia FC'], 'Juventus': ['Juve'],
+  'Paris Saint-Germain': ['Paris SG', 'PSG', 'Paris Saint Germain'], 'Marseille': ['Olympique de Marseille', 'Olympique Marseille'], 'Lyon': ['Olympique Lyonnais'], 'Monaco': ['AS Monaco'],
+  'Lille': ['LOSC Lille', 'Lille OSC'], 'Rennes': ['Stade Rennais'], 'Strasbourg': ['RC Strasbourg'], 'Lens': ['RC Lens'], 'Nice': ['OGC Nice'], 'Toulouse': ['Toulouse FC'], 'Brest': ['Stade Brestois'],
+  'Paris FC': ['Paris F.C.'], 'Le Havre': ['Le Havre AC', 'Havre'],
+};
+
+/** Fiche de l'entraîneur d'un club d'après le nom d'équipe (souple : « Man City », « Sevilla », « Venezia », « Bayern München »…). */
 export function clubCoachOf(team: string | undefined | null): ClubCoachFile | null {
   if (!team) return null;
   const t = strip(team);
-  const ALIASES: Record<string, string> = { 'man city': 'manchester city', 'man utd': 'manchester united', 'man united': 'manchester united', spurs: 'tottenham hotspur', tottenham: 'tottenham hotspur', newcastle: 'newcastle united', 'nott m forest': 'nottingham forest', brighton: 'brighton hove albion', wolves: 'wolverhampton', 'atletico madrid': 'atletico madrid', barcelona: 'fc barcelone', barca: 'fc barcelone', 'real madrid': 'real madrid', 'bayern': 'bayern munich', 'bayern munchen': 'bayern munich', 'borussia dortmund': 'borussia dortmund', dortmund: 'borussia dortmund', leverkusen: 'bayer leverkusen', 'rb leipzig': 'rb leipzig', inter: 'inter milan', internazionale: 'inter milan', milan: 'ac milan', roma: 'as rome', napoli: 'naples', 'paris sg': 'paris saint germain', psg: 'paris saint germain', marseille: 'marseille', lyon: 'lyon' };
-  const wanted = ALIASES[t] ?? t;
-  return (
-    CLUB_COACHES.find((c) => strip(c.club) === wanted) ??
-    CLUB_COACHES.find((c) => strip(c.club).includes(wanted) || wanted.includes(strip(c.club))) ??
-    null
-  );
+  if (!t) return null;
+  const exact = CLUB_COACHES.find((c) => strip(c.club) === t || (CLUB_ALIASES[c.club] ?? []).some((a) => strip(a) === t));
+  if (exact) return exact;
+  // Repli : l'un contient l'autre en mots entiers (« Real Betis Balompié » ↔ « Real Betis »), sans confondre deux clubs voisins.
+  const words = ` ${t} `;
+  const hits = CLUB_COACHES.filter((c) => [c.club, ...(CLUB_ALIASES[c.club] ?? [])].some((n) => { const w = ` ${strip(n)} `; return strip(n).length >= 5 && (words.includes(w) || w.includes(words)); }));
+  return hits.length === 1 ? hits[0] : null;
 }
-
