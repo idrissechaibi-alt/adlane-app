@@ -90,15 +90,39 @@ export function loadSites(): SiteSource[] {
 
 const getPath = (obj: any, p: string): any => p.split('.').filter(Boolean).reduce((o, k) => (o == null ? undefined : o[k]), obj);
 
+/**
+ * Chemin avec « * » : parcourt toutes les entrées d'une liste puis aplatit la suite (ex. "leagues.*.matches" : tous les matchs de
+ * toutes les compétitions). Chaque élément reçoit `_parent` = l'entrée traversée (ex. la compétition) : champ « _parent.name ».
+ */
+function getItems(data: any, p: string): any[] | any {
+  if (!p.includes('*')) return getPath(data, p);
+  const [head, ...rest] = p.split('*');
+  const list = getPath(data, head.replace(/\.$/, ''));
+  if (!Array.isArray(list)) return [];
+  const tail = rest.join('*').replace(/^\./, '');
+  const out: any[] = [];
+  for (const entry of list) {
+    const sub = tail ? getItems(entry, tail) : [entry];
+    for (const it of Array.isArray(sub) ? sub : [sub]) if (it && typeof it === 'object') out.push({ ...it, _parent: entry });
+  }
+  return out;
+}
+
 const BLOCK_RE = /access denied|acc[eè]s refus[eé]|captcha|just a moment|verify you are human|are you a robot|forbidden|pays interdits|blocked/i;
 
 class Blocked extends Error {}
+
+/** `{date}` → jour UTC au format AAAAMMJJ, `{today}` → AAAA-MM-JJ : une même adresse sert tous les jours (ex. liste des matchs du jour). */
+export const resolveUrl = (url: string, now = new Date()): string => {
+  const iso = now.toISOString().slice(0, 10);
+  return url.replace(/\{date\}/g, iso.replace(/-/g, '')).replace(/\{today\}/g, iso);
+};
 
 async function fetchText(s: SiteSource): Promise<{ text: string; type: string }> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 20_000);
   try {
-    const r = await fetch(s.url, {
+    const r = await fetch(resolveUrl(s.url), {
       headers: { 'User-Agent': 'adlane-collector/1.0 (usage personnel)', Accept: 'application/json,text/html;q=0.9,*/*;q=0.5', ...(s.headers ?? {}) },
       signal: ctrl.signal,
     });
@@ -120,7 +144,7 @@ export function extract(s: SiteSource, text: string, type: string): unknown {
   if (format === 'json') {
     const data = JSON.parse(text);
     if (!s.items && !s.fields) return data;
-    const base = s.items ? getPath(data, s.items) : data;
+    const base = s.items ? getItems(data, s.items) : data;
     const pick = (o: any) => (s.fields ? Object.fromEntries(Object.entries(s.fields).map(([k, p]) => [k, getPath(o, p)])) : o);
     return Array.isArray(base) ? base.map(pick) : pick(base);
   }

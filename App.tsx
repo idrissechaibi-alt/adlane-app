@@ -96,10 +96,19 @@ export default function App() {
     const realInterval = setInterval(() => {
       runRealFastTick().catch(() => undefined);
     }, REAL_FAST_TICK_INTERVAL_MS);
+    // Rappel de l'écran allumé chaque minute tant que l'app est au premier plan (sans effet si déjà posé).
+    const awakeInterval = setInterval(() => {
+      if (AppState.currentState === 'active') keepScreenOn();
+    }, 60_000);
     // L'app n'est jamais fermée (elle reste en arrière-plan) : une mise à jour publiée est appliquée quand elle revient au
     // premier plan, au plus une vérification toutes les 15 min — plus besoin de la fermer et la rouvrir.
     let lastUpdateCheck = Date.now();
     const appStateSub = AppState.addEventListener('change', (state) => {
+      // Android relâche le drapeau « écran allumé » quand l'app passe en arrière-plan : on le repose à chaque retour.
+      if (state === 'active') {
+        releaseScreen();
+        keepScreenOn();
+      }
       if (state !== 'active' || Date.now() - lastUpdateCheck < 15 * 60_000) return;
       lastUpdateCheck = Date.now();
       void applyPendingUpdate();
@@ -107,6 +116,7 @@ export default function App() {
     return () => {
       clearInterval(interval);
       clearInterval(realInterval);
+      clearInterval(awakeInterval);
       appStateSub.remove();
       releaseScreen();
     };

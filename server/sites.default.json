@@ -1,1 +1,25 @@
-[]
+[
+  {
+    "id": "fotmob-matchs",
+    "name": "FotMob : matchs du jour (scores, minute, statut)",
+    "url": "https://www.fotmob.com/api/data/matches?date={date}&timezone=UTC",
+    "every": 30,
+    "format": "json",
+    "items": "leagues.*.matches",
+    "key": "id",
+    "fields": {
+      "id": "id",
+      "ligue": "_parent.name",
+      "pays": "_parent.ccode",
+      "domicile": "home.name",
+      "exterieur": "away.name",
+      "buts_dom": "home.score",
+      "buts_ext": "away.score",
+      "minute": "status.liveTime.short",
+      "commence": "status.started",
+      "termine": "status.finished",
+      "raison": "status.reason.short"
+    },
+    "enabled": true
+  }
+]

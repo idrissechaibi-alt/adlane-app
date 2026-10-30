@@ -133,7 +133,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  every('Collecte', 60_000, async () => {
+  every('Collecte', 30_000, async () => {
     const r = await collectOnce();
     lastCollectAt = new Date().toISOString();
     samplesSinceStart += r.sampled;
@@ -141,7 +141,7 @@ async function main(): Promise<void> {
     liveNow = r.live;
     writeStatus();
   });
-  every('Publication', 2 * 60_000, async () => {
+  every('Publication', 30_000, async () => {
     if (await publish()) lastPublishAt = new Date().toISOString();
     writeStatus();
   }, false);
@@ -151,7 +151,7 @@ async function main(): Promise<void> {
   // les 60 s pour le téléphone.
   log(`Sites web à lire : ${loadSites().length}.`);
   every('Sites web', 10_000, collectDueSites);
-  every('Publication web', 60_000, publishWeb, false);
+  every('Publication web', 30_000, publishWeb, false);
   every('Nettoyage des relevés web', 24 * 3_600_000, pruneWebFeed, false);
   every('Battement de cœur', 5 * 60_000, heartbeat);
   every('Mise à jour du code', 30 * 60_000, async () => {

@@ -179,7 +179,7 @@ export async function getServerFeedStats(): Promise<{ lastPullAt: string | null;
 export function pullServerLiveFeed(): Promise<number> {
   if (isRunningOnServer()) return Promise.resolve(0);
   if (pulling) return pulling;
-  if (Date.now() - lastPullAt < 90_000) return Promise.resolve(0);
+  if (Date.now() - lastPullAt < 25_000) return Promise.resolve(0);
   lastPullAt = Date.now();
   pulling = (async () => {
     const seen: Record<string, string> = JSON.parse((await AsyncStorage.getItem(PULL_KEY)) ?? '{}');
@@ -252,7 +252,7 @@ async function mergeSlice(slice: FeedSlice): Promise<number> {
       const tl = (timelines[p.fixtureId] ??= []);
       const lastTs = tl.length ? Date.parse(tl[tl.length - 1].ts) : 0;
       for (const x of samples) {
-        if (Date.parse(x.ts) <= lastTs + 30_000) continue;
+        if (Date.parse(x.ts) <= lastTs + 20_000) continue;
         const sample: MatchSample = {
           ts: x.ts,
           minute: x.minute,

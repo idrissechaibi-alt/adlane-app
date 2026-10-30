@@ -32,6 +32,7 @@ import { loadTelegramConfig } from './telegram';
 import { getServerFeedStats } from './serverFeed';
 import { getComboTrainerStatus } from './comboTrainer';
 import { getCoachStatus } from './coaches/coachDesk';
+import { keepAwakeAvailable } from './keepAwake';
 import { getServerStatus } from './gitAutoSync';
 import {
   readAccuracySnapshots,
@@ -195,6 +196,7 @@ export async function buildAppHealth(): Promise<Record<string, unknown>> {
     teamRegistry: await section(async () => { await loadTeamRegistry(); return { teams: teamRegistrySize() }; }),
     comboTrainer: await section(async () => getComboTrainerStatus()),
     entraineurs: await section(async () => getCoachStatus()),
+    ecranToujoursAllume: await section(async () => ({ moduleNatifPresent: keepAwakeAvailable() })),
     serverFeed: await section(async () => ({ ...(await getServerFeedStats()), server: (await getServerStatus(true)).info })),
     patternEngine: await section(async () => patternStatus()),
     settlementAudit: await section(async () => JSON.parse((await AsyncStorage.getItem('@settlement_audit')) ?? '[]').slice(-30)),

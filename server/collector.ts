@@ -183,7 +183,7 @@ export async function collectOnce(): Promise<{ live: number; sampled: number; fi
   const liveKeys = new Set<string>();
   let sampled = 0;
 
-  // Réels chaque minute, les autres toutes les 5 min ; au plus 25 relevés détaillés par minute (sources gratuites).
+  // Réels toutes les 30 s, les autres toutes les 5 min ; au plus 25 relevés détaillés par passage (sources gratuites).
   // Une entrée par match, même quand plusieurs sources le donnent sous des noms différents.
   const unique: Array<{ m: HubMatch; key: string; real: boolean }> = [];
   const seenNames: Seen[] = [];
@@ -196,7 +196,7 @@ export async function collectOnce(): Promise<{ live: number; sampled: number; fi
   const due = unique
     .filter(({ key, real }) => {
       const t = tracked.get(key);
-      return !t || now - t.lastSampleAt >= (real ? 55_000 : 5 * 60_000 - 5_000);
+      return !t || now - t.lastSampleAt >= (real ? 25_000 : 5 * 60_000 - 5_000);
     })
     .sort((a, b) => Number(b.real) - Number(a.real))
     .slice(0, 25);
