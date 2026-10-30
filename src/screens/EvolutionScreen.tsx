@@ -32,6 +32,9 @@ import { OddsLoopFile, updateOddsLoopFile } from '../core/oddsLoop';
 import { ensureOddsLoaded } from '../core/oddsLearning';
 import { getRecentSearchSource, probeAnySearch } from '../core/webSearch';
 import { getComboProgress } from '../core/comboTrainer';
+import { getCoachStatus, COACH_MIN_SETTLED, type CoachRecord } from '../core/coaches/coachDesk';
+import { getReviewStats } from '../core/coaches/coachReview';
+import { listAnalyses, DAILY_AI_BUDGET } from '../core/coaches/coachAnalysis';
 import { getAgentLearningDigest, getAccuracyTrend, AccuracyTrend, buildMarketDayPointsFromPaperBets, buildLearningReport } from '../core/autoLearn';
 
 export default function EvolutionScreen() {
@@ -54,6 +57,8 @@ export default function EvolutionScreen() {
    * règlement des scores finaux et peuvent rester vides plus longtemps). */
   const [accuracyTrend, setAccuracyTrend] = useState<AccuracyTrend | null>(null);
   /** Entraînement du fictif aux combinés (règle : plus de 50 % sur 200 combinés) et combinés réels déjà joués. */
+  /** Les cinq entraîneurs IA : verdicts en mode ombre, analyses IA (20e / 60e) et bilans de fin de match. */
+  const [coachInfo, setCoachInfo] = useState<{ coaches: CoachRecord[]; analyses: number; todayAnalyses: number; reviews: number; notedClubs: number } | null>(null);
   const [comboInfo, setComboInfo] = useState<{ progress: Awaited<ReturnType<typeof getComboProgress>>; real: { settled: number; won: number } } | null>(null);
   const [marketSeriesFictional, setMarketSeriesFictional] = useState<MarketDayPoint[]>([]);
   /** Dérivée des paris papier déjà réglés (voir autoLearn.ts) — comble les
@@ -328,6 +333,15 @@ export default function EvolutionScreen() {
       } catch (error) {
         console.warn('Série des marchés indisponible:', error);
       }
+      void (async () => {
+        try {
+          const [status, analyses, reviews] = await Promise.all([getCoachStatus(), listAnalyses(), getReviewStats()]);
+          const today = new Date().toISOString().slice(0, 10);
+          setCoachInfo({ coaches: status.coaches, analyses: analyses.length, todayAnalyses: analyses.filter((a) => a.day === today).length, reviews: reviews.reviews, notedClubs: reviews.clubsWithNotes });
+        } catch (error) {
+          console.warn('Suivi des entraîneurs indisponible:', error);
+        }
+      })();
       void (async () => {
         try {
           const progress = await getComboProgress();
@@ -1021,6 +1035,32 @@ export default function EvolutionScreen() {
           );
         })()}
 
+        {coachInfo && (() => {
+          const pct = (b: { n: number; won: number }) => (b.n ? `${Math.round((b.won / b.n) * 100)} % (${b.won}/${b.n})` : '—');
+          const edge = (x: number | null) => (x == null ? '—' : `${x >= 0 ? '+' : ''}${x} pts`);
+          return (
+            <View style={styles.comboBox}>
+              <Text style={styles.comboTitle}>Entraîneurs IA</Text>
+              <Text style={styles.infoText}>
+                Mode ombre : leurs avis sont notés sur chaque pari réel, sans rien bloquer. Analyses IA : {coachInfo.analyses} ({coachInfo.todayAnalyses} aujourd'hui, {DAILY_AI_BUDGET} au plus par jour) · bilans de fin de match : {coachInfo.reviews} · clubs avec notes : {coachInfo.notedClubs}.
+              </Text>
+              {coachInfo.coaches.map((c) => (
+                <View key={c.coach} style={styles.coachRow}>
+                  <Text style={styles.coachName}>
+                    {c.coach} · {c.league}
+                  </Text>
+                  <Text style={styles.infoText}>
+                    {c.verdicts} verdict{c.verdicts > 1 ? 's' : ''} · {c.settledLegs}/{COACH_MIN_SETTLED} jambes réglées{'\n'}
+                    Soutenus : {pct(c.supported)} · Contestés : {pct(c.contested)} · Écart : {edge(c.edge)}
+                    {c.ai.legs > 0 ? `\nAvis de l'IA (${c.ai.legs} jambes) : soutenus ${pct(c.ai.supported)} · contestés ${pct(c.ai.contested)} · écart ${edge(c.ai.edge)}` : ''}
+                    {c.ready ? '\nPreuve suffisante : pouvoir activable.' : ''}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          );
+        })()}
+
         {renderWebAccessIndicator()}
         {paperBetsSummary && paperBetsSummary.total > 0 && (
           <View style={styles.paperBetsBox}>
@@ -1266,6 +1306,17 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
     marginBottom: 10,
     gap: 6,
+  },
+  coachRow: {
+    borderTopWidth: 1,
+    borderTopColor: '#1e293b',
+    paddingTop: 6,
+    gap: 2,
+  },
+  coachName: {
+    color: '#e2e8f0',
+    fontSize: 12,
+    fontWeight: '600',
   },
   comboTitle: {
     color: '#e2e8f0',
