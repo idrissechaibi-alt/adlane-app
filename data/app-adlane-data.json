@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-10-30T17:56:24.367Z",
+  "exportedAt": "2026-10-30T18:03:26.096Z",
   "formatVersion": 1,
   "source": "APP adlane",
   "data": {
@@ -6620,12 +6620,13 @@
       "ticksLast24h": 56
     },
     "tickProgress": {
-      "startedAt": "2026-10-30T17:53:50.225Z",
-      "step": "scan en direct 20e/60e",
-      "at": "2026-10-30T17:53:50.866Z",
+      "startedAt": "2026-10-30T17:56:22.676Z",
+      "step": "bilan de minuit",
+      "at": "2026-10-30T18:03:04.568Z",
       "stepDurationsSec": {
         "scan matinal": 1,
-        "relevé live partagé": 0
+        "relevé live partagé": 0,
+        "scan en direct 20e/60e": 401
       }
     },
     "lastTick": {
@@ -6720,25 +6721,12 @@
       "nightlyReviewPointsCreated": 18
     },
     "lastRealFastTick": {
-      "at": "2026-10-30T17:55:48.355Z",
-      "liveFound": 0,
+      "at": "2026-10-30T18:03:11.609Z",
+      "liveFound": 2,
       "fresh": 0,
-      "source": "api_football"
+      "source": "sources_live_gratuites"
     },
     "abortedTicks": [
-      {
-        "startedAt": "2026-10-26T11:09:25.062Z",
-        "step": "programme fictif",
-        "at": "2026-10-26T11:12:00.470Z",
-        "stepDurationsSec": {
-          "terminé": 0,
-          "scan matinal": 0,
-          "relevé live partagé": 0,
-          "scan en direct 20e/60e": 102,
-          "bilan de minuit": 0,
-          "marqueurs live": 53
-        }
-      },
       {
         "startedAt": "2026-10-26T16:17:13.485Z",
         "step": "scan en direct 20e/60e",
@@ -6885,6 +6873,15 @@
         "at": "2026-10-30T17:51:43.538Z",
         "stepDurationsSec": {
           "scan matinal": 2,
+          "relevé live partagé": 0
+        }
+      },
+      {
+        "startedAt": "2026-10-30T17:53:50.225Z",
+        "step": "scan en direct 20e/60e",
+        "at": "2026-10-30T17:53:50.866Z",
+        "stepDurationsSec": {
+          "scan matinal": 1,
           "relevé live partagé": 0
         }
       }
@@ -7143,11 +7140,11 @@
     },
     "inPlayProposals": {
       "real": 629,
-      "fictional": 46667,
+      "fictional": 46874,
       "fictionalReviewed": 46095,
       "fictionalSettledLegs": 41611,
-      "lastCreatedAt": "2026-10-30T17:40:31.344Z",
-      "createdLast24h": 578
+      "lastCreatedAt": "2026-10-30T17:59:22.589Z",
+      "createdLast24h": 785
     },
     "predictionOutcomes30d": 45874,
     "marketSeries": {
@@ -7207,7 +7204,7 @@
         {
           "name": "Principal",
           "ok": true,
-          "latencyMs": 79,
+          "latencyMs": 62,
           "readyModels": 28,
           "configuredReady": 13,
           "configuredTotal": 13
@@ -7215,8 +7212,8 @@
         {
           "name": "Omniroute",
           "ok": true,
-          "latencyMs": 2127,
-          "readyModels": 827,
+          "latencyMs": 1792,
+          "readyModels": 820,
           "configuredReady": 2,
           "configuredTotal": 2
         }
@@ -7224,31 +7221,31 @@
       "leaderboard": [
         {
           "label": "Principal · allam-2-7b",
-          "ok": 9784,
-          "fail": 9182,
-          "avgMs": 6166,
+          "ok": 9801,
+          "fail": 9194,
+          "avgMs": 808,
           "coolingDown": false
         },
         {
           "label": "Omniroute · Clodiko",
-          "ok": 19519,
+          "ok": 19556,
           "fail": 912,
-          "avgMs": 14818,
+          "avgMs": 2535,
           "coolingDown": false
         },
         {
           "label": "Principal · auto",
-          "ok": 5768,
+          "ok": 5807,
           "fail": 918,
-          "avgMs": 21896,
+          "avgMs": 2856,
           "coolingDown": false
         },
         {
           "label": "Principal · llama-3.2-11b-vision-instruct",
           "ok": 3590,
-          "fail": 835,
+          "fail": 847,
           "avgMs": 261437,
-          "coolingDown": false
+          "coolingDown": true
         },
         {
           "label": "Principal · nemotron-3-ultra-550b",
@@ -7340,9 +7337,9 @@
         "theOddsApi": 0,
         "perplexity": 0,
         "apiFootball-autolearn": 3,
-        "sportmonks-autolearn": 32,
+        "sportmonks-autolearn": 33,
         "sofaScore": 0,
-        "sportmonks": 105
+        "sportmonks": 107
       },
       "theOddsApiMonth": {
         "used": 500,
@@ -7360,38 +7357,38 @@
     "liveSources": {
       "TheSportsDB": {
         "ok": true,
-        "count": 28,
-        "at": "2026-10-30T17:53:50.475Z",
-        "failStreak": 0
-      },
-      "ESPN": {
-        "ok": true,
-        "count": 5,
-        "at": "2026-10-30T17:55:47.221Z",
+        "count": 47,
+        "at": "2026-10-30T18:03:21.802Z",
         "failStreak": 0
       },
       "LiveScore": {
         "ok": true,
         "count": 46,
-        "at": "2026-10-30T17:55:47.639Z",
-        "failStreak": 0
-      },
-      "FotMob": {
-        "ok": true,
-        "count": 23,
-        "at": "2026-10-30T17:55:47.225Z",
-        "failStreak": 0
-      },
-      "365Scores": {
-        "ok": true,
-        "count": 25,
-        "at": "2026-10-30T17:55:48.172Z",
+        "at": "2026-10-30T18:03:21.823Z",
         "failStreak": 0
       },
       "AllSportsApi": {
         "ok": true,
         "count": 0,
-        "at": "2026-10-30T17:55:48.172Z",
+        "at": "2026-10-30T18:03:21.896Z",
+        "failStreak": 0
+      },
+      "ESPN": {
+        "ok": true,
+        "count": 10,
+        "at": "2026-10-30T18:03:21.920Z",
+        "failStreak": 0
+      },
+      "FotMob": {
+        "ok": true,
+        "count": 47,
+        "at": "2026-10-30T18:03:21.924Z",
+        "failStreak": 0
+      },
+      "365Scores": {
+        "ok": true,
+        "count": 50,
+        "at": "2026-10-30T18:03:22.052Z",
         "failStreak": 0
       }
     },
@@ -7774,7 +7771,7 @@
     "voidedLegs": {
       "fictional": 4521,
       "real": 3,
-      "pendingNoVerdict": 535
+      "pendingNoVerdict": 742
     },
     "teamRegistry": {
       "teams": 1044
@@ -8102,10 +8099,10 @@
       "moduleNatifPresent": true
     },
     "serverFeed": {
-      "lastPullAt": "2026-10-30T17:56:22.671Z",
-      "slicesRead": 1894,
-      "samplesAdded": 38354,
-      "lastSlice": "data/server/live/2026-10-30/1750-mvv9o7jh.json",
+      "lastPullAt": "2026-10-30T18:03:22.931Z",
+      "slicesRead": 1896,
+      "samplesAdded": 38379,
+      "lastSlice": "data/server/live/2026-10-30/1800-mvv9o7jh.json",
       "server": {
         "at": "2026-10-30T17:43:55.717Z",
         "host": "DESKTOP-OSPJN0K",
@@ -8122,10 +8119,10 @@
       }
     },
     "patternEngine": {
-      "matches": 3471,
+      "matches": 3484,
       "cells": 3221,
-      "validated": 49,
-      "realReady": 49
+      "validated": 46,
+      "realReady": 46
     },
     "settlementAudit": [
       {
@@ -8370,12 +8367,19 @@
       }
     ],
     "unmatchedPlannedLive": {
-      "at": "2026-10-30T17:56:23.190Z",
+      "at": "2026-10-30T18:03:22.994Z",
       "unmatched": [],
       "sourceNames": [
+        "Le Havre - Paris Saint-Germain",
+        "Nice - Rennes",
         "Konyaspor - Galatasaray",
+        "Al Shabab - Al Ahli",
         "Arminia Bielefeld - Eintracht Braunschweig",
         "Energie Cottbus - VfL Bochum",
+        "Al-Ittihad Alexandria - El Geish",
+        "Olympic El Qanah FC - ENPPI",
+        "Lyngby - Randers FC",
+        "Bodoe/Glimt - Viking",
         "Slaven - NK Istra 1961",
         "Cracovia - Motor Lublin",
         "PFC Lokomotiv Sofia 1929 - Botev Plovdiv",
@@ -8388,15 +8392,35 @@
         "Doxa Katokopia - Iraklis Gerolakkou",
         "Ermis Aradippou - Anagennisi Deryneia",
         "Karvina - Slavia Prague B",
+        "AaB - Hobro",
+        "HIK - Nykoebing FC",
+        "Skive - VSK Aarhus",
+        "FC Helsingoer - Ringsted",
+        "Fortuna Dusseldorf - Meppen",
         "TSV Aubstadt - DJK Vilzing",
+        "1860 Munich - TSV Buchbach",
+        "Burghausen - Unterhaching",
+        "FV Illertissen - Greuther Furth II",
+        "Delmenhorst - Oldenburg",
+        "BFC Dynamo - RSV Eintracht 1949",
+        "FSV Luckenwalde - Hertha Berlin II",
+        "Lokomotive Leipzig - VSG Altglienicke",
+        "Homburg - Eintracht Trier",
+        "Mainz 05 II - Sandhausen",
+        "TSV Steinbach Haiger - FSV Frankfurt",
         "Erbil - Ghaz Al-Shamal SC",
         "Al-Gharafa - Qatar SC",
         "Al-Sadd - Al-Shamal",
+        "IK Oddevold - IK Brage",
+        "BK Olympic - Haessleholms IF",
         "Elfsborg - Alingsas FC United W",
         "Esenler Erokspor - Keciorengucu",
+        "HIK - Nykøbing FC",
         "VfB Stuttgart (W) - SGS Essen (W)",
+        "Bodø/Glimt - Viking",
         "Elfsborg (W) - Alingsås IF (W)",
         "Nizhny Novgorod - Arsenal Tula",
+        "Al Ittihad Alexandria - Tala'ea El Gaish",
         "Erbil FC - Gas Alshimal",
         "Al Wehdat - Al Arabi",
         "ASC HLM - Stade Mbour",
@@ -8404,21 +8428,31 @@
         "Inter Milan U19 - Roma U19",
         "St. Pölten - FC Hertha Wels",
         "Orbit College - Venda Fc",
+        "Aalborg - Hobro IK",
+        "Al Ittehad - El Geish",
+        "Bayonne - Avranches",
+        "Stade Briochin - Angouleme",
+        "Santos/Sp Youth - Santo André/Sp Youth",
+        "RB Bragantino/Sp Youth - Capivariano/Sp Youth",
+        "Hik Hellerup - Nykobing",
+        "Nice - Stade Rennais",
         "American University - Holy Cross",
+        "Aviron Bayonnais - Avranches",
+        "Vendée Poiré-sur-Vie - Les Herbiers",
+        "ATSV Wolfsberg - Austria Klagenfurt",
+        "Wals-Grünau - Bad Schallerbach",
+        "BK Olympic - Hässleholm",
+        "TSV Hartberg II - Kalsdorf",
         "Star Starachowice - Pogoń-Sokół Lubaczów",
-        "Shakhtar Donetsk - Obolon Kyiv",
-        "CSA Steaua Bucureşti - CS Dinamo București",
         "Podlasie Biała Podlaska - Moravia Morawica",
         "Tarxien Rainbows - Victoria Hotspurs"
       ]
     },
     "liveStatsScan": {
-      "lastScan": {
-        "at": "2026-10-30T17:56:23.191Z",
-        "matches": 0,
-        "sources": "6 sources gratuites"
-      },
-      "todaySamples": {}
+      "lastScan": null,
+      "todaySamples": {
+        "OGC Nice - Stade Rennais FC 1901": 2
+      }
     },
     "backupOddsSources": {
       "betBetter": {
@@ -8427,7 +8461,7 @@
       },
       "fanLine": {
         "fixtures": 20,
-        "soccer": 1
+        "soccer": 3
       },
       "oddsmagnet": {
         "httpStatus": null
@@ -8437,137 +8471,137 @@
       "indexUpdatedAt": "2026-10-30T01:19:08Z",
       "teamsInIndex": 111,
       "summariesCached": 111,
-      "lookups": 0,
-      "withTrend": 0,
+      "lookups": 2,
+      "withTrend": 2,
       "unknownTeams": 0,
-      "lastTrendAt": null,
+      "lastTrendAt": "2026-10-30T18:03:23.917Z",
       "lastUnknown": null
     },
     "teamStatsUsageLog": [
       {
-        "at": "2026-10-30T17:51:48.433Z",
-        "match": "ASC HLM - Stade Mbour",
+        "at": "2026-10-30T17:58:49.067Z",
+        "match": "Dubrava Zagreb - NK Sesvete",
         "result": "équipe inconnue"
       },
       {
-        "at": "2026-10-30T17:51:48.509Z",
-        "match": "Al Wehdat - Al-Arabi SC",
+        "at": "2026-10-30T17:58:50.289Z",
+        "match": "Opatija - Mladost Zdralovi",
         "result": "équipe inconnue"
       },
       {
-        "at": "2026-10-30T17:51:48.719Z",
-        "match": "Elfsborg - Alingsas FC United W",
+        "at": "2026-10-30T17:58:51.904Z",
+        "match": "Opatija - Mladost Zdralovi",
         "result": "équipe inconnue"
       },
       {
-        "at": "2026-10-30T17:51:48.794Z",
-        "match": "Orbit College - Venda Fc",
+        "at": "2026-10-30T17:58:54.944Z",
+        "match": "Hapoel Afula - Maccabi Kiryat Gat",
         "result": "équipe inconnue"
       },
       {
-        "at": "2026-10-30T17:51:48.856Z",
-        "match": "St. Pölten - FC Hertha Wels",
+        "at": "2026-10-30T17:58:56.804Z",
+        "match": "Hapoel Afula - Maccabi Kiryat Gat",
         "result": "équipe inconnue"
       },
       {
-        "at": "2026-10-30T17:51:50.177Z",
-        "match": "Star Starachowice - Pogoń-Sokół Lubaczów",
+        "at": "2026-10-30T17:58:57.107Z",
+        "match": "FK Pohronie - Slovan Bratislava B",
         "result": "équipe inconnue"
       },
       {
-        "at": "2026-10-30T17:51:51.268Z",
-        "match": "Elfsborg (W) - Alingsås IF (W)",
+        "at": "2026-10-30T17:58:57.403Z",
+        "match": "Konyaspor - Galatasaray",
         "result": "équipe inconnue"
       },
       {
-        "at": "2026-10-30T17:53:53.390Z",
-        "match": "SKN St. Poelten - FC Hertha Wels",
+        "at": "2026-10-30T17:58:58.891Z",
+        "match": "Cracovia - Motor Lublin",
         "result": "équipe inconnue"
       },
       {
-        "at": "2026-10-30T17:53:53.478Z",
-        "match": "SV Austria Salzburg - Amstetten",
+        "at": "2026-10-30T17:58:59.946Z",
+        "match": "VfB Stuttgart (W) - SGS Essen (W)",
         "result": "équipe inconnue"
       },
       {
-        "at": "2026-10-30T17:53:53.811Z",
-        "match": "TSV Aubstadt - DJK Vilzing",
+        "at": "2026-10-30T17:59:01.615Z",
+        "match": "Esenler Erokspor - Keciorengucu",
         "result": "équipe inconnue"
       },
       {
-        "at": "2026-10-30T17:53:53.891Z",
-        "match": "Erbil - Ghaz Al-Shamal SC",
+        "at": "2026-10-30T17:59:03.251Z",
+        "match": "Nizhny Novgorod - Arsenal Tula",
         "result": "équipe inconnue"
       },
       {
-        "at": "2026-10-30T17:53:55.085Z",
-        "match": "PFC Lokomotiv Sofia 1929 - Botev Plovdiv",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-10-30T17:53:55.401Z",
-        "match": "Al-Gharafa - Qatar SC",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-10-30T17:53:55.489Z",
-        "match": "Elfsborg - Alingsas FC United W",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-10-30T17:53:55.556Z",
-        "match": "Energie Cottbus - VfL Bochum",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-10-30T17:53:55.572Z",
-        "match": "Elfsborg (W) - Alingsås IF (W)",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-10-30T17:53:55.629Z",
+        "at": "2026-10-30T17:59:08.546Z",
         "match": "Al-Sadd - Al-Shamal",
         "result": "équipe inconnue"
       },
       {
-        "at": "2026-10-30T17:53:55.697Z",
-        "match": "Arminia Bielefeld - Eintracht Braunschweig",
+        "at": "2026-10-30T17:59:09.642Z",
+        "match": "Al-Gharafa - Qatar SC",
         "result": "équipe inconnue"
       },
       {
-        "at": "2026-10-30T17:53:55.722Z",
+        "at": "2026-10-30T17:59:10.070Z",
+        "match": "Erbil - Ghaz Al-Shamal SC",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-30T17:59:10.564Z",
         "match": "ASC HLM - Stade Mbour",
         "result": "équipe inconnue"
       },
       {
-        "at": "2026-10-30T17:53:55.749Z",
+        "at": "2026-10-30T17:59:11.208Z",
+        "match": "Al Sadd - Al Shamal",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-30T17:59:12.176Z",
+        "match": "Al Gharafa - Qatar SC",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-30T17:59:19.774Z",
+        "match": "SKN St. Poelten - FC Hertha Wels",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-30T17:59:20.103Z",
+        "match": "Elfsborg (W) - Alingsås IF (W)",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-30T17:59:21.062Z",
+        "match": "SV Austria Salzburg - Amstetten",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-30T17:59:21.722Z",
+        "match": "Elfsborg - Alingsas FC United W",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-10-30T17:59:22.402Z",
         "match": "St. Pölten - FC Hertha Wels",
         "result": "équipe inconnue"
       },
       {
-        "at": "2026-10-30T17:53:55.821Z",
-        "match": "Erbil - Gas Alshimal",
+        "at": "2026-10-30T17:59:22.959Z",
+        "match": "TSV Aubstadt - DJK Vilzing",
         "result": "équipe inconnue"
       },
       {
-        "at": "2026-10-30T17:53:55.876Z",
-        "match": "Star Starachowice - Pogoń-Sokół Lubaczów",
-        "result": "équipe inconnue"
+        "at": "2026-10-30T18:03:22.219Z",
+        "match": "Le Havre AC - Paris Saint-Germain FC",
+        "result": "tendance"
       },
       {
-        "at": "2026-10-30T17:53:55.929Z",
-        "match": "Marumo Gallants - Siwelele F.C.",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-10-30T17:53:56.099Z",
-        "match": "Orbit College - Venda Fc",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-10-30T17:53:56.226Z",
-        "match": "Al Wehdat - Al-Arabi SC",
-        "result": "équipe inconnue"
+        "at": "2026-10-30T18:03:23.914Z",
+        "match": "Nice - Rennes",
+        "result": "tendance"
       }
     ],
     "bookieLineMinimums": {
@@ -8631,7 +8665,7 @@
         "unit": "corners_1h",
         "label": "Corners 1ère mi-temps",
         "verified": 1882,
-        "pending": 918,
+        "pending": 930,
         "meanPredicted": 4.2,
         "meanActual": 4.4,
         "meanError": 0.2,
@@ -8659,7 +8693,7 @@
         "unit": "cards_1h",
         "label": "Cartons 1ère mi-temps",
         "verified": 1748,
-        "pending": 853,
+        "pending": 862,
         "meanPredicted": 1.2,
         "meanActual": 1.3,
         "meanError": 0.09,
@@ -8715,7 +8749,7 @@
         "unit": "goals_ft",
         "label": "Buts en fin de match",
         "verified": 4689,
-        "pending": 794,
+        "pending": 801,
         "meanPredicted": 2.9,
         "meanActual": 3,
         "meanError": 0.1,
@@ -8743,7 +8777,7 @@
         "unit": "corners_ft",
         "label": "Corners sur le match",
         "verified": 3418,
-        "pending": 378,
+        "pending": 393,
         "meanPredicted": 8.5,
         "meanActual": 9.3,
         "meanError": 0.78,
@@ -8771,7 +8805,7 @@
         "unit": "cards_ft",
         "label": "Cartons sur le match",
         "verified": 3284,
-        "pending": 322,
+        "pending": 339,
         "meanPredicted": 3.5,
         "meanActual": 3.8,
         "meanError": 0.35,
@@ -8799,7 +8833,7 @@
         "unit": "fouls_1h",
         "label": "Fautes 1ère mi-temps",
         "verified": 960,
-        "pending": 127,
+        "pending": 128,
         "meanPredicted": 10.5,
         "meanActual": 10.9,
         "meanError": 0.42,
@@ -8827,7 +8861,7 @@
         "unit": "fouls_ft",
         "label": "Fautes sur le match",
         "verified": 1461,
-        "pending": 73,
+        "pending": 77,
         "meanPredicted": 23.1,
         "meanActual": 23.5,
         "meanError": 0.33,
@@ -9089,8 +9123,8 @@
         "unit": "corners_ft",
         "label": "Corners sur le match",
         "samples": 2697,
-        "maeBase": 2.5467702498386524,
-        "maeNew": 2.541809206476638,
+        "maeBase": 2.546860896910417,
+        "maeNew": 2.5418858220425906,
         "promoted": false,
         "effects": [
           {
@@ -10145,25 +10179,25 @@
         },
         {
           "unit": "corners_ft",
-          "factor": 1.0885109299742723,
+          "factor": 1.089109209716772,
           "samples": 400,
-          "meanDelta": 0.08990686786206918,
-          "meanAbsDelta": 1.8745732424652963,
-          "dispersion": 1.3699120436905543,
+          "meanDelta": 0.0886337465558303,
+          "meanAbsDelta": 1.8758463637715352,
+          "dispersion": 1.3873847775688486,
           "bins": [
             {
-              "upTo": 2.715555555555556,
-              "factor": 1.5667917048193918,
+              "upTo": 2.7155555555555555,
+              "factor": 1.5723554827876154,
               "samples": 133
             },
             {
-              "upTo": 3.7555555555555564,
-              "factor": 1.0876629042468435,
+              "upTo": 3.755555555555556,
+              "factor": 1.0743329297212592,
               "samples": 133
             },
             {
               "upTo": null,
-              "factor": 0.9042950807336994,
+              "factor": 0.9118206312444938,
               "samples": 134
             }
           ]
@@ -10270,8 +10304,8 @@
         }
       ],
       "samples": {
-        "pending": 153,
-        "measured": 2704
+        "pending": 155,
+        "measured": 2702
       }
     },
     "configured": {
