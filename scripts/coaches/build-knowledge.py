@@ -33,10 +33,13 @@ for f in sorted(glob.glob(os.path.join(out, 'league-*.json'))):
     d = load(f)
     if d: leagues[d.get('league', os.path.basename(f))] = d
 facts = []
-for name in ('facts-tactique', 'facts-evenements', 'facts-rapports', 'wave2-facts'):
+for name in ('facts-tactique', 'facts-evenements', 'facts-rapports', 'wave2-facts', 'wave3-youtube', 'wave3-livres'):
     for x in load(os.path.join(out, name + '.json')) or []:
         if isinstance(x, dict) and x.get('fact_fr'):
             x['origin'] = name
+            if not x.get('use_fr') and x.get('how_to_read_live_fr'): x['use_fr'] = x['how_to_read_live_fr']
+            if not x.get('source'):
+                x['source'] = {'citation': ' — '.join(filter(None, [x.get('author'), x.get('title')])), 'url': x.get('url'), 'read': x.get('read')}
             facts.append(x)
 for i, x in enumerate(facts, 1): x['id'] = f'F{i}'
 gl = load(os.path.join(out, 'glossary.json')) or []
