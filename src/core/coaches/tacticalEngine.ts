@@ -24,6 +24,11 @@ export interface TacticalRead {
   profile: 'ouvert' | 'ferme' | 'unilateral' | 'hache' | 'indetermine';
   momentum: number | null;
   momentumShift: number | null;
+  /** Territoire d'après les cartes de chaleur en direct : -1 (extérieur dans le camp adverse) → +1 (domicile). Null sans carte. */
+  territory: number | null;
+  /** Hauteur moyenne (0-105) du bloc de chaque équipe, gardien exclu. */
+  heightH: number | null;
+  heightA: number | null;
   reds: number;
   /** Sources assez complètes pour juger ? (au moins un marqueur avancé ou le détail par équipe) */
   reliable: boolean;
@@ -95,7 +100,15 @@ export function readMatch(samples: LiveStatsSample[]): TacticalRead | null {
     else if (shotsPerMin < 0.14) profile = 'ferme';
   }
 
+  // Cartes de chaleur (FotMob, en direct) : qui occupe le camp adverse, et à quelle hauteur joue chaque bloc.
+  const heat = [...samples].reverse().find((x) => x.heat)?.heat ?? null;
+  let territory: number | null = null;
+  if (heat && heat.h.n >= 15 && heat.a.n >= 15) territory = Math.round(clamp((heat.h.att + heat.h.box - heat.a.att - heat.a.box) / 0.6, -1, 1) * 100) / 100;
+
   const flags: string[] = [];
+  if (territory != null && Math.abs(territory) > 0.5 && diff === 0 && minute >= 25) flags.push('territoire_sans_but');
+  if (heat && heat.h.avgX >= 58 && heat.a.avgX <= 46 && heat.h.n >= 15) flags.push('bloc_domicile_haut');
+  if (heat && heat.a.avgX >= 58 && heat.h.avgX <= 46 && heat.a.n >= 15) flags.push('bloc_exterieur_haut');
   if ((last.reds ?? 0) > 0) flags.push('expulsion');
   if (diff === 0 && Math.abs(dominance) > 0.4 && minute >= 25) flags.push('domination_sans_but');
   if (diff !== 0 && Math.sign(diff) !== Math.sign(dominance) && Math.abs(dominance) > 0.3) flags.push('mene_sans_dominer');
@@ -118,6 +131,9 @@ export function readMatch(samples: LiveStatsSample[]): TacticalRead | null {
     profile,
     momentum: mom,
     momentumShift,
+    territory,
+    heightH: heat ? heat.h.avgX : null,
+    heightA: heat ? heat.a.avgX : null,
     reds: last.reds ?? 0,
     reliable: !!(last.side || last.adv),
     flags,
@@ -159,6 +175,7 @@ export function opinionOn(read: TacticalRead | null, coach: CoachProfile, leg: {
     if (read.flags.includes('domination_sans_but')) { open += 0.25 * lens.control; reasons.push('domination sans but'); }
     if (read.flags.includes('match_scelle')) { open -= 0.4; reasons.push('match scellé'); }
     if (pushingTeamBehind) { open += 0.25 * lens.pressing; reasons.push('l’équipe menée pousse'); }
+    if (read.flags.includes('territoire_sans_but')) { open += 0.15; reasons.push('occupe le camp adverse sans but'); }
     if (read.flags.includes('expulsion')) { open += 0.1; reasons.push('expulsion'); }
     if (read.minute >= 75 && Math.abs(read.diff) <= 1) { open += 0.15; reasons.push('fin de match serrée'); }
     score = wantsMore ? open : wantsLess ? -open : 0;
@@ -166,6 +183,7 @@ export function opinionOn(read: TacticalRead | null, coach: CoachProfile, leg: {
     let pressure = 0;
     if (Math.abs(read.recentDominance ?? read.dominance) > 0.35) { pressure += 0.4 * lens.setPieces; reasons.push('un camp pousse'); }
     if (pushingTeamBehind) { pressure += 0.3 * lens.pressing; reasons.push('l’équipe menée pousse'); }
+    if (read.territory != null && Math.abs(read.territory) > 0.4) { pressure += 0.25 * lens.setPieces; reasons.push('un camp installé dans la moitié adverse (cartes de chaleur)'); }
     if (read.profile === 'ferme') { pressure -= 0.3; reasons.push('match fermé'); }
     if (read.flags.includes('rythme_en_hausse')) { pressure += 0.25; reasons.push('rythme en hausse'); }
     if (read.flags.includes('rythme_en_baisse')) { pressure -= 0.25; reasons.push('rythme en baisse'); }

@@ -31,6 +31,7 @@ import { DeltaReportRow, SituationReportRow, ensureDeltaSamplesLoaded, getDeltaR
 import { OddsLoopFile, updateOddsLoopFile } from '../core/oddsLoop';
 import { ensureOddsLoaded } from '../core/oddsLearning';
 import { getRecentSearchSource, probeAnySearch } from '../core/webSearch';
+import { getComboProgress } from '../core/comboTrainer';
 import { getAgentLearningDigest, getAccuracyTrend, AccuracyTrend, buildMarketDayPointsFromPaperBets, buildLearningReport } from '../core/autoLearn';
 
 export default function EvolutionScreen() {
@@ -52,6 +53,8 @@ export default function EvolutionScreen() {
    * (toujours fiable), pas sur les courbes par marché (qui dépendent du
    * règlement des scores finaux et peuvent rester vides plus longtemps). */
   const [accuracyTrend, setAccuracyTrend] = useState<AccuracyTrend | null>(null);
+  /** Entraînement du fictif aux combinés (règle : plus de 50 % sur 200 combinés) et combinés réels déjà joués. */
+  const [comboInfo, setComboInfo] = useState<{ progress: Awaited<ReturnType<typeof getComboProgress>>; real: { settled: number; won: number } } | null>(null);
   const [marketSeriesFictional, setMarketSeriesFictional] = useState<MarketDayPoint[]>([]);
   /** Dérivée des paris papier déjà réglés (voir autoLearn.ts) — comble les
    * courbes (buts 1ère mi-temps/corners/cartons/fautes) avec un échantillon
@@ -325,6 +328,15 @@ export default function EvolutionScreen() {
       } catch (error) {
         console.warn('Série des marchés indisponible:', error);
       }
+      void (async () => {
+        try {
+          const progress = await getComboProgress();
+          const combos = readInPlayProposals().filter((p) => p.real !== false && p.legs.length > 1 && p.legs.every((l) => l.settled && !l.voided));
+          setComboInfo({ progress, real: { settled: combos.length, won: combos.filter((p) => p.legs.every((l) => l.won)).length } });
+        } catch (error) {
+          console.warn('Suivi des combinés indisponible:', error);
+        }
+      })();
       try {
         setAccuracyTrend(getAccuracyTrend());
       } catch (error) {
@@ -983,6 +995,32 @@ export default function EvolutionScreen() {
           );
         })()}
 
+        {comboInfo && (() => {
+          const { progress: c, real } = comboInfo;
+          const pct = (x: number) => `${Math.round(x * 100)} %`;
+          const counted = c.leader?.n ?? 0;
+          const done = Math.min(1, counted / c.needed);
+          return (
+            <View style={styles.comboBox}>
+              <Text style={styles.comboTitle}>Combinés : entraînement du fictif</Text>
+              <View style={styles.comboBarBg}>
+                <View style={[styles.comboBarFill, { width: `${Math.round(done * 100)}%` }]} />
+              </View>
+              <Text style={styles.infoText}>
+                {counted} / {c.needed} combinés comptés pour la meilleure recette
+                {c.leader ? ` · réussite ${pct(c.leader.rate)} (objectif plus de ${pct(c.target)})` : ''}
+                {c.leader?.recentRate != null ? ` · 200 derniers : ${pct(c.leader.recentRate)}` : ''}
+              </Text>
+              <Text style={styles.infoText}>
+                Recettes validées : {c.validated} sur {c.recipes} · {c.slotsDone} créneaux comptés depuis le {c.since.slice(0, 10)}.
+              </Text>
+              <Text style={styles.infoText}>
+                Combinés réels joués : {real.won} gagnés sur {real.settled} réglés{real.settled ? ` (${pct(real.won / real.settled)})` : ''}.
+              </Text>
+            </View>
+          );
+        })()}
+
         {renderWebAccessIndicator()}
         {paperBetsSummary && paperBetsSummary.total > 0 && (
           <View style={styles.paperBetsBox}>
@@ -1218,6 +1256,32 @@ const styles = StyleSheet.create({
     color: '#64748b',
     fontSize: 22,
     fontWeight: 'bold',
+  },
+  comboBox: {
+    backgroundColor: '#0f172a',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#334155',
+    padding: 12,
+    marginHorizontal: 4,
+    marginBottom: 10,
+    gap: 6,
+  },
+  comboTitle: {
+    color: '#e2e8f0',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  comboBarBg: {
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#1e293b',
+    overflow: 'hidden',
+  },
+  comboBarFill: {
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#4ade80',
   },
   accuracyTrendLabel: {
     color: '#94a3b8',

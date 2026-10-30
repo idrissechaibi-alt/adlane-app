@@ -10,6 +10,7 @@ import { pullServerLiveFeed } from './serverFeed';
 import { trainCombos } from './comboTrainer';
 import { reconcileShadowVerdicts } from './coaches/coachDesk';
 import { runCoachReviews } from './coaches/coachReview';
+import { pullKnowledgeFeed } from './coaches/knowledgeFeed';
 import * as BackgroundTask from 'expo-background-task';
 import * as TaskManager from 'expo-task-manager';
 import AsyncStorage from './kvStore';
@@ -819,6 +820,7 @@ async function runAutoLearnTickLocked(mode: TickMode): Promise<AutoLearnTickDiag
     console.warn('[Tâche de fond] Consolidation échouée:', error.message);
   }
   // Entraînement aux combinés : créneaux du fictif terminés → statistiques des recettes (voir comboTrainer.ts).
+  if (doSlow) await pullKnowledgeFeed().catch(() => null);
   if (doSlow && !tickTooLong()) await runCoachReviews().catch((error: any) => console.warn('[Tâche de fond] Bilans des entraîneurs échoués:', error?.message));
   if (doSlow) await reconcileShadowVerdicts().catch((error: any) => console.warn('[Tâche de fond] Bilan des entraîneurs échoué:', error?.message));
   if (doSlow) await trainCombos().catch((error: any) => console.warn('[Tâche de fond] Entraînement aux combinés échoué:', error?.message));

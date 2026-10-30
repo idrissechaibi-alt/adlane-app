@@ -6,6 +6,7 @@ import AsyncStorage from './kvStore';
 
 import { advancedOf, type AdvancedPoint } from './patternEngine';
 import type { SofaPeriodStats } from '../api/footballDataAPIs/sofaScore';
+import type { HeatSummary } from '../api/footballDataAPIs/liveDataHub';
 
 export interface LiveStatsSample {
   ts: string;
@@ -27,6 +28,8 @@ export interface LiveStatsSample {
   ctx?: { fav?: 'h' | 'a' | null; trendGoals?: number | null; keyAbsent?: number | null; formationChanged?: boolean | null; refRatio?: number | null };
   /** Marqueurs avancés (FotMob) : xG, touches dans la surface adverse, passes dans le camp adverse, centres, momentum. */
   adv?: AdvancedPoint;
+  /** Cartes de chaleur en direct (FotMob), résumées : hauteur et présence dans le camp adverse par équipe, joueurs les plus avancés. */
+  heat?: HeatSummary;
 }
 
 const KEY_PREFIX = '@real_live_stats_';

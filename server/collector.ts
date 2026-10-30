@@ -2,7 +2,7 @@
 // Publiées pour le téléphone dans data/server/live/<jour UTC>/<tranche>.json (lu par src/core/serverFeed.ts), toutes les
 // 2 min. Les matchs réels (5 grands championnats + Ligue des champions) sont relevés chaque minute, les autres toutes
 // les 5 min. Alerte Telegram quand un match réel atteint la 20e ou la 60e minute : le téléphone analyse dès l'ouverture.
-import { hubDateKey, hubFinalResult, hubLiveEvents, hubStats, HubMatch } from '../src/api/footballDataAPIs/liveDataHub';
+import { hubDateKey, hubFinalResult, hubHeatmap, hubLiveEvents, hubStats, HubMatch } from '../src/api/footballDataAPIs/liveDataHub';
 import { buildLiveSample, LiveStatsSample } from '../src/core/liveStatsStore';
 import type { FeedFinal, FeedMatch, FeedSlice } from '../src/core/serverFeed';
 import { SERVER_LIVE_DIR } from '../src/core/serverFeed';
@@ -116,6 +116,8 @@ interface Tracked {
   lastMinute: number;
   lastStatus: string;
   lastSample: LiveStatsSample | null;
+  /** Dernière carte de chaleur jointe à un relevé (une toutes les 2 min par match réel : la publication reste légère). */
+  lastHeatAt?: number;
   htSample: LiveStatsSample | null;
   seenAt: number;
   finalTries: number;
@@ -215,6 +217,13 @@ export async function collectOnce(): Promise<{ live: number; sampled: number; fi
     t.lastStatus = m.statusShort;
     if (!stats?.all) continue;
     const s = buildLiveSample(m, stats.all);
+    if (real && now - (t.lastHeatAt ?? 0) >= 120_000) {
+      const heat = await hubHeatmap(m.homeTeam, m.awayTeam, day).catch(() => null);
+      if (heat) {
+        s.heat = heat;
+        t.lastHeatAt = now;
+      }
+    }
     t.lastSample = s;
     if (m.statusShort === 'HT' || (m.statusShort === '1H' && m.minute >= 44)) t.htSample = s;
     queueSample(t, key, s);

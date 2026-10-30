@@ -8,6 +8,7 @@
 //   node server/dist/server.js --import-config F    importe la configuration envoyée par le téléphone (fichier F)
 //   node server/dist/server.js --once               un passage de collecte puis arrêt (test)
 //   node server/dist/server.js --backup-now         archive locale immédiate (<serveur>/sauvegardes)
+//   node server/dist/server.js --base-now           base équipes et joueurs immédiate (<serveur>/base-equipes-joueurs)
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -26,6 +27,8 @@ import { mirrorPhoneBackup } from './restore';
 import { log, pruneLogs } from './log';
 import { dataRoot, serverRoot } from './paths';
 import { backupDueToday, makeLocalBackup } from './backup';
+import { backupPlayersAndTeams } from './baseEquipesJoueurs';
+import { refreshBanks } from './banks';
 
 async function importConfig(file: string): Promise<void> {
   // PowerShell enregistre le texte collé avec une marque BOM en tête : retirée avant lecture.
@@ -111,6 +114,11 @@ async function dailyArchive(force = false): Promise<void> {
   });
   if (r) log(`Copie de la sauvegarde du téléphone : ${r.files} fichiers${r.missing.length ? ` (illisibles : ${r.missing.join(', ')})` : ''}.`);
   makeLocalBackup();
+  try {
+    backupPlayersAndTeams();
+  } catch (e: any) {
+    log(`Base équipes et joueurs échouée : ${e?.message ?? e}`);
+  }
 }
 
 async function main(): Promise<void> {
@@ -121,6 +129,10 @@ async function main(): Promise<void> {
   const imp = args.indexOf('--import-config');
   if (imp >= 0) {
     await importConfig(args[imp + 1]);
+    return;
+  }
+  if (args.includes('--base-now')) {
+    backupPlayersAndTeams();
     return;
   }
   if (args.includes('--backup-now')) {
@@ -161,6 +173,7 @@ async function main(): Promise<void> {
       process.exit(0);
     }
   }, false);
+  every('Banques de données', 6 * 3_600_000, () => refreshBanks());
   every('Sauvegarde locale', 3_600_000, () => dailyArchive());
   every('Nettoyage des journaux', 24 * 3_600_000, async () => pruneLogs());
   log('Serveur démarré.');
@@ -171,7 +184,7 @@ process.on('uncaughtException', (e: any) => log('Exception non gérée :', e?.me
 
 main().then(
   () => {
-    if (['--import-config', '--once', '--backup-now'].some((a) => process.argv.includes(a))) process.exit(0);
+    if (['--import-config', '--once', '--backup-now', '--base-now'].some((a) => process.argv.includes(a))) process.exit(0);
   },
   (e) => {
     log(`Arrêt : ${e?.message ?? e}`);

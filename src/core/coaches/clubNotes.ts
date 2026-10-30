@@ -44,6 +44,11 @@ export function recentPlayerNotes(club: string, limit = 4): string[] {
   return out.sort((a, b) => b.day.localeCompare(a.day)).slice(0, limit).map((x) => x.text);
 }
 
+/** Leçons générales les plus récentes de la ligue, tirées des bilans des entraîneurs. */
+export function recentLeagueLessons(league: string, limit = 3): string[] {
+  return (notesMemo?.general ?? []).filter((g) => g.league === league).slice(-limit).map((g) => `${g.day} : ${g.lesson}`);
+}
+
 export async function saveNotes(): Promise<void> {
   if (!notesMemo) return;
   await AsyncStorage.setItem(NOTES_KEY, JSON.stringify(notesMemo)).catch(() => {});

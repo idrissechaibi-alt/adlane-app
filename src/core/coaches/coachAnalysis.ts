@@ -11,6 +11,7 @@ import { normalizeTeamName } from '../teamNameMatch';
 import type { LiveStatsSample } from '../liveStatsStore';
 import { coachBriefing } from './knowledgeBase';
 import { loadNotes } from './clubNotes';
+import { loadKnowledgeFeed } from './knowledgeFeed';
 import { coachForLeague, type CoachProfile } from './knowledge';
 import { readMatch, type Stance, type TacticalRead } from './tacticalEngine';
 
@@ -209,7 +210,8 @@ const line = (s: LiveStatsSample) => {
   const fo = side ? `fautes ${side.h[4]}-${side.a[4]}` : `fautes ${s.fouls ?? '?'}`;
   const poss = s.possessionHome != null ? `poss ${s.possessionHome}%` : '';
   const a = s.adv ? [s.adv.xg != null ? `xG ${s.adv.xg}` : '', s.adv.box != null ? `surface ${s.adv.box}` : '', s.adv.opp != null ? `camp adv. ${s.adv.opp}` : '', s.adv.mom != null ? `momentum ${s.adv.mom}` : ''].filter(Boolean).join(' ') : '';
-  return `${s.minute}' ${s.home}-${s.away} · ${sh} · ${co} · ${ca} · ${fo}${poss ? ` · ${poss}` : ''}${s.reds ? ` · rouges ${s.reds}` : ''}${a ? ` · ${a}` : ''}`;
+  const heat = s.heat ? ` · chaleur : bloc dom. x̄ ${s.heat.h.avgX} (dernier tiers ${Math.round(s.heat.h.att * 100)} %, surface ${Math.round(s.heat.h.box * 100)} %) / ext. x̄ ${s.heat.a.avgX} (${Math.round(s.heat.a.att * 100)} %, ${Math.round(s.heat.a.box * 100)} %)` : '';
+  return `${s.minute}' ${s.home}-${s.away} · ${sh} · ${co} · ${ca} · ${fo}${poss ? ` · ${poss}` : ''}${s.reds ? ` · rouges ${s.reds}` : ''}${a ? ` · ${a}` : ''}${heat}`;
 };
 
 function windowText(samples: LiveStatsSample[]): string {
@@ -253,12 +255,14 @@ export async function runCoachAnalysis(input: AnalyzeInput): Promise<CoachAnalys
   if (inFlight.has(key)) return inFlight.get(key)!;
   const job = (async () => {
     if (!(await takeBudget())) return null;
-    await loadNotes();
+    await Promise.all([loadNotes(), loadKnowledgeFeed()]);
     const briefing = coachBriefing(input.homeTeam, input.awayTeam, input.league, ['total_buts', 'corners', 'cartons', '1X2'], 5);
     const last = [...input.samples].sort((a, b) => a.minute - b.minute).slice(-1)[0];
+    const heat = [...input.samples].sort((a, b) => b.minute - a.minute).find((x) => x.heat)?.heat;
+    const heatPlayers = heat ? `\nCartes de chaleur (terrain 0-105 dans le sens de l'attaque de chaque équipe ; x̄ = hauteur moyenne ; joueurs les plus avancés) :\n${heat.players.slice(0, 8).map((p) => `${p.name ?? p.id} (${p.team === 'h' ? 'dom.' : 'ext.'}) x̄ ${p.mx}, camp adverse ${Math.round(p.att * 100)} %, surface ${Math.round(p.box * 100)} %`).join('\n')}` : '';
     const user =
       `Match : ${input.homeTeam} (domicile) contre ${input.awayTeam}, ${input.league}. Moment : ${input.checkpoint}e minute (relevé à la ${last.minute}e, score ${last.home}-${last.away}).\n\n` +
-      `${readText(readMatch(input.samples))}\n\nFenêtre de stats (domicile-extérieur ; tirs total(cadrés)) :\n${windowText(input.samples)}\n\n` +
+      `${readText(readMatch(input.samples))}\n\nFenêtre de stats (domicile-extérieur ; tirs total(cadrés)) :\n${windowText(input.samples)}${heatPlayers}\n\n` +
       `DOSSIER DU MATCH\n${briefing.context}`;
     const result = await askOmnirouteUsable(compactSystemPrompt(coach), user, config, (raw) => parseAnalysis(raw));
     if (!result) return null;

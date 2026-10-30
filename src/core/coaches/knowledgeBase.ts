@@ -10,7 +10,8 @@ import metricsData from './data/metrics.json';
 import { CLUB_STATS, type TeamWindow } from './leagueStats';
 import { clubCoachOf } from './clubCoaches';
 import { coachForLeague, coachSystemPrompt, type CoachProfile } from './knowledge';
-import { recentClubNotes, recentPlayerNotes } from './clubNotes';
+import { recentClubNotes, recentPlayerNotes, recentLeagueLessons } from './clubNotes';
+import { bankStatsFor, dynamicFacts } from './knowledgeFeed';
 
 export interface ClubProfile {
   club: string;
@@ -113,8 +114,12 @@ const factTags = (f: KnowledgeFact) => {
   return t;
 };
 
+const STATIC_KEYS = new Set(FACTS.map((f) => `${f.topic}|${f.fact_fr.slice(0, 80)}`));
+
 export function factsFor(tags: Tag[], limit = 8): KnowledgeFact[] {
-  const scored = FACTS.map((f) => {
+  // Savoirs ajoutés depuis la sortie de l'app (knowledgeFeed.ts) : ajoutés aux faits embarqués, sans doublon.
+  const pool = [...FACTS, ...dynamicFacts().filter((f) => !STATIC_KEYS.has(`${f.topic}|${f.fact_fr.slice(0, 80)}`))];
+  const scored = pool.map((f) => {
     const ft = factTags(f);
     const hits = tags.filter((t) => ft.has(t)).length;
     const conf = f.confidence === 'haute' ? 1 : f.confidence === 'moyenne' ? 0.5 : 0;
@@ -147,7 +152,8 @@ function clubBlock(team: string): string {
   const p = clubProfileOf(team);
   const entry = clubCoachOf(team);
   if (!p && !entry) return `# ${team}\n(aucune fiche)`;
-  const st = CLUB_STATS[p?.club ?? entry!.club];
+  // Moyennes à jour publiées par le serveur PC (knowledgeFeed.ts) ; à défaut, celles embarquées dans l'app.
+  const st = bankStatsFor(p?.club ?? entry!.club) ?? CLUB_STATS[p?.club ?? entry!.club];
   const lines = [
     `# ${p?.club ?? entry!.club} — entraîneur ${p?.coach ?? entry!.coach}${entry?.since ? ` (depuis le ${entry.since})` : ''} [fiabilité ${p?.confidence ?? 'inconnue'}]`,
     p?.formation_main ? `Formation : ${p.formation_main}` : '',
@@ -182,6 +188,7 @@ export function coachBriefing(homeTeam: string, awayTeam: string, league: string
         dossier.trends_fr?.length ? `Tendances : ${dossier.trends_fr.slice(0, 4).map((x) => clip(x, 220)).join(' | ')}` : '',
         dossier.rules_changes_fr?.length ? `Règles : ${dossier.rules_changes_fr.slice(0, 3).map((x) => clip(x, 200)).join(' | ')}` : '',
         dossier.referee_notes_fr?.length ? `Arbitrage : ${dossier.referee_notes_fr.slice(0, 3).map((x) => clip(x, 200)).join(' | ')}` : '',
+        recentLeagueLessons(coach?.league ?? '').length ? `Leçons de cette saison (bilans de l'entraîneur) : ${recentLeagueLessons(coach?.league ?? '').map((x) => clip(x, 220)).join(' | ')}` : '',
       ].filter(Boolean).join('\n')
     : '';
   const factText = facts.map((f) => `- [${f.id}] ${clip(f.fact_fr, 380)}${f.caveat_fr ? ` (limite : ${clip(f.caveat_fr, 120)})` : ''}`).join('\n');

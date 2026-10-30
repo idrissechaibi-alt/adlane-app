@@ -938,6 +938,103 @@ export async function hubReferee(homeTeam: string, awayTeam: string, dateKey: st
   return ref;
 }
 
+// ---------------------------------------------------------------- cartes de chaleur (FotMob)
+
+/** Joueur d'un match : où il a été vu (terrain de 105 × 68, orienté dans le sens de l'attaque de son équipe). */
+export interface HeatPlayer {
+  id: string;
+  name?: string;
+  team: 'h' | 'a';
+  gk?: boolean;
+  /** Nombre de points de la carte de chaleur. */
+  n: number;
+  /** Position moyenne : x de 0 (son but) à 105 (but adverse), y de 0 à 68. */
+  mx: number;
+  my: number;
+  /** Part des points dans le dernier tiers adverse (x > 70) et dans la surface adverse. */
+  att: number;
+  box: number;
+}
+
+export interface HeatTeam {
+  n: number;
+  /** Hauteur moyenne de l'équipe (0-105) hors gardien. */
+  avgX: number;
+  /** Part des points dans le dernier tiers adverse, dans la surface adverse, et dans son propre tiers défensif (x < 35). */
+  att: number;
+  box: number;
+  def: number;
+}
+
+export interface HeatSummary {
+  at: string;
+  h: HeatTeam;
+  a: HeatTeam;
+  /** Les joueurs les plus présents dans le camp adverse (12 au plus). */
+  players: HeatPlayer[];
+}
+
+const heatNames = new Map<string, { at: number; byOpta: Map<string, { name: string; team: 'h' | 'a'; gk: boolean }> }>();
+
+async function heatNamesOf(ref: string): Promise<Map<string, { name: string; team: 'h' | 'a'; gk: boolean }>> {
+  const hit = heatNames.get(ref);
+  if (hit && Date.now() - hit.at < 10 * 60_000) return hit.byOpta;
+  const d = await getJson(`https://www.fotmob.com/api/data/matchDetails?matchId=${ref}`);
+  const homeId = d?.general?.homeTeam?.id;
+  const byOpta = new Map<string, { name: string; team: 'h' | 'a'; gk: boolean }>();
+  for (const v of Object.values<any>(d?.content?.playerStats ?? {})) {
+    if (v?.optaId) byOpta.set(String(v.optaId), { name: String(v.name ?? ''), team: v.teamId === homeId ? 'h' : 'a', gk: !!v.isGoalkeeper });
+  }
+  heatNames.set(ref, { at: Date.now(), byOpta });
+  if (heatNames.size > 60) heatNames.delete(heatNames.keys().next().value as string);
+  return byOpta;
+}
+
+const round1 = (x: number) => Math.round(x * 10) / 10;
+const round2 = (x: number) => Math.round(x * 100) / 100;
+
+function teamHeat(points: Array<[number, number]>): HeatTeam {
+  const n = points.length;
+  if (!n) return { n: 0, avgX: 0, att: 0, box: 0, def: 0 };
+  return {
+    n,
+    avgX: round1(points.reduce((a, p) => a + p[0], 0) / n),
+    att: round2(points.filter((p) => p[0] > 70).length / n),
+    box: round2(points.filter((p) => p[0] > 88.5 && p[1] > 13.85 && p[1] < 54.15).length / n),
+    def: round2(points.filter((p) => p[0] < 35).length / n),
+  };
+}
+
+/**
+ * Cartes de chaleur EN DIRECT d'un match (FotMob, mises à jour pendant la rencontre) résumées par équipe et par joueur. Le terrain est
+ * orienté dans le sens de l'attaque de chaque équipe (le gardien est près de x = 0). Null si la source n'en publie pas.
+ */
+export async function hubHeatmap(homeTeam: string, awayTeam: string, dateKey: string): Promise<HeatSummary | null> {
+  try {
+    const fm = (await findEverywhere(homeTeam, awayTeam, dateKey, dateKey === utcDay())).find((m) => m.provider === 'FotMob');
+    if (!fm) return null;
+    const url = `https://pub.fotmob.com/prod/db/api/heatmap/match/${fm.ref}`;
+    const data = await getJson(`https://www.fotmob.com/api/data/heatmap/match/${fm.ref}/heatmaps?heatmapUrl=${encodeURIComponent(url)}`);
+    const raw: Record<string, string> = data?.players ?? {};
+    if (!Object.keys(raw).length) return null;
+    const names = await heatNamesOf(fm.ref).catch(() => new Map<string, { name: string; team: 'h' | 'a'; gk: boolean }>());
+    const all: Record<'h' | 'a', Array<[number, number]>> = { h: [], a: [] };
+    const players: HeatPlayer[] = [];
+    for (const [key, svg] of Object.entries(raw)) {
+      const pts: Array<[number, number]> = [...String(svg).matchAll(/cx="([\d.]+)" cy="([\d.]+)"/g)].map((m) => [Number(m[1]), Number(m[2])]);
+      const who = names.get(key.replace(/^p/, ''));
+      if (!pts.length || !who) continue;
+      if (!who.gk) all[who.team].push(...pts);
+      const t = teamHeat(pts);
+      players.push({ id: key.replace(/^p/, ''), name: who.name, team: who.team, ...(who.gk ? { gk: true } : {}), n: pts.length, mx: round1(pts.reduce((a, p) => a + p[0], 0) / pts.length), my: round1(pts.reduce((a, p) => a + p[1], 0) / pts.length), att: t.att, box: t.box });
+    }
+    if (!players.length) return null;
+    return { at: new Date().toISOString(), h: teamHeat(all.h), a: teamHeat(all.a), players: players.filter((p) => !p.gk).sort((x, y) => y.att * y.n - x.att * x.n).slice(0, 12) };
+  } catch {
+    return null;
+  }
+}
+
 export async function hubStats(
   homeTeam: string,
   awayTeam: string,

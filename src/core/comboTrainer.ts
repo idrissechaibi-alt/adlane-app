@@ -253,6 +253,27 @@ export async function trainCombos(maxSlots = 800): Promise<{ slots: number; comb
   return { slots: ready.length, combos };
 }
 
+/** Avancée vers la règle des combinés (plus de 50 % sur 200 combinés ou plus) : meilleure recette du moment, même très jeune. */
+export async function getComboProgress(): Promise<{
+  leader: { id: string; n: number; won: number; rate: number; recentRate: number | null } | null;
+  needed: number;
+  target: number;
+  validated: number;
+  recipes: number;
+  slotsDone: number;
+  since: string;
+}> {
+  const st = await load();
+  let leader: { id: string; n: number; won: number; rate: number; recentRate: number | null } | null = null;
+  for (const r of RECIPES) {
+    const s = st.recipes[r.id];
+    if (!s || s.n === 0) continue;
+    // Meilleure borne basse de Wilson : une recette à 3 sur 3 ne passe pas devant une recette à 60 % sur 150.
+    if (!leader || wilsonLow(s.won, s.n) > wilsonLow(leader.won, leader.n)) leader = { id: r.id, n: s.n, won: s.won, rate: rateOf(s), recentRate: s.recent.length >= 20 ? recentRate(s) : null };
+  }
+  return { leader, needed: MIN_COMBOS, target: MIN_RATE, validated: RECIPES.filter((r) => isValidated(st.recipes[r.id])).length, recipes: RECIPES.length, slotsDone: st.done.length, since: st.startedAt };
+}
+
 /** Résumé pour le rapport du soir et le diagnostic : meilleure recette (même non validée) et recettes validées. */
 export async function getComboTrainerStatus(): Promise<{
   validated: Array<{ id: string; n: number; rate: number }>;

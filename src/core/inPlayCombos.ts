@@ -107,7 +107,7 @@ import { AdvancedPoint, advancedOf, patternAdjust } from './patternEngine';
 import { ComboLeg, bestValidatedRecipe, pickCombos } from './comboTrainer';
 import { fetchRepoJson } from './gitAutoSync';
 import { getLineupCheck, runLineupChecks } from './lineupCheck';
-import { hubPlayerShots } from '../api/footballDataAPIs/liveDataHub';
+import { hubHeatmap, hubPlayerShots } from '../api/footballDataAPIs/liveDataHub';
 import { saveLivePlayers } from './liveStatsStore';
 import { canonicalTeam } from './teamRegistry';
 import { StrategyContext, evaluateStrategies, oddsFromExpectedGoals } from './strategies';
@@ -1944,6 +1944,9 @@ export function canonicalMatchKey(f: Pick<LiveFixture, 'homeTeam' | 'awayTeam'>,
   return m ? `${m.homeTeam} - ${m.awayTeam}` : `${canonicalTeam(f.homeTeam)} - ${canonicalTeam(f.awayTeam)}`;
 }
 
+/** Dernière carte de chaleur jointe à un relevé, par match. */
+const lastHeatAt = new Map<string, number>();
+
 export async function runLiveStatsScan(liveFixtures: LiveFixture[]): Promise<number> {
   const live = liveFixtures.filter((f) => ['1H', 'HT', '2H'].includes(f.statusShort));
   const plan = await getDailyPlan().catch(() => null);
@@ -1973,7 +1976,13 @@ export async function runLiveStatsScan(liveFixtures: LiveFixture[]): Promise<num
       const players = await hubPlayerShots(f.homeTeam, f.awayTeam, hubDateKey()).catch(() => null);
       if (players) await saveLivePlayers(mk, players).catch(() => {});
     }
-    const ok = await appendLiveStatsSample(mk, { ctx, ...buildLiveSample(f, a) });
+    // Cartes de chaleur en direct (FotMob) : une toutes les 2 minutes par match, jointes au relevé.
+    let heat: Awaited<ReturnType<typeof hubHeatmap>> = null;
+    if (Date.now() - (lastHeatAt.get(mk) ?? 0) >= 120_000) {
+      heat = await hubHeatmap(f.homeTeam, f.awayTeam, hubDateKey()).catch(() => null);
+      if (heat) lastHeatAt.set(mk, Date.now());
+    }
+    const ok = await appendLiveStatsSample(mk, { ctx, ...buildLiveSample(f, a), ...(heat ? { heat } : {}) });
     if (ok) recorded++;
   });
   noteLiveStatsScan(live.length, '6 sources gratuites');
