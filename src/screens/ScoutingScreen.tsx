@@ -431,12 +431,16 @@ export default function ScoutingScreen() {
             {!!o.lineup_fr && <Text style={styles.coachText}><Text style={styles.coachLabel}>Compositions : </Text>{o.lineup_fr}</Text>}
             {!!o.script_fr && <Text style={styles.coachText}><Text style={styles.coachLabel}>Scénario probable : </Text>{o.script_fr}</Text>}
             {o.risks_fr.length > 0 && <Text style={styles.coachText}><Text style={styles.coachLabel}>Risques : </Text>{o.risks_fr.join(' · ')}</Text>}
+            {!!o.web_fr && <Text style={styles.coachText}><Text style={styles.coachLabel}>Sources web : </Text>{o.web_fr}</Text>}
             {o.opinions.map((x, i) => (
               <Text key={i} style={styles.coachText}>
                 <Text style={{ color: stanceColor(x.stance), fontWeight: '700' }}>{x.stance}</Text> · {x.market} {x.direction} ({Math.round(x.confidence * 100)} %) — {x.why_fr}
               </Text>
             ))}
           </View>
+        )}
+        {open && (o.webSources?.length ?? 0) > 0 && (
+          <Text style={styles.coachSources}>Consultées ({o.webSources.length}) : {o.webSources.map((x) => x.title).slice(0, 6).join(' · ')}</Text>
         )}
         <TouchableOpacity onPress={() => setOpenOpinions((p) => ({ ...p, [m.id]: !open }))}>
           <Text style={styles.coachToggle}>{open ? 'Réduire' : "Lire l'avis complet"}</Text>
@@ -612,6 +616,7 @@ const styles = StyleSheet.create({
   coachHead: { color: '#4ade80', fontSize: 11, fontWeight: '700' },
   coachText: { color: '#cbd5e1', fontSize: 12, lineHeight: 18 },
   coachLabel: { color: '#e2e8f0', fontWeight: '700' },
+  coachSources: { color: '#64748b', fontSize: 11, lineHeight: 16 },
   coachToggle: { color: '#3b82f6', fontSize: 12, fontWeight: '600' },
   matchItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14 },
   matchLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },

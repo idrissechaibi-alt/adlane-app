@@ -16,6 +16,7 @@ import { coachBriefing } from './knowledgeBase';
 import { loadNotes } from './clubNotes';
 import { loadKnowledgeFeed } from './knowledgeFeed';
 import { parseAnalysis, loadConfig, takeBudget, type AiOpinion } from './coachAnalysis';
+import { gatherMatchWebContext, type WebSource } from './coachWeb';
 
 const STORE_KEY = '@coach_prematch_v1';
 const MAX_STORED = 200;
@@ -39,6 +40,10 @@ export interface PreMatchOpinion {
   script_fr: string;
   lineup_fr: string;
   risks_fr: string[];
+  /** Ce que les sources web ajoutent (actualité, absents annoncés, attentes de la presse), recoupé avec les données du dossier. */
+  web_fr: string;
+  /** Sources web consultées pour cet avis. */
+  webSources: WebSource[];
   opinions: AiOpinion[];
 }
 
@@ -93,9 +98,9 @@ function systemPrompt(coach: CoachProfile): string {
   return [
     `Tu es ${coach.name}, entraîneur de très haut niveau et analyste de la ligue « ${coach.league} ». ${coach.style}`,
     `Particularités de ta ligue : ${coach.leagueNotes}`,
-    "Tu rédiges ton AVIS TECHNIQUE GLOBAL d'avant-match, juste après la publication des compositions officielles. Tu t'appuies sur TOUT le dossier fourni (fiches des deux clubs, dossier de ligue, compositions officielles comparées au onze habituel, arbitre, météo, cotes, tendances, moyennes, faits de recherche) et sur rien d'autre. Si une donnée manque ou si une fiche est marquée de fiabilité « faible », tu le dis au lieu de l'inventer. Tu ne garantis rien et tu ne donnes aucun pari ferme.",
+    "Tu rédiges ton AVIS TECHNIQUE GLOBAL d'avant-match, juste après la publication des compositions officielles. Tu t'appuies sur TOUT le dossier fourni (fiches des deux clubs, dossier de ligue, compositions officielles comparées au onze habituel, arbitre, météo, cotes, tendances, moyennes, faits de recherche) ET sur les SOURCES WEB du jour (actualité, absents annoncés, attentes de la presse). Les sources web sont secondaires : la composition officielle et les données du dossier priment, et si le web les contredit tu le signales au lieu de choisir en silence. Tu précises ce qui vient du web (« selon la presse… ») et tu n'inventes rien au-delà de ces sources. Si une donnée manque ou si une fiche est marquée de fiabilité « faible », tu le dis au lieu de l'inventer. Tu ne garantis rien et tu ne donnes aucun pari ferme.",
     "Structure de ton avis : le duel tactique (systèmes, phases fortes et faibles de chaque équipe), les duels clés et les joueurs à surveiller d'après les compositions, l'effet des absences ou des changements de système, le scénario le plus probable de la rencontre, les risques qui le renverseraient, et ton avis par marché (buts, corners, cartons, résultat).",
-    'Réponds en JSON strict, rien autour : {"summary_fr":"avis technique global en 4 à 6 phrases","matchup_fr":"duel tactique en 2 à 4 phrases","key_duels_fr":["duel ou joueur clé","…"],"script_fr":"scénario le plus probable en 2 à 3 phrases","lineup_fr":"ce que changent les compositions (absences, système, rotation)","risks_fr":["risque","…"],"opinions":[{"market":"total_buts|buts_1ere_mt|btts|corners|cartons|fautes|1X2","direction":"plus|moins|domicile|nul|exterieur|oui|non","stance":"soutient|neutre|conteste","confidence":0.0,"why_fr":"raison courte chiffrée"}]}',
+    'Réponds en JSON strict, rien autour : {"summary_fr":"avis technique global en 4 à 6 phrases","matchup_fr":"duel tactique en 2 à 4 phrases","key_duels_fr":["duel ou joueur clé","…"],"script_fr":"scénario le plus probable en 2 à 3 phrases","lineup_fr":"ce que changent les compositions (absences, système, rotation)","risks_fr":["risque","…"],"web_fr":"ce que les sources web apportent ou contredisent, en 2 à 3 phrases (vide si aucune source)","opinions":[{"market":"total_buts|buts_1ere_mt|btts|corners|cartons|fautes|1X2","direction":"plus|moins|domicile|nul|exterieur|oui|non","stance":"soutient|neutre|conteste","confidence":0.0,"why_fr":"raison courte chiffrée"}]}',
     'Donne au moins 4 avis par marché (total de buts plus/moins, corners plus/moins, cartons plus/moins, résultat 1X2). « plus » et « moins » parlent de tout le match, sans ligne chiffrée précise.',
   ].join('\n\n');
 }
@@ -113,7 +118,7 @@ export interface PreMatchInput {
 }
 
 /** Lit la réponse de l'IA : la même grille d'avis par marché que l'analyse de la 20e / 60e. */
-export function parsePreMatch(raw: string): Pick<PreMatchOpinion, 'summary_fr' | 'matchup_fr' | 'key_duels_fr' | 'script_fr' | 'lineup_fr' | 'risks_fr' | 'opinions'> | null {
+export function parsePreMatch(raw: string): Pick<PreMatchOpinion, 'summary_fr' | 'matchup_fr' | 'key_duels_fr' | 'script_fr' | 'lineup_fr' | 'risks_fr' | 'web_fr' | 'opinions'> | null {
   try {
     const m = raw.match(/\{[\s\S]*\}/);
     const j = JSON.parse(m ? m[0] : raw);
@@ -129,6 +134,7 @@ export function parsePreMatch(raw: string): Pick<PreMatchOpinion, 'summary_fr' |
       key_duels_fr: list(j.key_duels_fr, 5, 220),
       script_fr: str(j.script_fr, 600),
       lineup_fr: str(j.lineup_fr, 600),
+      web_fr: str(j.web_fr, 700),
       risks_fr: common.risks_fr,
       opinions: common.opinions,
     };
@@ -169,11 +175,12 @@ export async function generatePreMatchOpinion(input: PreMatchInput): Promise<Pre
       return null;
     }
     await Promise.all([loadNotes(), loadKnowledgeFeed()]);
-    const [check, referee, weather, trend] = await Promise.all([
+    const [check, referee, weather, trend, web] = await Promise.all([
       checkLineup(input.homeTeam, input.awayTeam).catch(() => null),
       hubReferee(input.homeTeam, input.awayTeam, day).catch(() => null),
       getMatchWeather(input.homeTeam, input.awayTeam).catch(() => null),
       getMatchTrend(input.homeTeam, input.awayTeam).catch(() => null),
+      gatherMatchWebContext(input.homeTeam, input.awayTeam, config).catch(() => null),
     ]);
     const briefing = coachBriefing(input.homeTeam, input.awayTeam, coach.league, ['total_buts', 'corners', 'cartons', '1X2'], 6);
     const parts: string[] = [`Match : ${input.homeTeam} (domicile) contre ${input.awayTeam}, ${coach.league}, coup d'envoi ${input.kickoff}.`];
@@ -187,6 +194,7 @@ export async function generatePreMatchOpinion(input: PreMatchInput): Promise<Pre
     if (input.odds) parts.push(`COTES DU JOUR : 1 ${input.odds.home ?? '?'} · N ${input.odds.draw ?? '?'} · 2 ${input.odds.away ?? '?'} · les deux marquent ${input.odds.btts_yes ?? '?'} · plus de 2,5 buts ${input.odds.over_2_5 ?? '?'}.`);
     if (trend) parts.push(`TENDANCES DES ÉQUIPES : ${clip(describeMatchTrend(trend), 900)}`);
     if (input.context) parts.push(`CONTEXTE DU SCAN MATINAL : ${clip(input.context, 700)}`);
+    parts.push(web?.text ? `SOURCES WEB DU JOUR (${web.engines.join(', ')} ; non vérifiées, à recouper avec la composition officielle)\n${web.text}` : 'SOURCES WEB DU JOUR : aucune source web n\'a répondu pour ce match.');
     parts.push(`DOSSIER DU MATCH\n${briefing.context}`);
 
     const res = await askOmnirouteUsable(systemPrompt(coach), parts.join('\n\n'), config, (raw) => parsePreMatch(raw));
@@ -206,6 +214,7 @@ export async function generatePreMatchOpinion(input: PreMatchInput): Promise<Pre
       lineupHash: hash,
       at: new Date().toISOString(),
       model: res.model,
+      webSources: web?.sources ?? [],
       ...res.value,
     };
     const all = await load();
