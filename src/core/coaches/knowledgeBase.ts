@@ -10,6 +10,7 @@ import metricsData from './data/metrics.json';
 import { CLUB_STATS, type TeamWindow } from './leagueStats';
 import { clubCoachOf } from './clubCoaches';
 import { coachForLeague, coachSystemPrompt, type CoachProfile } from './knowledge';
+import { recentClubNotes, recentPlayerNotes } from './clubNotes';
 
 export interface ClubProfile {
   club: string;
@@ -160,6 +161,8 @@ function clubBlock(team: string): string {
     fmtWindow(st?.courant, 'Saison en cours'),
     fmtMetrics(metricsOf(p?.club ?? entry!.club, '2026-27')),
     fmtMetrics(metricsOf(p?.club ?? entry!.club, '2025-26')),
+    recentClubNotes(p?.club ?? entry!.club).length ? `Bilans récents de l'entraîneur sur ce club : ${recentClubNotes(p?.club ?? entry!.club).map((x) => clip(x, 220)).join(' | ')}` : '',
+    recentPlayerNotes(p?.club ?? entry!.club).length ? `Notes récentes sur ses joueurs : ${recentPlayerNotes(p?.club ?? entry!.club).map((x) => clip(x, 180)).join(' | ')}` : '',
   ].filter(Boolean);
   return lines.join('\n');
 }

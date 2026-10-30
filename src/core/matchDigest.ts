@@ -317,6 +317,9 @@ export async function digestPlayers(day: string, homeTeam: string, awayTeam: str
   return null;
 }
 
+/** Résumés des matchs terminés (lecture seule, pour les bilans des entraîneurs). */
+export const readMatchDigests = (): Promise<Record<string, MatchDigest>> => readJson<Record<string, MatchDigest>>(DIGEST_KEY, {});
+
 const REBUILT_KEY = '@team_live_rebuilt_v2';
 
 /**

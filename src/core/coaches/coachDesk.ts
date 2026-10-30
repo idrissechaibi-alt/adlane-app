@@ -8,6 +8,7 @@ import { readInPlayProposals, type InPlayProposal } from '../learnStore';
 import { namesLikelyMatch, normalizeTeamName } from '../teamNameMatch';
 import { COACHES, coachForLeague, type CoachProfile } from './knowledge';
 import { opinionOn, readMatch, type CoachOpinion, type Stance, type TacticalRead } from './tacticalEngine';
+import { aiOpinionOnLeg, analysisKey, getAnalysis, type Checkpoint } from './coachAnalysis';
 
 const KEY = '@coach_shadow_v1';
 /** Seuil de décision de l'étape 3 : nombre de paris réglés avant de juger l'apport d'un entraîneur. */
@@ -18,7 +19,9 @@ export interface ShadowVerdict {
   proposalId: string;
   at: string;
   coach: CoachProfile['id'];
-  legs: Array<{ selection: string; market: string; prob: number; stance: Stance; adjust: number; reasons: string[]; won?: boolean }>;
+  legs: Array<{ selection: string; market: string; prob: number; stance: Stance; adjust: number; reasons: string[]; won?: boolean; ai?: { stance: Stance; confidence: number; why_fr: string } }>;
+  /** Clé de l'analyse IA (20e / 60e) liée à ce pari, quand elle existait. */
+  analysisKey?: string;
   read: Pick<TacticalRead, 'minute' | 'diff' | 'dominance' | 'recentDominance' | 'tempoTrend' | 'profile' | 'phase' | 'flags' | 'reliable'> | null;
   settled?: boolean;
 }
@@ -46,7 +49,7 @@ async function save(): Promise<void> {
 }
 
 /** Relevés du jour pour un match, quel que soit le nom sous lequel ils ont été rangés. */
-async function samplesFor(homeTeam: string, awayTeam: string): Promise<LiveStatsSample[]> {
+export async function samplesFor(homeTeam: string, awayTeam: string): Promise<LiveStatsSample[]> {
   const day = await readLiveStatsDay(new Date().toISOString().slice(0, 10));
   const h = normalizeTeamName(homeTeam);
   const a = normalizeTeamName(awayTeam);
@@ -78,18 +81,25 @@ export async function coachOpinions(legs: CoachLegInput[]): Promise<{ coach: Coa
 }
 
 /** Enregistre le verdict d'ombre d'un pari réel qui vient d'être proposé (n'influence rien). */
-export async function recordShadowVerdict(proposal: Pick<InPlayProposal, 'id' | 'legs'>): Promise<void> {
+export async function recordShadowVerdict(proposal: Pick<InPlayProposal, 'id' | 'legs'> & { kind?: string }): Promise<void> {
   try {
     const res = await coachOpinions(proposal.legs.map((l) => ({ market: l.market, selection: l.selection, prob: l.prob, league: l.league, homeTeam: l.homeTeam, awayTeam: l.awayTeam })));
     if (!res) return;
     const all = await load();
     if (all.some((v) => v.proposalId === proposal.id)) return;
     const r = res.read;
+    const cp: Checkpoint | null = proposal.kind === 'minute20' ? '20' : proposal.kind === 'minute60' ? '60' : null;
+    const aKey = cp ? analysisKey(proposal.legs[0].homeTeam, proposal.legs[0].awayTeam, new Date().toISOString().slice(0, 10), cp) : undefined;
+    const analysis = aKey ? await getAnalysis(aKey) : null;
     all.push({
       proposalId: proposal.id,
       at: new Date().toISOString(),
       coach: res.coach.id,
-      legs: proposal.legs.map((l, i) => ({ selection: l.selection, market: l.market, prob: l.prob, stance: res.opinions[i].stance, adjust: res.opinions[i].adjust, reasons: res.opinions[i].reasons })),
+      analysisKey: aKey,
+      legs: proposal.legs.map((l, i) => {
+        const ai = aiOpinionOnLeg(analysis, l);
+        return { selection: l.selection, market: l.market, prob: l.prob, stance: res.opinions[i].stance, adjust: res.opinions[i].adjust, reasons: res.opinions[i].reasons, ...(ai ? { ai } : {}) };
+      }),
       read: r ? { minute: r.minute, diff: r.diff, dominance: r.dominance, recentDominance: r.recentDominance, tempoTrend: r.tempoTrend, profile: r.profile, phase: r.phase, flags: r.flags, reliable: r.reliable } : null,
     });
     await save();
@@ -106,6 +116,12 @@ export async function reconcileShadowVerdicts(): Promise<number> {
   const byId = new Map(readInPlayProposals().map((p) => [p.id, p]));
   let done = 0;
   for (const v of open) {
+    // Analyse IA arrivée après l'enregistrement (serveur PC, appel lent) : ajoutée au verdict.
+    if (v.analysisKey && v.legs.some((l) => !l.ai)) {
+      const a = await getAnalysis(v.analysisKey);
+      const pp = byId.get(v.proposalId);
+      if (a && pp) pp.legs.forEach((leg, i) => { const ai = v.legs[i] && !v.legs[i].ai ? aiOpinionOnLeg(a, leg) : null; if (ai) v.legs[i].ai = ai; });
+    }
     const p = byId.get(v.proposalId);
     if (!p) continue;
     let all_ = true;
@@ -131,6 +147,8 @@ export interface CoachRecord {
   neutral: { n: number; won: number };
   /** Taux de réussite des paris soutenus moins celui des contestés (en points) : l'apport estimé du veto. */
   edge: number | null;
+  /** Même mesure pour les avis de l'analyse IA (20e / 60e) : jambes réglées qui en avaient un. */
+  ai: { legs: number; supported: { n: number; won: number }; contested: { n: number; won: number }; edge: number | null };
   /** Le pouvoir peut-il être activé ? (étape 3) */
   ready: boolean;
 }
@@ -140,18 +158,28 @@ export async function getCoachStatus(): Promise<{ coaches: CoachRecord[]; total:
   const coaches: CoachRecord[] = COACHES.map((c) => {
     const mine = all.filter((v) => v.coach === c.id);
     const bucket = { soutient: { n: 0, won: 0 }, conteste: { n: 0, won: 0 }, neutre: { n: 0, won: 0 } };
+    const aiB = { soutient: { n: 0, won: 0 }, conteste: { n: 0, won: 0 }, neutre: { n: 0, won: 0 } };
     let settledLegs = 0;
+    let aiLegs = 0;
     for (const v of mine) for (const l of v.legs) {
       if (l.won == null) continue;
       settledLegs++;
       const b = bucket[l.stance];
       b.n++;
       if (l.won) b.won++;
+      if (l.ai) {
+        aiLegs++;
+        const a = aiB[l.ai.stance];
+        a.n++;
+        if (l.won) a.won++;
+      }
     }
     const rate = (b: { n: number; won: number }) => (b.n ? b.won / b.n : null);
     const rs = rate(bucket.soutient);
     const rc = rate(bucket.conteste);
     const edge = rs != null && rc != null ? Math.round((rs - rc) * 1000) / 10 : null;
+    const aiRs = rate(aiB.soutient);
+    const aiRc = rate(aiB.conteste);
     return {
       coach: c.name,
       league: c.league,
@@ -161,6 +189,7 @@ export async function getCoachStatus(): Promise<{ coaches: CoachRecord[]; total:
       contested: bucket.conteste,
       neutral: bucket.neutre,
       edge,
+      ai: { legs: aiLegs, supported: aiB.soutient, contested: aiB.conteste, edge: aiRs != null && aiRc != null ? Math.round((aiRs - aiRc) * 1000) / 10 : null },
       ready: settledLegs >= COACH_MIN_SETTLED && bucket.conteste.n >= 30 && edge != null && edge >= 8,
     };
   });

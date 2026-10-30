@@ -94,7 +94,10 @@ import {
 } from './learnStore';
 import { sendLocalNotification } from './notifications';
 import { normalizeTeamName, namesLikelyMatch } from './teamNameMatch';
-import { recordShadowVerdict } from './coaches/coachDesk';
+import { recordShadowVerdict, samplesFor } from './coaches/coachDesk';
+import { runCoachAnalysis, analysisKey, getAnalysis } from './coaches/coachAnalysis';
+import { getServerStatus } from './gitAutoSync';
+import { isRunningOnServer } from './serverMode';
 import { OmnirouteConfig } from '../types';
 import { mapWithConcurrency } from './concurrency';
 import { RefereeInfo, hubDateKey, hubKnowsMatch, hubLiveStatus, hubReferee, hubStats } from '../api/footballDataAPIs/liveDataHub';
@@ -1484,6 +1487,29 @@ function legDedupSuffix(leg: CandidateLeg): string {
  * Paris RÉELS d'un créneau, pour un checkpoint donné : paris simples ; des combinés seulement avec une recette validée
  * par l'entraînement du fictif (comboTrainer.ts), voir le détail dans le corps de la fonction.
  */
+/**
+ * Déclenche l'analyse IA du coach (20e ou 60e). Le serveur PC la fait en priorité (il publie son verdict dans le flux) : le
+ * téléphone ne la lance lui-même que si le PC est muet ou si le moment est déjà bien entamé sans verdict.
+ */
+async function requestCoachAnalysis(kind: 'minute20' | 'minute60', scheduled: ScheduledMatch, live: LiveFixture): Promise<void> {
+  try {
+    const checkpoint = kind === 'minute20' ? '20' : '60';
+    const day = new Date().toISOString().slice(0, 10);
+    const key = analysisKey(scheduled.homeTeam, scheduled.awayTeam, day, checkpoint);
+    if (await getAnalysis(key)) return;
+    const late = live.minute >= (checkpoint === '20' ? 24 : 64);
+    if (!late && !isRunningOnServer()) {
+      const status = await getServerStatus().catch(() => ({ alive: false }));
+      if (status.alive) return;
+    }
+    const samples = await samplesFor(scheduled.homeTeam, scheduled.awayTeam);
+    if (samples.length === 0) return;
+    await runCoachAnalysis({ homeTeam: scheduled.homeTeam, awayTeam: scheduled.awayTeam, league: scheduled.leagueName, day, checkpoint, minute: live.minute, samples, source: 'telephone' });
+  } catch (error: any) {
+    console.warn('[Entraîneurs] Analyse IA non lancée:', error?.message);
+  }
+}
+
 async function processRealSlotCheckpoint(
   kind: 'minute20' | 'minute60',
   slotMatchCount: number,
@@ -1494,6 +1520,9 @@ async function processRealSlotCheckpoint(
   fresh: InPlayProposal[]
 ): Promise<void> {
   if (candidates.length === 0) return;
+
+  // Analyse IA de l'entraîneur de la ligue pour chaque match réel du créneau (mode ombre : sans attendre, sans rien bloquer).
+  for (const { scheduled, live } of candidates) void requestCoachAnalysis(kind, scheduled, live);
 
   // Chaque match du créneau est indépendant des autres — vérifiés en
   // parallèle (petit créneau réel, 5 grands championnats, jamais plus d'une
@@ -1527,7 +1556,7 @@ async function processRealSlotCheckpoint(
     if (!(await claimPick(proposal))) return;
     fresh.push(proposal);
     appendInPlayProposals([proposal]);
-    void recordShadowVerdict(proposal);
+    void recordShadowVerdict({ id: proposal.id, legs: proposal.legs, kind: proposal.kind });
     for (const item of items) alreadyProposed.add(`${item.fixtureId}-${kind}`);
     await notifyProposal(proposal);
   };

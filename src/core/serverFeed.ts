@@ -14,6 +14,7 @@ import { MatchSample, readMatchTimelines, readStoredFictionalProgram, writeMatch
 import { namesLikelyMatch, normalizeTeamName } from './teamNameMatch';
 import { canonicalMatchKey } from './inPlayCombos';
 import { getDailyPlan } from './scheduler';
+import { mergeAnalyses, type CoachAnalysis } from './coaches/coachAnalysis';
 
 export const SERVER_LIVE_DIR = 'data/server/live';
 export const SERVER_WEB_DIR = 'data/server/web';
@@ -50,6 +51,8 @@ export interface FeedSlice {
   matches: Record<string, FeedMatch>;
   samples: Record<string, LiveStatsSample[]>;
   finals: Record<string, FeedFinal>;
+  /** Analyses IA des entraîneurs (20e / 60e) faites par le serveur. */
+  analyses?: Record<string, CoachAnalysis>;
 }
 
 const PULL_KEY = '@server_feed_pull';
@@ -221,6 +224,8 @@ export function pullServerLiveFeed(): Promise<number> {
 
 async function mergeSlice(slice: FeedSlice): Promise<number> {
   let added = 0;
+  // Analyses IA des entraîneurs faites par le serveur : versées dans le magasin du téléphone (mode ombre).
+  if (slice.analyses && Object.keys(slice.analyses).length) await mergeAnalyses(Object.values(slice.analyses)).catch(() => 0);
   // Résultats finaux : gardés pour le bilan (dailyReview → serverFinalFor).
   if (Object.keys(slice.finals ?? {}).length) {
     const all = JSON.parse((await AsyncStorage.getItem(FINALS_KEY(slice.day))) ?? '{}');
