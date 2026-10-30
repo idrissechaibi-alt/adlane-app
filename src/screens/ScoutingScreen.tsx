@@ -32,6 +32,9 @@ import { HISTORICAL_LESSONS } from '../data/historical';
 import { getDailyPlan } from '../core/scheduler';
 import { ScheduledMatchDetail } from '../types/database';
 import * as SecureStore from 'expo-secure-store';
+import { useIsFocused } from '@react-navigation/native';
+import CoachStatsCard from '../components/CoachStatsCard';
+import { preMatchStatus, runPreMatchOpinions, type PreMatchStatus } from '../core/coaches/coachPreMatch';
 
 const GEMINI_KEY_STORAGE = 'app-adlane.gemini-api-key';
 // 90 min + mi-temps + arrêts de jeu, même marge que matchSettlement.ts/
@@ -49,6 +52,10 @@ interface AIDiagnostic {
 }
 
 export default function ScoutingScreen() {
+  const isFocused = useIsFocused();
+  /** Avis technique d'avant-match de l'entraîneur de la ligue, par match (id du planning). */
+  const [coachStatus, setCoachStatus] = useState<Record<string, PreMatchStatus>>({});
+  const [openOpinions, setOpenOpinions] = useState<Record<string, boolean>>({});
   const [matches, setMatches] = useState<ScheduledMatchDetail[]>([]);
   const [selectedMatch, setSelectedMatch] = useState<ScheduledMatchDetail | null>(null);
   const [loading, setLoading] = useState(false);
@@ -85,6 +92,37 @@ export default function ScoutingScreen() {
       setRefreshing(false);
     }
   };
+
+  /** Relit l'état des avis (sans réseau) et, dès qu'une composition officielle est publiée, fait rédiger l'avis du coach de la ligue. */
+  const refreshCoachOpinions = async (list: ScheduledMatchDetail[], generate: boolean) => {
+    try {
+      if (generate) {
+        await runPreMatchOpinions(
+          list.map((m) => ({
+            homeTeam: m.homeTeam,
+            awayTeam: m.awayTeam,
+            league: m.leagueName,
+            kickoff: m.kickoff_utc,
+            odds: { home: m.odds?.home, draw: m.odds?.draw, away: m.odds?.away, btts_yes: m.odds?.btts_yes, over_2_5: m.odds?.over_2_5 },
+            context: m.context,
+          }))
+        );
+      }
+      const next: Record<string, PreMatchStatus> = {};
+      for (const m of list) next[m.id] = await preMatchStatus(m);
+      setCoachStatus(next);
+    } catch (error) {
+      console.warn('Avis des entraîneurs indisponibles:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (!isFocused || matches.length === 0) return;
+    void refreshCoachOpinions(matches, false);
+    void refreshCoachOpinions(matches, true);
+    const timer = setInterval(() => void refreshCoachOpinions(matches, true), 3 * 60_000);
+    return () => clearInterval(timer);
+  }, [isFocused, matches]);
 
   const handleSelectMatch = (match: ScheduledMatchDetail) => {
     setSelectedMatch(match);
@@ -371,25 +409,60 @@ export default function ScoutingScreen() {
     }
   };
 
+  const renderCoachOpinion = (m: ScheduledMatchDetail) => {
+    const st = coachStatus[m.id];
+    if (!st || st.state === 'hors_ligue') return null;
+    if (st.state === 'attente_compo') {
+      return <Text style={styles.coachWait}>{st.coachName} donnera son avis technique dès la composition officielle (en général 1 h avant le coup d'envoi).</Text>;
+    }
+    if (st.state === 'en_cours') return <Text style={styles.coachWait}>{st.coachName} rédige son avis…</Text>;
+    if (st.state === 'indisponible') return <Text style={styles.coachWait}>Avis de {st.coachName} indisponible pour l'instant : {st.reason}. Nouvel essai automatique.</Text>;
+    const o = st.opinion;
+    const open = !!openOpinions[m.id];
+    const stanceColor = (x: string) => (x === 'soutient' ? '#4ade80' : x === 'conteste' ? '#f87171' : '#94a3b8');
+    return (
+      <View style={styles.coachBox}>
+        <Text style={styles.coachHead}>Avis de {o.coachName} · composition officielle · {new Date(o.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</Text>
+        <Text style={styles.coachText}>{o.summary_fr}</Text>
+        {open && (
+          <View style={{ gap: 6 }}>
+            {!!o.matchup_fr && <Text style={styles.coachText}><Text style={styles.coachLabel}>Duel tactique : </Text>{o.matchup_fr}</Text>}
+            {o.key_duels_fr.length > 0 && <Text style={styles.coachText}><Text style={styles.coachLabel}>Duels clés : </Text>{o.key_duels_fr.join(' · ')}</Text>}
+            {!!o.lineup_fr && <Text style={styles.coachText}><Text style={styles.coachLabel}>Compositions : </Text>{o.lineup_fr}</Text>}
+            {!!o.script_fr && <Text style={styles.coachText}><Text style={styles.coachLabel}>Scénario probable : </Text>{o.script_fr}</Text>}
+            {o.risks_fr.length > 0 && <Text style={styles.coachText}><Text style={styles.coachLabel}>Risques : </Text>{o.risks_fr.join(' · ')}</Text>}
+            {o.opinions.map((x, i) => (
+              <Text key={i} style={styles.coachText}>
+                <Text style={{ color: stanceColor(x.stance), fontWeight: '700' }}>{x.stance}</Text> · {x.market} {x.direction} ({Math.round(x.confidence * 100)} %) — {x.why_fr}
+              </Text>
+            ))}
+          </View>
+        )}
+        <TouchableOpacity onPress={() => setOpenOpinions((p) => ({ ...p, [m.id]: !open }))}>
+          <Text style={styles.coachToggle}>{open ? 'Réduire' : "Lire l'avis complet"}</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
   const renderMatchList = () => (
     <View style={styles.card}>
       <Text style={styles.cardTitle}>Matchs du Jour (Scan Matinal)</Text>
       {matches.length > 0 ? (
         matches.map((m) => (
-          <TouchableOpacity
-            key={m.id}
-            style={styles.matchItem}
-            onPress={() => handleSelectMatch(m)}
-          >
-            <View style={styles.matchLeft}>
-              <Text style={styles.flag}>{m.flag}</Text>
-              <View>
-                <Text style={styles.teamsText}>{m.homeTeam} - {m.awayTeam}</Text>
-                <Text style={styles.leagueText}>{m.leagueName} • {m.creneau_display}</Text>
+          <View key={m.id} style={styles.matchBlock}>
+            <TouchableOpacity style={styles.matchItem} onPress={() => handleSelectMatch(m)}>
+              <View style={styles.matchLeft}>
+                <Text style={styles.flag}>{m.flag}</Text>
+                <View>
+                  <Text style={styles.teamsText}>{m.homeTeam} - {m.awayTeam}</Text>
+                  <Text style={styles.leagueText}>{m.leagueName} • {m.creneau_display}</Text>
+                </View>
               </View>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color="#475569" />
-          </TouchableOpacity>
+              <Ionicons name="chevron-forward" size={18} color="#475569" />
+            </TouchableOpacity>
+            {renderCoachOpinion(m)}
+          </View>
         ))
       ) : (
         <View style={styles.emptyContainer}>
@@ -517,6 +590,8 @@ export default function ScoutingScreen() {
           <Text style={styles.subtitle}>Cliquez sur un match pour lancer l'analyse probabiliste</Text>
         </View>
 
+        {!selectedMatch && <CoachStatsCard />}
+
         {selectedMatch ? renderAnalysis() : renderMatchList()}
       </ScrollView>
     </SafeAreaView>
@@ -531,7 +606,14 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 13, color: '#94a3b8', marginTop: 2 },
   card: { backgroundColor: '#1e293b', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#334155' },
   cardTitle: { fontSize: 15, fontWeight: '600', color: '#f1f5f9', marginBottom: 12 },
-  matchItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#334155' },
+  matchBlock: { borderBottomWidth: 1, borderBottomColor: '#334155', paddingBottom: 10 },
+  coachWait: { color: '#94a3b8', fontSize: 12, lineHeight: 17, marginTop: -4, marginBottom: 2, paddingHorizontal: 4 },
+  coachBox: { backgroundColor: '#0f172a', borderRadius: 8, borderWidth: 1, borderColor: '#334155', padding: 10, gap: 6, marginBottom: 2 },
+  coachHead: { color: '#4ade80', fontSize: 11, fontWeight: '700' },
+  coachText: { color: '#cbd5e1', fontSize: 12, lineHeight: 18 },
+  coachLabel: { color: '#e2e8f0', fontWeight: '700' },
+  coachToggle: { color: '#3b82f6', fontSize: 12, fontWeight: '600' },
+  matchItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14 },
   matchLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   flag: { fontSize: 20 },
   teamsText: { color: '#f8fafc', fontSize: 14, fontWeight: '600' },

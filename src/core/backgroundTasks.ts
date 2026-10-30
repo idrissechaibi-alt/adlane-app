@@ -10,6 +10,7 @@ import { pullServerLiveFeed } from './serverFeed';
 import { trainCombos } from './comboTrainer';
 import { reconcileShadowVerdicts } from './coaches/coachDesk';
 import { runCoachReviews } from './coaches/coachReview';
+import { runPreMatchOpinions } from './coaches/coachPreMatch';
 import { pullKnowledgeFeed } from './coaches/knowledgeFeed';
 import * as BackgroundTask from 'expo-background-task';
 import * as TaskManager from 'expo-task-manager';
@@ -388,6 +389,18 @@ async function fetchSharedLiveFixtures(): Promise<SharedLiveFixturesResult> {
 
 const REAL_FAST_TICK_KEY = '@last_real_fast_tick';
 let realFastInFlight: Promise<void> | null = null;
+let lastPreMatchPassAt = 0;
+
+/** Avis d'avant-match des entraîneurs : tous les 3 minutes au plus, pour les matchs du plan dont la composition officielle vient de tomber. */
+async function passPreMatchOpinions(): Promise<void> {
+  if (Date.now() - lastPreMatchPassAt < 3 * 60_000) return;
+  lastPreMatchPassAt = Date.now();
+  const plan = await getDailyPlan().catch(() => null);
+  const matches = (plan?.slots ?? []).flatMap((slot) => slot.matches as Array<{ homeTeam: string; awayTeam: string; leagueName: string; kickoff_utc: string; odds?: any; context?: string }>);
+  await runPreMatchOpinions(
+    matches.map((m) => ({ homeTeam: m.homeTeam, awayTeam: m.awayTeam, league: m.leagueName, kickoff: m.kickoff_utc, odds: m.odds, context: m.context }))
+  );
+}
 
 /** Scan réel rapide (voir runRealInPlayTick) : jamais deux en même temps. */
 export function runRealFastTick(): Promise<void> {
@@ -395,6 +408,7 @@ export function runRealFastTick(): Promise<void> {
   realFastInFlight = (async () => {
     try {
       await pullServerLiveFeed().catch(() => 0);
+      void passPreMatchOpinions().catch((error: any) => console.warn('[Entraîneurs] Avis d\'avant-match échoués:', error?.message));
       const real = await fetchRealLiveFixturesShared();
       const fresh = await runRealInPlayTick(real.fixtures);
       await AsyncStorage.setItem(
