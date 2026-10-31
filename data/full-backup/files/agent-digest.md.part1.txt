@@ -1,7 +1,7 @@
 # Mémoire d'auto-apprentissage — marqueurs observés en direct
 
-Mis à jour : 2026-10-31T11:11:27.769Z
-Corpus : 18907 observations sur 642 ligues / 1 pays.
+Mis à jour : 2026-10-31T11:33:57.408Z
+Corpus : 18918 observations sur 643 ligues / 1 pays.
 
 ## Taux de base observés (par fenêtre)
 - `goals>=1@10` : 35.9%
@@ -30,7 +30,7 @@ Corpus : 18907 observations sur 642 ligues / 1 pays.
 - `possession_imbalance>=15` → `corners>=2` : **39.2%** (×1.18 vs base 33.1%, n=1486)
 
 ## Fiabilité mesurée du modèle (paris papier, aucun argent engagé)
-- Paris simulés réglés : 8200 / 14059
+- Paris simulés réglés : 8200 / 14079
 - Taux de réussite réel : 38.1%
 - Facteur de recalibrage appliqué : ×0.95 (<1 = le modèle était trop optimiste, ses probabilités sont rabotées)
 
@@ -39,15 +39,15 @@ Corpus : 18907 observations sur 642 ligues / 1 pays.
 - Pas encore assez fiable (seuil : 30 recoupements, 80% d'accord) — Omniroute élargit la couverture observée mais n'influence pas encore les probabilités.
 
 ## Fiabilité passée du scan en direct 20e/60e minute (par marché, 30 derniers jours, réel + fictif confondus)
-- `Total de buts` : réalisé **62.8%** vs annoncé 64.1% (n=9525)
-- `Corners` : réalisé **63.8%** vs annoncé 63.4% (n=8625)
-- `Cartons jaunes` : réalisé **58.9%** vs annoncé 61.1% (n=8069)
-- `Les deux marquent` : réalisé **60.1%** vs annoncé 62.4% (n=3083)
-- `Victoire (1X2)` : réalisé **60.6%** vs annoncé 63.0% (n=2149)
-- `Buts par équipe` : réalisé **68.0%** vs annoncé 67.4% (n=1677)
+- `Total de buts` : réalisé **62.8%** vs annoncé 64.1% (n=9539)
+- `Corners` : réalisé **63.8%** vs annoncé 63.4% (n=8659)
+- `Cartons jaunes` : réalisé **58.9%** vs annoncé 61.1% (n=8082)
+- `Les deux marquent` : réalisé **60.1%** vs annoncé 62.4% (n=3088)
+- `Victoire (1X2)` : réalisé **60.6%** vs annoncé 63.0% (n=2153)
+- `Buts par équipe` : réalisé **68.0%** vs annoncé 67.5% (n=1683)
 - `Fautes` : réalisé **62.7%** vs annoncé 68.1% (n=910)
 - `Buts 1ère mi-temps` : réalisé **57.6%** vs annoncé 60.6% (n=648)
-- `Corners par équipe` : réalisé **71.9%** vs annoncé 66.9% (n=416)
+- `Corners par équipe` : réalisé **71.8%** vs annoncé 66.9% (n=419)
 - `Tirs cadrés (joueur)` : réalisé **37.1%** vs annoncé 61.8% (n=143) — trop confiant sur ce marché, à corriger.
 
 ## Fiabilité passée de l'analyse Scouting IA (par marché, 30 derniers jours)
@@ -60,8 +60,8 @@ Corpus : 18907 observations sur 642 ligues / 1 pays.
 - `cartons` : réalisé **100.0%** vs annoncé 55.0% (n=1)
 
 ## Périmètre de jeu de l'utilisateur
-- Ligues jouées : Serie A, Premier League, Bundesliga, UEFA Champions League, Primera Division, Ligue 1, La Liga, Championship / FA Cup
-- Marchés joués : OU_2_5, BTTS, 1X2, corners, cards, 1ere_mi_temps, fouls, shots_on_target
+- Ligues jouées : Premier League, Championship / FA Cup, Serie A, La Liga, Ligue 1
+- Marchés joués : BTTS, OU_2_5, 1X2, shots_on_target, corners
 
 ## Consigne aux agents
 Ces taux sont empiriques (comptés, pas estimés). Utilise-les comme prior sur les marchés buts, corners et cartons en cours de match.
