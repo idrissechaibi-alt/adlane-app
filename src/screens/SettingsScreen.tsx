@@ -24,6 +24,7 @@ import { LlmProvider } from '../types';
 import { TelegramConfig, sendTelegramMessage } from '../core/telegram';
 import { sendInternationalBreakCalendarNow } from '../core/internationalBreakNotify';
 import AsyncStorage from '../core/kvStore';
+import Hero from '../components/Hero';
 
 const OMNIROUTE_CONFIG_KEY = '@omniroute_config';
 const TELEGRAM_CONFIG_KEY = '@telegram_config';
@@ -491,7 +492,7 @@ export default function SettingsScreen({ navigation }: any) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#3b82f6" />
+          <ActivityIndicator size="large" color="#F5B83D" />
           <Text style={styles.loadingText}>Chargement configuration...</Text>
         </View>
       </SafeAreaView>
@@ -500,6 +501,7 @@ export default function SettingsScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={styles.container}>
+      <Hero title="Paramètres" />
       <ScrollView contentContainerStyle={styles.scrollContent}>
 
         {/* Bouton Gestion Avancée des API */}
@@ -508,7 +510,7 @@ export default function SettingsScreen({ navigation }: any) {
           onPress={() => navigation.navigate('APIManagement')}
         >
           <View style={styles.apiManagementLeft}>
-            <Ionicons name="server" size={28} color="#10b981" />
+            <Ionicons name="server" size={28} color="#7BD88F" />
             <View>
               <Text style={styles.apiManagementTitle}>🌐 Gestion des API</Text>
               <Text style={styles.apiManagementSubtitle}>
@@ -516,7 +518,7 @@ export default function SettingsScreen({ navigation }: any) {
               </Text>
             </View>
           </View>
-          <Ionicons name="chevron-forward" size={24} color="#60a5fa" />
+          <Ionicons name="chevron-forward" size={24} color="#F5B83D" />
         </TouchableOpacity>
 
         {/* Bouton de sauvegarde des données sur GitHub */}
@@ -525,7 +527,7 @@ export default function SettingsScreen({ navigation }: any) {
           onPress={() => navigation.navigate('GitSync')}
         >
           <View style={styles.apiManagementLeft}>
-            <Ionicons name="git-branch" size={28} color="#f59e0b" />
+            <Ionicons name="git-branch" size={28} color="#FF9F5A" />
             <View>
               <Text style={styles.apiManagementTitle}>🔄 Sauvegarde GitHub</Text>
               <Text style={styles.apiManagementSubtitle}>
@@ -533,13 +535,13 @@ export default function SettingsScreen({ navigation }: any) {
               </Text>
             </View>
           </View>
-          <Ionicons name="chevron-forward" size={24} color="#60a5fa" />
+          <Ionicons name="chevron-forward" size={24} color="#F5B83D" />
         </TouchableOpacity>
 
         {/* Section Omniroute */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Ionicons name="flask" size={24} color="#3b82f6" />
+            <Ionicons name="flask" size={24} color="#F5B83D" />
             <Text style={styles.sectionTitle}>Fournisseur IA principal (FreeLLMAPI / Omniroute)</Text>
           </View>
 
@@ -550,7 +552,7 @@ export default function SettingsScreen({ navigation }: any) {
               value={omniroute.endpoint}
               onChangeText={(text) => setOmniroute({ ...omniroute, endpoint: text })}
               placeholder="https://api.omniroute.io"
-              placeholderTextColor="#64748b"
+              placeholderTextColor="#8C8376"
               autoCapitalize="none"
               autoCorrect={false}
             />
@@ -563,7 +565,7 @@ export default function SettingsScreen({ navigation }: any) {
               value={omniroute.apiKey}
               onChangeText={(text) => setOmniroute({ ...omniroute, apiKey: text })}
               placeholder="sk-..."
-              placeholderTextColor="#64748b"
+              placeholderTextColor="#8C8376"
               secureTextEntry
               autoCapitalize="none"
               autoCorrect={false}
@@ -577,7 +579,7 @@ export default function SettingsScreen({ navigation }: any) {
               value={omniroute.selectedModel}
               onChangeText={(text) => setOmniroute({ ...omniroute, selectedModel: text })}
               placeholder="Utilise le bouton ci-dessous pour choisir tes agents"
-              placeholderTextColor="#64748b"
+              placeholderTextColor="#8C8376"
               autoCapitalize="none"
               multiline
             />
@@ -594,10 +596,10 @@ export default function SettingsScreen({ navigation }: any) {
             {probeProgress?.target === 'primary' ? (
               <Text style={styles.testButtonText}>Test des modèles {probeProgress.done}/{probeProgress.total}…</Text>
             ) : loadingModels ? (
-              <ActivityIndicator color="#ffffff" size="small" />
+              <ActivityIndicator color="#141210" size="small" />
             ) : (
               <>
-                <Ionicons name="list" size={18} color="#ffffff" />
+                <Ionicons name="list" size={18} color="#141210" />
                 <Text style={styles.testButtonText}>Choisir dans la liste (modèles qui répondent)</Text>
               </>
             )}
@@ -608,8 +610,8 @@ export default function SettingsScreen({ navigation }: any) {
             <Switch
               value={omniroute.enabled}
               onValueChange={(value) => setOmniroute({ ...omniroute, enabled: value })}
-              trackColor={{ false: '#334155', true: '#3b82f6' }}
-              thumbColor={omniroute.enabled ? '#ffffff' : '#94a3b8'}
+              trackColor={{ false: '#3A352D', true: '#F5B83D' }}
+              thumbColor={omniroute.enabled ? '#ffffff' : '#F5EFE6'}
             />
           </View>
           <Text style={styles.fieldHint}>
@@ -624,10 +626,10 @@ export default function SettingsScreen({ navigation }: any) {
             disabled={testing}
           >
             {testing ? (
-              <ActivityIndicator color="#ffffff" size="small" />
+              <ActivityIndicator color="#141210" size="small" />
             ) : (
               <>
-                <Ionicons name="checkmark-circle-outline" size={18} color="#ffffff" />
+                <Ionicons name="checkmark-circle-outline" size={18} color="#141210" />
                 <Text style={styles.testButtonText}>Tester la connexion</Text>
               </>
             )}
@@ -637,7 +639,7 @@ export default function SettingsScreen({ navigation }: any) {
         {/* Fournisseurs IA supplémentaires */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Ionicons name="git-network" size={24} color="#a78bfa" />
+            <Ionicons name="git-network" size={24} color="#B9A4FF" />
             <Text style={styles.sectionTitle}>Fournisseurs IA supplémentaires</Text>
           </View>
           <Text style={styles.fieldHint}>
@@ -654,13 +656,13 @@ export default function SettingsScreen({ navigation }: any) {
                   value={provider.name}
                   onChangeText={(text) => updateExtraProvider(provider.id, { name: text })}
                   placeholder="Nom (ex. FreeLLMAPI 2)"
-                  placeholderTextColor="#64748b"
+                  placeholderTextColor="#8C8376"
                 />
                 <Switch
                   value={provider.enabled}
                   onValueChange={(value) => updateExtraProvider(provider.id, { enabled: value })}
-                  trackColor={{ false: '#334155', true: '#a78bfa' }}
-                  thumbColor={provider.enabled ? '#ffffff' : '#94a3b8'}
+                  trackColor={{ false: '#3A352D', true: '#B9A4FF' }}
+                  thumbColor={provider.enabled ? '#ffffff' : '#F5EFE6'}
                 />
               </View>
               <TextInput
@@ -668,7 +670,7 @@ export default function SettingsScreen({ navigation }: any) {
                 value={provider.endpoint}
                 onChangeText={(text) => updateExtraProvider(provider.id, { endpoint: text })}
                 placeholder="http://localhost:3001/v1"
-                placeholderTextColor="#64748b"
+                placeholderTextColor="#8C8376"
                 autoCapitalize="none"
                 autoCorrect={false}
               />
@@ -677,7 +679,7 @@ export default function SettingsScreen({ navigation }: any) {
                 value={provider.apiKey}
                 onChangeText={(text) => updateExtraProvider(provider.id, { apiKey: text })}
                 placeholder="Clé API"
-                placeholderTextColor="#64748b"
+                placeholderTextColor="#8C8376"
                 secureTextEntry
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -687,7 +689,7 @@ export default function SettingsScreen({ navigation }: any) {
                 value={provider.models}
                 onChangeText={(text) => updateExtraProvider(provider.id, { models: text })}
                 placeholder="modèle-1, modèle-2"
-                placeholderTextColor="#64748b"
+                placeholderTextColor="#8C8376"
                 autoCapitalize="none"
                 autoCorrect={false}
                 multiline
@@ -701,7 +703,7 @@ export default function SettingsScreen({ navigation }: any) {
                   <Text style={styles.testButtonText}>Test des modèles {probeProgress.done}/{probeProgress.total}…</Text>
                 ) : (
                   <>
-                    <Ionicons name="list" size={18} color="#ffffff" />
+                    <Ionicons name="list" size={18} color="#141210" />
                     <Text style={styles.testButtonText}>Choisir dans la liste (modèles qui répondent)</Text>
                   </>
                 )}
@@ -713,7 +715,7 @@ export default function SettingsScreen({ navigation }: any) {
                   disabled={testingProviderId === provider.id}
                 >
                   {testingProviderId === provider.id ? (
-                    <ActivityIndicator color="#ffffff" size="small" />
+                    <ActivityIndicator color="#141210" size="small" />
                   ) : (
                     <Text style={styles.testButtonText}>Tester</Text>
                   )}
@@ -729,7 +731,7 @@ export default function SettingsScreen({ navigation }: any) {
           ))}
 
           <TouchableOpacity style={[styles.testButton, styles.testButtonPurple]} onPress={handleAddProvider}>
-            <Ionicons name="add-circle-outline" size={18} color="#ffffff" />
+            <Ionicons name="add-circle-outline" size={18} color="#141210" />
             <Text style={styles.testButtonText}>Ajouter un fournisseur</Text>
           </TouchableOpacity>
 
@@ -739,10 +741,10 @@ export default function SettingsScreen({ navigation }: any) {
             disabled={testingAllProviders}
           >
             {testingAllProviders ? (
-              <ActivityIndicator color="#ffffff" size="small" />
+              <ActivityIndicator color="#141210" size="small" />
             ) : (
               <>
-                <Ionicons name="pulse" size={18} color="#ffffff" />
+                <Ionicons name="pulse" size={18} color="#141210" />
                 <Text style={styles.testButtonText}>Tester tous les fournisseurs + classement</Text>
               </>
             )}
@@ -756,7 +758,7 @@ export default function SettingsScreen({ navigation }: any) {
         {/* Section Telegram */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Ionicons name="paper-plane" size={24} color="#0ea5e9" />
+            <Ionicons name="paper-plane" size={24} color="#7CC4F2" />
             <Text style={styles.sectionTitle}>Notifications Telegram</Text>
           </View>
 
@@ -775,7 +777,7 @@ export default function SettingsScreen({ navigation }: any) {
               value={telegram.botToken}
               onChangeText={(text) => setTelegram({ ...telegram, botToken: text })}
               placeholder="123456789:AAExxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-              placeholderTextColor="#64748b"
+              placeholderTextColor="#8C8376"
               secureTextEntry
               autoCapitalize="none"
               autoCorrect={false}
@@ -789,7 +791,7 @@ export default function SettingsScreen({ navigation }: any) {
               value={telegram.chatId}
               onChangeText={(text) => setTelegram({ ...telegram, chatId: text })}
               placeholder="ex: 123456789"
-              placeholderTextColor="#64748b"
+              placeholderTextColor="#8C8376"
               autoCapitalize="none"
               autoCorrect={false}
               keyboardType="numbers-and-punctuation"
@@ -801,8 +803,8 @@ export default function SettingsScreen({ navigation }: any) {
             <Switch
               value={telegram.enabled}
               onValueChange={(value) => setTelegram({ ...telegram, enabled: value })}
-              trackColor={{ false: '#334155', true: '#0ea5e9' }}
-              thumbColor={telegram.enabled ? '#ffffff' : '#94a3b8'}
+              trackColor={{ false: '#3A352D', true: '#7CC4F2' }}
+              thumbColor={telegram.enabled ? '#ffffff' : '#F5EFE6'}
             />
           </View>
 
@@ -812,10 +814,10 @@ export default function SettingsScreen({ navigation }: any) {
             disabled={testingTelegram}
           >
             {testingTelegram ? (
-              <ActivityIndicator color="#ffffff" size="small" />
+              <ActivityIndicator color="#141210" size="small" />
             ) : (
               <>
-                <Ionicons name="send" size={18} color="#ffffff" />
+                <Ionicons name="send" size={18} color="#141210" />
                 <Text style={styles.testButtonText}>Envoyer un message de test</Text>
               </>
             )}
@@ -827,10 +829,10 @@ export default function SettingsScreen({ navigation }: any) {
             disabled={testingTelegram}
           >
             {testingTelegram ? (
-              <ActivityIndicator color="#ffffff" size="small" />
+              <ActivityIndicator color="#141210" size="small" />
             ) : (
               <>
-                <Ionicons name="calendar" size={18} color="#ffffff" />
+                <Ionicons name="calendar" size={18} color="#141210" />
                 <Text style={styles.testButtonText}>Renvoyer le calendrier de la trêve internationale</Text>
               </>
             )}
@@ -840,7 +842,7 @@ export default function SettingsScreen({ navigation }: any) {
         {/* Section API Football */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Ionicons name="football" size={24} color="#10b981" />
+            <Ionicons name="football" size={24} color="#7BD88F" />
             <Text style={styles.sectionTitle}>API Football</Text>
           </View>
 
@@ -848,7 +850,7 @@ export default function SettingsScreen({ navigation }: any) {
             <View style={styles.labelRow}>
               <Text style={styles.label}>API-Football (RapidAPI) ⭐</Text>
               <TouchableOpacity onPress={() => Alert.alert('ℹ️ Info', 'Source principale recommandée.\n100 requêtes/jour gratuites.\n\nInscription: rapidapi.com/api-sports/api/api-football')}>
-                <Ionicons name="information-circle-outline" size={18} color="#60a5fa" />
+                <Ionicons name="information-circle-outline" size={18} color="#F5B83D" />
               </TouchableOpacity>
             </View>
             <TextInput
@@ -856,7 +858,7 @@ export default function SettingsScreen({ navigation }: any) {
               value={apiConfig?.apiFootball || ''}
               onChangeText={(text) => setApiConfig({ ...apiConfig!, apiFootball: text })}
               placeholder="Votre clé RapidAPI"
-              placeholderTextColor="#64748b"
+              placeholderTextColor="#8C8376"
               autoCapitalize="none"
               autoCorrect={false}
             />
@@ -866,7 +868,7 @@ export default function SettingsScreen({ navigation }: any) {
             <View style={styles.labelRow}>
               <Text style={styles.label}>TheOddsAPI</Text>
               <TouchableOpacity onPress={() => Alert.alert('ℹ️ Info', 'Spécialisé cotes temps réel.\n$30/mois (10k requêtes)\n\nInscription: the-odds-api.com')}>
-                <Ionicons name="information-circle-outline" size={18} color="#60a5fa" />
+                <Ionicons name="information-circle-outline" size={18} color="#F5B83D" />
               </TouchableOpacity>
             </View>
             <TextInput
@@ -874,7 +876,7 @@ export default function SettingsScreen({ navigation }: any) {
               value={apiConfig?.theOddsApi || ''}
               onChangeText={(text) => setApiConfig({ ...apiConfig!, theOddsApi: text })}
               placeholder="Clé TheOddsAPI (optionnel)"
-              placeholderTextColor="#64748b"
+              placeholderTextColor="#8C8376"
               autoCapitalize="none"
               autoCorrect={false}
             />
@@ -884,7 +886,7 @@ export default function SettingsScreen({ navigation }: any) {
             <View style={styles.labelRow}>
               <Text style={styles.label}>Football-Data.org</Text>
               <TouchableOpacity onPress={() => Alert.alert('ℹ️ Info', 'Gratuit (10 req/min).\nTop 5 ligues européennes.\n\nInscription: football-data.org/client/register')}>
-                <Ionicons name="information-circle-outline" size={18} color="#60a5fa" />
+                <Ionicons name="information-circle-outline" size={18} color="#F5B83D" />
               </TouchableOpacity>
             </View>
             <TextInput
@@ -892,7 +894,7 @@ export default function SettingsScreen({ navigation }: any) {
               value={apiConfig?.footballData || ''}
               onChangeText={(text) => setApiConfig({ ...apiConfig!, footballData: text })}
               placeholder="Clé Football-Data (optionnel)"
-              placeholderTextColor="#64748b"
+              placeholderTextColor="#8C8376"
               autoCapitalize="none"
               autoCorrect={false}
             />
@@ -902,7 +904,7 @@ export default function SettingsScreen({ navigation }: any) {
             <View style={styles.labelRow}>
               <Text style={styles.label}>Sportmonks</Text>
               <TouchableOpacity onPress={() => Alert.alert('ℹ️ Info', 'API complète pro.\n$40/mois (Classic)\n\nInscription: sportmonks.com/register')}>
-                <Ionicons name="information-circle-outline" size={18} color="#60a5fa" />
+                <Ionicons name="information-circle-outline" size={18} color="#F5B83D" />
               </TouchableOpacity>
             </View>
             <TextInput
@@ -910,7 +912,7 @@ export default function SettingsScreen({ navigation }: any) {
               value={apiConfig?.sportmonks || ''}
               onChangeText={(text) => setApiConfig({ ...apiConfig!, sportmonks: text })}
               placeholder="Clé Sportmonks (optionnel)"
-              placeholderTextColor="#64748b"
+              placeholderTextColor="#8C8376"
               autoCapitalize="none"
               autoCorrect={false}
             />
@@ -925,7 +927,7 @@ export default function SettingsScreen({ navigation }: any) {
               value={apiConfig?.allSports || ''}
               onChangeText={(text) => setApiConfig({ ...apiConfig!, allSports: text })}
               placeholder="Clé AllSportsApi (optionnel)"
-              placeholderTextColor="#64748b"
+              placeholderTextColor="#8C8376"
               autoCapitalize="none"
               autoCorrect={false}
             />
@@ -936,8 +938,8 @@ export default function SettingsScreen({ navigation }: any) {
             <Switch
               value={apiConfig?.fallbackEnabled ?? true}
               onValueChange={(value) => setApiConfig({ ...apiConfig!, fallbackEnabled: value })}
-              trackColor={{ false: '#334155', true: '#10b981' }}
-              thumbColor={apiConfig?.fallbackEnabled ? '#ffffff' : '#94a3b8'}
+              trackColor={{ false: '#3A352D', true: '#7BD88F' }}
+              thumbColor={apiConfig?.fallbackEnabled ? '#ffffff' : '#F5EFE6'}
             />
           </View>
 
@@ -947,10 +949,10 @@ export default function SettingsScreen({ navigation }: any) {
             disabled={testing}
           >
             {testing ? (
-              <ActivityIndicator color="#ffffff" size="small" />
+              <ActivityIndicator color="#141210" size="small" />
             ) : (
               <>
-                <Ionicons name="checkmark-circle-outline" size={18} color="#ffffff" />
+                <Ionicons name="checkmark-circle-outline" size={18} color="#141210" />
                 <Text style={styles.testButtonText}>Tester API-Football</Text>
               </>
             )}
@@ -960,7 +962,7 @@ export default function SettingsScreen({ navigation }: any) {
         {/* Section Informations */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Ionicons name="help-circle" size={24} color="#f59e0b" />
+            <Ionicons name="help-circle" size={24} color="#FF9F5A" />
             <Text style={styles.sectionTitle}>Aide</Text>
           </View>
 
@@ -986,7 +988,7 @@ export default function SettingsScreen({ navigation }: any) {
             style={styles.linkButton}
             onPress={() => Alert.alert('📖 Documentation', 'Consultez API-INTEGRATION-GUIDE.md dans le projet pour la liste complète des API disponibles et leurs tarifs.')}
           >
-            <Ionicons name="document-text-outline" size={18} color="#60a5fa" />
+            <Ionicons name="document-text-outline" size={18} color="#F5B83D" />
             <Text style={styles.linkButtonText}>Voir le guide complet des API</Text>
           </TouchableOpacity>
         </View>
@@ -998,10 +1000,10 @@ export default function SettingsScreen({ navigation }: any) {
           disabled={saving}
         >
           {saving ? (
-            <ActivityIndicator color="#ffffff" size="small" />
+            <ActivityIndicator color="#141210" size="small" />
           ) : (
             <>
-              <Ionicons name="save" size={20} color="#ffffff" />
+              <Ionicons name="save" size={20} color="#141210" />
               <Text style={styles.saveButtonText}>Sauvegarder la configuration</Text>
             </>
           )}
@@ -1020,7 +1022,7 @@ export default function SettingsScreen({ navigation }: any) {
               Modèles — {pickerTarget === 'primary' ? 'Principal' : (omniroute.extraProviders ?? []).find((p) => p.id === pickerTarget)?.name ?? 'Fournisseur'} ({pendingSelection.size} sélectionné{pendingSelection.size > 1 ? 's' : ''} / {availableModels.length})
             </Text>
             <TouchableOpacity onPress={() => setModelPickerVisible(false)}>
-              <Ionicons name="close" size={26} color="#f8fafc" />
+              <Ionicons name="close" size={26} color="#F5EFE6" />
             </TouchableOpacity>
           </View>
 
@@ -1029,7 +1031,7 @@ export default function SettingsScreen({ navigation }: any) {
             value={modelSearch}
             onChangeText={setModelSearch}
             placeholder="Rechercher un agent (ex: gpt, gemini, deepseek...)"
-            placeholderTextColor="#64748b"
+            placeholderTextColor="#8C8376"
             autoCapitalize="none"
             autoCorrect={false}
           />
@@ -1038,7 +1040,7 @@ export default function SettingsScreen({ navigation }: any) {
             style={[styles.scrapingFilterChip, scrapingFilterActive && styles.scrapingFilterChipActive]}
             onPress={() => setScrapingFilterActive((prev) => !prev)}
           >
-            <Ionicons name="globe-outline" size={16} color={scrapingFilterActive ? '#ffffff' : '#94a3b8'} />
+            <Ionicons name="globe-outline" size={16} color={scrapingFilterActive ? '#ffffff' : '#A39A8C'} />
             <Text style={[styles.scrapingFilterChipText, scrapingFilterActive && styles.scrapingFilterChipTextActive]}>
               Agents de scraping / recherche web uniquement
             </Text>
@@ -1058,7 +1060,7 @@ export default function SettingsScreen({ navigation }: any) {
                   <Ionicons
                     name={checked ? 'checkbox' : 'square-outline'}
                     size={22}
-                    color={checked ? '#3b82f6' : '#64748b'}
+                    color={checked ? '#F5B83D' : '#8C8376'}
                   />
                   <View style={styles.modelRowBody}>
                     <Text style={styles.modelRowText}>{item}</Text>
@@ -1104,7 +1106,7 @@ export default function SettingsScreen({ navigation }: any) {
             style={styles.modalApplyButton}
             onPress={handleApplyModelSelection}
           >
-            <Ionicons name="checkmark" size={18} color="#ffffff" />
+            <Ionicons name="checkmark" size={18} color="#141210" />
             <Text style={styles.testButtonText}>Valider la sélection</Text>
           </TouchableOpacity>
         </SafeAreaView>
@@ -1116,7 +1118,7 @@ export default function SettingsScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f172a',
+    backgroundColor: '#141210',
   },
   loadingContainer: {
     flex: 1,
@@ -1125,7 +1127,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 14,
-    color: '#94a3b8',
+    color: '#A39A8C',
     marginTop: 12,
   },
   scrollContent: {
@@ -1133,7 +1135,8 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   apiManagementButton: {
-    backgroundColor: '#1e293b',
+    minHeight: 48,
+    backgroundColor: '#1E1B17',
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
@@ -1141,10 +1144,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 2,
-    borderColor: '#10b981',
+    borderColor: '#7BD88F',
   },
   gitSyncButton: {
-    backgroundColor: '#1e293b',
+    minHeight: 48,
+    backgroundColor: '#1E1B17',
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
@@ -1152,7 +1156,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 2,
-    borderColor: '#f59e0b',
+    borderColor: '#FF9F5A',
   },
   apiManagementLeft: {
     flexDirection: 'row',
@@ -1163,21 +1167,21 @@ const styles = StyleSheet.create({
   apiManagementTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#f8fafc',
+    color: '#F5EFE6',
     marginBottom: 4,
   },
   apiManagementSubtitle: {
-    fontSize: 11,
-    color: '#94a3b8',
+    fontSize: 12,
+    color: '#A39A8C',
     lineHeight: 16,
   },
   section: {
-    backgroundColor: '#1e293b',
+    backgroundColor: '#1E1B17',
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#3A352D',
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -1188,7 +1192,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#f8fafc',
+    color: '#F5EFE6',
   },
   inputGroup: {
     marginBottom: 16,
@@ -1202,23 +1206,23 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#cbd5e1',
+    color: '#D9D2C6',
     marginBottom: 8,
   },
   fieldHint: {
-    fontSize: 11,
-    color: '#64748b',
+    fontSize: 12,
+    color: '#8C8376',
     marginTop: 6,
     lineHeight: 16,
   },
   input: {
-    backgroundColor: '#0f172a',
+    backgroundColor: '#141210',
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#3A352D',
     borderRadius: 8,
     padding: 12,
     fontSize: 14,
-    color: '#f8fafc',
+    color: '#F5EFE6',
   },
   switchRow: {
     flexDirection: 'row',
@@ -1226,16 +1230,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
     borderTopWidth: 1,
-    borderTopColor: '#334155',
+    borderTopColor: '#3A352D',
     marginTop: 8,
   },
   switchLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#cbd5e1',
+    color: '#D9D2C6',
   },
   testButton: {
-    backgroundColor: '#3b82f6',
+    minHeight: 48,
+    backgroundColor: '#F5B83D',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1245,22 +1250,22 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   testButtonGreen: {
-    backgroundColor: '#10b981',
+    backgroundColor: '#7BD88F',
   },
   testButtonPurple: {
-    backgroundColor: '#7c3aed',
+    backgroundColor: '#B9A4FF',
   },
   modelRowBody: {
     flex: 1,
   },
   modelRowStats: {
-    color: '#94a3b8',
-    fontSize: 11,
+    color: '#A39A8C',
+    fontSize: 12,
     marginTop: 2,
   },
   providerCard: {
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#3A352D',
     borderRadius: 10,
     padding: 10,
     marginTop: 12,
@@ -1275,40 +1280,43 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   providerActionButton: {
+    minHeight: 48,
     flex: 1,
     marginTop: 0,
   },
   providerRemoveButton: {
-    backgroundColor: '#b91c1c',
+    minHeight: 48,
+    backgroundColor: '#F58A7E',
   },
   testButtonBlueSky: {
-    backgroundColor: '#0ea5e9',
+    backgroundColor: '#7CC4F2',
   },
   testButtonDisabled: {
     opacity: 0.6,
   },
   testButtonText: {
-    color: '#ffffff',
+    color: '#141210',
     fontSize: 14,
     fontWeight: 'bold',
   },
   infoBox: {
-    backgroundColor: '#0f172a',
+    backgroundColor: '#141210',
     borderRadius: 8,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#3A352D',
   },
   infoText: {
     fontSize: 12,
-    color: '#94a3b8',
+    color: '#A39A8C',
     lineHeight: 18,
   },
   infoBold: {
     fontWeight: 'bold',
-    color: '#cbd5e1',
+    color: '#D9D2C6',
   },
   linkButton: {
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1317,12 +1325,13 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   linkButtonText: {
-    color: '#60a5fa',
+    color: '#F5B83D',
     fontSize: 13,
     fontWeight: '600',
   },
   saveButton: {
-    backgroundColor: '#10b981',
+    minHeight: 48,
+    backgroundColor: '#7BD88F',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1334,13 +1343,13 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   saveButtonText: {
-    color: '#ffffff',
+    color: '#141210',
     fontSize: 16,
     fontWeight: 'bold',
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: '#0f172a',
+    backgroundColor: '#141210',
     padding: 16,
   },
   modalHeader: {
@@ -1352,7 +1361,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#f8fafc',
+    color: '#F5EFE6',
     flex: 1,
     marginRight: 12,
   },
@@ -1368,20 +1377,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#3A352D',
     marginBottom: 12,
   },
   scrapingFilterChipActive: {
-    backgroundColor: '#3b82f6',
-    borderColor: '#3b82f6',
+    backgroundColor: '#F5B83D',
+    borderColor: '#F5B83D',
   },
   scrapingFilterChipText: {
-    color: '#94a3b8',
+    color: '#A39A8C',
     fontSize: 12,
     fontWeight: '600',
   },
   scrapingFilterChipTextActive: {
-    color: '#ffffff',
+    color: '#141210',
   },
   modalList: {
     flex: 1,
@@ -1393,15 +1402,15 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 4,
     borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
+    borderBottomColor: '#3A352D',
   },
   modelRowText: {
-    color: '#e2e8f0',
+    color: '#F5EFE6',
     fontSize: 14,
     flex: 1,
   },
   modalEmptyText: {
-    color: '#64748b',
+    color: '#8C8376',
     textAlign: 'center',
     marginTop: 40,
     fontSize: 13,
@@ -1412,20 +1421,22 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   modalClearButton: {
+    minHeight: 48,
     flex: 1,
-    backgroundColor: '#334155',
+    backgroundColor: '#2E2A24',
     padding: 14,
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
   modalClearButtonText: {
-    color: '#e2e8f0',
+    color: '#141210',
     fontSize: 14,
     fontWeight: '600',
   },
   modalApplyButton: {
-    backgroundColor: '#3b82f6',
+    minHeight: 48,
+    backgroundColor: '#F5B83D',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

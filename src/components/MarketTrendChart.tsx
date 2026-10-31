@@ -24,11 +24,11 @@ const DAY_MS = 86_400_000;
 const SMALL_SAMPLE = 5;
 const MONTHS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
 
-const REAL_COLOR = '#60a5fa';
-const FICTIONAL_COLOR = '#a78bfa';
+const REAL_COLOR = '#F5B83D';
+const FICTIONAL_COLOR = '#B9A4FF';
 const GRID_COLOR = '#334155';
-const AXIS_TEXT = '#94a3b8';
-const THRESHOLD_COLOR = '#64748b';
+const AXIS_TEXT = '#A39A8C';
+const THRESHOLD_COLOR = '#8C8376';
 
 interface Props {
   label: string;
@@ -265,10 +265,10 @@ export default function MarketTrendChart({ label, points: dailyPoints, fictional
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#1e293b',
+    backgroundColor: '#1E1B17',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#3A352D',
     padding: 12,
     marginBottom: 12,
   },
@@ -279,13 +279,13 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   title: {
-    color: '#f8fafc',
+    color: '#F5EFE6',
     fontSize: 14,
     fontWeight: 'bold',
   },
   subtitle: {
-    color: '#64748b',
-    fontSize: 11,
+    color: '#8C8376',
+    fontSize: 12,
   },
   legendRow: {
     flexDirection: 'row',
@@ -302,7 +302,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   fictionalStats: {
-    color: '#c4b5fd',
+    color: '#B9A4FF',
     fontSize: 12,
     marginBottom: 8,
   },
@@ -311,7 +311,7 @@ const styles = StyleSheet.create({
     color: FICTIONAL_COLOR,
   },
   empty: {
-    color: '#64748b',
+    color: '#8C8376',
     fontSize: 12,
     paddingVertical: 12,
   },
@@ -323,7 +323,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   footerText: {
-    color: '#94a3b8',
-    fontSize: 11,
+    color: '#A39A8C',
+    fontSize: 12,
   },
 });

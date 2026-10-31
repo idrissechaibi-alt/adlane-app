@@ -2,10 +2,11 @@
 
 import React, { useEffect } from 'react';
 import { AppState } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
+import { DefaultTheme, NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
+import { AMBRE } from './src/theme';
 import * as Updates from 'expo-updates';
 import { initDatabase, seedDatabaseIfEmpty } from './src/database/storage';
 import { setSnapshotHealthProvider, startAutoSync } from './src/core/gitAutoSync';
@@ -26,11 +27,14 @@ import GitSyncScreen from './src/screens/GitSyncScreen';
 import FootballDataScreen from './src/screens/FootballDataScreen';
 
 const Tab = createBottomTabNavigator();
+
+// Direction « Stade ambré » : charbon chaud, bandeaux sombres en tête d'écran (plus d'en-tête de navigation), or ambre pour l'onglet actif.
+const navTheme = { ...DefaultTheme, dark: true, colors: { ...DefaultTheme.colors, background: AMBRE.bg, card: AMBRE.band, text: AMBRE.ink, border: AMBRE.line, primary: AMBRE.amber } };
 const Stack = createStackNavigator();
 
 function SettingsStack() {
   return (
-    <Stack.Navigator screenOptions={{ headerStyle: { backgroundColor: '#1e293b' }, headerTintColor: '#f8fafc', headerTitleStyle: { fontWeight: 'bold' } }}>
+    <Stack.Navigator screenOptions={{ headerStyle: { backgroundColor: AMBRE.band }, headerTintColor: AMBRE.ink, headerTitleStyle: { fontWeight: '800' } }}>
       <Stack.Screen name="SettingsMain" component={SettingsScreen} options={{ headerShown: false }} />
       <Stack.Screen name="APIManagement" component={APIManagementScreen} options={{ title: 'Gestion des API' }} />
       <Stack.Screen name="GitSync" component={GitSyncScreen} options={{ title: 'Sauvegarde & IA' }} />
@@ -123,7 +127,7 @@ export default function App() {
   }, []);
 
   return (
-    <NavigationContainer>
+    <NavigationContainer theme={navTheme}>
       <Tab.Navigator
         screenOptions={({ route }) => ({
           tabBarIcon: ({ focused, color, size }) => {
@@ -136,19 +140,22 @@ export default function App() {
             else if (route.name === 'Football') iconName = focused ? 'football' : 'football-outline';
             return <Ionicons name={iconName as any} size={size} color={color} />;
           },
-          tabBarActiveTintColor: '#3b82f6',
-          tabBarInactiveTintColor: '#64748b',
-          tabBarStyle: { backgroundColor: '#1e293b', borderTopColor: '#334155', height: 65, paddingBottom: 8 },
-          headerStyle: { backgroundColor: '#1e293b', borderBottomWidth: 1, borderBottomColor: '#334155' },
-          headerTintColor: '#f8fafc',
+          // Barre du bas à portée du pouce : 72 px, nom toujours visible, onglet actif sur une pastille ambrée.
+          headerShown: false,
+          tabBarActiveTintColor: AMBRE.amber,
+          tabBarInactiveTintColor: AMBRE.mute,
+          tabBarActiveBackgroundColor: 'rgba(245,184,61,0.14)',
+          tabBarLabelStyle: { fontSize: 11, fontWeight: '700', marginBottom: 4 },
+          tabBarItemStyle: { borderRadius: 16, marginHorizontal: 3, marginVertical: 6 },
+          tabBarStyle: { backgroundColor: AMBRE.band, borderTopColor: AMBRE.line, height: 72, paddingBottom: 6 },
         })}
       >
-        <Tab.Screen name="Planning" component={DailyPlanScreen} options={{ title: 'Planning du Jour' }} />
-        <Tab.Screen name="Dashboard" component={DashboardScreen} options={{ title: 'Bilan P&L' }} />
-        <Tab.Screen name="Scouting" component={ScoutingScreen} options={{ title: 'Scouting IA' }} />
+        <Tab.Screen name="Planning" component={DailyPlanScreen} options={{ title: 'Planning' }} />
+        <Tab.Screen name="Dashboard" component={DashboardScreen} options={{ title: 'Bilan' }} />
+        <Tab.Screen name="Scouting" component={ScoutingScreen} options={{ title: 'Scouting' }} />
         <Tab.Screen name="Évolution" component={EvolutionScreen} options={{ title: 'Analyses' }} />
-        <Tab.Screen name="Football" component={FootballDataScreen} options={{ title: 'Données Foot' }} />
-        <Tab.Screen name="Paramètres" component={SettingsStack} options={{ title: 'Paramètres', headerShown: false }} />
+        <Tab.Screen name="Football" component={FootballDataScreen} options={{ title: 'Foot' }} />
+        <Tab.Screen name="Paramètres" component={SettingsStack} options={{ title: 'Réglages' }} />
       </Tab.Navigator>
     </NavigationContainer>
   );

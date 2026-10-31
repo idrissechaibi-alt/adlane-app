@@ -17,6 +17,7 @@ import { getAllBets } from '../database/storage';
 import { calculateDailySummary, calculateLedgerSummary, LedgerSummary } from '../core/ledger';
 import { Ionicons } from '@expo/vector-icons';
 import { useIsFocused } from '@react-navigation/native';
+import Hero from '../components/Hero';
 
 export default function DashboardScreen() {
   const isFocused = useIsFocused();
@@ -81,7 +82,7 @@ export default function DashboardScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.centered}>
-          <ActivityIndicator color="#3b82f6" size="large" />
+          <ActivityIndicator color="#F5B83D" size="large" />
         </View>
       </SafeAreaView>
     );
@@ -100,19 +101,20 @@ export default function DashboardScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <Hero
+        title="Bilan P&L"
+        value={`${cumulativeSummary.net_pnl > 0 ? '+' : ''}${cumulativeSummary.net_pnl.toFixed(2)} u`}
+        tone={cumulativeSummary.net_pnl >= 0 ? 'good' : 'bad'}
+        caption={`ROI ${cumulativeSummary.roi.toFixed(1)} % · ${cumulativeSummary.bets_settled} réglé${cumulativeSummary.bets_settled > 1 ? 's' : ''}`}
+      />
       <ScrollView
         contentContainerStyle={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#3b82f6" />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#F5B83D" />}
       >
         {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.appTitle}>APP adlane</Text>
-          <Text style={styles.subtitle}>Suivi & Analyse Probabiliste Football</Text>
-        </View>
-
         {/* Bannière de posture légale & éthique */}
         <View style={styles.disclaimerBox}>
-          <Ionicons name="information-circle-outline" size={18} color="#94a3b8" />
+          <Ionicons name="information-circle-outline" size={18} color="#A39A8C" />
           <Text style={styles.disclaimerText}>
             Constat et analyse uniquement. Aucun conseil de mise ni de staking.
           </Text>
@@ -121,7 +123,7 @@ export default function DashboardScreen() {
         {/* Section Cumul Global (Source de Vérité §7) */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
-            <Ionicons name="stats-chart" size={20} color="#3b82f6" />
+            <Ionicons name="stats-chart" size={20} color="#F5B83D" />
             <Text style={styles.cardTitle}>Bilan Cumulé ({cumulativeSummary.bets_settled} réglé{cumulativeSummary.bets_settled > 1 ? 's' : ''})</Text>
           </View>
 
@@ -131,7 +133,7 @@ export default function DashboardScreen() {
               <Text style={[styles.statValue, cumulativeSummary.net_pnl >= 0 ? styles.positive : styles.negative]}>
                 {cumulativeSummary.net_pnl >= 0 ? '+' : ''}{cumulativeSummary.net_pnl.toFixed(3)} u
               </Text>
-              {renderProgressBar(Math.abs(cumulativeSummary.net_pnl), 50, '#3b82f6')}
+              {renderProgressBar(Math.abs(cumulativeSummary.net_pnl), 50, '#F5B83D')}
             </View>
 
             <View style={styles.statBox}>
@@ -139,7 +141,7 @@ export default function DashboardScreen() {
               <Text style={[styles.statValue, cumulativeSummary.roi >= 0 ? styles.positive : styles.negative]}>
                 {cumulativeSummary.roi >= 0 ? '+' : ''}{cumulativeSummary.roi.toFixed(1)}%
               </Text>
-              {renderProgressBar(Math.abs(cumulativeSummary.roi), 100, '#10b981')}
+              {renderProgressBar(Math.abs(cumulativeSummary.roi), 100, '#7BD88F')}
             </View>
 
             <View style={styles.statBox}>
@@ -166,7 +168,7 @@ export default function DashboardScreen() {
 
         {sortedDates.length === 0 ? (
           <View style={styles.disclaimerBox}>
-            <Ionicons name="information-circle-outline" size={18} color="#94a3b8" />
+            <Ionicons name="information-circle-outline" size={18} color="#A39A8C" />
             <Text style={styles.disclaimerText}>Aucun pari enregistré pour l'instant.</Text>
           </View>
         ) : (
@@ -179,7 +181,7 @@ export default function DashboardScreen() {
               <View key={date} style={styles.dateGroupCard}>
                 <TouchableOpacity style={styles.dateGroupHeader} onPress={() => toggleDate(date)}>
                   <View style={styles.dateGroupLeft}>
-                    <Ionicons name="calendar" size={18} color="#10b981" />
+                    <Ionicons name="calendar" size={18} color="#7BD88F" />
                     <Text style={styles.dateGroupTitle}>{date}</Text>
                     <View style={styles.dateGroupBadge}>
                       <Text style={styles.dateGroupBadgeText}>{dayBets.length}</Text>
@@ -189,7 +191,7 @@ export default function DashboardScreen() {
                     <Text style={[styles.dateGroupSummary, daySummary.net_pnl >= 0 ? styles.positive : styles.negative]}>
                       {daySummary.net_pnl >= 0 ? '+' : ''}{daySummary.net_pnl.toFixed(2)} u
                     </Text>
-                    <Ionicons name={isExpanded ? 'chevron-up' : 'chevron-down'} size={18} color="#94a3b8" />
+                    <Ionicons name={isExpanded ? 'chevron-up' : 'chevron-down'} size={18} color="#A39A8C" />
                   </View>
                 </TouchableOpacity>
 
@@ -231,7 +233,7 @@ export default function DashboardScreen() {
                                 <Ionicons
                                   name={leg.result === 'won' ? 'checkmark-circle' : leg.result === 'lost' ? 'close-circle' : 'time'}
                                   size={16}
-                                  color={leg.result === 'won' ? '#10b981' : leg.result === 'lost' ? '#ef4444' : '#94a3b8'}
+                                  color={leg.result === 'won' ? '#7BD88F' : leg.result === 'lost' ? '#F58A7E' : '#A39A8C'}
                                 />
                                 <Text style={styles.legMatch}>{leg.match} :</Text>
                                 <Text style={styles.legSelection}>{leg.selection}</Text>
@@ -261,7 +263,7 @@ export default function DashboardScreen() {
                           {/* Analyse factuelle de cause */}
                           {bet.analysis ? (
                             <View style={styles.analysisBox}>
-                              <Ionicons name="bulb-outline" size={14} color="#60a5fa" />
+                              <Ionicons name="bulb-outline" size={14} color="#F5B83D" />
                               <Text style={styles.analysisText}>{bet.analysis}</Text>
                             </View>
                           ) : null}
@@ -282,7 +284,7 @@ export default function DashboardScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f172a',
+    backgroundColor: '#141210',
   },
   scrollContent: {
     padding: 16,
@@ -294,36 +296,36 @@ const styles = StyleSheet.create({
   appTitle: {
     fontSize: 26,
     fontWeight: 'bold',
-    color: '#f8fafc',
+    color: '#F5EFE6',
     letterSpacing: 0.5,
   },
   subtitle: {
     fontSize: 13,
-    color: '#94a3b8',
+    color: '#A39A8C',
     marginTop: 2,
   },
   disclaimerBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1e293b',
+    backgroundColor: '#1E1B17',
     padding: 10,
     borderRadius: 8,
     marginBottom: 16,
     gap: 8,
   },
   disclaimerText: {
-    fontSize: 11,
-    color: '#94a3b8',
+    fontSize: 12,
+    color: '#A39A8C',
     flex: 1,
     fontStyle: 'italic',
   },
   card: {
-    backgroundColor: '#1e293b',
+    backgroundColor: '#1E1B17',
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#3A352D',
   },
   cardHeader: {
     flexDirection: 'row',
@@ -334,7 +336,7 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#f1f5f9',
+    color: '#F5EFE6',
   },
   centered: {
     flex: 1,
@@ -349,7 +351,7 @@ const styles = StyleSheet.create({
   },
   progressContainer: {
     height: 4,
-    backgroundColor: '#334155',
+    backgroundColor: '#2E2A24',
     borderRadius: 2,
     marginTop: 8,
     width: '100%',
@@ -360,32 +362,32 @@ const styles = StyleSheet.create({
   },
   statBox: {
     width: '48%',
-    backgroundColor: '#0f172a',
+    backgroundColor: '#141210',
     borderRadius: 8,
     padding: 12,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#3A352D',
   },
   statLabel: {
     fontSize: 12,
-    color: '#94a3b8',
+    color: '#A39A8C',
     marginBottom: 4,
   },
   statValue: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#f8fafc',
+    color: '#F5EFE6',
   },
   statSub: {
-    fontSize: 11,
-    color: '#64748b',
+    fontSize: 12,
+    color: '#8C8376',
     marginTop: 2,
   },
   positive: {
-    color: '#10b981',
+    color: '#7BD88F',
   },
   negative: {
-    color: '#ef4444',
+    color: '#F58A7E',
   },
   bold: {
     fontWeight: 'bold',
@@ -397,14 +399,14 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 17,
     fontWeight: 'bold',
-    color: '#f8fafc',
+    color: '#F5EFE6',
   },
   dateGroupCard: {
-    backgroundColor: '#1e293b',
+    backgroundColor: '#1E1B17',
     borderRadius: 12,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#3A352D',
     overflow: 'hidden',
   },
   dateGroupHeader: {
@@ -421,17 +423,17 @@ const styles = StyleSheet.create({
   dateGroupTitle: {
     fontSize: 15,
     fontWeight: 'bold',
-    color: '#f8fafc',
+    color: '#F5EFE6',
   },
   dateGroupBadge: {
-    backgroundColor: '#334155',
+    backgroundColor: '#2E2A24',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 6,
   },
   dateGroupBadgeText: {
-    fontSize: 11,
-    color: '#cbd5e1',
+    fontSize: 12,
+    color: '#D9D2C6',
     fontWeight: '600',
   },
   dateGroupRight: {
@@ -445,7 +447,7 @@ const styles = StyleSheet.create({
   },
   dateGroupBody: {
     borderTopWidth: 1,
-    borderTopColor: '#334155',
+    borderTopColor: '#3A352D',
     padding: 14,
   },
   dateGroupStatsRow: {
@@ -455,15 +457,15 @@ const styles = StyleSheet.create({
   },
   dateGroupStatText: {
     fontSize: 12,
-    color: '#94a3b8',
+    color: '#A39A8C',
   },
   betCard: {
-    backgroundColor: '#1e293b',
+    backgroundColor: '#1E1B17',
     borderRadius: 12,
     padding: 14,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#3A352D',
   },
   betCardTop: {
     flexDirection: 'row',
@@ -477,11 +479,11 @@ const styles = StyleSheet.create({
   betId: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#f8fafc',
+    color: '#F5EFE6',
   },
   betLeague: {
-    fontSize: 11,
-    color: '#94a3b8',
+    fontSize: 12,
+    color: '#A39A8C',
     marginTop: 2,
   },
   statusBadge: {
@@ -492,27 +494,27 @@ const styles = StyleSheet.create({
   badgeWon: {
     backgroundColor: 'rgba(16, 185, 129, 0.2)',
     borderWidth: 1,
-    borderColor: '#10b981',
+    borderColor: '#7BD88F',
   },
   badgeLost: {
     backgroundColor: 'rgba(239, 68, 68, 0.2)',
     borderWidth: 1,
-    borderColor: '#ef4444',
+    borderColor: '#F58A7E',
   },
   badgeUnplayed: {
     backgroundColor: 'rgba(148, 163, 184, 0.2)',
     borderWidth: 1,
-    borderColor: '#64748b',
+    borderColor: '#6B6459',
   },
   statusText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: 'bold',
-    color: '#f8fafc',
+    color: '#141210',
   },
   legsContainer: {
     borderTopWidth: 1,
     borderBottomWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#3A352D',
     paddingVertical: 8,
     marginBottom: 10,
     gap: 6,
@@ -524,17 +526,17 @@ const styles = StyleSheet.create({
   },
   legMatch: {
     fontSize: 12,
-    color: '#cbd5e1',
+    color: '#D9D2C6',
     fontWeight: '500',
   },
   legSelection: {
     fontSize: 12,
-    color: '#94a3b8',
+    color: '#A39A8C',
     flex: 1,
   },
   voidTag: {
-    fontSize: 10,
-    color: '#f59e0b',
+    fontSize: 12,
+    color: '#FF9F5A',
     fontWeight: 'bold',
   },
   betFooter: {
@@ -544,11 +546,11 @@ const styles = StyleSheet.create({
   },
   betFooterText: {
     fontSize: 12,
-    color: '#cbd5e1',
+    color: '#D9D2C6',
   },
   analysisBox: {
     flexDirection: 'row',
-    backgroundColor: '#0f172a',
+    backgroundColor: '#141210',
     padding: 8,
     borderRadius: 6,
     marginTop: 8,
@@ -556,8 +558,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   analysisText: {
-    fontSize: 11,
-    color: '#94a3b8',
+    fontSize: 12,
+    color: '#A39A8C',
     flex: 1,
     fontStyle: 'italic',
   },

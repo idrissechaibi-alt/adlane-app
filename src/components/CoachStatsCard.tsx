@@ -66,9 +66,9 @@ export default function CoachStatsCard() {
 }
 
 const styles = StyleSheet.create({
-  box: { backgroundColor: '#0f172a', borderRadius: 10, borderWidth: 1, borderColor: '#334155', padding: 12, marginBottom: 12, gap: 6 },
-  title: { color: '#e2e8f0', fontSize: 14, fontWeight: '700' },
-  name: { color: '#e2e8f0', fontSize: 12, fontWeight: '600' },
-  row: { borderTopWidth: 1, borderTopColor: '#1e293b', paddingTop: 6, gap: 2 },
-  text: { color: '#94a3b8', fontSize: 12, lineHeight: 17 },
+  box: { backgroundColor: '#141210', borderRadius: 10, borderWidth: 1, borderColor: '#3A352D', padding: 12, marginBottom: 12, gap: 6 },
+  title: { color: '#F5EFE6', fontSize: 14, fontWeight: '700' },
+  name: { color: '#F5EFE6', fontSize: 12, fontWeight: '600' },
+  row: { borderTopWidth: 1, borderTopColor: '#3A352D', paddingTop: 6, gap: 2 },
+  text: { color: '#A39A8C', fontSize: 12, lineHeight: 17 },
 });
