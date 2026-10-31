@@ -1,8 +1,8 @@
 // APP adlane - Point d'entrée principal (Fix Football Data Button)
 
 import React, { useEffect } from 'react';
-import { AppState, Text } from 'react-native';
-import { DefaultTheme, NavigationContainer } from '@react-navigation/native';
+import { AppState } from 'react-native';
+import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -26,14 +26,11 @@ import GitSyncScreen from './src/screens/GitSyncScreen';
 import FootballDataScreen from './src/screens/FootballDataScreen';
 
 const Tab = createBottomTabNavigator();
-
-// Direction « Bandes cobalt » : bandes noires en haut et en bas, corps gris très clair, cartes blanches, un seul cobalt.
-const navTheme = { ...DefaultTheme, colors: { ...DefaultTheme.colors, background: '#F4F4F4', card: '#000000', text: '#FFFFFF', border: '#16181A', primary: '#494FDF' } };
 const Stack = createStackNavigator();
 
 function SettingsStack() {
   return (
-    <Stack.Navigator screenOptions={{ headerStyle: { backgroundColor: '#000000' }, headerTintColor: '#FFFFFF', headerTitleStyle: { fontWeight: '800' } }}>
+    <Stack.Navigator screenOptions={{ headerStyle: { backgroundColor: '#1e293b' }, headerTintColor: '#f8fafc', headerTitleStyle: { fontWeight: 'bold' } }}>
       <Stack.Screen name="SettingsMain" component={SettingsScreen} options={{ headerShown: false }} />
       <Stack.Screen name="APIManagement" component={APIManagementScreen} options={{ title: 'Gestion des API' }} />
       <Stack.Screen name="GitSync" component={GitSyncScreen} options={{ title: 'Sauvegarde & IA' }} />
@@ -126,7 +123,7 @@ export default function App() {
   }, []);
 
   return (
-    <NavigationContainer theme={navTheme}>
+    <NavigationContainer>
       <Tab.Navigator
         screenOptions={({ route }) => ({
           tabBarIcon: ({ focused, color, size }) => {
@@ -139,17 +136,11 @@ export default function App() {
             else if (route.name === 'Football') iconName = focused ? 'football' : 'football-outline';
             return <Ionicons name={iconName as any} size={size} color={color} />;
           },
-          // Seul l'onglet actif affiche son nom, dans une pilule blanche ; les autres sont des icônes de 44 px.
-          tabBarActiveTintColor: '#000000',
-          tabBarInactiveTintColor: '#8D969E',
-          tabBarActiveBackgroundColor: '#FFFFFF',
-          tabBarLabel: ({ focused, color }) => (focused ? <Text style={{ color, fontSize: 12, fontWeight: '700', marginLeft: 6 }}>{route.name === 'Dashboard' ? 'Bilan' : route.name === 'Évolution' ? 'Analyses' : route.name}</Text> : null),
-          tabBarLabelPosition: 'beside-icon',
-          tabBarItemStyle: { borderRadius: 999, marginHorizontal: 6, marginVertical: 10, minWidth: 44 },
-          tabBarStyle: { backgroundColor: '#000000', borderTopColor: '#000000', height: 68 },
-          headerStyle: { backgroundColor: '#000000', borderBottomWidth: 0, shadowOpacity: 0, elevation: 0 },
-          headerTintColor: '#FFFFFF',
-          headerTitleStyle: { fontWeight: '800' },
+          tabBarActiveTintColor: '#3b82f6',
+          tabBarInactiveTintColor: '#64748b',
+          tabBarStyle: { backgroundColor: '#1e293b', borderTopColor: '#334155', height: 65, paddingBottom: 8 },
+          headerStyle: { backgroundColor: '#1e293b', borderBottomWidth: 1, borderBottomColor: '#334155' },
+          headerTintColor: '#f8fafc',
         })}
       >
         <Tab.Screen name="Planning" component={DailyPlanScreen} options={{ title: 'Planning du Jour' }} />

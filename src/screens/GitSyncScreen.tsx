@@ -142,14 +142,14 @@ export default function GitSyncScreen({ navigation }: any) {
   };
 
   if (loading || !config) {
-    return <View style={styles.centered}><ActivityIndicator color="#494FDF" /><Text style={styles.mutedText}>Chargement...</Text></View>;
+    return <View style={styles.centered}><ActivityIndicator color="#3b82f6" /><Text style={styles.mutedText}>Chargement...</Text></View>;
   }
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.header}>
-            <TouchableOpacity onPress={() => navigation.goBack()}><Ionicons name="arrow-back" size={24} color="#191C1F" /></TouchableOpacity>
+            <TouchableOpacity onPress={() => navigation.goBack()}><Ionicons name="arrow-back" size={24} color="#fff" /></TouchableOpacity>
             <Text style={styles.title}>Configuration</Text>
             <View style={{width: 24}} />
         </View>
@@ -158,13 +158,13 @@ export default function GitSyncScreen({ navigation }: any) {
           <Text style={styles.cardTitle}>🔑 Clés API & Sécurité</Text>
 
           <Text style={styles.label}>GITHUB TOKEN (BACKUP)</Text>
-          <TextInput onChangeText={setToken} secureTextEntry={!showKeys} style={styles.input} value={token} placeholder="ghp_..." placeholderTextColor="#666668" />
+          <TextInput onChangeText={setToken} secureTextEntry={!showKeys} style={styles.input} value={token} placeholder="ghp_..." placeholderTextColor="#475569" />
 
           <Text style={styles.label}>GOOGLE GEMINI KEY (IA PRO)</Text>
-          <TextInput onChangeText={setGeminiKey} secureTextEntry={!showKeys} style={styles.input} value={geminiKey} placeholder="AIza..." placeholderTextColor="#666668" />
+          <TextInput onChangeText={setGeminiKey} secureTextEntry={!showKeys} style={styles.input} value={geminiKey} placeholder="AIza..." placeholderTextColor="#475569" />
 
           <Text style={styles.label}>FOOTBALL-DATA KEY (PLANNING)</Text>
-          <TextInput onChangeText={setFootballKey} secureTextEntry={!showKeys} style={styles.input} value={footballKey} placeholder="Clé Football-Data..." placeholderTextColor="#666668" />
+          <TextInput onChangeText={setFootballKey} secureTextEntry={!showKeys} style={styles.input} value={footballKey} placeholder="Clé Football-Data..." placeholderTextColor="#475569" />
 
           <TouchableOpacity onPress={() => setShowKeys(!showKeys)}><Text style={styles.link}>{showKeys ? 'Cacher les clés' : 'Modifier les clés'}</Text></TouchableOpacity>
         </View>
@@ -183,7 +183,7 @@ export default function GitSyncScreen({ navigation }: any) {
                 style={styles.input}
                 value={freeLLMKeys[provider.id] || ''}
                 placeholder={provider.signupHint}
-                placeholderTextColor="#666668"
+                placeholderTextColor="#475569"
               />
             </View>
           ))}
@@ -204,28 +204,28 @@ export default function GitSyncScreen({ navigation }: any) {
         <TouchableOpacity onPress={handleManualBackup} style={styles.btnSecondary}><Text style={styles.btnText}>SAUVEGARDER SUR GITHUB</Text></TouchableOpacity>
         <TouchableOpacity onPress={() => syncDataFromGitHub()} style={styles.btnWarning}><Text style={styles.btnText}>RESTAURER LE JSON</Text></TouchableOpacity>
         <TouchableOpacity onPress={handleCheckUpdate} style={styles.btnUpdate}><Text style={styles.btnText}>VÉRIFIER LES MISES À JOUR</Text></TouchableOpacity>
-        <TouchableOpacity onPress={handleServerConfig} style={[styles.btnUpdate, { backgroundColor: '#E2E2E7' }]}><Text style={styles.btnText}>🖥️ CONFIGURER LE SERVEUR PC</Text></TouchableOpacity>
+        <TouchableOpacity onPress={handleServerConfig} style={[styles.btnUpdate, { backgroundColor: '#334155' }]}><Text style={styles.btnText}>🖥️ CONFIGURER LE SERVEUR PC</Text></TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F4F4F4' },
+  container: { flex: 1, backgroundColor: '#0f172a' },
   content: { padding: 16 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F4F4F4' },
-  title: { fontSize: 22, fontWeight: 'bold', color: '#191C1F' },
-  card: { backgroundColor: '#FFFFFF', borderRadius: 20, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: '#E2E2E7' },
-  cardTitle: { color: '#191C1F', fontSize: 15, fontWeight: 'bold', marginBottom: 15 },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0f172a' },
+  title: { fontSize: 22, fontWeight: 'bold', color: '#f8fafc' },
+  card: { backgroundColor: '#1e293b', borderRadius: 16, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: '#334155' },
+  cardTitle: { color: '#f1f5f9', fontSize: 15, fontWeight: 'bold', marginBottom: 15 },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  label: { color: '#505A63', fontSize: 11, marginTop: 15, marginBottom: 5, fontWeight: 'bold' },
-  input: { backgroundColor: '#F4F4F4', borderRadius: 10, padding: 12, color: '#191C1F', borderWidth: 1, borderColor: '#E2E2E7' },
-  link: { color: '#494FDF', fontSize: 12, marginTop: 12, textAlign: 'right' },
-  mutedText: { color: '#505A63', fontSize: 13, marginTop: 4 },
-  btnPrimary: { backgroundColor: '#494FDF', borderRadius: 12, padding: 16, alignItems: 'center', marginBottom: 12 },
-  btnSecondary: { backgroundColor: '#007A5A', borderRadius: 12, padding: 16, alignItems: 'center', marginBottom: 12 },
-  btnWarning: { backgroundColor: '#8A4B00', borderRadius: 12, padding: 16, alignItems: 'center', marginBottom: 12 },
-  btnUpdate: { backgroundColor: '#5B3FD1', borderRadius: 12, padding: 16, alignItems: 'center', marginBottom: 12 },
-  btnText: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 13 },
+  label: { color: '#94a3b8', fontSize: 11, marginTop: 15, marginBottom: 5, fontWeight: 'bold' },
+  input: { backgroundColor: '#0f172a', borderRadius: 10, padding: 12, color: '#f8fafc', borderWidth: 1, borderColor: '#334155' },
+  link: { color: '#3b82f6', fontSize: 12, marginTop: 12, textAlign: 'right' },
+  mutedText: { color: '#64748b', fontSize: 13, marginTop: 4 },
+  btnPrimary: { backgroundColor: '#2563eb', borderRadius: 12, padding: 16, alignItems: 'center', marginBottom: 12 },
+  btnSecondary: { backgroundColor: '#10b981', borderRadius: 12, padding: 16, alignItems: 'center', marginBottom: 12 },
+  btnWarning: { backgroundColor: '#f59e0b', borderRadius: 12, padding: 16, alignItems: 'center', marginBottom: 12 },
+  btnUpdate: { backgroundColor: '#8b5cf6', borderRadius: 12, padding: 16, alignItems: 'center', marginBottom: 12 },
+  btnText: { color: '#fff', fontWeight: 'bold', fontSize: 13 },
 });

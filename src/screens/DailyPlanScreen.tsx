@@ -548,7 +548,7 @@ export default function DailyPlanScreen() {
     const target = c.target;
     const ratio = target ? Math.max(0, Math.min(1, c.current / Math.ceil(target))) : null;
     // « Plus de » : vert en approchant de la ligne. « Moins de » : rouge en approchant (la ligne est un plafond).
-    const color = ratio == null ? '#494FDF' : c.side === 'moins' ? (ratio >= 1 ? '#C4182B' : ratio >= 0.75 ? '#8A4B00' : '#007A5A') : ratio >= 1 ? '#007A5A' : ratio >= 0.75 ? '#8A4B00' : '#494FDF';
+    const color = ratio == null ? '#60a5fa' : c.side === 'moins' ? (ratio >= 1 ? '#ef4444' : ratio >= 0.75 ? '#f59e0b' : '#10b981') : ratio >= 1 ? '#10b981' : ratio >= 0.75 ? '#f59e0b' : '#60a5fa';
     return (
       <View style={styles.counterBox}>
         <Text style={styles.counterText}>
@@ -723,7 +723,7 @@ export default function DailyPlanScreen() {
                 value={oddsNoteInput}
                 onChangeText={setOddsNoteInput}
                 placeholder="Cote chez ton bookie"
-                placeholderTextColor="#666668"
+                placeholderTextColor="#64748b"
                 keyboardType="decimal-pad"
                 autoFocus
               />
@@ -731,7 +731,7 @@ export default function DailyPlanScreen() {
                 <Text style={styles.confirmStakeText}>OK</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.cancelStakeButton} onPress={() => { setOddsNoteId(null); setOddsNoteInput(''); }}>
-                <Ionicons name="close" size={16} color="#505A63" />
+                <Ionicons name="close" size={16} color="#94a3b8" />
               </TouchableOpacity>
             </View>
           )}
@@ -748,7 +748,7 @@ export default function DailyPlanScreen() {
                 value={minLineForm.low}
                 onChangeText={(v) => setMinLineForm({ ...minLineForm, low: v })}
                 placeholder={`${parseLine(proposal.legs[Number(minLineForm.id.split(':').pop()) || 0].selection)?.side === 'under' ? 'Moins' : 'Plus'} de MIN (ex 2.5)`}
-                placeholderTextColor="#666668"
+                placeholderTextColor="#64748b"
                 keyboardType="decimal-pad"
                 autoFocus
               />
@@ -757,7 +757,7 @@ export default function DailyPlanScreen() {
                 value={minLineForm.lowOdds}
                 onChangeText={(v) => setMinLineForm({ ...minLineForm, lowOdds: v })}
                 placeholder="Sa cote"
-                placeholderTextColor="#666668"
+                placeholderTextColor="#64748b"
                 keyboardType="decimal-pad"
               />
             </View>
@@ -767,7 +767,7 @@ export default function DailyPlanScreen() {
                 value={minLineForm.high}
                 onChangeText={(v) => setMinLineForm({ ...minLineForm, high: v })}
                 placeholder={`${parseLine(proposal.legs[Number(minLineForm.id.split(':').pop()) || 0].selection)?.side === 'under' ? 'Moins' : 'Plus'} de MAX (ex 6.5)`}
-                placeholderTextColor="#666668"
+                placeholderTextColor="#64748b"
                 keyboardType="decimal-pad"
               />
               <TextInput
@@ -775,14 +775,14 @@ export default function DailyPlanScreen() {
                 value={minLineForm.highOdds}
                 onChangeText={(v) => setMinLineForm({ ...minLineForm, highOdds: v })}
                 placeholder="Sa cote"
-                placeholderTextColor="#666668"
+                placeholderTextColor="#64748b"
                 keyboardType="decimal-pad"
               />
               <TouchableOpacity style={styles.confirmStakeButton} onPress={() => handleSaveMinLine(proposal)}>
                 <Text style={styles.confirmStakeText}>OK</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.cancelStakeButton} onPress={() => setMinLineForm(null)}>
-                <Ionicons name="close" size={16} color="#505A63" />
+                <Ionicons name="close" size={16} color="#94a3b8" />
               </TouchableOpacity>
             </View>
           </View>
@@ -794,7 +794,7 @@ export default function DailyPlanScreen() {
               value={oddsInput}
               onChangeText={setOddsInput}
               placeholder="Cote réelle"
-              placeholderTextColor="#666668"
+              placeholderTextColor="#64748b"
               keyboardType="decimal-pad"
               autoFocus
             />
@@ -803,7 +803,7 @@ export default function DailyPlanScreen() {
               value={stakeInput}
               onChangeText={setStakeInput}
               placeholder="Mise (ex: 10)"
-              placeholderTextColor="#666668"
+              placeholderTextColor="#64748b"
               keyboardType="decimal-pad"
             />
             <TouchableOpacity
@@ -811,10 +811,10 @@ export default function DailyPlanScreen() {
               disabled={placing}
               onPress={() => handleConfirmPlaceLiveBet(proposal)}
             >
-              {placing ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Text style={styles.confirmStakeText}>OK</Text>}
+              {placing ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.confirmStakeText}>OK</Text>}
             </TouchableOpacity>
             <TouchableOpacity style={styles.cancelStakeButton} onPress={() => { setPlacingId(null); setStakeInput(''); setOddsInput(''); }}>
-              <Ionicons name="close" size={16} color="#505A63" />
+              <Ionicons name="close" size={16} color="#94a3b8" />
             </TouchableOpacity>
           </View>
         )}
@@ -851,7 +851,7 @@ export default function DailyPlanScreen() {
             <Ionicons
               name="time-outline"
               size={20}
-              color={slot.isT90Reached ? '#007A5A' : '#494FDF'}
+              color={slot.isT90Reached ? '#10b981' : '#60a5fa'}
             />
             <Text style={styles.slotTime}>{slot.slotTimeDisplay}</Text>
             <View style={styles.matchCountBadge}>
@@ -862,7 +862,7 @@ export default function DailyPlanScreen() {
           <View style={styles.slotRight}>
             {slot.isT90Reached ? (
               <View style={styles.t90Badge}>
-                <Ionicons name="checkmark-circle" size={16} color="#007A5A" />
+                <Ionicons name="checkmark-circle" size={16} color="#10b981" />
                 <Text style={styles.t90Text}>T-90 ✓</Text>
               </View>
             ) : (
@@ -871,7 +871,7 @@ export default function DailyPlanScreen() {
             <Ionicons
               name={isSelected ? 'chevron-up' : 'chevron-down'}
               size={20}
-              color="#505A63"
+              color="#94a3b8"
             />
           </View>
         </TouchableOpacity>
@@ -894,7 +894,7 @@ export default function DailyPlanScreen() {
         {slotLive.length > 0 && isSelected && (
           <View style={[styles.halftimeAlertsBox, styles.slotLiveBox]}>
             <View style={styles.halftimeAlertsHeader}>
-              <Ionicons name="flash" size={18} color="#5B3FD1" />
+              <Ionicons name="flash" size={18} color="#a78bfa" />
               <Text style={styles.halftimeAlertsTitle}>Paris en direct ({slotLive.length})</Text>
             </View>
             {slotLive.map((p) => renderLiveProposal(p, slot.matches.length > 1))}
@@ -959,7 +959,7 @@ export default function DailyPlanScreen() {
                         <Ionicons
                           name={prop.validation.valid ? 'checkmark-circle' : 'close-circle'}
                           size={14}
-                          color={prop.validation.valid ? '#007A5A' : '#C4182B'}
+                          color={prop.validation.valid ? '#10b981' : '#ef4444'}
                         />
                         <Text style={[
                           styles.validationText,
@@ -1002,7 +1002,7 @@ export default function DailyPlanScreen() {
                       <View style={styles.blockersBox}>
                         {prop.validation.blockers.map((block, bIdx) => (
                           <View key={bIdx} style={styles.blockerRow}>
-                            <Ionicons name="alert-circle" size={12} color="#C4182B" />
+                            <Ionicons name="alert-circle" size={12} color="#ef4444" />
                             <Text style={styles.blockerText}>{block}</Text>
                           </View>
                         ))}
@@ -1013,7 +1013,7 @@ export default function DailyPlanScreen() {
                       <View style={styles.warningsBox}>
                         {prop.validation.warnings.map((warn, wIdx) => (
                           <View key={wIdx} style={styles.warningRow}>
-                            <Ionicons name="warning" size={12} color="#8A4B00" />
+                            <Ionicons name="warning" size={12} color="#f59e0b" />
                             <Text style={styles.warningText}>{warn}</Text>
                           </View>
                         ))}
@@ -1027,7 +1027,7 @@ export default function DailyPlanScreen() {
                       if (alreadyPlaced) {
                         return (
                           <View style={styles.placedBadge}>
-                            <Ionicons name="checkmark-done-circle" size={14} color="#007A5A" />
+                            <Ionicons name="checkmark-done-circle" size={14} color="#10b981" />
                             <Text style={styles.placedBadgeText}>Pari placé — dans le Bilan P&L</Text>
                           </View>
                         );
@@ -1049,7 +1049,7 @@ export default function DailyPlanScreen() {
                               value={oddsInput}
                               onChangeText={setOddsInput}
                               placeholder="Cote réelle"
-                              placeholderTextColor="#666668"
+                              placeholderTextColor="#64748b"
                               keyboardType="decimal-pad"
                               autoFocus
                             />
@@ -1058,7 +1058,7 @@ export default function DailyPlanScreen() {
                               value={stakeInput}
                               onChangeText={setStakeInput}
                               placeholder="Mise (ex: 10)"
-                              placeholderTextColor="#666668"
+                              placeholderTextColor="#64748b"
                               keyboardType="decimal-pad"
                             />
                             <TouchableOpacity
@@ -1066,10 +1066,10 @@ export default function DailyPlanScreen() {
                               disabled={placing}
                               onPress={() => handleConfirmPlaceBet(prop)}
                             >
-                              {placing ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Text style={styles.confirmStakeText}>OK</Text>}
+                              {placing ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.confirmStakeText}>OK</Text>}
                             </TouchableOpacity>
                             <TouchableOpacity style={styles.cancelStakeButton} onPress={() => { setPlacingId(null); setStakeInput(''); setOddsInput(''); }}>
-                              <Ionicons name="close" size={16} color="#505A63" />
+                              <Ionicons name="close" size={16} color="#94a3b8" />
                             </TouchableOpacity>
                           </View>
                         );
@@ -1084,7 +1084,7 @@ export default function DailyPlanScreen() {
                             setPlacingId(prop.id);
                           }}
                         >
-                          <Ionicons name="checkmark-circle-outline" size={16} color="#FFFFFF" />
+                          <Ionicons name="checkmark-circle-outline" size={16} color="#ffffff" />
                           <Text style={styles.placeBetButtonText}>Placer ce pari</Text>
                         </TouchableOpacity>
                       );
@@ -1112,10 +1112,10 @@ export default function DailyPlanScreen() {
 
       <TouchableOpacity style={styles.scanButton} onPress={handleRunMorningScan} disabled={loading}>
         {loading ? (
-          <ActivityIndicator color="#FFFFFF" />
+          <ActivityIndicator color="#ffffff" />
         ) : (
           <>
-            <Ionicons name="refresh" size={18} color="#FFFFFF" />
+            <Ionicons name="refresh" size={18} color="#ffffff" />
             <Text style={styles.scanButtonText}>Lancer le Scan Matinal</Text>
           </>
         )}
@@ -1123,7 +1123,7 @@ export default function DailyPlanScreen() {
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#494FDF" />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#3b82f6" />}
       >
 
         <Text style={styles.infoLine}>
@@ -1134,7 +1134,7 @@ export default function DailyPlanScreen() {
         {orphanLive.length > 0 && (
           <View style={styles.halftimeAlertsBox}>
             <View style={styles.halftimeAlertsHeader}>
-              <Ionicons name="flash" size={18} color="#5B3FD1" />
+              <Ionicons name="flash" size={18} color="#a78bfa" />
               <Text style={styles.halftimeAlertsTitle}>Autres paris en direct ({orphanLive.length})</Text>
             </View>
             {orphanLive.map((p) => renderLiveProposal(p, true))}
@@ -1145,7 +1145,7 @@ export default function DailyPlanScreen() {
           plan.slots.map(renderSlot)
         ) : (
           <View style={styles.emptyState}>
-            <Ionicons name="calendar-outline" size={64} color="#505A63" />
+            <Ionicons name="calendar-outline" size={64} color="#64748b" />
             <Text style={styles.emptyText}>{stalePlanDate ? "Le planning d'aujourd'hui n'est pas encore généré" : "Aucun match programmé aujourd'hui"}</Text>
             <Text style={styles.emptySubText}>
               {stalePlanDate ? `Le planning du ${stalePlanDate} est masqué. Tire pour actualiser ou lance le scan matinal.` : 'Lance le scan matinal pour détecter les matchs'}
@@ -1159,12 +1159,12 @@ export default function DailyPlanScreen() {
 
 const styles = StyleSheet.create({
   counterBox: { marginTop: 4, marginBottom: 4 },
-  counterText: { color: '#191C1F', fontSize: 13, fontWeight: '600' },
-  counterTrack: { height: 6, borderRadius: 3, backgroundColor: '#E2E2E7', marginTop: 4, overflow: 'hidden' },
+  counterText: { color: '#e2e8f0', fontSize: 13, fontWeight: '600' },
+  counterTrack: { height: 6, borderRadius: 3, backgroundColor: '#334155', marginTop: 4, overflow: 'hidden' },
   counterFill: { height: 6, borderRadius: 3 },
   container: {
     flex: 1,
-    backgroundColor: '#F4F4F4',
+    backgroundColor: '#0f172a',
   },
   header: {
     padding: 16,
@@ -1173,15 +1173,15 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#191C1F',
+    color: '#f8fafc',
   },
   subtitle: {
     fontSize: 13,
-    color: '#505A63',
+    color: '#94a3b8',
     marginTop: 2,
   },
   scanButton: {
-    backgroundColor: '#494FDF',
+    backgroundColor: '#2563eb',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1192,7 +1192,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   scanButtonText: {
-    color: '#FFFFFF',
+    color: '#ffffff',
     fontWeight: 'bold',
     fontSize: 14,
   },
@@ -1202,11 +1202,11 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   slotCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    backgroundColor: '#1e293b',
+    borderRadius: 12,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#E2E2E7',
+    borderColor: '#334155',
     overflow: 'hidden',
   },
   slotHeader: {
@@ -1224,17 +1224,17 @@ const styles = StyleSheet.create({
   slotTime: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#191C1F',
+    color: '#f8fafc',
   },
   matchCountBadge: {
-    backgroundColor: '#E2E2E7',
+    backgroundColor: '#334155',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
   },
   matchCountText: {
     fontSize: 11,
-    color: '#3A3D40',
+    color: '#cbd5e1',
     fontWeight: '600',
   },
   slotRight: {
@@ -1254,16 +1254,16 @@ const styles = StyleSheet.create({
   t90Text: {
     fontSize: 11,
     fontWeight: 'bold',
-    color: '#007A5A',
+    color: '#10b981',
   },
   countdownText: {
     fontSize: 12,
-    color: '#494FDF',
+    color: '#60a5fa',
     fontWeight: '600',
   },
   slotContent: {
     borderTopWidth: 1,
-    borderColor: '#E2E2E7',
+    borderColor: '#334155',
     padding: 14,
   },
   matchRow: {
@@ -1277,34 +1277,34 @@ const styles = StyleSheet.create({
   },
   matchText: {
     fontSize: 13,
-    color: '#3A3D40',
+    color: '#cbd5e1',
     flex: 1,
   },
   proposalsSection: {
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderColor: '#E2E2E7',
+    borderColor: '#334155',
   },
   proposalsTitle: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#191C1F',
+    color: '#f8fafc',
     marginBottom: 10,
   },
   proposalCard: {
     padding: 12,
-    borderRadius: 20,
+    borderRadius: 8,
     marginBottom: 10,
     borderWidth: 1,
   },
   proposalValid: {
     backgroundColor: 'rgba(16, 185, 129, 0.05)',
-    borderColor: '#007A5A',
+    borderColor: '#10b981',
   },
   proposalRejected: {
     backgroundColor: 'rgba(239, 68, 68, 0.05)',
-    borderColor: '#C4182B',
+    borderColor: '#ef4444',
   },
   proposalHeader: {
     flexDirection: 'row',
@@ -1313,14 +1313,14 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   proposalTypeTag: {
-    backgroundColor: '#E2E2E7',
+    backgroundColor: '#334155',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 4,
   },
   proposalTypeText: {
     fontSize: 10,
-    color: '#FFFFFF',
+    color: '#f8fafc',
     fontWeight: 'bold',
   },
   validationBadge: {
@@ -1342,31 +1342,31 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   validText: {
-    color: '#007A5A',
+    color: '#10b981',
   },
   rejectedText: {
-    color: '#C4182B',
+    color: '#ef4444',
   },
   proposalTitle: {
     fontSize: 13,
     fontWeight: 'bold',
-    color: '#191C1F',
+    color: '#f8fafc',
     marginBottom: 4,
   },
   proposalOdds: {
     fontSize: 12,
-    color: '#505A63',
+    color: '#94a3b8',
     marginBottom: 6,
   },
   proposalAnalysis: {
     fontSize: 11,
-    color: '#505A63',
+    color: '#94a3b8',
     fontStyle: 'italic',
     marginBottom: 8,
   },
   legText: {
     fontSize: 11,
-    color: '#3A3D40',
+    color: '#cbd5e1',
     marginBottom: 3,
   },
   blockersBox: {
@@ -1383,7 +1383,7 @@ const styles = StyleSheet.create({
   },
   blockerText: {
     fontSize: 10,
-    color: '#C4182B',
+    color: '#ef4444',
     fontWeight: '600',
     flex: 1,
   },
@@ -1401,14 +1401,14 @@ const styles = StyleSheet.create({
   },
   warningText: {
     fontSize: 10,
-    color: '#8A4B00',
+    color: '#f59e0b',
     fontWeight: '600',
     flex: 1,
   },
   placeLockedText: {
     marginTop: 10,
     fontSize: 11,
-    color: '#505A63',
+    color: '#64748b',
     fontStyle: 'italic',
   },
   placeBetButton: {
@@ -1417,12 +1417,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
     marginTop: 10,
-    backgroundColor: '#007A5A',
+    backgroundColor: '#10b981',
     borderRadius: 8,
     paddingVertical: 10,
   },
   placeBetButtonText: {
-    color: '#FFFFFF',
+    color: '#ffffff',
     fontWeight: 'bold',
     fontSize: 13,
   },
@@ -1434,7 +1434,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   placedBadgeText: {
-    color: '#007A5A',
+    color: '#10b981',
     fontSize: 12,
     fontWeight: '600',
   },
@@ -1446,23 +1446,23 @@ const styles = StyleSheet.create({
   },
   stakeInput: {
     flex: 1,
-    backgroundColor: '#F4F4F4',
+    backgroundColor: '#0f172a',
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#E2E2E7',
+    borderColor: '#334155',
     paddingHorizontal: 12,
     paddingVertical: 8,
-    color: '#191C1F',
+    color: '#f8fafc',
     fontSize: 13,
   },
   confirmStakeButton: {
-    backgroundColor: '#007A5A',
+    backgroundColor: '#10b981',
     borderRadius: 8,
     paddingHorizontal: 16,
     paddingVertical: 9,
   },
   confirmStakeText: {
-    color: '#FFFFFF',
+    color: '#ffffff',
     fontWeight: 'bold',
     fontSize: 13,
   },
@@ -1477,12 +1477,12 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#505A63',
+    color: '#94a3b8',
     marginTop: 16,
   },
   emptySubText: {
     fontSize: 13,
-    color: '#505A63',
+    color: '#64748b',
     marginTop: 4,
   },
   liveBetRow: {
@@ -1492,12 +1492,12 @@ const styles = StyleSheet.create({
   },
   waitOdds: {
     fontSize: 11,
-    color: '#8A4B00',
+    color: '#fbbf24',
     marginBottom: 2,
   },
   legNotFound: {
     fontSize: 11,
-    color: '#5B3FD1',
+    color: '#a78bfa',
     textDecorationLine: 'underline',
     marginLeft: 22,
     marginBottom: 4,
@@ -1505,22 +1505,22 @@ const styles = StyleSheet.create({
   liveBetMatch: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#5B3FD1',
+    color: '#c4b5fd',
     marginBottom: 2,
   },
-  liveBetTitle: { color: '#5B3FD1', fontSize: 14, fontWeight: '600' },
-  sideWord: { color: '#C4182B', fontWeight: '800' },
-  liveBetLeg: { color: '#5B3FD1', fontSize: 12, marginTop: 2 },
+  liveBetTitle: { color: '#ede9fe', fontSize: 14, fontWeight: '600' },
+  sideWord: { color: '#ef4444', fontWeight: '800' },
+  liveBetLeg: { color: '#c4b5fd', fontSize: 12, marginTop: 2 },
   liveBetStatusRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' },
   liveBetBadge: { fontSize: 12, fontWeight: '600', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, overflow: 'hidden' },
-  badgePlayed: { backgroundColor: 'rgba(59,130,246,0.25)', color: '#494FDF' },
-  badgeNotPlayed: { backgroundColor: 'rgba(100,116,139,0.25)', color: '#3A3D40' },
-  badgeWon: { backgroundColor: 'rgba(16,185,129,0.25)', color: '#007A5A' },
-  badgeLost: { backgroundColor: 'rgba(239,68,68,0.25)', color: '#C4182B' },
-  badgePending: { backgroundColor: 'rgba(245,158,11,0.2)', color: '#8A4B00' },
-  liveBetPlaceButton: { backgroundColor: '#007A5A', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 8, marginLeft: 'auto' },
+  badgePlayed: { backgroundColor: 'rgba(59,130,246,0.25)', color: '#bfdbfe' },
+  badgeNotPlayed: { backgroundColor: 'rgba(100,116,139,0.25)', color: '#cbd5e1' },
+  badgeWon: { backgroundColor: 'rgba(16,185,129,0.25)', color: '#6ee7b7' },
+  badgeLost: { backgroundColor: 'rgba(239,68,68,0.25)', color: '#fca5a5' },
+  badgePending: { backgroundColor: 'rgba(245,158,11,0.2)', color: '#fde68a' },
+  liveBetPlaceButton: { backgroundColor: '#10b981', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 8, marginLeft: 'auto' },
   slotLiveSummary: {
-    color: '#5B3FD1',
+    color: '#c4b5fd',
     fontSize: 13,
     fontWeight: '600',
     paddingHorizontal: 16,
@@ -1531,7 +1531,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   infoLine: {
-    color: '#505A63',
+    color: '#94a3b8',
     fontSize: 12,
     marginBottom: 10,
   },
@@ -1542,13 +1542,13 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(245, 158, 11, 0.1)',
     borderWidth: 1,
     borderColor: 'rgba(245, 158, 11, 0.35)',
-    borderRadius: 20,
+    borderRadius: 10,
     padding: 12,
     marginBottom: 12,
   },
   oddsWarningText: {
     flex: 1,
-    color: '#8A4B00',
+    color: '#fde68a',
     fontSize: 12,
     lineHeight: 18,
   },
@@ -1556,7 +1556,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(167, 139, 250, 0.1)',
     borderWidth: 1,
     borderColor: 'rgba(167, 139, 250, 0.35)',
-    borderRadius: 20,
+    borderRadius: 10,
     padding: 12,
     marginBottom: 12,
   },
@@ -1567,7 +1567,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   halftimeAlertsTitle: {
-    color: '#5B3FD1',
+    color: '#e9d5ff',
     fontSize: 13,
     fontWeight: 'bold',
   },
@@ -1577,18 +1577,18 @@ const styles = StyleSheet.create({
     borderTopColor: 'rgba(167, 139, 250, 0.2)',
   },
   halftimeAlertMatch: {
-    color: '#191C1F',
+    color: '#f8fafc',
     fontSize: 13,
     fontWeight: '600',
   },
   halftimeAlertWindow: {
-    color: '#5B3FD1',
+    color: '#ddd6fe',
     fontSize: 12,
     fontWeight: '600',
     marginTop: 2,
   },
   halftimeAlertSelection: {
-    color: '#5B3FD1',
+    color: '#c4b5fd',
     fontSize: 11,
     marginTop: 2,
     lineHeight: 15,

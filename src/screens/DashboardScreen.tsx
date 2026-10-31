@@ -81,7 +81,7 @@ export default function DashboardScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.centered}>
-          <ActivityIndicator color="#494FDF" size="large" />
+          <ActivityIndicator color="#3b82f6" size="large" />
         </View>
       </SafeAreaView>
     );
@@ -102,7 +102,7 @@ export default function DashboardScreen() {
     <SafeAreaView style={styles.container}>
       <ScrollView
         contentContainerStyle={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#494FDF" />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#3b82f6" />}
       >
         {/* Header */}
         <View style={styles.header}>
@@ -112,7 +112,7 @@ export default function DashboardScreen() {
 
         {/* Bannière de posture légale & éthique */}
         <View style={styles.disclaimerBox}>
-          <Ionicons name="information-circle-outline" size={18} color="#505A63" />
+          <Ionicons name="information-circle-outline" size={18} color="#94a3b8" />
           <Text style={styles.disclaimerText}>
             Constat et analyse uniquement. Aucun conseil de mise ni de staking.
           </Text>
@@ -121,7 +121,7 @@ export default function DashboardScreen() {
         {/* Section Cumul Global (Source de Vérité §7) */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
-            <Ionicons name="stats-chart" size={20} color="#494FDF" />
+            <Ionicons name="stats-chart" size={20} color="#3b82f6" />
             <Text style={styles.cardTitle}>Bilan Cumulé ({cumulativeSummary.bets_settled} réglé{cumulativeSummary.bets_settled > 1 ? 's' : ''})</Text>
           </View>
 
@@ -131,7 +131,7 @@ export default function DashboardScreen() {
               <Text style={[styles.statValue, cumulativeSummary.net_pnl >= 0 ? styles.positive : styles.negative]}>
                 {cumulativeSummary.net_pnl >= 0 ? '+' : ''}{cumulativeSummary.net_pnl.toFixed(3)} u
               </Text>
-              {renderProgressBar(Math.abs(cumulativeSummary.net_pnl), 50, '#494FDF')}
+              {renderProgressBar(Math.abs(cumulativeSummary.net_pnl), 50, '#3b82f6')}
             </View>
 
             <View style={styles.statBox}>
@@ -139,7 +139,7 @@ export default function DashboardScreen() {
               <Text style={[styles.statValue, cumulativeSummary.roi >= 0 ? styles.positive : styles.negative]}>
                 {cumulativeSummary.roi >= 0 ? '+' : ''}{cumulativeSummary.roi.toFixed(1)}%
               </Text>
-              {renderProgressBar(Math.abs(cumulativeSummary.roi), 100, '#007A5A')}
+              {renderProgressBar(Math.abs(cumulativeSummary.roi), 100, '#10b981')}
             </View>
 
             <View style={styles.statBox}>
@@ -166,7 +166,7 @@ export default function DashboardScreen() {
 
         {sortedDates.length === 0 ? (
           <View style={styles.disclaimerBox}>
-            <Ionicons name="information-circle-outline" size={18} color="#505A63" />
+            <Ionicons name="information-circle-outline" size={18} color="#94a3b8" />
             <Text style={styles.disclaimerText}>Aucun pari enregistré pour l'instant.</Text>
           </View>
         ) : (
@@ -179,7 +179,7 @@ export default function DashboardScreen() {
               <View key={date} style={styles.dateGroupCard}>
                 <TouchableOpacity style={styles.dateGroupHeader} onPress={() => toggleDate(date)}>
                   <View style={styles.dateGroupLeft}>
-                    <Ionicons name="calendar" size={18} color="#007A5A" />
+                    <Ionicons name="calendar" size={18} color="#10b981" />
                     <Text style={styles.dateGroupTitle}>{date}</Text>
                     <View style={styles.dateGroupBadge}>
                       <Text style={styles.dateGroupBadgeText}>{dayBets.length}</Text>
@@ -189,7 +189,7 @@ export default function DashboardScreen() {
                     <Text style={[styles.dateGroupSummary, daySummary.net_pnl >= 0 ? styles.positive : styles.negative]}>
                       {daySummary.net_pnl >= 0 ? '+' : ''}{daySummary.net_pnl.toFixed(2)} u
                     </Text>
-                    <Ionicons name={isExpanded ? 'chevron-up' : 'chevron-down'} size={18} color="#505A63" />
+                    <Ionicons name={isExpanded ? 'chevron-up' : 'chevron-down'} size={18} color="#94a3b8" />
                   </View>
                 </TouchableOpacity>
 
@@ -231,7 +231,7 @@ export default function DashboardScreen() {
                                 <Ionicons
                                   name={leg.result === 'won' ? 'checkmark-circle' : leg.result === 'lost' ? 'close-circle' : 'time'}
                                   size={16}
-                                  color={leg.result === 'won' ? '#007A5A' : leg.result === 'lost' ? '#C4182B' : '#505A63'}
+                                  color={leg.result === 'won' ? '#10b981' : leg.result === 'lost' ? '#ef4444' : '#94a3b8'}
                                 />
                                 <Text style={styles.legMatch}>{leg.match} :</Text>
                                 <Text style={styles.legSelection}>{leg.selection}</Text>
@@ -261,7 +261,7 @@ export default function DashboardScreen() {
                           {/* Analyse factuelle de cause */}
                           {bet.analysis ? (
                             <View style={styles.analysisBox}>
-                              <Ionicons name="bulb-outline" size={14} color="#494FDF" />
+                              <Ionicons name="bulb-outline" size={14} color="#60a5fa" />
                               <Text style={styles.analysisText}>{bet.analysis}</Text>
                             </View>
                           ) : null}
@@ -282,7 +282,7 @@ export default function DashboardScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F4F4F4',
+    backgroundColor: '#0f172a',
   },
   scrollContent: {
     padding: 16,
@@ -294,36 +294,36 @@ const styles = StyleSheet.create({
   appTitle: {
     fontSize: 26,
     fontWeight: 'bold',
-    color: '#191C1F',
+    color: '#f8fafc',
     letterSpacing: 0.5,
   },
   subtitle: {
     fontSize: 13,
-    color: '#505A63',
+    color: '#94a3b8',
     marginTop: 2,
   },
   disclaimerBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#1e293b',
     padding: 10,
-    borderRadius: 20,
+    borderRadius: 8,
     marginBottom: 16,
     gap: 8,
   },
   disclaimerText: {
     fontSize: 11,
-    color: '#505A63',
+    color: '#94a3b8',
     flex: 1,
     fontStyle: 'italic',
   },
   card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    backgroundColor: '#1e293b',
+    borderRadius: 12,
     padding: 16,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#E2E2E7',
+    borderColor: '#334155',
   },
   cardHeader: {
     flexDirection: 'row',
@@ -334,7 +334,7 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#191C1F',
+    color: '#f1f5f9',
   },
   centered: {
     flex: 1,
@@ -349,7 +349,7 @@ const styles = StyleSheet.create({
   },
   progressContainer: {
     height: 4,
-    backgroundColor: '#E2E2E7',
+    backgroundColor: '#334155',
     borderRadius: 2,
     marginTop: 8,
     width: '100%',
@@ -360,32 +360,32 @@ const styles = StyleSheet.create({
   },
   statBox: {
     width: '48%',
-    backgroundColor: '#F4F4F4',
-    borderRadius: 20,
+    backgroundColor: '#0f172a',
+    borderRadius: 8,
     padding: 12,
     borderWidth: 1,
-    borderColor: '#E2E2E7',
+    borderColor: '#334155',
   },
   statLabel: {
     fontSize: 12,
-    color: '#505A63',
+    color: '#94a3b8',
     marginBottom: 4,
   },
   statValue: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#191C1F',
+    color: '#f8fafc',
   },
   statSub: {
     fontSize: 11,
-    color: '#505A63',
+    color: '#64748b',
     marginTop: 2,
   },
   positive: {
-    color: '#007A5A',
+    color: '#10b981',
   },
   negative: {
-    color: '#C4182B',
+    color: '#ef4444',
   },
   bold: {
     fontWeight: 'bold',
@@ -397,14 +397,14 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 17,
     fontWeight: 'bold',
-    color: '#191C1F',
+    color: '#f8fafc',
   },
   dateGroupCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    backgroundColor: '#1e293b',
+    borderRadius: 12,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#E2E2E7',
+    borderColor: '#334155',
     overflow: 'hidden',
   },
   dateGroupHeader: {
@@ -421,17 +421,17 @@ const styles = StyleSheet.create({
   dateGroupTitle: {
     fontSize: 15,
     fontWeight: 'bold',
-    color: '#191C1F',
+    color: '#f8fafc',
   },
   dateGroupBadge: {
-    backgroundColor: '#E2E2E7',
+    backgroundColor: '#334155',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 6,
   },
   dateGroupBadgeText: {
     fontSize: 11,
-    color: '#3A3D40',
+    color: '#cbd5e1',
     fontWeight: '600',
   },
   dateGroupRight: {
@@ -445,7 +445,7 @@ const styles = StyleSheet.create({
   },
   dateGroupBody: {
     borderTopWidth: 1,
-    borderTopColor: '#E2E2E7',
+    borderTopColor: '#334155',
     padding: 14,
   },
   dateGroupStatsRow: {
@@ -455,15 +455,15 @@ const styles = StyleSheet.create({
   },
   dateGroupStatText: {
     fontSize: 12,
-    color: '#505A63',
+    color: '#94a3b8',
   },
   betCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    backgroundColor: '#1e293b',
+    borderRadius: 12,
     padding: 14,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#E2E2E7',
+    borderColor: '#334155',
   },
   betCardTop: {
     flexDirection: 'row',
@@ -477,11 +477,11 @@ const styles = StyleSheet.create({
   betId: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#191C1F',
+    color: '#f8fafc',
   },
   betLeague: {
     fontSize: 11,
-    color: '#505A63',
+    color: '#94a3b8',
     marginTop: 2,
   },
   statusBadge: {
@@ -492,27 +492,27 @@ const styles = StyleSheet.create({
   badgeWon: {
     backgroundColor: 'rgba(16, 185, 129, 0.2)',
     borderWidth: 1,
-    borderColor: '#007A5A',
+    borderColor: '#10b981',
   },
   badgeLost: {
     backgroundColor: 'rgba(239, 68, 68, 0.2)',
     borderWidth: 1,
-    borderColor: '#C4182B',
+    borderColor: '#ef4444',
   },
   badgeUnplayed: {
     backgroundColor: 'rgba(148, 163, 184, 0.2)',
     borderWidth: 1,
-    borderColor: '#C9C9CD',
+    borderColor: '#64748b',
   },
   statusText: {
     fontSize: 10,
     fontWeight: 'bold',
-    color: '#FFFFFF',
+    color: '#f8fafc',
   },
   legsContainer: {
     borderTopWidth: 1,
     borderBottomWidth: 1,
-    borderColor: '#E2E2E7',
+    borderColor: '#334155',
     paddingVertical: 8,
     marginBottom: 10,
     gap: 6,
@@ -524,17 +524,17 @@ const styles = StyleSheet.create({
   },
   legMatch: {
     fontSize: 12,
-    color: '#3A3D40',
+    color: '#cbd5e1',
     fontWeight: '500',
   },
   legSelection: {
     fontSize: 12,
-    color: '#505A63',
+    color: '#94a3b8',
     flex: 1,
   },
   voidTag: {
     fontSize: 10,
-    color: '#8A4B00',
+    color: '#f59e0b',
     fontWeight: 'bold',
   },
   betFooter: {
@@ -544,11 +544,11 @@ const styles = StyleSheet.create({
   },
   betFooterText: {
     fontSize: 12,
-    color: '#3A3D40',
+    color: '#cbd5e1',
   },
   analysisBox: {
     flexDirection: 'row',
-    backgroundColor: '#F4F4F4',
+    backgroundColor: '#0f172a',
     padding: 8,
     borderRadius: 6,
     marginTop: 8,
@@ -557,7 +557,7 @@ const styles = StyleSheet.create({
   },
   analysisText: {
     fontSize: 11,
-    color: '#505A63',
+    color: '#94a3b8',
     flex: 1,
     fontStyle: 'italic',
   },
