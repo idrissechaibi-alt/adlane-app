@@ -57,7 +57,14 @@ function isFirstDivision(m: { league?: string; country?: string; homeTeam?: stri
   return ALLOWED_COUNTRY.test(country);
 }
 
+/** Une des sources dit explicitement « féminin / jeunes / division inférieure » (nom d'équipe ou ligue). */
+function explicitlyNotFirstTeamMen(m: { league?: string; country?: string; homeTeam?: string; awayTeam?: string }): boolean {
+  return NOT_SENIOR_MEN_TEAM.test(m.homeTeam ?? '') || NOT_SENIOR_MEN_TEAM.test(m.awayTeam ?? '') || /liga f\b|liga-f\b|femen|women|frauen|f[ée]minin/i.test(m.league ?? '') || NOT_FIRST_DIVISION.test(`${m.league ?? ''} ${m.country ?? ''}`);
+}
+
 function isReal(m: HubMatch): boolean {
+  // Une entrée sans nom d'équipe lisible (source qui perd l'équipe visiteuse) ne déclenche jamais d'alerte.
+  if ((m.homeTeam ?? '').trim().length < 3 || (m.awayTeam ?? '').trim().length < 3) return false;
   // Plan du jour lu : l'app n'analyse QUE ces matchs (même vide : aucun match du plan, aucune alerte).
   if (plan?.known) {
     return plan.matches.some((p) => namesLikelyMatch(normalizeTeamName(m.homeTeam), normalizeTeamName(p.home)) && namesLikelyMatch(normalizeTeamName(m.awayTeam), normalizeTeamName(p.away)));
@@ -191,7 +198,12 @@ export async function collectOnce(): Promise<{ live: number; sampled: number; fi
   const seenNames: Seen[] = [];
   for (const m of live) {
     const key = keyOf(m, seenNames);
-    if (unique.some((u) => u.key === key)) continue;
+    const same = unique.find((u) => u.key === key);
+    if (same) {
+      // Un autre fournisseur sait que c'est le match féminin / de jeunes / d'une division inférieure : le veto l'emporte.
+      if (same.real && explicitlyNotFirstTeamMen(m)) same.real = false;
+      continue;
+    }
     unique.push({ m, key, real: isReal(m) });
     seenNames.push({ key, home: m.homeTeam, away: m.awayTeam, minute: m.minute, score: `${m.homeGoals}-${m.awayGoals}` });
   }

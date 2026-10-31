@@ -211,8 +211,14 @@ async function leconsMessage(day: string, todays: InPlayProposal[]): Promise<str
 }
 
 async function statsMessage(day: string): Promise<string> {
-  const index = await fetchRepoJson<{ updatedAt?: string; teams?: Array<{ name: string; matches: number; lastMatch?: string }> }>('data/team-stats/index.json');
-  if (!index?.updatedAt || !index.teams) return `📁 Fichier des stats d'équipes — ${day}\n\n⚠️ Impossible de lire le fichier sur GitHub depuis l'app ce soir : mise à jour non confirmée.`;
+  type StatsIndex = { updatedAt?: string; teams?: Array<{ name: string; matches: number; lastMatch?: string }> };
+  // Trois essais espacés : au milieu de la nuit le réseau du téléphone ou le démarrage de la tâche de fond font échouer le premier.
+  let index: StatsIndex | null = null;
+  for (let attempt = 0; attempt < 3 && !index?.updatedAt; attempt++) {
+    if (attempt) await new Promise((r) => setTimeout(r, attempt * 8_000));
+    index = await fetchRepoJson<StatsIndex>('data/team-stats/index.json');
+  }
+  if (!index?.updatedAt || !index.teams) return `📁 Fichier des stats d'équipes — ${day}\n\n⚠️ Impossible de lire le fichier sur GitHub depuis l'app ce soir (3 essais : réseau, jeton GitHub ou fichier absent) : mise à jour non confirmée.`;
   const updated = new Date(index.updatedAt);
   const playedToday = index.teams.filter((t) => t.lastMatch && localDay(new Date(t.lastMatch)) === day);
   const lastKick = playedToday.reduce((m, t) => Math.max(m, Date.parse(t.lastMatch!)), 0);
