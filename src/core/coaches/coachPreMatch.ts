@@ -135,7 +135,19 @@ export function parsePreMatch(raw: string): Pick<PreMatchOpinion, 'summary_fr' |
   try {
     const m = raw.match(/\{[\s\S]*\}/);
     const j = JSON.parse(m ? m[0] : raw);
-    const summary = typeof j.summary_fr === 'string' ? j.summary_fr.trim().slice(0, 1200) : '';
+    // Certains modèles gardent le fond mais changent les clés (« match », « analysis »…) : on retrouve le texte au lieu de tout perdre.
+    const strings: Array<{ key: string; text: string }> = [];
+    const walk = (o: unknown, key: string, depth: number) => {
+      if (depth > 4 || o == null) return;
+      if (typeof o === 'string') strings.push({ key, text: o.trim() });
+      else if (Array.isArray(o)) o.forEach((x) => walk(x, key, depth + 1));
+      else if (typeof o === 'object') Object.entries(o as Record<string, unknown>).forEach(([k, v]) => walk(v, k, depth + 1));
+    };
+    walk(j, '', 0);
+    const salvage = strings.find((x) => /summary|r[eé]sum|avis|analys|synth|conclusion|overview|assessment/i.test(x.key) && x.text.length > 60)?.text
+      ?? strings.filter((x) => x.text.length > 120).sort((p, q) => q.text.length - p.text.length)[0]?.text
+      ?? '';
+    const summary = typeof j.summary_fr === 'string' ? j.summary_fr.trim().slice(0, 1200) : salvage.slice(0, 1200);
     // Les avis par marché suivent le format de l'analyse en direct : on réutilise sa lecture en lui donnant read_fr.
     if (!summary) return null;
     // Avis par marché mal formés : l'avis écrit reste valable (sans la grille), il ne faut pas tout perdre pour un champ.
@@ -213,7 +225,7 @@ export async function generatePreMatchOpinion(input: PreMatchInput): Promise<Pre
     parts.push(web?.text ? `SOURCES WEB DU JOUR (${web.engines.join(', ')} ; non vérifiées : la composition recoupée et la liste des indisponibles ci-dessus priment, ne reprends jamais du web un blessé ou un titulaire qu'elles contredisent)\n${clip(web.text, 1600)}` : 'SOURCES WEB DU JOUR : aucune source web n\'a répondu pour ce match.');
     parts.push(`DOSSIER DU MATCH\n${clip(briefing.context, 3200)}`);
     // Rappel en fin de message : plusieurs modèles répondent en prose Markdown quand la consigne JSON n'est qu'au début d'un long texte.
-    parts.push("RÉPONDS UNIQUEMENT par l'objet JSON demandé : commence par { et finis par }, sans titre, sans Markdown, sans aucun texte autour.");
+    parts.push("RÉPONDS UNIQUEMENT par l'objet JSON demandé, avec EXACTEMENT les clés summary_fr, matchup_fr, key_duels_fr, script_fr, lineup_fr, risks_fr, web_fr, opinions (aucune autre clé, pas d'objet « match »). Commence par { et finis par }, sans titre, sans Markdown, sans texte autour.");
 
     // Avis long (dossier + compositions + web) : plus de temps et d'essais qu'une analyse en direct, et la cause de l'échec est gardée.
     const trace: OmnirouteAttempt[] = [];
