@@ -11,6 +11,7 @@ import { coachForLeague, type CoachProfile } from './knowledge';
 import { clubCoachOf } from './clubCoaches';
 import { analysisKey, getAnalysis, loadConfig, takeBudget, type CoachAnalysis } from './coachAnalysis';
 import { loadNotes, saveNotes } from './clubNotes';
+import { readPreMatchBrief } from './preMatchMemory';
 
 const REVIEWS_KEY = '@coach_reviews_v1';
 const MAX_REVIEWS = 400;
@@ -26,7 +27,7 @@ export interface CoachReview {
   home_lessons_fr: string[];
   away_lessons_fr: string[];
   player_notes: Array<{ player: string; team: 'home' | 'away'; note_fr: string }>;
-  analysis_check: Array<{ checkpoint: '20' | '60'; verdict: 'juste' | 'fausse' | 'partielle' | 'sans_objet'; why_fr: string }>;
+  analysis_check: Array<{ checkpoint: 'avant' | '20' | '60'; verdict: 'juste' | 'fausse' | 'partielle' | 'sans_objet'; why_fr: string }>;
   general_lessons_fr: string[];
 }
 
@@ -66,8 +67,8 @@ export function parseReview(raw: string): Omit<CoachReview, 'key' | 'day' | 'mat
         .slice(0, 10)
         .map((p: any) => ({ player: text(p.player, 80), team: p.team, note_fr: text(p.note_fr, 240) })),
       analysis_check: (Array.isArray(j.analysis_check) ? j.analysis_check : [])
-        .filter((a: any) => (a?.checkpoint === '20' || a?.checkpoint === '60') && verdicts.includes(a?.verdict))
-        .slice(0, 2)
+        .filter((a: any) => (a?.checkpoint === 'avant' || a?.checkpoint === '20' || a?.checkpoint === '60') && verdicts.includes(a?.verdict))
+        .slice(0, 3)
         .map((a: any) => ({ checkpoint: a.checkpoint, verdict: a.verdict, why_fr: text(a.why_fr, 240) })),
       general_lessons_fr: strs(j.general_lessons_fr, 3, 260),
     };
@@ -79,9 +80,9 @@ export function parseReview(raw: string): Omit<CoachReview, 'key' | 'day' | 'mat
 const SYSTEM = (coach: CoachProfile) =>
   [
     `Tu es ${coach.name}, entraîneur de très haut niveau et analyste de la ligue « ${coach.league} ». ${coach.style}`,
-    "Tu fais le BILAN d'un match terminé à partir UNIQUEMENT des données fournies (score, minutes des buts, totaux et détail par équipe, stats des joueurs si présentes, et tes analyses de la 20e et de la 60e). Tu n'inventes aucun fait, aucun nom de joueur, aucune cause absente des données : quand tu ne peux pas conclure, tu l'écris ou tu omets l'entrée.",
-    "Pour chaque équipe, retiens des leçons durables et vérifiables dans ces données (rythme, tirs, corners, cartons, moment des buts, effet du score ou d'un carton). Juge ton analyse : « juste », « fausse », « partielle » ou « sans_objet », en citant ce que le match a montré.",
-    'Réponds en JSON strict, rien autour : {"summary_fr":"bilan du match en 2 à 4 phrases","home_lessons_fr":["…"],"away_lessons_fr":["…"],"player_notes":[{"player":"nom exact des données","team":"home|away","note_fr":"…"}],"analysis_check":[{"checkpoint":"20|60","verdict":"juste|fausse|partielle|sans_objet","why_fr":"…"}],"general_lessons_fr":["leçon valable pour la ligue, seulement si le match la montre clairement"]}',
+    "Tu fais le BILAN d'un match terminé à partir UNIQUEMENT des données fournies (score, minutes des buts, totaux et détail par équipe, stats des joueurs si présentes, tes analyses de la 20e et de la 60e, et ton avis d'avant-match rédigé sur les compositions officielles). Tu n'inventes aucun fait, aucun nom de joueur, aucune cause absente des données : quand tu ne peux pas conclure, tu l'écris ou tu omets l'entrée.",
+    "Pour chaque équipe, retiens des leçons durables et vérifiables dans ces données (rythme, tirs, corners, cartons, moment des buts, effet du score ou d'un carton). Juge ton analyse : « juste », « fausse », « partielle » ou « sans_objet », en citant ce que le match a montré. Juge aussi ton avis d'avant-match (checkpoint « avant ») : ce que tu avais bien lu des compositions et des forces en présence, et ce que tu avais mal lu, pour ne pas refaire la même erreur.",
+    'Réponds en JSON strict, rien autour : {"summary_fr":"bilan du match en 2 à 4 phrases","home_lessons_fr":["…"],"away_lessons_fr":["…"],"player_notes":[{"player":"nom exact des données","team":"home|away","note_fr":"…"}],"analysis_check":[{"checkpoint":"avant|20|60","verdict":"juste|fausse|partielle|sans_objet","why_fr":"…"}],"general_lessons_fr":["leçon valable pour la ligue, seulement si le match la montre clairement"]}',
   ].join('\n\n');
 
 function digestText(d: MatchDigest, home: string, away: string): string {
@@ -125,7 +126,8 @@ export async function runCoachReviews(maxPerPass = 3): Promise<number> {
     if (reviews[key]) continue;
     if (!(await takeBudget())) break;
     const [a20, a60] = await Promise.all([getAnalysis(analysisKey(homeName, awayName, d.day, '20')), getAnalysis(analysisKey(homeName, awayName, d.day, '60'))]);
-    const user = `${digestText(d, hc.club, ac.club)}\n\n${analysisText(a20, '20')}\n${analysisText(a60, '60')}`;
+    const before = await readPreMatchBrief(homeName, awayName, d.day).catch(() => null);
+    const user = `${digestText(d, hc.club, ac.club)}\n\n${before ? `TON AVIS D'AVANT-MATCH\n${before}\n\n` : ''}${analysisText(a20, '20')}\n${analysisText(a60, '60')}`;
     const res = await askOmnirouteUsable(SYSTEM(coach), user, config, (raw) => parseReview(raw));
     if (!res) continue;
     const review: CoachReview = { key, day: d.day, match: `${hc.club} - ${ac.club}`, coach: coach.id, at: new Date().toISOString(), model: res.model, ...res.value };

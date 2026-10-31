@@ -33,6 +33,7 @@ import { getServerFeedStats } from './serverFeed';
 import { getComboTrainerStatus } from './comboTrainer';
 import { getCoachStatus } from './coaches/coachDesk';
 import { getReviewStats } from './coaches/coachReview';
+import { getPreMatchDiagnostics } from './coaches/coachPreMatch';
 import { knowledgeFeedStatus, loadKnowledgeFeed } from './coaches/knowledgeFeed';
 import { listAnalyses, DAILY_AI_BUDGET } from './coaches/coachAnalysis';
 import { keepAwakeAvailable } from './keepAwake';
@@ -198,7 +199,7 @@ export async function buildAppHealth(): Promise<Record<string, unknown>> {
     }),
     teamRegistry: await section(async () => { await loadTeamRegistry(); return { teams: teamRegistrySize() }; }),
     comboTrainer: await section(async () => getComboTrainerStatus()),
-    entraineurs: await section(async () => ({ ...(await getCoachStatus()), analysesIA: (await listAnalyses()).length, budgetIAParJour: DAILY_AI_BUDGET, bilans: await getReviewStats(), alimentation: (await loadKnowledgeFeed(), knowledgeFeedStatus()) })),
+    entraineurs: await section(async () => ({ ...(await getCoachStatus()), analysesIA: (await listAnalyses()).length, budgetIAParJour: DAILY_AI_BUDGET, bilans: await getReviewStats(), avantMatch: getPreMatchDiagnostics(), alimentation: (await loadKnowledgeFeed(), knowledgeFeedStatus()) })),
     ecranToujoursAllume: await section(async () => ({ moduleNatifPresent: keepAwakeAvailable() })),
     serverFeed: await section(async () => ({ ...(await getServerFeedStats()), server: (await getServerStatus(true)).info })),
     patternEngine: await section(async () => patternStatus()),

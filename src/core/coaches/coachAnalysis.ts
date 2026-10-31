@@ -14,6 +14,7 @@ import { loadNotes } from './clubNotes';
 import { loadKnowledgeFeed } from './knowledgeFeed';
 import { coachForLeague, type CoachProfile } from './knowledge';
 import { readMatch, type Stance, type TacticalRead } from './tacticalEngine';
+import { readPreMatchBrief } from './preMatchMemory';
 
 export type Checkpoint = '20' | '60';
 export type AiMarket = 'total_buts' | 'buts_1ere_mt' | 'btts' | 'corners' | 'cartons' | 'fautes' | '1X2';
@@ -257,12 +258,15 @@ export async function runCoachAnalysis(input: AnalyzeInput): Promise<CoachAnalys
     if (!(await takeBudget())) return null;
     await Promise.all([loadNotes(), loadKnowledgeFeed()]);
     const briefing = coachBriefing(input.homeTeam, input.awayTeam, input.league, ['total_buts', 'corners', 'cartons', '1X2'], 5);
+    // Ce que l'entraîneur avait annoncé avant le match, compositions officielles à l'appui : il dit si le jeu le confirme ou le dément.
+    const before = await readPreMatchBrief(input.homeTeam, input.awayTeam, input.day).catch(() => null);
     const last = [...input.samples].sort((a, b) => a.minute - b.minute).slice(-1)[0];
     const heat = [...input.samples].sort((a, b) => b.minute - a.minute).find((x) => x.heat)?.heat;
     const heatPlayers = heat ? `\nCartes de chaleur (terrain 0-105 dans le sens de l'attaque de chaque équipe ; x̄ = hauteur moyenne ; joueurs les plus avancés) :\n${heat.players.slice(0, 8).map((p) => `${p.name ?? p.id} (${p.team === 'h' ? 'dom.' : 'ext.'}) x̄ ${p.mx}, camp adverse ${Math.round(p.att * 100)} %, surface ${Math.round(p.box * 100)} %`).join('\n')}` : '';
     const user =
       `Match : ${input.homeTeam} (domicile) contre ${input.awayTeam}, ${input.league}. Moment : ${input.checkpoint}e minute (relevé à la ${last.minute}e, score ${last.home}-${last.away}).\n\n` +
       `${readText(readMatch(input.samples))}\n\nFenêtre de stats (domicile-extérieur ; tirs total(cadrés)) :\n${windowText(input.samples)}${heatPlayers}\n\n` +
+      (before ? `TON AVIS D'AVANT-MATCH (à confronter au jeu observé : dis ce qui se confirme et ce qui est démenti)\n${before}\n\n` : '') +
       `DOSSIER DU MATCH\n${briefing.context}`;
     const result = await askOmnirouteUsable(compactSystemPrompt(coach), user, config, (raw) => parseAnalysis(raw));
     if (!result) return null;

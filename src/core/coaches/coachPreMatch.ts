@@ -6,7 +6,7 @@
 import AsyncStorage from '../kvStore';
 import { askOmnirouteUsable, type OmnirouteAttempt } from '../omniroute';
 import { hubDateKey, hubReferee } from '../../api/footballDataAPIs/liveDataHub';
-import { consensusHash, getLineupConsensus, LINEUP_WINDOW_MIN, nameKey, type ConsensusSide } from './lineupConsensus';
+import { consensusHash, getLineupConsensus, inPlayers, LINEUP_WINDOW_MIN, type ConsensusSide } from './lineupConsensus';
 import { getMatchWeather } from '../weather';
 import { getMatchTrend, describeMatchTrend, getTeamProfile } from '../teamStats';
 import { normalizeTeamName } from '../teamNameMatch';
@@ -17,9 +17,10 @@ import { loadNotes } from './clubNotes';
 import { loadKnowledgeFeed } from './knowledgeFeed';
 import { parseAnalysis, loadConfig, takeBudget, type AiOpinion } from './coachAnalysis';
 import { gatherMatchWebContext, type WebSource } from './coachWeb';
+import { PREMATCH_STORE_KEY } from './preMatchMemory';
 
 // v2 : les avis rédigés avant le recoupement des compositions (3 sources) sont écartés et refaits.
-const STORE_KEY = '@coach_prematch_v2';
+const STORE_KEY = PREMATCH_STORE_KEY;
 const MAX_STORED = 200;
 
 export interface PreMatchOpinion {
@@ -45,6 +46,8 @@ export interface PreMatchOpinion {
   web_fr: string;
   /** Sources web consultées pour cet avis. */
   webSources: WebSource[];
+  /** Compositions recoupées au moment de l'avis (systèmes, onzes, indisponibles), relues à la 20e, à la 60e et au bilan. */
+  lineup_text?: string;
   opinions: AiOpinion[];
 }
 
@@ -60,6 +63,14 @@ export const preMatchKey = (home: string, away: string, day: string) => `${day}|
 let memo: Record<string, PreMatchOpinion> | null = null;
 const inFlight = new Map<string, Promise<PreMatchOpinion | null>>();
 const lastFailure = new Map<string, { at: number; reason: string }>();
+/** Dernier état de chaque match du jour (diagnostic exporté) : pourquoi un avis n'est pas encore là. */
+const trail = new Map<string, { match: string; state: string; detail?: string; at: string }>();
+const note = (key: string, match: string, state: string, detail?: string) => trail.set(key, { match, state, detail, at: new Date().toISOString() });
+
+export function getPreMatchDiagnostics(): Array<{ match: string; state: string; detail?: string; at: string }> {
+  const day = hubDateKey();
+  return [...trail.entries()].filter(([k]) => k.startsWith(day)).map(([, v]) => v);
+}
 
 async function load(): Promise<Record<string, PreMatchOpinion>> {
   if (memo) return memo;
@@ -102,10 +113,9 @@ type Profile = Awaited<ReturnType<typeof getTeamProfile>>;
 
 /** Texte de composition d'un côté : onze recoupé, système, banc, indisponibles AVEC leur cause, et ce qui reste sans explication. */
 export function sideText(team: string, cs: ConsensusSide, profile: Profile): string {
-  const startersKeys = new Set(cs.starters.map(nameKey));
-  const missingKeys = new Set(cs.missing.map((m) => nameKey(m.name)));
+  const missingNames = cs.missing.map((m) => m.name);
   const usual = (profile?.usualXI ?? []).map((id) => profile?.players.find((p) => p.id === id)).filter((p): p is NonNullable<typeof p> => !!p);
-  const benchedUsual = usual.filter((p) => !startersKeys.has(nameKey(p.name)) && !missingKeys.has(nameKey(p.name)));
+  const benchedUsual = usual.filter((p) => !inPlayers(p.name, cs.starters) && !inPlayers(p.name, missingNames));
   const usualFormation = profile?.usualFormation ?? null;
   const lines = [`${team} : système ${cs.formation ?? '?'}${usualFormation ? ` (habituel ${usualFormation}${cs.formation && cs.formation !== usualFormation ? ', CHANGÉ' : ''})` : ''}`];
   lines.push(`  Onze de départ (confirmé par les sources) : ${cs.starters.join(', ')}`);
@@ -182,12 +192,16 @@ export async function generatePreMatchOpinion(input: PreMatchInput): Promise<Pre
   if (!coach || !home || !away || home.league !== coach.league || away.league !== coach.league) return null;
   const day = hubDateKey();
   const key = preMatchKey(input.homeTeam, input.awayTeam, day);
+  const label = `${input.homeTeam} - ${input.awayTeam}`;
   // Pas d'avis avant T-55 min : c'est le moment où les compositions officielles sont publiées et se recoupent.
   const minutesToKickoff = (Date.parse(input.kickoff) - Date.now()) / 60_000;
   if (Number.isFinite(minutesToKickoff) && minutesToKickoff > LINEUP_WINDOW_MIN) return null;
   // Compositions recoupées : au moins 3 sources avec le même onze, sinon l'entraîneur attend.
   const consensus = await getLineupConsensus(input.homeTeam, input.awayTeam).catch(() => null);
-  if (!consensus || !consensus.ok) return null;
+  if (!consensus || !consensus.ok) {
+    note(key, label, 'attente_compo', consensus && !consensus.ok ? `${consensus.reason} (${consensus.sources.join(', ') || 'aucune source'})` : 'recoupement impossible');
+    return null;
+  }
   const hash = consensusHash(consensus);
   const store = await load();
   if (store[key]?.lineupHash === hash) return store[key];
@@ -197,6 +211,7 @@ export async function generatePreMatchOpinion(input: PreMatchInput): Promise<Pre
 
   const job = (async () => {
     const config = await loadConfig();
+    note(key, label, 'en_cours', `compositions recoupées : ${consensus.sources.join(', ')}`);
     if (!config) {
       lastFailure.set(key, { at: Date.now(), reason: "aucune IA configurée dans Paramètres" });
       return null;
@@ -233,6 +248,7 @@ export async function generatePreMatchOpinion(input: PreMatchInput): Promise<Pre
     if (!res) {
       const why = trace.slice(0, 3).map((a) => `${a.model} : ${a.outcome === 'erreur' ? 'erreur' : a.outcome === 'sans_contenu_utile' ? 'réponse inexploitable' : a.outcome} — ${String(a.detail ?? '').replace(/\s+/g, ' ').slice(0, 90)}`).join(' | ');
       lastFailure.set(key, { at: Date.now(), reason: why ? `aucune réponse exploitable des IA (${why})` : 'aucune réponse exploitable des IA (délai dépassé)' });
+      note(key, label, 'echec_ia', lastFailure.get(key)!.reason);
       return null;
     }
     const opinion: PreMatchOpinion = {
@@ -248,11 +264,13 @@ export async function generatePreMatchOpinion(input: PreMatchInput): Promise<Pre
       at: new Date().toISOString(),
       model: res.model,
       webSources: web?.sources ?? [],
+      lineup_text: [consensus.home, consensus.away].map((cs, i) => `${i ? input.awayTeam : input.homeTeam} (${cs.formation ?? '?'}) : ${cs.starters.join(', ')}${cs.missing.length ? ` — indisponibles : ${cs.missing.map((m) => m.name).join(', ')}` : ''}`).join(' | '),
       ...res.value,
     };
     const all = await load();
     all[key] = opinion;
     lastFailure.delete(key);
+    note(key, label, 'pret', `${res.model} · ${consensus.sources.join(', ')}`);
     await save();
     return opinion;
   })().finally(() => inFlight.delete(key));
@@ -279,20 +297,50 @@ export async function preMatchStatus(m: { homeTeam: string; awayTeam: string; le
  * Passe sur les matchs du jour : pour ceux dont le coup d'envoi approche (dans les 3 heures) ou vient de passer, tente l'avis dès que
  * la composition officielle est publiée. Renvoie le nombre d'avis rédigés. À appeler depuis la tâche de fond et à l'ouverture de l'écran.
  */
-export async function runPreMatchOpinions(matches: Array<PreMatchInput & { id?: string }>, maxPerPass = 4): Promise<number> {
-  // Les matchs les plus proches d'abord, et EN PARALLÈLE : un avis qui échoue (jusqu'à 150 s) ne doit pas retarder celui d'un match
-  // qui commence dans 40 minutes.
-  const due = matches
-    .map((m) => ({ m, minutes: (Date.parse(m.kickoff) - Date.now()) / 60_000 }))
-    .filter((x) => Number.isFinite(x.minutes) && x.minutes <= LINEUP_WINDOW_MIN && x.minutes >= -20)
-    .sort((a, b) => a.minutes - b.minutes)
-    .slice(0, maxPerPass);
-  const results = await Promise.all(
-    due.map(async ({ m }) => {
-      const before = (await getPreMatchOpinion(m.homeTeam, m.awayTeam, hubDateKey()))?.at;
-      const op = await generatePreMatchOpinion(m).catch(() => null);
-      return op && op.at !== before ? 1 : 0;
-    })
-  );
-  return results.reduce<number>((a, b) => a + b, 0);
+let passRunning: Promise<number> | null = null;
+/** Avis déjà rédigés : composition revérifiée au plus toutes les 10 min (avant le coup d'envoi), pour refaire l'avis si elle change. */
+const lastRecheck = new Map<string, number>();
+const CONCURRENCY = 3;
+
+/**
+ * Passe sur les matchs du jour dont le coup d'envoi est dans moins de 55 min (ou vient de passer, 20 min au plus) : rédige l'avis de
+ * chaque match dès que sa composition est recoupée. TOUS les matchs concernés sont traités à chaque passe, 3 à la fois, les plus
+ * proches du coup d'envoi d'abord ; un avis déjà rédigé ou en échec récent ne prend pas la place d'un autre. Une seule passe à la fois
+ * (l'écran et la tâche de fond partagent la même). Renvoie le nombre d'avis rédigés.
+ */
+export function runPreMatchOpinions(matches: Array<PreMatchInput & { id?: string }>): Promise<number> {
+  if (passRunning) return passRunning;
+  passRunning = (async () => {
+    const day = hubDateKey();
+    const store = await load();
+    const due = matches
+      .map((m) => ({ m, key: preMatchKey(m.homeTeam, m.awayTeam, day), minutes: (Date.parse(m.kickoff) - Date.now()) / 60_000 }))
+      .filter(({ m, key, minutes }) => {
+        if (!Number.isFinite(minutes) || minutes > LINEUP_WINDOW_MIN || minutes < -20) return false;
+        if (inFlight.has(key)) return false;
+        const failed = lastFailure.get(key);
+        if (failed && Date.now() - failed.at < 3 * 60_000) return false;
+        if (store[key]) {
+          if (minutes < 0 || Date.now() - (lastRecheck.get(key) ?? 0) < 10 * 60_000) return false;
+          lastRecheck.set(key, Date.now());
+        }
+        return !!m.homeTeam && !!m.awayTeam;
+      })
+      .sort((a, b) => Math.abs(a.minutes) - Math.abs(b.minutes));
+    let done = 0;
+    let next = 0;
+    const worker = async () => {
+      while (next < due.length) {
+        const { m, key } = due[next++];
+        const before = store[key]?.at;
+        const op = await generatePreMatchOpinion(m).catch(() => null);
+        if (op && op.at !== before) done++;
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, due.length) }, worker));
+    return done;
+  })().finally(() => {
+    passRunning = null;
+  });
+  return passRunning;
 }
