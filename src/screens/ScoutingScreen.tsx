@@ -419,7 +419,7 @@ export default function ScoutingScreen() {
     if (st.state === 'indisponible') return <Text style={styles.coachWait}>Avis de {st.coachName} indisponible pour l'instant : {st.reason}. Nouvel essai automatique.</Text>;
     const o = st.opinion;
     const open = !!openOpinions[m.id];
-    const stanceColor = (x: string) => (x === 'soutient' ? '#4ade80' : x === 'conteste' ? '#f87171' : '#94a3b8');
+    const stanceColor = (x: string) => (x === 'soutient' ? '#007A5A' : x === 'conteste' ? '#C4182B' : '#505A63');
     return (
       <View style={styles.coachBox}>
         <Text style={styles.coachHead}>Avis de {o.coachName} · composition officielle · {new Date(o.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</Text>
@@ -463,14 +463,14 @@ export default function ScoutingScreen() {
                   <Text style={styles.leagueText}>{m.leagueName} • {m.creneau_display}</Text>
                 </View>
               </View>
-              <Ionicons name="chevron-forward" size={18} color="#475569" />
+              <Ionicons name="chevron-forward" size={18} color="#505A63" />
             </TouchableOpacity>
             {renderCoachOpinion(m)}
           </View>
         ))
       ) : (
         <View style={styles.emptyContainer}>
-          <Ionicons name="calendar-outline" size={40} color="#475569" />
+          <Ionicons name="calendar-outline" size={40} color="#505A63" />
           <Text style={styles.emptyText}>Aucun match détecté. Lancez le scan matinal dans l'onglet Planning.</Text>
         </View>
       )}
@@ -483,29 +483,29 @@ export default function ScoutingScreen() {
         style={styles.backButton}
         onPress={() => { setSelectedMatch(null); setAnalysisResult(null); setAnalysisError(null); setDiagnostic(null); setWebSources([]); setCalibrationOutcome(null); }}
       >
-        <Ionicons name="arrow-back" size={20} color="#3b82f6" />
+        <Ionicons name="arrow-back" size={20} color="#494FDF" />
         <Text style={styles.backButtonText}>Retour à la liste</Text>
       </TouchableOpacity>
 
       <View style={styles.resultCard}>
         <View style={styles.resultHeader}>
-          <Ionicons name="sparkles" size={20} color="#10b981" />
+          <Ionicons name="sparkles" size={20} color="#007A5A" />
           <Text style={styles.resultTitle}>Analyse : {selectedMatch?.homeTeam} vs {selectedMatch?.awayTeam}</Text>
         </View>
 
         {loading ? (
           <View style={styles.loadingBox}>
-            <ActivityIndicator size="large" color="#3b82f6" />
+            <ActivityIndicator size="large" color="#494FDF" />
             <Text style={styles.loadingText}>L'IA Adlane analyse le match...</Text>
           </View>
         ) : analysisError ? (
           <View style={styles.errorBox}>
-            <Ionicons name="alert-circle" size={22} color="#ef4444" />
+            <Ionicons name="alert-circle" size={22} color="#C4182B" />
             <Text style={styles.errorTitle}>Analyse impossible</Text>
             <Text style={styles.errorMessage}>{analysisError}</Text>
             {selectedMatch && (
               <TouchableOpacity style={styles.retryButton} onPress={() => triggerAnalysis(selectedMatch)}>
-                <Ionicons name="refresh" size={16} color="#ffffff" />
+                <Ionicons name="refresh" size={16} color="#191C1F" />
                 <Text style={styles.retryButtonText}>Réessayer</Text>
               </TouchableOpacity>
             )}
@@ -538,7 +538,7 @@ export default function ScoutingScreen() {
             <Text style={styles.sectionSubTitle}>Sources web utilisées ({webSources.length}) :</Text>
             {webSources.map((s, idx) => (
               <View key={idx} style={styles.webSourceRow}>
-                <Ionicons name="globe-outline" size={12} color="#14b8a6" />
+                <Ionicons name="globe-outline" size={12} color="#007A5A" />
                 <Text style={styles.webSourceText} numberOfLines={2}>{s.title}</Text>
               </View>
             ))}
@@ -550,7 +550,7 @@ export default function ScoutingScreen() {
             <Ionicons
               name={diagnostic.status === 'success' ? 'checkmark-circle' : 'close-circle'}
               size={14}
-              color={diagnostic.status === 'success' ? '#10b981' : '#ef4444'}
+              color={diagnostic.status === 'success' ? '#007A5A' : '#C4182B'}
             />
             <Text style={styles.diagnosticText}>
               Moteur : {diagnostic.engine === 'gemini' ? 'Google Gemini' : diagnostic.engine === 'freeLLM' ? 'Pool IA gratuit' : diagnostic.engine === 'omniroute' ? 'Omniroute' : 'Aucun'}
@@ -570,7 +570,7 @@ export default function ScoutingScreen() {
                 <Ionicons
                   name={leg.correct ? 'checkmark-circle' : 'close-circle'}
                   size={14}
-                  color={leg.correct ? '#10b981' : '#ef4444'}
+                  color={leg.correct ? '#007A5A' : '#C4182B'}
                 />
                 <Text style={styles.calibrationLegText}>
                   {leg.market} — {leg.selection} ({(leg.estimated_prob * 100).toFixed(0)}% annoncé)
@@ -587,7 +587,7 @@ export default function ScoutingScreen() {
     <SafeAreaView style={styles.container}>
       <ScrollView
         contentContainerStyle={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadMatches(); }} tintColor="#3b82f6" />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadMatches(); }} tintColor="#494FDF" />}
       >
         <View style={styles.header}>
           <Text style={styles.title}>Scouting & Analyse IA</Text>
@@ -603,53 +603,53 @@ export default function ScoutingScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a' },
+  container: { flex: 1, backgroundColor: '#F4F4F4' },
   scrollContent: { padding: 16, paddingBottom: 40 },
   header: { marginBottom: 16 },
-  title: { fontSize: 24, fontWeight: 'bold', color: '#f8fafc' },
-  subtitle: { fontSize: 13, color: '#94a3b8', marginTop: 2 },
-  card: { backgroundColor: '#1e293b', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#334155' },
-  cardTitle: { fontSize: 15, fontWeight: '600', color: '#f1f5f9', marginBottom: 12 },
-  matchBlock: { borderBottomWidth: 1, borderBottomColor: '#334155', paddingBottom: 10 },
-  coachWait: { color: '#94a3b8', fontSize: 12, lineHeight: 17, marginTop: -4, marginBottom: 2, paddingHorizontal: 4 },
-  coachBox: { backgroundColor: '#0f172a', borderRadius: 8, borderWidth: 1, borderColor: '#334155', padding: 10, gap: 6, marginBottom: 2 },
-  coachHead: { color: '#4ade80', fontSize: 11, fontWeight: '700' },
-  coachText: { color: '#cbd5e1', fontSize: 12, lineHeight: 18 },
-  coachLabel: { color: '#e2e8f0', fontWeight: '700' },
-  coachSources: { color: '#64748b', fontSize: 11, lineHeight: 16 },
-  coachToggle: { color: '#3b82f6', fontSize: 12, fontWeight: '600' },
+  title: { fontSize: 24, fontWeight: 'bold', color: '#191C1F' },
+  subtitle: { fontSize: 13, color: '#505A63', marginTop: 2 },
+  card: { backgroundColor: '#FFFFFF', borderRadius: 20, padding: 16, borderWidth: 1, borderColor: '#E2E2E7' },
+  cardTitle: { fontSize: 15, fontWeight: '600', color: '#191C1F', marginBottom: 12 },
+  matchBlock: { borderBottomWidth: 1, borderBottomColor: '#E2E2E7', paddingBottom: 10 },
+  coachWait: { color: '#505A63', fontSize: 12, lineHeight: 17, marginTop: -4, marginBottom: 2, paddingHorizontal: 4 },
+  coachBox: { backgroundColor: '#F4F4F4', borderRadius: 20, borderWidth: 1, borderColor: '#E2E2E7', padding: 10, gap: 6, marginBottom: 2 },
+  coachHead: { color: '#007A5A', fontSize: 11, fontWeight: '700' },
+  coachText: { color: '#3A3D40', fontSize: 12, lineHeight: 18 },
+  coachLabel: { color: '#191C1F', fontWeight: '700' },
+  coachSources: { color: '#505A63', fontSize: 11, lineHeight: 16 },
+  coachToggle: { color: '#494FDF', fontSize: 12, fontWeight: '600' },
   matchItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14 },
   matchLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   flag: { fontSize: 20 },
-  teamsText: { color: '#f8fafc', fontSize: 14, fontWeight: '600' },
-  leagueText: { color: '#64748b', fontSize: 11, marginTop: 2 },
+  teamsText: { color: '#191C1F', fontSize: 14, fontWeight: '600' },
+  leagueText: { color: '#505A63', fontSize: 11, marginTop: 2 },
   emptyContainer: { alignItems: 'center', paddingVertical: 30 },
-  emptyText: { color: '#64748b', fontSize: 13, textAlign: 'center', marginTop: 10, lineHeight: 18 },
+  emptyText: { color: '#505A63', fontSize: 13, textAlign: 'center', marginTop: 10, lineHeight: 18 },
   backButton: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 16 },
-  backButtonText: { color: '#3b82f6', fontWeight: '600', fontSize: 14 },
-  resultCard: { backgroundColor: '#1e293b', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#10b981' },
+  backButtonText: { color: '#494FDF', fontWeight: '600', fontSize: 14 },
+  resultCard: { backgroundColor: '#FFFFFF', borderRadius: 20, padding: 16, borderWidth: 1, borderColor: '#007A5A' },
   resultHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 },
-  resultTitle: { fontSize: 15, fontWeight: 'bold', color: '#f1f5f9' },
+  resultTitle: { fontSize: 15, fontWeight: 'bold', color: '#191C1F' },
   loadingBox: { paddingVertical: 40, alignItems: 'center', gap: 16 },
-  loadingText: { color: '#94a3b8', fontSize: 14, fontStyle: 'italic' },
-  generalAnalysisText: { fontSize: 13, color: '#cbd5e1', lineHeight: 20, marginBottom: 16 },
-  sectionSubTitle: { fontSize: 12, fontWeight: '700', color: '#64748b', marginBottom: 10, textTransform: 'uppercase' },
-  marketBox: { backgroundColor: '#0f172a', borderRadius: 8, padding: 12, marginBottom: 10, borderWidth: 1, borderColor: '#334155' },
+  loadingText: { color: '#505A63', fontSize: 14, fontStyle: 'italic' },
+  generalAnalysisText: { fontSize: 13, color: '#3A3D40', lineHeight: 20, marginBottom: 16 },
+  sectionSubTitle: { fontSize: 12, fontWeight: '700', color: '#505A63', marginBottom: 10, textTransform: 'uppercase' },
+  marketBox: { backgroundColor: '#F4F4F4', borderRadius: 20, padding: 12, marginBottom: 10, borderWidth: 1, borderColor: '#E2E2E7' },
   marketTop: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-  marketName: { fontSize: 13, fontWeight: 'bold', color: '#f8fafc' },
-  marketProb: { fontSize: 13, fontWeight: 'bold', color: '#10b981' },
-  marketReason: { fontSize: 11, color: '#94a3b8', lineHeight: 16 },
+  marketName: { fontSize: 13, fontWeight: 'bold', color: '#191C1F' },
+  marketProb: { fontSize: 13, fontWeight: 'bold', color: '#007A5A' },
+  marketReason: { fontSize: 11, color: '#505A63', lineHeight: 16 },
   errorBox: { alignItems: 'center', paddingVertical: 20, gap: 8 },
-  errorTitle: { color: '#ef4444', fontSize: 14, fontWeight: 'bold' },
-  errorMessage: { color: '#94a3b8', fontSize: 12, textAlign: 'center', lineHeight: 18, paddingHorizontal: 8 },
-  retryButton: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#3b82f6', borderRadius: 8, paddingVertical: 10, paddingHorizontal: 18, marginTop: 8 },
-  retryButtonText: { color: '#ffffff', fontSize: 13, fontWeight: 'bold' },
-  diagnosticBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#334155' },
-  diagnosticText: { color: '#64748b', fontSize: 11, flex: 1 },
-  calibrationBox: { marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#334155' },
+  errorTitle: { color: '#C4182B', fontSize: 14, fontWeight: 'bold' },
+  errorMessage: { color: '#505A63', fontSize: 12, textAlign: 'center', lineHeight: 18, paddingHorizontal: 8 },
+  retryButton: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#494FDF', borderRadius: 8, paddingVertical: 10, paddingHorizontal: 18, marginTop: 8 },
+  retryButtonText: { color: '#FFFFFF', fontSize: 13, fontWeight: 'bold' },
+  diagnosticBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#E2E2E7' },
+  diagnosticText: { color: '#505A63', fontSize: 11, flex: 1 },
+  calibrationBox: { marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#E2E2E7' },
   calibrationLegRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 },
-  calibrationLegText: { color: '#94a3b8', fontSize: 12, flex: 1 },
-  webSourcesBox: { marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#334155' },
+  calibrationLegText: { color: '#505A63', fontSize: 12, flex: 1 },
+  webSourcesBox: { marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#E2E2E7' },
   webSourceRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
-  webSourceText: { color: '#94a3b8', fontSize: 11, flex: 1 },
+  webSourceText: { color: '#505A63', fontSize: 11, flex: 1 },
 });

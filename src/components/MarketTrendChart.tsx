@@ -24,11 +24,11 @@ const DAY_MS = 86_400_000;
 const SMALL_SAMPLE = 5;
 const MONTHS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
 
-const REAL_COLOR = '#60a5fa';
-const FICTIONAL_COLOR = '#a78bfa';
-const GRID_COLOR = '#334155';
-const AXIS_TEXT = '#94a3b8';
-const THRESHOLD_COLOR = '#64748b';
+const REAL_COLOR = '#494FDF';
+const FICTIONAL_COLOR = '#5B3FD1';
+const GRID_COLOR = '#E2E2E7';
+const AXIS_TEXT = '#505A63';
+const THRESHOLD_COLOR = '#505A63';
 
 interface Props {
   label: string;
@@ -103,12 +103,12 @@ function renderSeries(
       {sorted.map((p) =>
         // Moins de 5 paris ce jour-là : point CREUX (taux peu fiable — 1 sur 1 = 100 %).
         p.predictions < SMALL_SAMPLE ? (
-          <Circle key={p.date} cx={toX(dayNum(p.date))} cy={toY(p.hitRate)} r={dot + 0.5} fill="#1e293b" stroke={color} strokeWidth={1.5} />
+          <Circle key={p.date} cx={toX(dayNum(p.date))} cy={toY(p.hitRate)} r={dot + 0.5} fill="#FFFFFF" stroke={color} strokeWidth={1.5} />
         ) : (
           <Circle key={p.date} cx={toX(dayNum(p.date))} cy={toY(p.hitRate)} r={dot} fill={color} />
         )
       )}
-      <Circle cx={lastX} cy={lastY} r={4} fill={last.predictions < SMALL_SAMPLE ? '#1e293b' : color} stroke={color} strokeWidth={1.5} />
+      <Circle cx={lastX} cy={lastY} r={4} fill={last.predictions < SMALL_SAMPLE ? '#FFFFFF' : color} stroke={color} strokeWidth={1.5} />
       <SvgText x={Math.min(lastX + 7, width - 30)} y={lastY + 4 + labelDy} fill={color} fontSize={11} fontWeight="bold">
         {`${Math.round(last.hitRate * 100)}%`}
       </SvgText>
@@ -265,10 +265,10 @@ export default function MarketTrendChart({ label, points: dailyPoints, fictional
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#1e293b',
-    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#E2E2E7',
     padding: 12,
     marginBottom: 12,
   },
@@ -279,12 +279,12 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   title: {
-    color: '#f8fafc',
+    color: '#191C1F',
     fontSize: 14,
     fontWeight: 'bold',
   },
   subtitle: {
-    color: '#64748b',
+    color: '#505A63',
     fontSize: 11,
   },
   legendRow: {
@@ -302,7 +302,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   fictionalStats: {
-    color: '#c4b5fd',
+    color: '#5B3FD1',
     fontSize: 12,
     marginBottom: 8,
   },
@@ -311,7 +311,7 @@ const styles = StyleSheet.create({
     color: FICTIONAL_COLOR,
   },
   empty: {
-    color: '#64748b',
+    color: '#505A63',
     fontSize: 12,
     paddingVertical: 12,
   },
@@ -323,7 +323,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   footerText: {
-    color: '#94a3b8',
+    color: '#505A63',
     fontSize: 11,
   },
 });

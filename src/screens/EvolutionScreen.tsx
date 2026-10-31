@@ -140,7 +140,7 @@ export default function EvolutionScreen() {
     return (
       <View>
         <View style={styles.webAccessRow}>
-          <View style={[styles.webAccessDot, { backgroundColor: ok ? '#22c55e' : '#ef4444' }]} />
+          <View style={[styles.webAccessDot, { backgroundColor: ok ? '#007A5A' : '#C4182B' }]} />
           <Text style={styles.webAccessText}>
             {ok
               ? `Accès internet : ${parts.join(' + ')}`
@@ -148,7 +148,7 @@ export default function EvolutionScreen() {
           </Text>
         </View>
         <View style={styles.webAccessRow}>
-          <View style={[styles.webAccessDot, { backgroundColor: liveOk ? '#22c55e' : '#ef4444' }]} />
+          <View style={[styles.webAccessDot, { backgroundColor: liveOk ? '#007A5A' : '#C4182B' }]} />
           <Text style={styles.webAccessText}>
             {liveOk
               ? `Données live : ${sourcesOk.length}/${sourceNames.length} sources (${sourcesOk.map((n) => `${n} ${liveSources[n].count ?? 0}`).join(', ')})`
@@ -562,7 +562,7 @@ export default function EvolutionScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.centered}>
-          <ActivityIndicator color="#3b82f6" size="large" />
+          <ActivityIndicator color="#494FDF" size="large" />
         </View>
       </SafeAreaView>
     );
@@ -576,7 +576,7 @@ export default function EvolutionScreen() {
       {renderSituation()}
       {fictionalCounter && (
         <View style={styles.liveCounterRow}>
-          <Ionicons name="radio-button-on" size={10} color="#4ade80" />
+          <Ionicons name="radio-button-on" size={10} color="#007A5A" />
           <Text style={styles.liveCounterText}>
             <Text style={styles.liveCounterNumber}>{fictionalCounter.matches}</Text> match{fictionalCounter.matches > 1 ? 's' : ''} traité{fictionalCounter.matches > 1 ? 's' : ''}
             {'  •  '}
@@ -590,10 +590,10 @@ export default function EvolutionScreen() {
             disabled={forcingScan}
           >
             {forcingScan ? (
-              <ActivityIndicator size="small" color="#4ade80" />
+              <ActivityIndicator size="small" color="#007A5A" />
             ) : (
               <>
-                <Ionicons name="play-circle" size={18} color="#4ade80" />
+                <Ionicons name="play-circle" size={18} color="#007A5A" />
                 <Text style={styles.forceScanButtonText}>Forcer le scan</Text>
               </>
             )}
@@ -602,7 +602,7 @@ export default function EvolutionScreen() {
       )}
 
       <View style={styles.infoBox}>
-        <Ionicons name="information-circle" size={16} color="#60a5fa" />
+        <Ionicons name="information-circle" size={16} color="#494FDF" />
         <Text style={styles.infoText}>
           La boucle d'apprentissage compare la probabilité moyenne annoncée par l'IA au taux de réussite réel.
           Un écart de +15 points ou plus indique un biais (ex: BTTS annoncé à 65% mais réel 40%).
@@ -613,7 +613,7 @@ export default function EvolutionScreen() {
           ci-dessous qui porte sur les VRAIS paris réglés) : affiché ici aussi,
           c'est là que la plupart des gens le cherchent en premier. */}
       <View style={styles.paperBetsBox}>
-        <Ionicons name="pulse" size={16} color="#a78bfa" />
+        <Ionicons name="pulse" size={16} color="#5B3FD1" />
         <Text style={styles.paperBetsText}>
           {paperBetsSummary && paperBetsSummary.total > 0 ? (
             <>
@@ -636,7 +636,7 @@ export default function EvolutionScreen() {
       <Text style={styles.sectionTitle}>Pronos du scan 20e/60e minute</Text>
       {scanCalibration.length === 0 ? (
         <View style={styles.infoBox}>
-          <Ionicons name="information-circle" size={16} color="#60a5fa" />
+          <Ionicons name="information-circle" size={16} color="#494FDF" />
           <Text style={styles.infoText}>
             Aucune proposition encore réglée. Chaque prono du scan est confronté au score réel
             en fin de match, et vient nourrir cette mesure.
@@ -645,7 +645,7 @@ export default function EvolutionScreen() {
       ) : (
         scanCalibration.map((cal) => {
           const delta = (cal.meanPredicted - cal.hitRate) * 100;
-          const statusColor = cal.total < 5 ? '#64748b' : delta > 15 ? '#f59e0b' : '#10b981';
+          const statusColor = cal.total < 5 ? '#505A63' : delta > 15 ? '#8A4B00' : '#007A5A';
           const statusLabel = cal.total < 5 ? 'Échantillon faible' : delta > 15 ? 'Suspect' : 'Calibré';
 
           return (
@@ -688,8 +688,8 @@ export default function EvolutionScreen() {
         if (cal.total_predictions === 0) return null;
 
         const statusColor =
-          cal.calibration_status === 'calibre' ? '#10b981' :
-          cal.calibration_status === 'suspect' ? '#f59e0b' : '#ef4444';
+          cal.calibration_status === 'calibre' ? '#007A5A' :
+          cal.calibration_status === 'suspect' ? '#8A4B00' : '#C4182B';
 
         const statusIcon =
           cal.calibration_status === 'calibre' ? 'checkmark-circle' :
@@ -740,7 +740,7 @@ export default function EvolutionScreen() {
 
             {cal.calibration_status === 'suspect' && (
               <View style={styles.warningBox}>
-                <Ionicons name="alert-circle" size={14} color="#f59e0b" />
+                <Ionicons name="alert-circle" size={14} color="#8A4B00" />
                 <Text style={styles.warningText}>
                   Biais détecté : l'IA surestime ce marché. Confiance automatiquement dégradée.
                 </Text>
@@ -762,7 +762,7 @@ export default function EvolutionScreen() {
         <Text style={styles.patternChip}>🧪 testé {p.n} matchs</Text>
         <Text style={styles.patternChip}>✅ réalisé {p.hits} fois · {pct(p.hits, p.n)} %</Text>
         {p.validated && (
-          <Text style={[styles.patternChip, drift != null && Math.abs(drift) >= 10 ? { color: '#fbbf24', borderColor: '#fbbf24' } : null]}>
+          <Text style={[styles.patternChip, drift != null && Math.abs(drift) >= 10 ? { color: '#8A4B00', borderColor: '#8A4B00' } : null]}>
             {post == null ? '🔁 depuis validation : pas encore de match' : `🔁 depuis validation : ${p.postHit}/${p.postN} · ${post} %${drift != null && Math.abs(drift) >= 10 ? ' (écart, en réévaluation)' : ''}`}
           </Text>
         )}
@@ -789,13 +789,13 @@ export default function EvolutionScreen() {
             ['Schéma : fictif → réel', 'https://claude.ai/artifact/LUTQ4YoRD6HkVMiZbnriep'],
           ] as const).map(([label, url]) => (
             <TouchableOpacity key={url} style={[styles.learningDigestButton, { flex: 1, marginBottom: 0 }]} onPress={() => Linking.openURL(url).catch(() => {})}>
-              <Ionicons name="git-network-outline" size={14} color="#a78bfa" />
+              <Ionicons name="git-network-outline" size={14} color="#5B3FD1" />
               <Text style={[styles.learningDigestButtonText, { fontSize: 12 }]}>{label}</Text>
             </TouchableOpacity>
           ))}
         </View>
         <View style={styles.infoBox}>
-          <Ionicons name="bulb" size={16} color="#f59e0b" />
+          <Ionicons name="bulb" size={16} color="#8A4B00" />
           <Text style={styles.infoText}>
             Chaque match terminé est rejoué à la 15e, 30e, mi-temps, 60e et 75e : l'app compare ce qui a suivi chaque situation au
             cas moyen. Un motif est retenu à partir de 100 matchs et 10 points d'écart ; il corrige alors les pronos, fictifs et
@@ -813,7 +813,7 @@ export default function EvolutionScreen() {
               {items.slice(0, 8).map((p, i) => (
                 <View key={i} style={{ marginTop: 6 }}>
                   {renderPatternCounter(p)}
-                  <Text style={[styles.lessonDetail, { color: p.delta >= 0 ? '#34d399' : '#f87171' }]}>
+                  <Text style={[styles.lessonDetail, { color: p.delta >= 0 ? '#007A5A' : '#C4182B' }]}>
                     {p.real ? '● ' : '○ '}{describePattern(p)}
                   </Text>
                 </View>
@@ -856,7 +856,7 @@ export default function EvolutionScreen() {
     if (dailyReports.length === 0) {
       return (
         <View style={styles.infoBox}>
-          <Ionicons name="information-circle" size={16} color="#60a5fa" />
+          <Ionicons name="information-circle" size={16} color="#494FDF" />
           <Text style={styles.infoText}>
             Aucun bilan quotidien pour l'instant. Il est généré automatiquement à la clôture de chaque
             journée (premier tour de fond après minuit), à partir des paris réellement placés ce jour-là.
@@ -873,7 +873,7 @@ export default function EvolutionScreen() {
         {sorted.map((report) => (
           <View key={report.date} style={styles.reportCard}>
             <View style={styles.reportHeader}>
-              <Ionicons name="document-text" size={20} color="#10b981" />
+              <Ionicons name="document-text" size={20} color="#007A5A" />
               <Text style={styles.reportTitle}>Rapport Quotidien - {report.date}</Text>
             </View>
 
@@ -969,13 +969,13 @@ export default function EvolutionScreen() {
             <View>
               <View style={styles.accuracyTrendBox}>
                 <View style={styles.accuracyTrendCol}>
-                  <Text style={[styles.accuracyTrendValue, { color: '#4ade80' }]}>{rate.toFixed(1)}%</Text>
+                  <Text style={[styles.accuracyTrendValue, { color: '#007A5A' }]}>{rate.toFixed(1)}%</Text>
                   <Text style={styles.accuracyTrendLabel}>Pronos réussis (depuis le début)</Text>
                 </View>
                 <View style={styles.accuracyTrendDivider} />
                 <View style={styles.accuracyTrendCol}>
                   {delta != null ? (
-                    <Text style={[styles.accuracyTrendValue, { color: delta >= 0 ? '#4ade80' : '#f87171' }]}>
+                    <Text style={[styles.accuracyTrendValue, { color: delta >= 0 ? '#007A5A' : '#C4182B' }]}>
                       {delta >= 0 ? '+' : ''}
                       {delta.toFixed(1)} pts
                     </Text>
@@ -1024,7 +1024,7 @@ export default function EvolutionScreen() {
         {renderWebAccessIndicator()}
         {paperBetsSummary && paperBetsSummary.total > 0 && (
           <View style={styles.paperBetsBox}>
-            <Ionicons name="pulse" size={16} color="#a78bfa" />
+            <Ionicons name="pulse" size={16} color="#5B3FD1" />
             <Text style={styles.paperBetsText}>
               <Text style={styles.paperBetsNumber}>{paperBetsSummary.total}</Text> paris du modèle à marqueurs (fenêtres de 10 et 25 min)
               {' '}(<Text style={styles.paperBetsNumber}>{paperBetsSummary.settled}</Text> réglés,{' '}
@@ -1039,7 +1039,7 @@ export default function EvolutionScreen() {
         )}
 
         <TouchableOpacity style={styles.learningDigestButton} onPress={handleShowLearningDigest}>
-          <Ionicons name="bulb" size={16} color="#a78bfa" />
+          <Ionicons name="bulb" size={16} color="#5B3FD1" />
           <Text style={styles.learningDigestButtonText}>
             Rapport des leçons apprises et corrections (sur Telegram)
           </Text>
@@ -1087,7 +1087,7 @@ export default function EvolutionScreen() {
           <Ionicons
             name="trending-up"
             size={18}
-            color={selectedTab === 'courbes' ? '#3b82f6' : '#64748b'}
+            color={selectedTab === 'courbes' ? '#494FDF' : '#505A63'}
           />
           <Text style={[styles.tabText, selectedTab === 'courbes' && styles.activeTabText]}>
             Courbes
@@ -1101,7 +1101,7 @@ export default function EvolutionScreen() {
           <Ionicons
             name="analytics"
             size={18}
-            color={selectedTab === 'calibration' ? '#3b82f6' : '#64748b'}
+            color={selectedTab === 'calibration' ? '#494FDF' : '#505A63'}
           />
           <Text style={[styles.tabText, selectedTab === 'calibration' && styles.activeTabText]}>
             Calibration
@@ -1115,7 +1115,7 @@ export default function EvolutionScreen() {
           <Ionicons
             name="school"
             size={18}
-            color={selectedTab === 'lessons' ? '#3b82f6' : '#64748b'}
+            color={selectedTab === 'lessons' ? '#494FDF' : '#505A63'}
           />
           <Text style={[styles.tabText, selectedTab === 'lessons' && styles.activeTabText]}>
             Leçons
@@ -1129,7 +1129,7 @@ export default function EvolutionScreen() {
           <Ionicons
             name="newspaper"
             size={18}
-            color={selectedTab === 'report' ? '#3b82f6' : '#64748b'}
+            color={selectedTab === 'report' ? '#494FDF' : '#505A63'}
           />
           <Text style={[styles.tabText, selectedTab === 'report' && styles.activeTabText]}>
             Rapport
@@ -1149,10 +1149,10 @@ export default function EvolutionScreen() {
 
 const styles = StyleSheet.create({
   patternChip: {
-    color: '#cbd5e1',
+    color: '#3A3D40',
     fontSize: 11,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#E2E2E7',
     borderRadius: 10,
     paddingHorizontal: 7,
     paddingVertical: 1,
@@ -1167,13 +1167,13 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   curvesIntroTitle: {
-    color: '#bfdbfe',
+    color: '#494FDF',
     fontSize: 13,
     fontWeight: 'bold',
     marginBottom: 4,
   },
   curvesIntroText: {
-    color: '#94a3b8',
+    color: '#505A63',
     fontSize: 11,
     lineHeight: 16,
   },
@@ -1185,12 +1185,12 @@ const styles = StyleSheet.create({
   },
   liveCounterText: {
     flex: 1,
-    color: '#94a3b8',
+    color: '#505A63',
     fontSize: 11,
   },
   liveCounterNumber: {
     fontWeight: 'bold',
-    color: '#e2e8f0',
+    color: '#191C1F',
   },
   forceScanButton: {
     flexDirection: 'row',
@@ -1204,26 +1204,26 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(74, 222, 128, 0.3)',
   },
   forceScanButtonText: {
-    color: '#4ade80',
+    color: '#007A5A',
     fontSize: 11,
     fontWeight: '600',
   },
-  oddsCard: { backgroundColor: '#1e293b', borderRadius: 10, padding: 12, marginHorizontal: 16, marginBottom: 12, borderWidth: 1, borderColor: '#334155' },
-  oddsTitle: { color: '#f8fafc', fontSize: 14, fontWeight: '700', marginBottom: 8 },
+  oddsCard: { backgroundColor: '#FFFFFF', borderRadius: 20, padding: 12, marginHorizontal: 16, marginBottom: 12, borderWidth: 1, borderColor: '#E2E2E7' },
+  oddsTitle: { color: '#191C1F', fontSize: 14, fontWeight: '700', marginBottom: 8 },
   oddsScoreRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 8 },
-  oddsScore: { color: '#a78bfa', fontSize: 34, fontWeight: '800' },
-  oddsScoreUnit: { fontSize: 14, fontWeight: '600', color: '#94a3b8' },
+  oddsScore: { color: '#5B3FD1', fontSize: 34, fontWeight: '800' },
+  oddsScoreUnit: { fontSize: 14, fontWeight: '600', color: '#505A63' },
   oddsScoreSide: { flex: 1, minWidth: 0 },
-  oddsLine: { color: '#cbd5e1', fontSize: 12, marginTop: 3, lineHeight: 17 },
-  oddsWhy: { color: '#f8fafc', fontSize: 12, fontWeight: '700', marginTop: 8 },
+  oddsLine: { color: '#3A3D40', fontSize: 12, marginTop: 3, lineHeight: 17 },
+  oddsWhy: { color: '#191C1F', fontSize: 12, fontWeight: '700', marginTop: 8 },
   oddsBars: { flexDirection: 'row', alignItems: 'flex-end', gap: 2, height: 42, marginVertical: 6 },
-  oddsBar: { width: 5, backgroundColor: '#8b5cf6', borderRadius: 2 },
+  oddsBar: { width: 5, backgroundColor: '#5B3FD1', borderRadius: 2 },
   paperBetsBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 8,
     backgroundColor: 'rgba(167, 139, 250, 0.08)',
-    borderRadius: 10,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: 'rgba(167, 139, 250, 0.3)',
     padding: 12,
@@ -1231,10 +1231,10 @@ const styles = StyleSheet.create({
   },
   accuracyTrendBox: {
     flexDirection: 'row',
-    backgroundColor: '#1e293b',
-    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#E2E2E7',
     paddingVertical: 14,
     marginBottom: 12,
   },
@@ -1245,46 +1245,46 @@ const styles = StyleSheet.create({
   },
   accuracyTrendDivider: {
     width: 1,
-    backgroundColor: '#334155',
+    backgroundColor: '#E2E2E7',
   },
   accuracyTrendValue: {
-    color: '#f8fafc',
+    color: '#191C1F',
     fontSize: 22,
     fontWeight: 'bold',
   },
   accuracyTrendValueMuted: {
-    color: '#64748b',
+    color: '#505A63',
     fontSize: 22,
     fontWeight: 'bold',
   },
   comboBox: {
-    backgroundColor: '#0f172a',
-    borderRadius: 10,
+    backgroundColor: '#F4F4F4',
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#E2E2E7',
     padding: 12,
     marginHorizontal: 4,
     marginBottom: 10,
     gap: 6,
   },
   comboTitle: {
-    color: '#e2e8f0',
+    color: '#191C1F',
     fontSize: 13,
     fontWeight: '700',
   },
   comboBarBg: {
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#1e293b',
+    backgroundColor: '#FFFFFF',
     overflow: 'hidden',
   },
   comboBarFill: {
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#4ade80',
+    backgroundColor: '#007A5A',
   },
   accuracyTrendLabel: {
-    color: '#94a3b8',
+    color: '#505A63',
     fontSize: 11,
     textAlign: 'center',
     paddingHorizontal: 12,
@@ -1293,10 +1293,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#1e293b',
+    backgroundColor: '#FFFFFF',
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#E2E2E7',
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginBottom: 12,
@@ -1308,7 +1308,7 @@ const styles = StyleSheet.create({
   },
   webAccessText: {
     flex: 1,
-    color: '#e2e8f0',
+    color: '#191C1F',
     fontSize: 12,
   },
   learningDigestButton: {
@@ -1324,23 +1324,23 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   learningDigestButtonText: {
-    color: '#ddd6fe',
+    color: '#5B3FD1',
     fontSize: 12,
     fontWeight: '600',
   },
   paperBetsText: {
     flex: 1,
-    color: '#ddd6fe',
+    color: '#5B3FD1',
     fontSize: 12,
     lineHeight: 17,
   },
   paperBetsNumber: {
     fontWeight: 'bold',
-    color: '#f8fafc',
+    color: '#191C1F',
   },
   container: {
     flex: 1,
-    backgroundColor: '#0f172a',
+    backgroundColor: '#F4F4F4',
   },
   header: {
     padding: 16,
@@ -1349,7 +1349,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#f8fafc',
+    color: '#191C1F',
   },
   centered: {
     flex: 1,
@@ -1358,7 +1358,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 13,
-    color: '#94a3b8',
+    color: '#505A63',
     marginTop: 2,
   },
   tabBar: {
@@ -1374,22 +1374,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 10,
     borderRadius: 8,
-    backgroundColor: '#1e293b',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#E2E2E7',
     gap: 6,
   },
   activeTab: {
     backgroundColor: 'rgba(59, 130, 246, 0.1)',
-    borderColor: '#3b82f6',
+    borderColor: '#494FDF',
   },
   tabText: {
     fontSize: 13,
-    color: '#64748b',
+    color: '#505A63',
     fontWeight: '500',
   },
   activeTabText: {
-    color: '#3b82f6',
+    color: '#494FDF',
     fontWeight: 'bold',
   },
   scrollContent: {
@@ -1401,7 +1401,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     backgroundColor: 'rgba(96, 165, 250, 0.1)',
     padding: 12,
-    borderRadius: 8,
+    borderRadius: 20,
     marginBottom: 16,
     gap: 8,
     borderWidth: 1,
@@ -1409,24 +1409,24 @@ const styles = StyleSheet.create({
   },
   infoText: {
     fontSize: 11,
-    color: '#94a3b8',
+    color: '#505A63',
     flex: 1,
     lineHeight: 16,
   },
   sectionTitle: {
-    color: '#e2e8f0',
+    color: '#191C1F',
     fontSize: 14,
     fontWeight: 'bold',
     marginTop: 8,
     marginBottom: 8,
   },
   calibrationCard: {
-    backgroundColor: '#1e293b',
-    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
     padding: 14,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#E2E2E7',
   },
   calibrationHeader: {
     flexDirection: 'row',
@@ -1437,7 +1437,7 @@ const styles = StyleSheet.create({
   marketLabel: {
     fontSize: 15,
     fontWeight: 'bold',
-    color: '#f8fafc',
+    color: '#191C1F',
   },
   statusBadge: {
     flexDirection: 'row',
@@ -1459,31 +1459,31 @@ const styles = StyleSheet.create({
   },
   statItem: {
     flex: 1,
-    backgroundColor: '#0f172a',
+    backgroundColor: '#F4F4F4',
     borderRadius: 6,
     padding: 8,
     alignItems: 'center',
   },
   statLabel: {
     fontSize: 10,
-    color: '#64748b',
+    color: '#505A63',
     marginBottom: 2,
   },
   statValue: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#f8fafc',
+    color: '#191C1F',
   },
   statSub: {
     fontSize: 9,
-    color: '#64748b',
+    color: '#505A63',
     marginTop: 1,
   },
   positive: {
-    color: '#10b981',
+    color: '#007A5A',
   },
   negative: {
-    color: '#ef4444',
+    color: '#C4182B',
   },
   warningBox: {
     flexDirection: 'row',
@@ -1496,16 +1496,16 @@ const styles = StyleSheet.create({
   },
   warningText: {
     fontSize: 11,
-    color: '#f59e0b',
+    color: '#8A4B00',
     flex: 1,
   },
   lessonCard: {
-    backgroundColor: '#1e293b',
-    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
     padding: 14,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#E2E2E7',
   },
   lessonHeader: {
     flexDirection: 'row',
@@ -1516,44 +1516,44 @@ const styles = StyleSheet.create({
   lessonOccurrences: {
     fontSize: 12,
     fontWeight: 'bold',
-    color: '#f59e0b',
+    color: '#8A4B00',
   },
   ruleTag: {
-    backgroundColor: '#0f172a',
+    backgroundColor: '#F4F4F4',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#E2E2E7',
   },
   ruleText: {
     fontSize: 10,
-    color: '#60a5fa',
+    color: '#494FDF',
     fontFamily: 'monospace',
   },
   lessonMotif: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#f8fafc',
+    color: '#191C1F',
     marginBottom: 6,
   },
   lessonDetail: {
     fontSize: 12,
-    color: '#94a3b8',
+    color: '#505A63',
     lineHeight: 17,
     marginBottom: 8,
   },
   lessonDate: {
     fontSize: 10,
-    color: '#64748b',
+    color: '#505A63',
     fontStyle: 'italic',
   },
   reportCard: {
-    backgroundColor: '#1e293b',
-    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#10b981',
+    borderColor: '#007A5A',
   },
   reportHeader: {
     flexDirection: 'row',
@@ -1564,11 +1564,11 @@ const styles = StyleSheet.create({
   reportTitle: {
     fontSize: 15,
     fontWeight: 'bold',
-    color: '#f1f5f9',
+    color: '#191C1F',
   },
   reportContent: {
     fontSize: 12,
-    color: '#cbd5e1',
+    color: '#3A3D40',
     lineHeight: 18,
   },
 });
