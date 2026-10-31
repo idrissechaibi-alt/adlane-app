@@ -267,15 +267,20 @@ export async function preMatchStatus(m: { homeTeam: string; awayTeam: string; le
  * Passe sur les matchs du jour : pour ceux dont le coup d'envoi approche (dans les 3 heures) ou vient de passer, tente l'avis dès que
  * la composition officielle est publiée. Renvoie le nombre d'avis rédigés. À appeler depuis la tâche de fond et à l'ouverture de l'écran.
  */
-export async function runPreMatchOpinions(matches: Array<PreMatchInput & { id?: string }>, maxPerPass = 3): Promise<number> {
-  let done = 0;
-  for (const m of matches) {
-    if (done >= maxPerPass) break;
-    const minutes = (Date.parse(m.kickoff) - Date.now()) / 60_000;
-    if (!Number.isFinite(minutes) || minutes > LINEUP_WINDOW_MIN || minutes < -20) continue;
-    const before = (await getPreMatchOpinion(m.homeTeam, m.awayTeam, hubDateKey()))?.at;
-    const op = await generatePreMatchOpinion(m).catch(() => null);
-    if (op && op.at !== before) done++;
-  }
-  return done;
+export async function runPreMatchOpinions(matches: Array<PreMatchInput & { id?: string }>, maxPerPass = 4): Promise<number> {
+  // Les matchs les plus proches d'abord, et EN PARALLÈLE : un avis qui échoue (jusqu'à 150 s) ne doit pas retarder celui d'un match
+  // qui commence dans 40 minutes.
+  const due = matches
+    .map((m) => ({ m, minutes: (Date.parse(m.kickoff) - Date.now()) / 60_000 }))
+    .filter((x) => Number.isFinite(x.minutes) && x.minutes <= LINEUP_WINDOW_MIN && x.minutes >= -20)
+    .sort((a, b) => a.minutes - b.minutes)
+    .slice(0, maxPerPass);
+  const results = await Promise.all(
+    due.map(async ({ m }) => {
+      const before = (await getPreMatchOpinion(m.homeTeam, m.awayTeam, hubDateKey()))?.at;
+      const op = await generatePreMatchOpinion(m).catch(() => null);
+      return op && op.at !== before ? 1 : 0;
+    })
+  );
+  return results.reduce<number>((a, b) => a + b, 0);
 }

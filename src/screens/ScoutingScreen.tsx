@@ -122,7 +122,12 @@ export default function ScoutingScreen() {
     void refreshCoachOpinions(matches, false);
     void refreshCoachOpinions(matches, true);
     const timer = setInterval(() => void refreshCoachOpinions(matches, true), 3 * 60_000);
-    return () => clearInterval(timer);
+    // L'état (en cours, prêt, indisponible) se relit toutes les 15 s : un avis terminé apparaît sans attendre la fin des autres.
+    const statusTimer = setInterval(() => void refreshCoachOpinions(matches, false), 15_000);
+    return () => {
+      clearInterval(timer);
+      clearInterval(statusTimer);
+    };
   }, [isFocused, matches]);
 
   const handleSelectMatch = (match: ScheduledMatchDetail) => {
