@@ -208,10 +208,12 @@ export async function generatePreMatchOpinion(input: PreMatchInput): Promise<Pre
     if (referee) parts.push(`ARBITRE : ${referee.name}${referee.country ? ` (${referee.country})` : ''}${referee.matches ? `, ${referee.matches} matchs connus` : ''}${referee.yellowPerMatch != null ? `, ${referee.yellowPerMatch} jaunes et ${referee.foulsPerMatch ?? '?'} fautes par match (moyenne de la compétition : ${referee.leagueYellowAvg ?? '?'} et ${referee.leagueFoulsAvg ?? '?'})` : ''}${referee.penalties != null ? `, ${referee.penalties} penaltys` : ''}${referee.reds != null ? `, ${referee.reds} rouges` : ''}.`);
     if (weather) parts.push(`MÉTÉO : ${weather.city}, ${Math.round(weather.temperatureC)} °C, pluie ${weather.rainMm} mm, vent ${Math.round(weather.windKmh)} km/h.`);
     if (input.odds) parts.push(`COTES DU JOUR : 1 ${input.odds.home ?? '?'} · N ${input.odds.draw ?? '?'} · 2 ${input.odds.away ?? '?'} · les deux marquent ${input.odds.btts_yes ?? '?'} · plus de 2,5 buts ${input.odds.over_2_5 ?? '?'}.`);
-    if (trend) parts.push(`TENDANCES DES ÉQUIPES : ${clip(describeMatchTrend(trend), 900)}`);
-    if (input.context) parts.push(`CONTEXTE DU SCAN MATINAL : ${clip(input.context, 700)}`);
-    parts.push(web?.text ? `SOURCES WEB DU JOUR (${web.engines.join(', ')} ; non vérifiées : la composition recoupée et la liste des indisponibles ci-dessus priment, ne reprends jamais du web un blessé ou un titulaire qu'elles contredisent)\n${web.text}` : 'SOURCES WEB DU JOUR : aucune source web n\'a répondu pour ce match.');
-    parts.push(`DOSSIER DU MATCH\n${briefing.context}`);
+    if (trend) parts.push(`TENDANCES DES ÉQUIPES : ${clip(describeMatchTrend(trend), 500)}`);
+    if (input.context) parts.push(`CONTEXTE DU SCAN MATINAL : ${clip(input.context, 400)}`);
+    parts.push(web?.text ? `SOURCES WEB DU JOUR (${web.engines.join(', ')} ; non vérifiées : la composition recoupée et la liste des indisponibles ci-dessus priment, ne reprends jamais du web un blessé ou un titulaire qu'elles contredisent)\n${clip(web.text, 1600)}` : 'SOURCES WEB DU JOUR : aucune source web n\'a répondu pour ce match.');
+    parts.push(`DOSSIER DU MATCH\n${clip(briefing.context, 3200)}`);
+    // Rappel en fin de message : plusieurs modèles répondent en prose Markdown quand la consigne JSON n'est qu'au début d'un long texte.
+    parts.push("RÉPONDS UNIQUEMENT par l'objet JSON demandé : commence par { et finis par }, sans titre, sans Markdown, sans aucun texte autour.");
 
     // Avis long (dossier + compositions + web) : plus de temps et d'essais qu'une analyse en direct, et la cause de l'échec est gardée.
     const trace: OmnirouteAttempt[] = [];
