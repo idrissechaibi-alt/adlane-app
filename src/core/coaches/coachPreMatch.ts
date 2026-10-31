@@ -4,7 +4,7 @@
 // officielles comparées au onze habituel, arbitre, météo, cotes du jour, tendances des équipes.
 
 import AsyncStorage from '../kvStore';
-import { askOmnirouteUsable } from '../omniroute';
+import { askOmnirouteUsable, type OmnirouteAttempt } from '../omniroute';
 import { hubDateKey, hubReferee } from '../../api/footballDataAPIs/liveDataHub';
 import { consensusHash, getLineupConsensus, LINEUP_WINDOW_MIN, nameKey, type ConsensusSide } from './lineupConsensus';
 import { getMatchWeather } from '../weather';
@@ -137,8 +137,10 @@ export function parsePreMatch(raw: string): Pick<PreMatchOpinion, 'summary_fr' |
     const j = JSON.parse(m ? m[0] : raw);
     const summary = typeof j.summary_fr === 'string' ? j.summary_fr.trim().slice(0, 1200) : '';
     // Les avis par marché suivent le format de l'analyse en direct : on réutilise sa lecture en lui donnant read_fr.
-    const common = parseAnalysis(JSON.stringify({ read_fr: summary || 'x', momentum_fr: '', risks_fr: j.risks_fr ?? [], opinions: j.opinions ?? [] }));
-    if (!summary || !common) return null;
+    if (!summary) return null;
+    // Avis par marché mal formés : l'avis écrit reste valable (sans la grille), il ne faut pas tout perdre pour un champ.
+    const common = parseAnalysis(JSON.stringify({ read_fr: summary, momentum_fr: '', risks_fr: j.risks_fr ?? [], opinions: j.opinions ?? [] }))
+      ?? { risks_fr: (Array.isArray(j.risks_fr) ? j.risks_fr : []).map((x: unknown) => (typeof x === 'string' ? x.trim().slice(0, 200) : '')).filter(Boolean).slice(0, 5), opinions: [] as AiOpinion[] };
     const list = (x: unknown, n: number, max: number): string[] => (Array.isArray(x) ? x.map((v) => (typeof v === 'string' ? v.trim().slice(0, max) : '')).filter(Boolean).slice(0, n) : []);
     const str = (x: unknown, max: number) => (typeof x === 'string' ? x.trim().slice(0, max) : '');
     return {
@@ -178,7 +180,7 @@ export async function generatePreMatchOpinion(input: PreMatchInput): Promise<Pre
   const store = await load();
   if (store[key]?.lineupHash === hash) return store[key];
   const failed = lastFailure.get(key);
-  if (failed && Date.now() - failed.at < 10 * 60_000) return null;
+  if (failed && Date.now() - failed.at < 3 * 60_000) return null;
   if (inFlight.has(key)) return inFlight.get(key)!;
 
   const job = (async () => {
@@ -211,9 +213,12 @@ export async function generatePreMatchOpinion(input: PreMatchInput): Promise<Pre
     parts.push(web?.text ? `SOURCES WEB DU JOUR (${web.engines.join(', ')} ; non vérifiées : la composition recoupée et la liste des indisponibles ci-dessus priment, ne reprends jamais du web un blessé ou un titulaire qu'elles contredisent)\n${web.text}` : 'SOURCES WEB DU JOUR : aucune source web n\'a répondu pour ce match.');
     parts.push(`DOSSIER DU MATCH\n${briefing.context}`);
 
-    const res = await askOmnirouteUsable(systemPrompt(coach), parts.join('\n\n'), config, (raw) => parsePreMatch(raw));
+    // Avis long (dossier + compositions + web) : plus de temps et d'essais qu'une analyse en direct, et la cause de l'échec est gardée.
+    const trace: OmnirouteAttempt[] = [];
+    const res = await askOmnirouteUsable(systemPrompt(coach), parts.join('\n\n'), config, (raw) => parsePreMatch(raw), trace, false, 6, 150_000);
     if (!res) {
-      lastFailure.set(key, { at: Date.now(), reason: 'aucune réponse exploitable des IA' });
+      const why = trace.slice(0, 3).map((a) => `${a.model} : ${a.outcome === 'erreur' ? 'erreur' : a.outcome === 'sans_contenu_utile' ? 'réponse inexploitable' : a.outcome} — ${String(a.detail ?? '').replace(/\s+/g, ' ').slice(0, 90)}`).join(' | ');
+      lastFailure.set(key, { at: Date.now(), reason: why ? `aucune réponse exploitable des IA (${why})` : 'aucune réponse exploitable des IA (délai dépassé)' });
       return null;
     }
     const opinion: PreMatchOpinion = {

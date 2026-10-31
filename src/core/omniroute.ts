@@ -475,11 +475,12 @@ export function askOmnirouteUsable<T>(
   extract: (text: string) => T | null,
   trace?: OmnirouteAttempt[],
   web: boolean | string = false,
-  maxAttempts: number = USABLE_MAX_ATTEMPTS
+  maxAttempts: number = USABLE_MAX_ATTEMPTS,
+  deadlineMs: number = ASK_DEADLINE_MS
 ): Promise<{ value: T; model: string } | null> {
   return withDeadline(
     askOmnirouteUsableUnbounded(systemPrompt, userPrompt, config, extract, trace, web, maxAttempts),
-    ASK_DEADLINE_MS,
+    deadlineMs,
     null
   );
 }
