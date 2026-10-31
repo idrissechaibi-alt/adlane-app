@@ -1279,6 +1279,109 @@ export async function hubLineup(homeTeam: string, awayTeam: string, dateKey: str
   }
 }
 
+/** Un indisponible annoncé par une source : blessé ou suspendu, avec sa cause et son retour quand elle les donne. */
+export interface MissingPlayer {
+  name: string;
+  reason: string | null;
+  back: string | null;
+}
+
+/** Composition d'un match telle que la publie UNE source (noms bruts, côté domicile / extérieur tel que la source les range). */
+export interface SourceSide {
+  formation: string | null;
+  starters: string[];
+  subs: string[];
+  missing: MissingPlayer[];
+}
+
+export interface SourceLineup {
+  provider: HubProviderName;
+  /** true = la source l'annonce confirmée, false = prévue, null = elle ne le dit pas. */
+  official: boolean | null;
+  home: SourceSide;
+  away: SourceSide;
+}
+
+const LINEUP_LOOKUP = ['FotMob', '365Scores', 'ESPN', 'LiveScore'];
+
+/** Compositions du match chez chaque source qui les publie (FotMob, 365Scores, ESPN, LiveScore) : onze, remplaçants, blessés. */
+export async function hubLineups(homeTeam: string, awayTeam: string, dateKey: string): Promise<SourceLineup[]> {
+  const hits = (await findEverywhere(homeTeam, awayTeam, dateKey, true).catch(() => [] as HubMatch[])).filter((m) => LINEUP_LOOKUP.includes(m.provider));
+  const out = await Promise.all(
+    hits.map(async (m): Promise<SourceLineup | null> => {
+      try {
+        const empty = (): SourceSide => ({ formation: null, starters: [], subs: [], missing: [] });
+        if (m.provider === 'FotMob') {
+          const d = await getJson(`https://www.fotmob.com/api/data/matchDetails?matchId=${m.ref}`);
+          const lu = d?.content?.lineup;
+          const side = (t: any): SourceSide => ({
+            formation: t?.formation ?? null,
+            starters: (t?.starters ?? []).map((p: any) => String(p.name)),
+            subs: (t?.subs ?? []).map((p: any) => String(p.name)),
+            missing: (t?.unavailable ?? []).map((p: any) => ({ name: String(p.name), reason: p.unavailability?.type ?? null, back: p.unavailability?.expectedReturn ?? null })),
+          });
+          if (!lu?.homeTeam?.starters?.length) return null;
+          return { provider: 'FotMob', official: null, home: side(lu.homeTeam), away: side(lu.awayTeam) };
+        }
+        if (m.provider === '365Scores') {
+          const d = await getJson(`${S365}/game/?${S365_COMMON}&gameId=${m.ref}`);
+          const g = d?.game;
+          const names = new Map<number, string>((g?.members ?? []).map((x: any) => [Number(x.id), String(x.name)]));
+          const side = (c: any): SourceSide => {
+            const ms: any[] = c?.lineups?.members ?? [];
+            const nm = (x: any) => names.get(Number(x.id)) ?? '';
+            return {
+              formation: c?.lineups?.formation ?? null,
+              starters: ms.filter((x) => x.status === 1).map(nm).filter(Boolean),
+              subs: ms.filter((x) => x.status === 2).map(nm).filter(Boolean),
+              missing: ms.filter((x) => x.status === 3).map((x) => ({ name: nm(x), reason: x.injury?.reason ?? null, back: x.injury?.expectedReturn ?? null })).filter((x) => x.name),
+            };
+          };
+          const home = side(g?.homeCompetitor);
+          if (home.starters.length === 0) return null;
+          const st = String(g?.homeCompetitor?.lineups?.status ?? '').toLowerCase();
+          return { provider: '365Scores', official: st ? st === 'confirmed' : null, home, away: side(g?.awayCompetitor) };
+        }
+        if (m.provider === 'ESPN') {
+          const d = await getJson(`${ESPN}/summary?event=${m.ref}`);
+          const rosters: any[] = d?.rosters ?? [];
+          const side = (r: any): SourceSide => ({
+            formation: r?.formation ?? null,
+            starters: (r?.roster ?? []).filter((p: any) => p.starter).map((p: any) => String(p.athlete?.displayName)),
+            subs: (r?.roster ?? []).filter((p: any) => !p.starter).map((p: any) => String(p.athlete?.displayName)),
+            missing: [],
+          });
+          const h = rosters.find((r) => r.homeAway === 'home') ?? rosters[0];
+          const a = rosters.find((r) => r.homeAway === 'away') ?? rosters[1];
+          if (!h || !a || side(h).starters.length === 0) return null;
+          return { provider: 'ESPN', official: null, home: side(h), away: side(a) };
+        }
+        // LiveScore : identifiant négatif dans le hub ; Pos 1 à 4 = onze de départ, 5 = remplaçants, 10 = entraîneur.
+        const eid = Math.abs(Number(m.ref));
+        const d = await getJson(`https://prod-public-api.livescore.com/v1/api/app/lineups/soccer/${eid}?locale=en`);
+        const teams: any[] = d?.Lu ?? [];
+        const side = (t: any): SourceSide => {
+          const nm = (p: any) => `${p.Fn ? p.Fn + ' ' : ''}${p.Ln ?? p.Snm ?? ''}`.trim();
+          const ps: any[] = t?.Ps ?? [];
+          return {
+            formation: Array.isArray(t?.Fo) && t.Fo.length ? t.Fo.join('-') : null,
+            starters: ps.filter((p) => p.Pos >= 1 && p.Pos <= 4).map(nm),
+            subs: ps.filter((p) => p.Pos === 5).map(nm),
+            missing: (t?.IS ?? []).map((p: any) => ({ name: nm(p), reason: p.Rs ?? null, back: p.RtonS ?? null })),
+          };
+        };
+        const h = teams.find((t) => t.Tnb === 1);
+        const a = teams.find((t) => t.Tnb === 2);
+        if (!h || !a || side(h).starters.length === 0) return null;
+        return { provider: 'LiveScore', official: null, home: side(h), away: side(a) };
+      } catch {
+        return null;
+      }
+    })
+  );
+  return out.filter((x): x is SourceLineup => !!x);
+}
+
 /** Ville du stade (ESPN, gratuit) : sert à la météo du match. */
 export async function hubVenueCity(homeTeam: string, awayTeam: string, dateKey: string): Promise<string | null> {
   try {

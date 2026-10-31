@@ -16,6 +16,8 @@ import { canonicalMatchKey } from './inPlayCombos';
 import { getDailyPlan } from './scheduler';
 
 export const SERVER_LIVE_DIR = 'data/server/live';
+/** Compositions recoupées par le serveur (un fichier par jour UTC) : voir server/lineups.ts. */
+export const SERVER_LINEUPS_DIR = 'data/server/lineups';
 export const SERVER_WEB_DIR = 'data/server/web';
 
 /** Match suivi par le serveur. `real` : 5 grands championnats et Ligue des champions. */

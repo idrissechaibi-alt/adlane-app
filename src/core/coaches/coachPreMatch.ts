@@ -5,10 +5,10 @@
 
 import AsyncStorage from '../kvStore';
 import { askOmnirouteUsable } from '../omniroute';
-import { hubDateKey, hubLineup, hubReferee, type HubLineup } from '../../api/footballDataAPIs/liveDataHub';
-import { checkLineup, type LineupCheck } from '../lineupCheck';
+import { hubDateKey, hubReferee } from '../../api/footballDataAPIs/liveDataHub';
+import { consensusHash, getLineupConsensus, LINEUP_WINDOW_MIN, nameKey, type ConsensusSide } from './lineupConsensus';
 import { getMatchWeather } from '../weather';
-import { getMatchTrend, describeMatchTrend } from '../teamStats';
+import { getMatchTrend, describeMatchTrend, getTeamProfile } from '../teamStats';
 import { normalizeTeamName } from '../teamNameMatch';
 import { coachForLeague, type CoachProfile } from './knowledge';
 import { clubCoachOf } from './clubCoaches';
@@ -18,7 +18,8 @@ import { loadKnowledgeFeed } from './knowledgeFeed';
 import { parseAnalysis, loadConfig, takeBudget, type AiOpinion } from './coachAnalysis';
 import { gatherMatchWebContext, type WebSource } from './coachWeb';
 
-const STORE_KEY = '@coach_prematch_v1';
+// v2 : les avis rédigés avant le recoupement des compositions (3 sources) sont écartés et refaits.
+const STORE_KEY = '@coach_prematch_v2';
 const MAX_STORED = 200;
 
 export interface PreMatchOpinion {
@@ -84,29 +85,41 @@ export async function getPreMatchOpinion(home: string, away: string, day: string
   return (await load())[preMatchKey(home, away, day)] ?? null;
 }
 
-const hashOf = (lu: HubLineup): string => {
-  const s = (t: HubLineup['home']) => `${t.formation ?? ''}:${t.starters.map((p) => p.id).sort((a, b) => a - b).join(',')}`;
-  const text = `${s(lu.home)}|${s(lu.away)}`;
-  let h = 0;
-  for (let i = 0; i < text.length; i++) h = (h * 31 + text.charCodeAt(i)) | 0;
-  return String(h);
-};
-
 const clip = (s: string | null | undefined, n: number) => (s ? (s.length > n ? s.slice(0, n - 1) + '…' : s) : '');
 
 function systemPrompt(coach: CoachProfile): string {
   return [
     `Tu es ${coach.name}, entraîneur de très haut niveau et analyste de la ligue « ${coach.league} ». ${coach.style}`,
     `Particularités de ta ligue : ${coach.leagueNotes}`,
-    "Tu rédiges ton AVIS TECHNIQUE GLOBAL d'avant-match, juste après la publication des compositions officielles. Tu t'appuies sur TOUT le dossier fourni (fiches des deux clubs, dossier de ligue, compositions officielles comparées au onze habituel, arbitre, météo, cotes, tendances, moyennes, faits de recherche) ET sur les SOURCES WEB du jour (actualité, absents annoncés, attentes de la presse). Les sources web sont secondaires : la composition officielle et les données du dossier priment, et si le web les contredit tu le signales au lieu de choisir en silence. Tu précises ce qui vient du web (« selon la presse… ») et tu n'inventes rien au-delà de ces sources. Si une donnée manque ou si une fiche est marquée de fiabilité « faible », tu le dis au lieu de l'inventer. Tu ne garantis rien et tu ne donnes aucun pari ferme.",
+    "Tu rédiges ton AVIS TECHNIQUE GLOBAL d'avant-match, juste après la publication des compositions officielles, recoupées entre au moins 3 sources. Les INDISPONIBLES listés (avec leur cause) sont des absents CERTAINS : tu ne les décris jamais comme « laissés de côté » ni « cause inconnue ». Seuls les titulaires habituels signalés « SANS être signalés indisponibles » sont des choix de l'entraîneur ou une rotation. Tu t'appuies sur TOUT le dossier fourni (fiches des deux clubs, dossier de ligue, compositions officielles comparées au onze habituel, arbitre, météo, cotes, tendances, moyennes, faits de recherche) ET sur les SOURCES WEB du jour (actualité, absents annoncés, attentes de la presse). Les sources web sont secondaires : la composition officielle et les données du dossier priment, et si le web les contredit tu le signales au lieu de choisir en silence. Tu précises ce qui vient du web (« selon la presse… ») et tu n'inventes rien au-delà de ces sources. Si une donnée manque ou si une fiche est marquée de fiabilité « faible », tu le dis au lieu de l'inventer. Tu ne garantis rien et tu ne donnes aucun pari ferme.",
     "Structure de ton avis : le duel tactique (systèmes, phases fortes et faibles de chaque équipe), les duels clés et les joueurs à surveiller d'après les compositions, l'effet des absences ou des changements de système, le scénario le plus probable de la rencontre, les risques qui le renverseraient, et ton avis par marché (buts, corners, cartons, résultat).",
     'Réponds en JSON strict, rien autour : {"summary_fr":"avis technique global en 4 à 6 phrases","matchup_fr":"duel tactique en 2 à 4 phrases","key_duels_fr":["duel ou joueur clé","…"],"script_fr":"scénario le plus probable en 2 à 3 phrases","lineup_fr":"ce que changent les compositions (absences, système, rotation)","risks_fr":["risque","…"],"web_fr":"ce que les sources web apportent ou contredisent, en 2 à 3 phrases (vide si aucune source)","opinions":[{"market":"total_buts|buts_1ere_mt|btts|corners|cartons|fautes|1X2","direction":"plus|moins|domicile|nul|exterieur|oui|non","stance":"soutient|neutre|conteste","confidence":0.0,"why_fr":"raison courte chiffrée"}]}',
     'Donne au moins 4 avis par marché (total de buts plus/moins, corners plus/moins, cartons plus/moins, résultat 1X2). « plus » et « moins » parlent de tout le match, sans ligne chiffrée précise.',
   ].join('\n\n');
 }
 
-const sideLine = (c: LineupCheck['home'], names: string[]) =>
-  `${c.team} : système ${c.formation ?? '?'}${c.usualFormation ? ` (habituel ${c.usualFormation}${c.formationChanged ? ', CHANGÉ' : ''})` : ''} · onze : ${names.join(', ')}${c.absentKey.length ? ` · joueurs clés habituels HORS du onze (cause inconnue : blessure, suspension ou rotation) : ${c.absentKey.join(', ')}` : c.absentUsual.length ? ` · titulaires habituels hors du onze (cause inconnue) : ${c.absentUsual.slice(0, 5).join(', ')}` : ' · onze habituel'}`;
+type Profile = Awaited<ReturnType<typeof getTeamProfile>>;
+
+/** Texte de composition d'un côté : onze recoupé, système, banc, indisponibles AVEC leur cause, et ce qui reste sans explication. */
+export function sideText(team: string, cs: ConsensusSide, profile: Profile): string {
+  const startersKeys = new Set(cs.starters.map(nameKey));
+  const missingKeys = new Set(cs.missing.map((m) => nameKey(m.name)));
+  const usual = (profile?.usualXI ?? []).map((id) => profile?.players.find((p) => p.id === id)).filter((p): p is NonNullable<typeof p> => !!p);
+  const benchedUsual = usual.filter((p) => !startersKeys.has(nameKey(p.name)) && !missingKeys.has(nameKey(p.name)));
+  const usualFormation = profile?.usualFormation ?? null;
+  const lines = [`${team} : système ${cs.formation ?? '?'}${usualFormation ? ` (habituel ${usualFormation}${cs.formation && cs.formation !== usualFormation ? ', CHANGÉ' : ''})` : ''}`];
+  lines.push(`  Onze de départ (confirmé par les sources) : ${cs.starters.join(', ')}`);
+  if (cs.subs.length) lines.push(`  Remplaçants : ${cs.subs.join(', ')}`);
+  lines.push(
+    cs.missing.length
+      ? `  INDISPONIBLES (blessés ou suspendus, signalés par les sources) : ${cs.missing.map((m) => `${m.name}${m.reason ? ` — ${m.reason}` : ''}${m.back ? `, retour : ${m.back}` : ''}`).join(' ; ')}`
+      : '  Aucun indisponible signalé par les sources.'
+  );
+  if (benchedUsual.length) lines.push(`  Titulaires habituels laissés hors du onze SANS être signalés indisponibles (choix de l'entraîneur ou rotation) : ${benchedUsual.slice(0, 6).map((p) => p.name).join(', ')}`);
+  else if (usual.length) lines.push("  Onze habituel (aucun titulaire habituel laissé de côté sans raison connue).");
+  if (cs.disputed.length) lines.push(`  À noter : ${cs.disputed.map((d) => `${d.name} (${d.sources} source${d.sources > 1 ? 's' : ''})`).join(', ')} ne figure pas chez toutes les sources.`);
+  return lines.join('\n');
+}
 
 export interface PreMatchInput {
   homeTeam: string;
@@ -155,9 +168,13 @@ export async function generatePreMatchOpinion(input: PreMatchInput): Promise<Pre
   if (!coach || !home || !away || home.league !== coach.league || away.league !== coach.league) return null;
   const day = hubDateKey();
   const key = preMatchKey(input.homeTeam, input.awayTeam, day);
-  const lineup = await hubLineup(input.homeTeam, input.awayTeam, day).catch(() => null);
-  if (!lineup) return null;
-  const hash = hashOf(lineup);
+  // Pas d'avis avant T-55 min : c'est le moment où les compositions officielles sont publiées et se recoupent.
+  const minutesToKickoff = (Date.parse(input.kickoff) - Date.now()) / 60_000;
+  if (Number.isFinite(minutesToKickoff) && minutesToKickoff > LINEUP_WINDOW_MIN) return null;
+  // Compositions recoupées : au moins 3 sources avec le même onze, sinon l'entraîneur attend.
+  const consensus = await getLineupConsensus(input.homeTeam, input.awayTeam).catch(() => null);
+  if (!consensus || !consensus.ok) return null;
+  const hash = consensusHash(consensus);
   const store = await load();
   if (store[key]?.lineupHash === hash) return store[key];
   const failed = lastFailure.get(key);
@@ -175,8 +192,9 @@ export async function generatePreMatchOpinion(input: PreMatchInput): Promise<Pre
       return null;
     }
     await Promise.all([loadNotes(), loadKnowledgeFeed()]);
-    const [check, referee, weather, trend, web] = await Promise.all([
-      checkLineup(input.homeTeam, input.awayTeam).catch(() => null),
+    const [homeProfile, awayProfile, referee, weather, trend, web] = await Promise.all([
+      getTeamProfile(input.homeTeam).catch(() => null),
+      getTeamProfile(input.awayTeam).catch(() => null),
       hubReferee(input.homeTeam, input.awayTeam, day).catch(() => null),
       getMatchWeather(input.homeTeam, input.awayTeam).catch(() => null),
       getMatchTrend(input.homeTeam, input.awayTeam).catch(() => null),
@@ -184,17 +202,13 @@ export async function generatePreMatchOpinion(input: PreMatchInput): Promise<Pre
     ]);
     const briefing = coachBriefing(input.homeTeam, input.awayTeam, coach.league, ['total_buts', 'corners', 'cartons', '1X2'], 6);
     const parts: string[] = [`Match : ${input.homeTeam} (domicile) contre ${input.awayTeam}, ${coach.league}, coup d'envoi ${input.kickoff}.`];
-    parts.push(
-      check
-        ? `COMPOSITIONS OFFICIELLES\n${sideLine(check.home, lineup.home.starters.map((p) => p.name))}\n${sideLine(check.away, lineup.away.starters.map((p) => p.name))}`
-        : `COMPOSITIONS OFFICIELLES\n${input.homeTeam} (${lineup.home.formation ?? '?'}) : ${lineup.home.starters.map((p) => p.name).join(', ')}\n${input.awayTeam} (${lineup.away.formation ?? '?'}) : ${lineup.away.starters.map((p) => p.name).join(', ')}\n(comparaison au onze habituel indisponible)`
-    );
+    parts.push(`COMPOSITIONS OFFICIELLES (recoupées entre ${consensus.sources.length} sources : ${consensus.sources.join(', ')})\n${sideText(input.homeTeam, consensus.home, homeProfile)}\n${sideText(input.awayTeam, consensus.away, awayProfile)}${consensus.notes.length ? `\nRemarque : ${consensus.notes.join(' ; ')}` : ''}`);
     if (referee) parts.push(`ARBITRE : ${referee.name}${referee.country ? ` (${referee.country})` : ''}${referee.matches ? `, ${referee.matches} matchs connus` : ''}${referee.yellowPerMatch != null ? `, ${referee.yellowPerMatch} jaunes et ${referee.foulsPerMatch ?? '?'} fautes par match (moyenne de la compétition : ${referee.leagueYellowAvg ?? '?'} et ${referee.leagueFoulsAvg ?? '?'})` : ''}${referee.penalties != null ? `, ${referee.penalties} penaltys` : ''}${referee.reds != null ? `, ${referee.reds} rouges` : ''}.`);
     if (weather) parts.push(`MÉTÉO : ${weather.city}, ${Math.round(weather.temperatureC)} °C, pluie ${weather.rainMm} mm, vent ${Math.round(weather.windKmh)} km/h.`);
     if (input.odds) parts.push(`COTES DU JOUR : 1 ${input.odds.home ?? '?'} · N ${input.odds.draw ?? '?'} · 2 ${input.odds.away ?? '?'} · les deux marquent ${input.odds.btts_yes ?? '?'} · plus de 2,5 buts ${input.odds.over_2_5 ?? '?'}.`);
     if (trend) parts.push(`TENDANCES DES ÉQUIPES : ${clip(describeMatchTrend(trend), 900)}`);
     if (input.context) parts.push(`CONTEXTE DU SCAN MATINAL : ${clip(input.context, 700)}`);
-    parts.push(web?.text ? `SOURCES WEB DU JOUR (${web.engines.join(', ')} ; non vérifiées, à recouper avec la composition officielle)\n${web.text}` : 'SOURCES WEB DU JOUR : aucune source web n\'a répondu pour ce match.');
+    parts.push(web?.text ? `SOURCES WEB DU JOUR (${web.engines.join(', ')} ; non vérifiées : la composition recoupée et la liste des indisponibles ci-dessus priment, ne reprends jamais du web un blessé ou un titulaire qu'elles contredisent)\n${web.text}` : 'SOURCES WEB DU JOUR : aucune source web n\'a répondu pour ce match.');
     parts.push(`DOSSIER DU MATCH\n${briefing.context}`);
 
     const res = await askOmnirouteUsable(systemPrompt(coach), parts.join('\n\n'), config, (raw) => parsePreMatch(raw));
@@ -251,7 +265,7 @@ export async function runPreMatchOpinions(matches: Array<PreMatchInput & { id?: 
   for (const m of matches) {
     if (done >= maxPerPass) break;
     const minutes = (Date.parse(m.kickoff) - Date.now()) / 60_000;
-    if (!Number.isFinite(minutes) || minutes > 180 || minutes < -20) continue;
+    if (!Number.isFinite(minutes) || minutes > LINEUP_WINDOW_MIN || minutes < -20) continue;
     const before = (await getPreMatchOpinion(m.homeTeam, m.awayTeam, hubDateKey()))?.at;
     const op = await generatePreMatchOpinion(m).catch(() => null);
     if (op && op.at !== before) done++;

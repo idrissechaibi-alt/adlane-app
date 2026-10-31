@@ -9,6 +9,7 @@ import AsyncStorage from './kvStore';
 import { hubDateKey, hubLineup } from '../api/footballDataAPIs/liveDataHub';
 import { getTeamProfile, TeamPlayer } from './teamStats';
 import { normalizeTeamName } from './teamNameMatch';
+import { getLineupConsensus } from './coaches/lineupConsensus';
 
 const KEY = '@lineup_checks';
 const MAX_GOAL_FACTOR_DROP = 0.25;
@@ -85,6 +86,9 @@ export async function checkLineup(homeTeam: string, awayTeam: string): Promise<L
   const store = await load();
   const k = keyOf(homeTeam, awayTeam);
   if (store[k]) return store[k];
+  // Compo non recoupée (moins de 3 sources identiques) = peut-être un onze prévu : rien n'est calculé ni mis en cache.
+  const consensus = await getLineupConsensus(homeTeam, awayTeam).catch(() => null);
+  if (!consensus?.ok) return null;
   const lineup = await hubLineup(homeTeam, awayTeam, hubDateKey()).catch(() => null);
   if (!lineup) return null;
   const [hp, ap] = await Promise.all([getTeamProfile(homeTeam).catch(() => null), getTeamProfile(awayTeam).catch(() => null)]);

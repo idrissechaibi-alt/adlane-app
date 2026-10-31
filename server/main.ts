@@ -22,6 +22,7 @@ import kvStore from '../src/core/kvStore';
 import * as SecureStore from 'expo-secure-store';
 import { putRepoText, SERVER_HEARTBEAT_PATH } from '../src/core/gitAutoSync';
 import { collectOnce, publish } from './collector';
+import { collectLineups } from './lineups';
 import { collectDueSites, loadSites, publishWeb, pruneWebFeed, webStatus } from './webCollector';
 import { mirrorPhoneBackup } from './restore';
 import { log, pruneLogs } from './log';
@@ -162,6 +163,8 @@ async function main(): Promise<void> {
   // Sites web déclarés dans <serveur>/sites.json : relevés toutes les 30 s (échéance propre à chaque site), publiés toutes
   // les 60 s pour le téléphone.
   log(`Sites web à lire : ${loadSites().length}.`);
+  // Compositions de l'heure à venir, recoupées (3 sources minimum) et publiées pour le téléphone.
+  every('Compositions', 3 * 60_000, collectLineups, false);
   every('Sites web', 10_000, collectDueSites);
   every('Publication web', 30_000, publishWeb, false);
   every('Nettoyage des relevés web', 24 * 3_600_000, pruneWebFeed, false);

@@ -20,7 +20,10 @@ import { log } from './log';
  * que l'app n'analysera pas n'a aucun sens.
  */
 /** `known` : le plan du jour a été lu (même vide) ; alors seuls les matchs du plan comptent. */
-let plan: { loadedAt: number; known: boolean; matches: Array<{ home: string; away: string }> } | null = null;
+let plan: { loadedAt: number; known: boolean; matches: Array<{ home: string; away: string; kickoff?: string }> } | null = null;
+
+/** Matchs du plan du jour de l'app, avec leur heure de coup d'envoi (pour la collecte des compositions). */
+export const plannedMatches = (): Array<{ home: string; away: string; kickoff?: string }> => plan?.matches ?? [];
 
 async function refreshPlan(): Promise<void> {
   if (plan && Date.now() - plan.loadedAt < 30 * 60_000) return;
@@ -32,9 +35,9 @@ async function refreshPlan(): Promise<void> {
     loadedAt: Date.now(),
     known: fresh,
     matches: fresh
-      ? (dp.matches as Array<{ match: string }>).map((x) => {
+      ? (dp.matches as Array<{ match: string; kickoff?: string }>).map((x) => {
           const i = x.match.indexOf(' - ');
-          return { home: x.match.slice(0, i), away: x.match.slice(i + 3) };
+          return { home: x.match.slice(0, i), away: x.match.slice(i + 3), kickoff: x.kickoff };
         })
       : [],
   };
