@@ -183,13 +183,18 @@ export async function buildRoutes(config: OmnirouteConfig): Promise<LlmRoute[]> 
   return routes;
 }
 
+/** Plafond de mise à l'écart : un quota journalier épuisé (429) ne revient qu'au bout de plusieurs heures. */
+const MAX_COOLDOWN_MS = 6 * 3_600_000;
+
+/**
+ * Mise à l'écart croissante : 10 min après 3 échecs de suite, puis le double à chaque échec de plus (20, 40, 80 min…),
+ * jusqu'à 6 h. Journal OmniRoute du 02/11 : 455 appels perdus sur une route au quota épuisé retentée toutes les 10 min.
+ */
 function isCoolingDown(entry: RouteStats | undefined, now: number): boolean {
-  return Boolean(
-    entry &&
-      entry.consecutiveFails >= COOLDOWN_AFTER_FAILS &&
-      entry.lastFailAt != null &&
-      now - entry.lastFailAt < COOLDOWN_MS
-  );
+  if (!entry || entry.consecutiveFails < COOLDOWN_AFTER_FAILS || entry.lastFailAt == null) return false;
+  const extra = Math.min(10, entry.consecutiveFails - COOLDOWN_AFTER_FAILS);
+  const cooldown = Math.min(MAX_COOLDOWN_MS, COOLDOWN_MS * 2 ** extra);
+  return now - entry.lastFailAt < cooldown;
 }
 
 function routeScore(route: LlmRoute, entry: RouteStats | undefined): number {
