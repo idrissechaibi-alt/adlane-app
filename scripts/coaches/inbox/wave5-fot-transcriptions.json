@@ -1,0 +1,54 @@
+[
+  {
+    "topic": "Distance n'est pas espace : l'espace dépend du joueur",
+    "fact_fr": "Un même écart entre deux défenseurs (l'exemple donné est 6 m) est trop étroit pour un joueur, qui renoncera et fera un autre choix, et grand ouvert pour un autre, plus habile, qui passera facilement. L'intervenant résume : la distance est un nombre, l'espace est une perception liée au talent individuel. Les modèles qui ignorent le talent individuel laissent de côté une part essentielle, alors que c'est précisément ce talent que les clubs paient cher.",
+    "principle_fr": "Un espace se juge avec le joueur qui doit l'exploiter, pas seulement en mètres.",
+    "how_to_read_live_fr": "Quand l'équipe dispose d'un dribbleur ou d'un passeur d'exception titulaire, les blocs adverses serrés restent franchissables : ne pas conclure trop vite à un match fermé sur le seul resserrement défensif. À l'inverse, sans joueur de percussion dans le onze, un bloc compact a plus de chances de tenir.",
+    "author": "Vosse de Boode (Ajax), Friends of Tracking",
+    "title": "Trailer for part two of Vosse de Boode (Ajax)",
+    "url": "https://www.youtube.com/watch?v=gwvG8vllkpw",
+    "duration": "1 min 28 (bande-annonce)",
+    "read": "transcription intégrale (Whisper, non relue)",
+    "caveat_fr": "Extrait de 1 min 28 : l'exemple chiffré du modèle annoncé n'y figure pas, seule l'idée est posée.",
+    "confidence": "moyenne"
+  },
+  {
+    "topic": "Le football n'est pas statique : un écart se lit avec la vitesse des défenseurs",
+    "fact_fr": "Mesurer une distance à un instant donné ne suffit pas : deux défenseurs immobiles qui regardent ailleurs et deux défenseurs qui courent à pleine vitesse pour fermer le même écart ne laissent pas le même espace. Faire comme si le jeu était figé conduit à de mauvaises conclusions ; le modèle présenté chez Ajax cherche à intégrer à la fois le talent individuel et le caractère dynamique du jeu, notamment pour évaluer les options de passe.",
+    "principle_fr": "Un espace ouvert vaut ce que vaut le temps qu'il reste avant qu'il se referme.",
+    "how_to_read_live_fr": "Une équipe qui presse et revient vite (beaucoup de duels gagnés, de récupérations hautes, peu de tirs concédés malgré la possession adverse) referme les espaces que les statistiques de position semblent laisser ouverts. Lire la vitesse de repli, pas seulement l'occupation.",
+    "author": "Vosse de Boode (Ajax), Friends of Tracking",
+    "title": "Trailer for part two of Vosse de Boode (Ajax)",
+    "url": "https://www.youtube.com/watch?v=gwvG8vllkpw",
+    "duration": "1 min 28 (bande-annonce)",
+    "read": "transcription intégrale (Whisper, non relue)",
+    "caveat_fr": "Le détail du modèle d'options de passe est annoncé à la fin de l'extrait mais pas montré.",
+    "confidence": "moyenne"
+  },
+  {
+    "topic": "Bases du tracking : position d'un joueur dans le plan (R²)",
+    "fact_fr": "Une position se note par un couple ordonné (x, y) : le premier nombre donne le déplacement gauche-droite depuis l'origine, le second le déplacement haut-bas ; positif vers la droite et vers le haut, négatif vers la gauche et vers le bas. L'ordre porte une relation « si x vaut ceci, alors y vaut cela », ce qui permet aussi de représenter une grandeur en fonction du temps (l'axe horizontal peut être le temps).",
+    "principle_fr": "Les données de tracking sont des suites de couples (x, y) par joueur et par instant.",
+    "how_to_read_live_fr": "Les cartes de chaleur reçues en direct suivent cette convention : x = profondeur dans le sens de l'attaque, y = largeur. Un x moyen élevé signifie une équipe ou un joueur qui joue haut.",
+    "author": "Friends of Tracking",
+    "title": "Euclidean (also called the Coordinate) Plane",
+    "url": "https://www.youtube.com/watch?v=aDARCLsWMBY",
+    "duration": "8 min",
+    "read": "transcription intégrale (Whisper, non relue)",
+    "caveat_fr": "Cours de mathématiques de base, sans exemple de football : utile seulement comme fondation pour lire les données de position.",
+    "confidence": "haute"
+  },
+  {
+    "topic": "Distance entre deux joueurs : théorème de Pythagore",
+    "fact_fr": "Sur une droite, la distance entre x et x' est la valeur absolue |x − x'| : l'ordre ne compte pas, la valeur absolue la rend positive. Dans le plan, la distance entre (x, y) et (x', y') découle du théorème de Pythagore : racine carrée de (x − x')² + (y − y')². Les carrés rendent la valeur absolue inutile.",
+    "principle_fr": "La distance euclidienne est la brique de base des modèles d'espace (Voronoï, pitch control, pressing).",
+    "how_to_read_live_fr": "C'est la mesure qui sert à dire qu'un défenseur est « à 2 m » ou qu'un bloc est « compact » ; seule elle ignore la vitesse et le talent (voir les faits « distance n'est pas espace »).",
+    "author": "Friends of Tracking",
+    "title": "Distance In R2",
+    "url": "https://www.youtube.com/watch?v=Qkpr30zSpiE",
+    "duration": "9 min",
+    "read": "transcription intégrale (Whisper, non relue)",
+    "caveat_fr": "Cours de mathématiques de base, sans application football dans la vidéo.",
+    "confidence": "haute"
+  }
+]
