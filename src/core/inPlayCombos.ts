@@ -292,6 +292,8 @@ interface CandidateLeg {
   market: TrackedMarket;
   selection: string;
   prob: number;
+  /** Probabilité du modèle AVANT la correction apprise : c'est sur elle que la correction s'apprend. */
+  rawProb?: number;
   evidence: string;
   /** Valeur projetée de la fenêtre, comparée au réel au règlement. */
   projection?: LegProjection;
@@ -864,7 +866,7 @@ async function buildLegs20(
     legs.push(...teamLegs(live, correctedGoals(sitFt.xg, 'goals_ft'), currentStats, trend));
   }
 
-  return withLearnedExpertise(legs);
+  return withLearnedExpertise(legs, live.minute);
 }
 
 /**
@@ -874,10 +876,11 @@ async function buildLegs20(
  * chaque match terminé). C'est le point où l'expérience accumulée revient
  * corriger la prédiction suivante.
  */
-function withLearnedExpertise(legs: CandidateLeg[]): CandidateLeg[] {
+function withLearnedExpertise(legs: CandidateLeg[], minute?: number): CandidateLeg[] {
   return legs.map((leg) => {
-    const { prob, evidence } = applyMarketExpertise(leg.market, leg.prob, leg.evidence, leg.selection);
-    return { ...leg, prob, evidence };
+    const raw = leg.rawProb ?? leg.prob;
+    const { prob, evidence } = applyMarketExpertise(leg.market, raw, leg.evidence, leg.selection, minute);
+    return { ...leg, rawProb: raw, prob, evidence };
   });
 }
 
@@ -897,7 +900,7 @@ function buildLegs60(
   if (preMatchExpectedGoals) preMatchExpectedGoals = blendExpectedGoals(preMatchExpectedGoals, trend);
   // Corners / cartons / fautes du match entier : indépendants des buts attendus.
   const countLegs = countMarketLegs('ft', live.minute, observedLive ?? {}, null, trend, situation);
-  if (!preMatchExpectedGoals) return withLearnedExpertise(countLegs);
+  if (!preMatchExpectedGoals) return withLearnedExpertise(countLegs, live.minute);
 
   const legs: CandidateLeg[] = [...countLegs];
   const currentScore = { home: live.homeGoals, away: live.awayGoals };
@@ -918,7 +921,7 @@ function buildLegs60(
   legs.push(...goalsTotalLegs(currentScore, est.secondHalfExpectedGoals, situation?.features, sitFt.mult));
   legs.push(...teamLegs(live, correctedGoals(sitFt.xg, 'goals_ft'), currentStats, trend));
 
-  return withLearnedExpertise(legs);
+  return withLearnedExpertise(legs, live.minute);
 }
 
 /**
@@ -965,14 +968,52 @@ function teamLegs(
       const lambda = per90 * remFrac;
       pick('corners_equipe', team, label, doneC, lambda, 'corners_team', `${team} : ${doneC} corner(s) à la ${minute}e, rythme ${livePace.toFixed(1)}/90 dans ce match, ${habitual.toFixed(1)}/90 d'habitude → ${lambda.toFixed(1)} attendu(s) d'ici la fin.`);
     }
+    // Tirs cadrés de l'équipe : rythme dans CE match mêlé au rythme attendu d'après ses buts attendus d'avant-match
+    // (environ 3 tirs cadrés par but attendu). Une source qui ne publie pas les tirs cadrés donne 0-0 : pas de pari dans ce cas.
+    const sotH = stats?.shotsOnTargetHome;
+    const sotA = stats?.shotsOnTargetAway;
+    const doneS = side === 'home' ? sotH : sotA;
+    const sotKnown = sotH != null && sotA != null && (sotH + sotA > 0 || minute < 20);
+    if (doneS != null && sotKnown) {
+      const xgSide = teamXg ? (side === 'home' ? teamXg.home : teamXg.away) : null;
+      const habitual = xgSide != null ? Math.max(1.5, xgSide * SOT_PER_XG) : side === 'home' ? 4.4 : 3.7;
+      const livePace = (doneS / minute) * 90;
+      const w = Math.min(0.7, minute / 90);
+      const lambda = (livePace * w + habitual * (1 - w)) * remFrac;
+      const leg = teamCountLine('tirs_equipe', team, label, doneS, lambda, 'tir(s) cadré(s)',
+        `${team} : ${doneS} tir(s) cadré(s) à la ${minute}e, rythme ${livePace.toFixed(1)}/90 dans ce match, ${habitual.toFixed(1)}/90 attendu d'après ses buts attendus → ${lambda.toFixed(1)} attendu(s) d'ici la fin.`);
+      if (leg) out.push(leg);
+    }
   }
   return out;
+}
+
+/** Environ 3 tirs cadrés par but attendu (ordre de grandeur des grands championnats). */
+const SOT_PER_XG = 3;
+
+/**
+ * Ligne d'un compteur par équipe : parmi « Plus de X.5 » et « Moins de X.5 » (X = déjà fait + 0 à 4), garde celle dont la
+ * probabilité (loi de Poisson sur le reste du match) est la plus proche de 70 %, entre 55 et 85 %.
+ */
+function teamCountLine(market: 'tirs_equipe', team: string, label: 'domicile' | 'extérieur', done: number, lambda: number, noun: string, evidence: string): CandidateLeg | null {
+  let best: CandidateLeg | null = null;
+  for (let k = 0; k <= 4; k++) {
+    const line = done + k + 0.5;
+    const over = poissonOverProb(lambda, k + 0.5);
+    for (const [side, prob] of [['Plus', over], ['Moins', 1 - over]] as const) {
+      if (prob < 0.55 || prob > 0.85) continue;
+      if (!best || Math.abs(prob - 0.7) < Math.abs(best.prob - 0.7)) {
+        best = { market, selection: `${side} de ${line} ${noun} — ${team} (${label})`, prob, evidence };
+      }
+    }
+  }
+  return best;
 }
 
 /** Jambes « tirs cadrés joueur » (ESPN gratuit), passées par la même calibration que les autres marchés. */
 async function playerShotCandidates(live: LiveFixture): Promise<CandidateLeg[]> {
   const found = await playerShotLegs(live.homeTeam, live.awayTeam, hubDateKey(), live.minute).catch(() => []);
-  return withLearnedExpertise(found.map((l) => ({ market: 'tirs_cadres' as const, selection: l.selection, prob: l.prob, evidence: l.evidence })));
+  return withLearnedExpertise(found.map((l) => ({ market: 'tirs_cadres' as const, selection: l.selection, prob: l.prob, evidence: l.evidence })), live.minute);
 }
 
 /**
@@ -998,9 +1039,11 @@ function fictionalSettleable(leg: CandidateLeg, observed: ObservedLiveCounts | u
  * Le fictif continue de les proposer et de les mesurer ; dès que, sur ses 150 derniers paris réglés de ce marché (au moins
  * 100), le taux réel est à moins de 5 points de la probabilité annoncée, le marché revient automatiquement au réel.
  */
-const WEAK_SEGMENTS = ['tirs_cadres', 'htgoal_yes', 'corners_under_ft'];
+const WEAK_SEGMENTS = ['tirs_cadres', 'tirs_equipe', 'htgoal_yes', 'corners_under_ft'];
 function weakSegmentOf(l: { market: string; selection: string }): string | null {
   if (l.market === 'tirs_cadres') return 'tirs_cadres';
+  // Nouveau marché (02/11) : fictif seulement tant qu'il n'a pas prouvé sa justesse.
+  if (l.market === 'tirs_equipe') return 'tirs_equipe';
   if (l.market === 'buts_1ere_mt' && !/0-0|pas de but/i.test(l.selection)) return 'htgoal_yes';
   if (l.market === 'corners' && /^moins/i.test(l.selection) && /sur le match/i.test(l.selection)) return 'corners_under_ft';
   return null;
@@ -1070,6 +1113,7 @@ function toProposalLeg(item: LegWithContext): InPlayProposalLeg {
     market: item.leg.market,
     selection: item.leg.selection,
     prob: item.leg.prob,
+    rawProb: item.leg.rawProb,
     evidence: item.leg.evidence,
     fixtureId: item.fixtureId,
     league: item.match.league,

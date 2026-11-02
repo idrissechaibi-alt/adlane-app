@@ -493,7 +493,15 @@ export function calibrationSegment(selection: string): string {
   return `${side}|${window}`;
 }
 
-const CALIBRATION_BINS: Array<[number, number]> = [[0.45, 0.55], [0.55, 0.65], [0.65, 0.75], [0.75, 0.85], [0.85, 1.01]];
+// Tranches plus fines au-dessus de 65 % : c'est là que l'app était le plus trop sûre d'elle (mesure du 02/11 : 80 % annoncés,
+// 74 % réalisés).
+const CALIBRATION_BINS: Array<[number, number]> = [[0.45, 0.55], [0.55, 0.65], [0.65, 0.7], [0.7, 0.75], [0.75, 0.8], [0.8, 0.85], [0.85, 1.01]];
+
+/** Moment du match d'après la minute : 20e (jusqu'à 39), mi-temps (40-55), 60e (au-delà). */
+export function momentOfMinute(minute: number | undefined): 'minute20' | 'halftime' | 'minute60' | undefined {
+  if (minute == null || !Number.isFinite(minute)) return undefined;
+  return minute < 40 ? 'minute20' : minute <= 55 ? 'halftime' : 'minute60';
+}
 /** Poids (en paris) de la probabilité annoncée face au taux observé dans une case. */
 const CELL_PRIOR = 15;
 const CELL_MIN_SAMPLES = 15;
@@ -501,13 +509,21 @@ const CELL_MIN_SAMPLES = 15;
 function computeCells(list: PredictionOutcome[]): CalibrationCell[] {
   const cells: CalibrationCell[] = [];
   const bySegment = new Map<string, PredictionOutcome[]>();
+  const add = (key: string, o: PredictionOutcome) => bySegment.set(key, [...(bySegment.get(key) ?? []), o]);
   for (const o of list) {
-    const key = calibrationSegment(o.selection);
-    bySegment.set(key, [...(bySegment.get(key) ?? []), o]);
+    const base = calibrationSegment(o.selection);
+    add(base, o);
+    // Même case, au même moment du match (20e, mi-temps, 60e) : les écarts n'y sont pas les mêmes.
+    if (o.kind) add(`${base}|${o.kind}`, o);
   }
   for (const [segment, items] of bySegment) {
+    // La tranche se choisit sur la probabilité brute quand elle est connue (c'est elle qu'on corrige ensuite).
+    const withRaw = items.filter((o) => o.rawProb != null);
+    const useRaw = withRaw.length >= CELL_MIN_SAMPLES * 4;
+    const pool = useRaw ? withRaw : items;
+    const p = (o: PredictionOutcome) => (useRaw ? (o.rawProb as number) : o.predictedProb);
     for (const [lo, hi] of CALIBRATION_BINS) {
-      const inBin = items.filter((o) => o.predictedProb >= lo && o.predictedProb < hi);
+      const inBin = pool.filter((o) => p(o) >= lo && p(o) < hi);
       if (inBin.length === 0) continue;
       cells.push({
         segment,
@@ -515,8 +531,9 @@ function computeCells(list: PredictionOutcome[]): CalibrationCell[] {
         hi,
         samples: inBin.length,
         hits: inBin.filter((o) => o.won).length,
-        meanPredicted: inBin.reduce((a, o) => a + o.predictedProb, 0) / inBin.length,
+        meanPredicted: inBin.reduce((a, o) => a + p(o), 0) / inBin.length,
         realSamples: inBin.filter((o) => o.real).length,
+        raw: useRaw,
       });
     }
   }
@@ -571,18 +588,25 @@ export function applyMarketExpertise(
   market: TrackedMarket,
   prob: number,
   evidence: string,
-  selection?: string
+  selection?: string,
+  minute?: number
 ): { prob: number; evidence: string } {
   const model = readLearnedModel();
   const expertise = model?.marketExpertise?.find((e) => e.market === market);
   // Calibration fine d'abord : même marché, même côté, même fenêtre, même
   // tranche de probabilité annoncée — paris réels ET fictifs réglés.
-  const cell = selection
-    ? expertise?.cells?.find((c) => c.segment === calibrationSegment(selection) && prob >= c.lo && prob < c.hi)
-    : undefined;
+  // D'abord la case du même moment du match (20e, mi-temps, 60e), sinon la case tous moments confondus.
+  const moment = momentOfMinute(minute);
+  const findCell = (segment: string) =>
+    expertise?.cells?.find((c) => c.segment === segment && prob >= c.lo && prob < c.hi && c.samples >= CELL_MIN_SAMPLES);
+  const base = selection ? calibrationSegment(selection) : undefined;
+  const cell = base ? (moment ? findCell(`${base}|${moment}`) : undefined) ?? findCell(base) : undefined;
   if (cell && cell.samples >= CELL_MIN_SAMPLES) {
     const observed = cell.hits / cell.samples;
-    const shift = (observed - cell.meanPredicted) * (cell.samples / (cell.samples + CELL_PRIOR));
+    let shift = (observed - cell.meanPredicted) * (cell.samples / (cell.samples + CELL_PRIOR));
+    // Vers le haut, moitié seulement : testé hors échantillon (02/11, 20 381 pronostics), les remontées complètes rendaient
+    // l'app encore plus sûre d'elle au-dessus de 75 % ; à moitié, l'erreur de calibration est divisée par deux.
+    if (shift > 0) shift *= 0.5;
     const corrected = Math.min(0.97, Math.max(0.03, prob + shift));
     if (Math.abs(corrected - prob) >= 0.01) {
       return {
@@ -634,6 +658,7 @@ function backfillOutcomesFromProposals(): number {
         market: leg.market,
         selection: leg.selection,
         predictedProb: leg.prob,
+        rawProb: leg.rawProb,
         won: leg.won,
         kind: proposal.kind,
         minute: proposal.minute,

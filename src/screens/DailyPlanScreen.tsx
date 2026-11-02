@@ -250,6 +250,7 @@ export default function DailyPlanScreen() {
     tirs_cadres: 'shots_on_target',
     buts_equipe: 'OU_2_5',
     corners_equipe: 'corners',
+    tirs_equipe: 'shots_on_target',
   };
 
   /**

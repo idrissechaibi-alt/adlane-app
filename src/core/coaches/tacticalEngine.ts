@@ -179,7 +179,7 @@ export function opinionOn(read: TacticalRead | null, coach: CoachProfile, leg: {
     if (read.flags.includes('expulsion')) { open += 0.1; reasons.push('expulsion'); }
     if (read.minute >= 75 && Math.abs(read.diff) <= 1) { open += 0.15; reasons.push('fin de match serrée'); }
     score = wantsMore ? open : wantsLess ? -open : 0;
-  } else if (leg.market === 'corners' || leg.market === 'corners_equipe') {
+  } else if (leg.market === 'corners' || leg.market === 'corners_equipe' || leg.market === 'tirs_equipe') {
     let pressure = 0;
     if (Math.abs(read.recentDominance ?? read.dominance) > 0.35) { pressure += 0.4 * lens.setPieces; reasons.push('un camp pousse'); }
     if (pushingTeamBehind) { pressure += 0.3 * lens.pressing; reasons.push('l’équipe menée pousse'); }

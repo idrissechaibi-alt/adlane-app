@@ -5,7 +5,7 @@
 // perdu ("Moins de 2.5 buts" à 3 buts) est annoncé tout de suite.
 
 import { InPlayProposal, InPlayProposalLeg } from './learnStore';
-import { FinalResult, settleReprojectedLeg } from './dailyReview';
+import { FinalResult, settleReprojectedLeg, setSotFT } from './dailyReview';
 import { HubPlayerShots, hubFinalResult, hubLiveConsensus, hubFirstHalfGoals, hubLiveStatus, hubPlayerShots, hubStats } from '../api/footballDataAPIs/liveDataHub';
 import { playerSotFromSelection } from './playerShots';
 import { getHalfTimeCounts, getHalfTimeGoals } from './liveStatsStore';
@@ -47,6 +47,17 @@ function decidedEarly(leg: InPlayProposalLeg, live: { homeGoals: number; awayGoa
     const all = counts.all as any;
     const value = leg.market === 'buts_equipe' ? (side === 'home' ? live.homeGoals : live.awayGoals) : all ? (side === 'home' ? all.cornersHome : all.cornersAway) : null;
     if (value == null) return 'pending';
+    if (value > l.line) return l.side === 'plus' ? 'won' : 'lost';
+    return 'pending';
+  }
+  if (leg.market === 'tirs_equipe') {
+    const l = lineOf(sel);
+    const side = /\(domicile\)/i.test(sel) ? 'home' : /\(extérieur\)/i.test(sel) ? 'away' : null;
+    const all = counts.all as any;
+    if (!l || !side || !all) return 'pending';
+    const h = all.shotsOnTargetHome, a = all.shotsOnTargetAway;
+    if (h == null || a == null || h + a === 0) return 'pending';
+    const value = side === 'home' ? h : a;
     if (value > l.line) return l.side === 'plus' ? 'won' : 'lost';
     return 'pending';
   }
@@ -128,6 +139,10 @@ export async function checkLegStatus(leg: InPlayProposalLeg, dateKey: string): P
           const st = await hubStats(leg.homeTeam, leg.awayTeam, dateKey).catch(() => null);
           result.cornersHomeFT ??= st?.all?.cornersHome;
           result.cornersAwayFT ??= st?.all?.cornersAway;
+        }
+        if (leg.market === 'tirs_equipe') {
+          const st = await hubStats(leg.homeTeam, leg.awayTeam, dateKey).catch(() => null);
+          setSotFT(result, st?.all);
         }
         if (['corners', 'cartons', 'fautes'].includes(leg.market) && /sur le match/i.test(leg.selection) && (leg.market === 'corners' ? result.cornersFT : leg.market === 'cartons' ? result.cardsFT : result.foulsFT) == null) {
           const st = await hubStats(leg.homeTeam, leg.awayTeam, dateKey).catch(() => null);
@@ -216,6 +231,15 @@ export async function liveLegCounter(leg: InPlayProposalLeg, dateKey: string): P
           const stats = await hubStats(leg.homeTeam, leg.awayTeam, dateKey).catch(() => null);
           const c = side === 'home' ? stats?.all?.cornersHome : stats?.all?.cornersAway;
           if (c != null) value = { ...base, what: `Corners ${team}`, label: `${c}`, current: Number(c) };
+        }
+      } else if (leg.market === 'tirs_equipe') {
+        const side = /\(domicile\)/i.test(leg.selection) ? 'home' : 'away';
+        const team = /—\s*(.+?)\s*\(/.exec(leg.selection)?.[1] ?? (side === 'home' ? leg.homeTeam : leg.awayTeam);
+        const stats = await hubStats(leg.homeTeam, leg.awayTeam, dateKey).catch(() => null);
+        const h = stats?.all?.shotsOnTargetHome, a = stats?.all?.shotsOnTargetAway;
+        if (h != null && a != null && h + a > 0) {
+          const c = side === 'home' ? h : a;
+          value = { ...base, what: `Tirs cadrés ${team}`, label: `${c}`, current: Number(c) };
         }
       } else if (leg.market === 'tirs_cadres') {
         const players = await hubPlayerShots(leg.homeTeam, leg.awayTeam, dateKey).catch(() => null);

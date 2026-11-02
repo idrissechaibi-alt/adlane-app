@@ -46,6 +46,7 @@ export const TRACKED_MARKETS = [
   { key: 'tirs_cadres', label: 'Tirs cadrés (joueur)' },
   { key: 'buts_equipe', label: 'Buts par équipe' },
   { key: 'corners_equipe', label: 'Corners par équipe' },
+  { key: 'tirs_equipe', label: 'Tirs cadrés par équipe' },
 ] as const;
 
 export type TrackedMarket = (typeof TRACKED_MARKETS)[number]['key'];
@@ -188,6 +189,8 @@ export interface CalibrationCell {
   meanPredicted: number;
   /** Dont paris réels (le reste : fictifs). */
   realSamples: number;
+  /** true : meanPredicted est la moyenne des probabilités brutes (avant correction). */
+  raw?: boolean;
 }
 
 export interface LearnedModel {
@@ -332,6 +335,8 @@ export interface PredictionOutcome {
   market: TrackedMarket;
   selection: string;
   predictedProb: number;
+  /** Probabilité du modèle avant correction apprise : base de l'apprentissage de la correction. */
+  rawProb?: number;
   won: boolean;
   kind: 'minute20' | 'minute60' | 'halftime';
   minute: number;
@@ -535,6 +540,8 @@ export interface InPlayProposalLeg {
   market: TrackedMarket;
   selection: string;
   prob: number;
+  /** Probabilité du modèle avant correction apprise (absente des propositions d'avant le 02/11). */
+  rawProb?: number;
   evidence: string;
   /** Rempli au bilan de minuit : la jambe est-elle passée ? */
   /** Annulé : toujours sans verdict 48 h après le pari (stat introuvable). Exclu des courbes et de la calibration. */

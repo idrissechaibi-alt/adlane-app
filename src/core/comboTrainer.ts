@@ -54,11 +54,11 @@ export interface ComboLeg {
 }
 
 const GOALS = new Set(['total_buts', 'buts_equipe', 'buts_1ere_mt', 'btts']);
-const COUNTS = new Set(['corners', 'corners_equipe', 'cartons', 'fautes']);
+const COUNTS = new Set(['corners', 'corners_equipe', 'tirs_equipe', 'cartons', 'fautes']);
 
 /** Marchés suspendus au réel (mesurés trop surestimés) : jamais dans un combiné. */
 function isWeak(l: ComboLeg): boolean {
-  if (l.market === 'tirs_cadres') return true;
+  if (l.market === 'tirs_cadres' || l.market === 'tirs_equipe') return true;
   if (l.market === 'buts_1ere_mt' && !/0-0|pas de but/i.test(l.selection)) return true;
   if (l.market === 'corners' && /^moins/i.test(l.selection) && /sur le match/i.test(l.selection)) return true;
   return false;

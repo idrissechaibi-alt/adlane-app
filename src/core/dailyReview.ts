@@ -92,6 +92,15 @@ function buildHeaders(apiKey: string): Record<string, string> {
   };
 }
 
+/** Tirs cadrés de fin de match par équipe ; une source sans tirs cadrés donne 0-0 : ignorée. */
+export function setSotFT(final: { sotHomeFT?: number; sotAwayFT?: number }, all: { shotsOnTargetHome?: number; shotsOnTargetAway?: number } | null | undefined): void {
+  if (!all || final.sotHomeFT != null) return;
+  const h = all.shotsOnTargetHome, a = all.shotsOnTargetAway;
+  if (h == null || a == null || h + a === 0) return;
+  final.sotHomeFT = h;
+  final.sotAwayFT = a;
+}
+
 export interface FinalResult {
   goalsHome: number;
   goalsAway: number;
@@ -106,6 +115,9 @@ export interface FinalResult {
   /** Corners de chaque équipe sur le match (marché « corners par équipe »). */
   cornersHomeFT?: number;
   cornersAwayFT?: number;
+  /** Tirs cadrés de chaque équipe sur le match (marché « tirs cadrés par équipe »). */
+  sotHomeFT?: number;
+  sotAwayFT?: number;
   cardsFT?: number;
   fouls1H?: number;
   foulsFT?: number;
@@ -425,6 +437,16 @@ export function settleReprojectedLeg(
     const value =
       market === 'buts_equipe' ? (side === 'home' ? result.goalsHome : result.goalsAway) : side === 'home' ? result.cornersHomeFT : result.cornersAwayFT;
     if (value == null) return null;
+    return /^moins/i.test(selection) ? value < line : value > line;
+  }
+
+  // Tirs cadrés par équipe : « Plus de 4.5 tir(s) cadré(s) — Lens (domicile) ».
+  if (market === 'tirs_equipe') {
+    const m = /^(plus|moins) de\s+(\d+(?:[.,]\d+)?)/i.exec(selection);
+    const side = /\(domicile\)/i.test(selection) ? 'home' : /\(extérieur\)/i.test(selection) ? 'away' : null;
+    if (!m || !side || result.sotHomeFT == null || result.sotAwayFT == null) return null;
+    const value = side === 'home' ? result.sotHomeFT : result.sotAwayFT;
+    const line = Number(m[2].replace(',', '.'));
     return /^moins/i.test(selection) ? value < line : value > line;
   }
 
@@ -830,6 +852,7 @@ export async function runNightlyReviewIfDue(): Promise<number> {
       if (l.market === 'cartons') return (ft ? final.cardsFT : final.cards1H) == null;
       if (l.market === 'fautes') return (ft ? final.foulsFT : final.fouls1H) == null;
       if (l.market === 'corners_equipe') return final.cornersHomeFT == null || final.cornersAwayFT == null;
+      if (l.market === 'tirs_equipe') return final.sotHomeFT == null || final.sotAwayFT == null;
       return false;
     }));
     await mapWithConcurrency(needCounts.slice(0, HUB_FINAL_RESULT_MAX_PER_PASS), 4, async (leg) => {
@@ -840,6 +863,7 @@ export async function runNightlyReviewIfDue(): Promise<number> {
       final.cornersFT ??= stats.all?.corners;
       final.cornersHomeFT ??= stats.all?.cornersHome;
       final.cornersAwayFT ??= stats.all?.cornersAway;
+      setSotFT(final, stats.all);
       final.cardsFT ??= stats.all?.cards;
       final.foulsFT ??= stats.all?.fouls || undefined;
       final.corners1H ??= stats.firstHalf?.corners;
@@ -960,7 +984,7 @@ export async function runNightlyReviewIfDue(): Promise<number> {
         if (truth == null || truth === l.won) continue;
         audit.push({ at: new Date().toISOString(), match: `${l.homeTeam} - ${l.awayTeam}`, selection: l.selection, was: l.won ? 'gagné' : 'perdu', now: truth ? 'gagné' : 'perdu', real: p.real !== false });
         l.won = truth;
-        corrected.push({ ts: new Date().toISOString(), fixtureId: l.fixtureId, league: l.league, market: l.market, selection: l.selection, predictedProb: l.prob, won: truth, kind: p.kind, minute: p.minute, real: p.real !== false });
+        corrected.push({ ts: new Date().toISOString(), fixtureId: l.fixtureId, league: l.league, market: l.market, selection: l.selection, predictedProb: l.prob, rawProb: l.rawProb, won: truth, kind: p.kind, minute: p.minute, real: p.real !== false });
       }
     }
     if (audit.length > 0) {
@@ -1032,6 +1056,7 @@ export async function runNightlyReviewIfDue(): Promise<number> {
           market: leg.market,
           selection: leg.selection,
           predictedProb: leg.prob,
+          rawProb: leg.rawProb,
           won,
           kind: proposal.kind,
           minute: proposal.minute,
