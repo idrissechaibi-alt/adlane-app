@@ -145,7 +145,7 @@ export default function EvolutionScreen() {
           <Text style={styles.webAccessText}>
             {ok
               ? `Accès internet : ${parts.join(' + ')}`
-              : "Pas d'accès internet : aucune source de recherche ne répond (OmniRoute, Gemini, DuckDuckGo) et aucun modèle vérifié."}
+              : "Pas d'accès internet : aucune source de recherche ne répond (OmniRoute, Gemini, Google Actualités, DuckDuckGo) et aucun modèle vérifié."}
           </Text>
         </View>
         <View style={styles.webAccessRow}>

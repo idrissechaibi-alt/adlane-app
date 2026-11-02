@@ -235,9 +235,44 @@ async function duckDuckGoSearch(query: string): Promise<SearchResultItem[] | nul
   }
 }
 
+// ---------- Secours gratuit sans clé : flux RSS de Google Actualités ----------
+// Flux public prévu pour être lu par des programmes (DuckDuckGo renvoie désormais une page anti-robots, 02/11).
+// Donne titres, sources et dates des articles récents : suffisant pour l'actualité des équipes (blessés, compos,
+// déclarations).
+
+function rssField(item: string, tag: string): string {
+  const m = item.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`));
+  return m ? decodeHtml(m[1].replace(/<!\[CDATA\[|\]\]>/g, '')) : '';
+}
+
+async function googleNewsSearch(query: string): Promise<SearchResultItem[] | null> {
+  const french = /[éèàùç]|\b(bless|compo|entra[iî]neur|match|équipe)\b/i.test(query);
+  const lang = french ? 'hl=fr&gl=FR&ceid=FR:fr' : 'hl=en-GB&gl=GB&ceid=GB:en';
+  const q = /\bwhen:\d+[dh]\b/.test(query) ? query : `${query} when:3d`;
+  try {
+    const response = await fetchWithTimeout(`https://news.google.com/rss/search?q=${encodeURIComponent(q)}&${lang}`, {}, SEARCH_TIMEOUT_MS);
+    if (!response.ok) return null;
+    const xml = await response.text();
+    const results: SearchResultItem[] = [];
+    for (const item of xml.split('<item>').slice(1, 9)) {
+      const title = rssField(item, 'title');
+      if (!title) continue;
+      results.push({
+        title,
+        url: rssField(item, 'link'),
+        snippet: rssField(item, 'source'),
+        publishedAt: rssField(item, 'pubDate') || null,
+      });
+    }
+    return results.length > 0 ? results : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Recherche web, sources essayées dans l'ordre : API de recherche OmniRoute,
- * recherche Google de Gemini (FreeLLMAPI), puis DuckDuckGo (gratuit, sans
+ * recherche Google de Gemini (FreeLLMAPI), puis le flux RSS de Google Actualités et DuckDuckGo (gratuits, sans
  * clé). Indépendante du modèle qui répondra ensuite : c'est ce qui donne
  * internet à TOUS les modèles.
  */
@@ -254,6 +289,11 @@ export async function searchWeb(config: OmnirouteConfig, query: string): Promise
   if (gemini) {
     await recordSearchSource('Google via Gemini (FreeLLMAPI)');
     return gemini;
+  }
+  const news = await googleNewsSearch(query);
+  if (news) {
+    await recordSearchSource('Google Actualités (RSS)');
+    return news;
   }
   const ddg = await duckDuckGoSearch(query);
   if (ddg) await recordSearchSource('DuckDuckGo');
