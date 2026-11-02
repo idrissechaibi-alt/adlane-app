@@ -68,6 +68,21 @@ Ensuite, pour toutes les vidéos de tactique ou de démonstration de données, *
 l'horodatage : le schéma de jeu (positions, flèches, mouvements), les graphiques (axes, valeurs, légende), le code affiché
 (langage, bibliothèques, fonctions) et les formules. Ce sont souvent là que se trouvent les vraies leçons.
 
+## Vitesse de Whisper (à régler avant de lancer un lot)
+
+Mesure d'abord sur une vidéo de 9 min, puis garde le réglage le plus rapide dont la qualité reste bonne :
+1. **GPU NVIDIA** (`nvidia-smi` répond) : `faster-whisper` avec `device="cuda"`, `compute_type="float16"`, modèle
+   `distil-large-v3` ou `large-v3`. Compter 20 à 40 fois plus vite que la durée de la vidéo.
+2. **Sans GPU** : `faster-whisper` avec `compute_type="int8"`, `cpu_threads` = nombre de cœurs, `beam_size=1`,
+   `vad_filter=True`, modèle anglais `small.en` ou `distil-small.en`. Autre piste à mesurer : `whisper.cpp` (binaire Windows)
+   avec un modèle quantifié `ggml-small.en-q5_1`, souvent plusieurs fois plus rapide que la durée de la vidéo sur un processeur
+   récent.
+3. Les sous-titres officiels restent la voie la plus rapide : réessaie-les **une fois par jour, sur une seule vidéo**. Si la
+   limite (429) est levée, repasse dessus pour tout le reste. Jamais de contournement.
+
+Produis `a-copier/lot-01.md` dès que les premières vidéos sont transcrites, sans attendre la fin de toute la phase : la
+synthèse peut commencer pendant que la suite tourne.
+
 ## Format de sortie : un fichier par vidéo
 
 `transcriptions/<chaine>/<AAAA-MM-JJ>_<id>_<titre-court>.md`
