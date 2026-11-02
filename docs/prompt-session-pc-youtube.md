@@ -21,12 +21,9 @@ autonomie jusqu'au bout, sans poser de question, sauf blocage réel.
 
 ## Règles à respecter (non négociables)
 
-1. **Les transcriptions ne vont JAMAIS dans le dépôt public `idrissechaibi-alt/adlane-app`.** Ce sont des œuvres protégées : on
-   les garde pour notre usage d'étude, pas pour les republier. Elles vont :
-   - en local dans `%USERPROFILE%\adlane-recherche\` ;
-   - et dans un dépôt GitHub **PRIVÉ** `idrissechaibi-alt/adlane-recherche`. Crée-le s'il n'existe pas
-     (`gh repo create idrissechaibi-alt/adlane-recherche --private`). Vérifie avec `gh repo view --json visibility` qu'il est
-     bien `PRIVATE` avant le premier envoi. S'il est public ou si tu ne peux pas le vérifier, n'envoie rien et dis-le.
+1. **Tu ne pousses rien sur GitHub et tu ne publies rien.** Ce sont des œuvres protégées, gardées pour notre usage d'étude.
+   Tout reste en local dans `%USERPROFILE%\adlane-recherche\`. L'utilisateur copiera lui-même les fichiers dans la
+   conversation avec la session cloud, qui en fera la synthèse.
 2. **Pas de contournement de blocage.** Pas de proxy, de VPN, de rotation d'adresse, de cookies volés ni de faux navigateur.
    Utilise la connexion normale du PC. Si YouTube limite (erreur 429, « confirm you're not a bot »), ralentis (pause de
    2 à 5 min, puis 30 à 60 s entre vidéos) et passe à la méthode suivante. Si une vidéo reste inaccessible, note-la et continue.
@@ -147,19 +144,25 @@ des exemples concrets (données, schémas, séquences de match). Écarte le dive
 analyse, les pronostics, les paris et les vidéos de moins de 4 min. Vise **150 vidéos au catalogue**, dont au moins **60 en
 priorité A**. Transcris toutes les A, puis les B s'il reste du temps.
 
-## Envoi et suivi
+## Fichiers à copier pour la synthèse
 
-- Tous les 10 fichiers : `git add`, `git commit` et `git push` vers le dépôt privé `adlane-recherche`, après avoir revérifié
-  qu'il est privé.
+L'utilisateur colle les résultats dans une conversation, qui a une taille limite. Prépare donc, en plus des fichiers par vidéo :
+- `a-copier/lot-01.md`, `lot-02.md`… : les transcriptions mises bout à bout, **40 000 caractères au plus par lot**, sans couper
+  une vidéo en deux sauf si elle dépasse seule cette taille (alors `lot-07a.md`, `lot-07b.md`). Chaque lot commence par la liste
+  des vidéos qu'il contient. Priorité A et Friends of Tracking d'abord.
+- `a-copier/SOMMAIRE.md` : la liste des lots, avec les vidéos et les thèmes de chacun.
+
+## Suivi
+
 - Tiens à jour `ETAT.md` : vidéos faites, échecs et leur cause, méthode utilisée, temps passé. En cas de coupure, reprends là où
   tu t'es arrêté grâce à `catalogue.csv`, sans refaire ce qui est déjà transcrit.
 - À la fin, réponds en français avec :
   - combien de vidéos sont transcrites par méthode et combien ont échoué (avec la cause) ;
   - ce qui est relu et ce qui ne l'est pas ;
-  - l'adresse du dépôt privé.
+  - le nombre de lots dans `a-copier\` et le chemin du dossier.
   Ne colle aucune transcription dans ta réponse.
 
-## Contrôle qualité avant chaque envoi
+## Contrôle qualité de chaque fichier
 
 - La transcription couvre toute la durée de la vidéo : le dernier horodatage est proche de la durée.
 - Aucun segment résumé, reformulé ou sauté.
