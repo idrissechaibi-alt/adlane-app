@@ -170,6 +170,11 @@ export interface MarketExpertise {
   calibrationFactor: number;
   /** Calibration fine : par côté du pari, fenêtre et tranche de probabilité. */
   cells?: CalibrationCell[];
+  /** Score de Brier des probabilités annoncées (moyenne de (p - résultat)², plus bas = mieux). */
+  brier?: number;
+  /** 1 - brier / brier d'une prévision constante au taux observé : > 0 = les probabilités
+   * annoncées départagent mieux les paris qu'un simple taux moyen ; ≤ 0 = elles n'apportent rien. */
+  brierSkill?: number;
 }
 
 /** Une case de calibration : ce qui était annoncé vs ce qui s'est passé. */

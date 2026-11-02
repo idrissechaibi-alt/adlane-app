@@ -539,6 +539,11 @@ function computeMarketExpertise(outcomes: PredictionOutcome[]): MarketExpertise[
     // Borné comme le recalibrage global : une série de malchance ne doit pas
     // effondrer un marché, ni une bonne série le rendre euphorique.
     const rawFactor = meanPredicted > 0 && samples >= MIN_OUTCOMES_PER_MARKET ? hitRate / meanPredicted : 1;
+    // Contrôle de calibration (score de Brier) : erreur quadratique entre la
+    // probabilité annoncée et le résultat, comparée à une prévision constante
+    // égale au taux de réussite observé.
+    const brier = list.reduce((sum, o) => sum + (o.predictedProb - (o.won ? 1 : 0)) ** 2, 0) / samples;
+    const baseBrier = hitRate * (1 - hitRate);
     expertise.push({
       market,
       samples,
@@ -546,6 +551,8 @@ function computeMarketExpertise(outcomes: PredictionOutcome[]): MarketExpertise[
       hitRate,
       calibrationFactor: Math.min(1.5, Math.max(0.5, rawFactor)),
       cells: computeCells(list),
+      brier,
+      brierSkill: baseBrier > 0 ? 1 - brier / baseBrier : 0,
     });
   }
 

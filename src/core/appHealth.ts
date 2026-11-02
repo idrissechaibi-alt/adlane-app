@@ -120,6 +120,8 @@ export async function buildAppHealth(): Promise<Record<string, unknown>> {
           hitRate: Number(e.hitRate.toFixed(3)),
           meanPredicted: Number(e.meanPredicted.toFixed(3)),
           calibrationFactor: Number(e.calibrationFactor.toFixed(3)),
+          brier: e.brier !== undefined ? Number(e.brier.toFixed(4)) : null,
+          brierSkill: e.brierSkill !== undefined ? Number(e.brierSkill.toFixed(3)) : null,
         })),
       };
     }),

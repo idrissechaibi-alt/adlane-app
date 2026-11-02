@@ -197,7 +197,7 @@ function compactSystemPrompt(coach: CoachProfile): string {
     `Tu es ${coach.name}, entraîneur de très haut niveau et analyste de la ligue « ${coach.league} ». ${coach.style}`,
     `Particularités de ta ligue : ${coach.leagueNotes}`,
     "Tu analyses un match EN DIRECT d'après les seules statistiques fournies (stats minute par minute, momentum, marqueurs avancés) et le dossier du match. Aucune information en dehors de ces données : si une donnée manque, dis-le au lieu de l'inventer. Tu ne garantis rien.",
-    "Règles : un marché est SOUTENU si la situation tactique actuelle le rend plus probable que ne le dit la seule statistique chiffrée, CONTESTÉ si elle le rend moins probable ou si les indicateurs se contredisent, NEUTRE sans information fiable. Cite 2 ou 3 faits mesurés (minute, état du match, indicateur). Tiens compte de l'état du score, des cartons rouges, de la fenêtre récente (10 dernières minutes) et de la fiabilité du dossier (fiches « faible » = prudence).",
+    "Règles : un marché est SOUTENU si la situation tactique actuelle le rend plus probable que ne le dit la seule statistique chiffrée, CONTESTÉ si elle le rend moins probable ou si les indicateurs se contredisent, NEUTRE sans information fiable. Cite 2 ou 3 faits mesurés (minute, état du match, indicateur). Tiens compte de l'état du score, des cartons rouges, de la menace récente (tirs et corners des 10-15 dernières minutes : c'est elle qui dit qui a l'emprise, la possession seule ne le dit pas) et de la fiabilité du dossier (fiches « faible » = prudence).",
     'Réponds en JSON strict, rien autour : {"read_fr":"lecture du match en 2 à 4 phrases","momentum_fr":"qui a l\'emprise et comment elle évolue","risks_fr":["risque","…"],"opinions":[{"market":"total_buts|buts_1ere_mt|btts|corners|cartons|fautes|1X2","direction":"plus|moins|domicile|nul|exterieur|oui|non","stance":"soutient|neutre|conteste","confidence":0.0,"why_fr":"raison courte chiffrée"}]}',
     'Donne un avis (au moins 4) sur : total de buts plus/moins, corners plus/moins, cartons plus/moins, et le résultat final (1X2) ; ajoute btts ou fautes si les données le permettent. « plus » et « moins » parlent de la suite du match, sans ligne chiffrée précise.',
   ].join('\n\n');
@@ -224,6 +224,44 @@ function windowText(samples: LiveStatsSample[]): string {
   const last = sorted[sorted.length - 1];
   if (last && picked[picked.length - 1] !== last) picked.push(last);
   return picked.slice(-12).map(line).join('\n');
+}
+
+/**
+ * Menace récente par équipe (momentum mesuré, pas la possession) : tirs cadrés ×3, autres tirs ×1, corners ×1 sur les
+ * 15 dernières minutes, chaque action pesant d'autant plus qu'elle est récente (demi-vie ~5,5 min). Null si les relevés
+ * par équipe manquent ou couvrent moins de 5 minutes.
+ */
+export function recentThreat(samples: LiveStatsSample[]): { home: number; away: number; span: number } | null {
+  const sorted = samples.filter((s) => s.side).sort((x, y) => x.minute - y.minute);
+  const last = sorted[sorted.length - 1];
+  if (!last) return null;
+  const from = last.minute - 15;
+  let home = 0, away = 0, first: number | null = null;
+  for (let i = 1; i < sorted.length; i++) {
+    const prev = sorted[i - 1], cur = sorted[i];
+    if (cur.minute <= from) continue;
+    if (first === null) first = Math.max(prev.minute, from);
+    const w = Math.exp(-(last.minute - cur.minute) / 8);
+    const d = (k: 'h' | 'a') => {
+      const p = prev.side![k], c = cur.side![k];
+      const sot = Math.max(0, c[1] - p[1]);
+      const other = Math.max(0, c[0] - p[0] - sot);
+      const corners = Math.max(0, c[2] - p[2]);
+      return 3 * sot + other + corners;
+    };
+    home += w * d('h');
+    away += w * d('a');
+  }
+  if (first === null || last.minute - first < 5) return null;
+  return { home: Math.round(home * 10) / 10, away: Math.round(away * 10) / 10, span: last.minute - first };
+}
+
+function threatText(samples: LiveStatsSample[]): string {
+  const t = recentThreat(samples);
+  if (!t) return 'Menace récente : relevés par équipe insuffisants.';
+  const total = t.home + t.away;
+  const lead = total < 2 ? 'aucune équipe ne menace vraiment' : t.home >= 2 * t.away ? 'emprise nette du domicile' : t.away >= 2 * t.home ? "emprise nette de l'extérieur" : 'menace partagée';
+  return `Menace récente (${t.span} dernières minutes ; cadrés ×3, autres tirs ×1, corners ×1, les plus récents pèsent plus) : domicile ${t.home} / extérieur ${t.away} → ${lead}. C'est le momentum à retenir, pas la possession.`;
 }
 
 const readText = (r: TacticalRead | null) =>
@@ -265,7 +303,7 @@ export async function runCoachAnalysis(input: AnalyzeInput): Promise<CoachAnalys
     const heatPlayers = heat ? `\nCartes de chaleur (terrain 0-105 dans le sens de l'attaque de chaque équipe ; x̄ = hauteur moyenne ; joueurs les plus avancés) :\n${heat.players.slice(0, 8).map((p) => `${p.name ?? p.id} (${p.team === 'h' ? 'dom.' : 'ext.'}) x̄ ${p.mx}, camp adverse ${Math.round(p.att * 100)} %, surface ${Math.round(p.box * 100)} %`).join('\n')}` : '';
     const user =
       `Match : ${input.homeTeam} (domicile) contre ${input.awayTeam}, ${input.league}. Moment : ${input.checkpoint}e minute (relevé à la ${last.minute}e, score ${last.home}-${last.away}).\n\n` +
-      `${readText(readMatch(input.samples))}\n\nFenêtre de stats (domicile-extérieur ; tirs total(cadrés)) :\n${windowText(input.samples)}${heatPlayers}\n\n` +
+      `${readText(readMatch(input.samples))}\n${threatText(input.samples)}\n\nFenêtre de stats (domicile-extérieur ; tirs total(cadrés)) :\n${windowText(input.samples)}${heatPlayers}\n\n` +
       (before ? `TON AVIS D'AVANT-MATCH (à confronter au jeu observé : dis ce qui se confirme et ce qui est démenti)\n${before}\n\n` : '') +
       `DOSSIER DU MATCH\n${briefing.context}`;
     const result = await askOmnirouteUsable(compactSystemPrompt(coach), user, config, (raw) => parseAnalysis(raw));

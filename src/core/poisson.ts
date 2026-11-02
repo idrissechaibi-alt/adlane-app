@@ -94,18 +94,18 @@ export function computePoissonModel(expectedHomeGoals: number, expectedAwayGoals
 // parfaitement indépendants sur les scores bas). Dixon & Coles (1997)
 // corrigent ça avec un facteur τ(x,y,ρ) appliqué aux 4 cases les plus basses.
 //
-// Calibration réelle effectuée pendant cette session : τ ajusté sur une
-// saison complète (Serie A 2015/16, 380 matchs, données StatsBomb open-data)
-// donne un ρ optimal de -0,014 sur ces 4 cases — beaucoup plus proche de 0
-// que le -0.13 souvent cité dans la littérature (calibré sur d'autres
-// championnats/époques), et appliquer -0.13 tel quel dégradait l'ajustement
-// sur cet échantillon (erreur quadratique ×5,6). Le champion set StatsBomb
-// ouvert ne couvre pas les saisons courantes des 5 grands championnats (cf.
-// rapport), donc cette valeur reste un point de départ raisonnable, pas une
-// calibration définitive — à recalculer quand le corpus collecté en direct
-// par la boucle d'auto-apprentissage sera assez large pour sa propre
-// estimation par match plutôt que par moyenne de ligue.
-export const DEFAULT_DIXON_COLES_RHO = -0.014;
+// Calibration (02/11/2026) : ρ estimé par maximum de vraisemblance sur les
+// scores réels de 16 championnats (football-data.co.uk : PL, Championship,
+// Liga, Segunda, Serie A/B, Bundesliga 1/2, Ligue 1/2, Eredivisie, Portugal,
+// Turquie, Belgique, Écosse, Grèce), avec les buts attendus tirés des cotes
+// moyennes comme le fait l'app (estimateExpectedGoalsFromMarket).
+// Entraînement 2021-22 à 2024-25 (22 363 matchs) : ρ = -0,04. Test sur 2025-26
+// (5 450 matchs) : meilleur que l'ancien -0,014 sur les scores exacts et sur
+// les nuls (nuls attendus 1 368 contre 1 336, réels 1 451). Un ρ par ligue a
+// été essayé : il ne fait pas mieux hors échantillon (gagne dans 5 ligues,
+// perd dans 9), donc une seule valeur commune. Le -0,13 de la littérature
+// colle mieux aux nuls mais dégrade les scores exacts.
+export const DEFAULT_DIXON_COLES_RHO = -0.04;
 
 function dixonColesTau(x: number, y: number, lambdaHome: number, lambdaAway: number, rho: number): number {
   if (x === 0 && y === 0) return 1 - lambdaHome * lambdaAway * rho;
