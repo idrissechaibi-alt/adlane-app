@@ -125,6 +125,12 @@ L'index sert seulement à retrouver vite un passage. Il doit être exhaustif, pa
 Garde aussi un fichier `catalogue.csv` avec une ligne par vidéo trouvée : id, url, titre, chaîne, durée, date, thème, priorité
 (A/B/C), état (à faire / transcrite / échec + raison), méthode utilisée.
 
+## Ordre de travail (mis à jour le 02/11)
+
+La liste à transcrire est dans `docs/videos-a-transcrire.md` : **priorité A d'abord, dans l'ordre du tableau**, puis B. Elle
+remplace les phases 1 à 3 ci-dessous, qui restent pour mémoire. Saute la série de cours de mathématiques Friends of Tracking
+(« Distance In R2 », « Euclidean Plane »…), sans apport football. Fais un lot `a-copier` toutes les 3 ou 4 vidéos.
+
 ## Phase 1 : les 13 vidéos Friends of Tracking manquantes
 
 Commence par celles-ci : elles avaient échoué lors du premier passage.
