@@ -1587,10 +1587,12 @@ async function processRealSlotCheckpoint(
     // Un même pari n'est JAMAIS envoyé deux fois (deux passages simultanés, relances à chaque minute) : réservation avant l'envoi,
     // et enregistrement immédiat (un passage coupé en route ne le fait pas renvoyer).
     if (!(await claimPick(proposal))) return;
-    fresh.push(proposal);
-    appendInPlayProposals([proposal]);
-    void recordShadowVerdict({ id: proposal.id, legs: proposal.legs, kind: proposal.kind });
+    // Doublon d'un pari déjà enregistré (même match, marché, fenêtre, côté) : ni affiché, donc ni notifié sur Telegram.
+    const saved = appendInPlayProposals([proposal]).length > 0;
     for (const item of items) alreadyProposed.add(`${item.fixtureId}-${kind}`);
+    if (!saved) return;
+    fresh.push(proposal);
+    void recordShadowVerdict({ id: proposal.id, legs: proposal.legs, kind: proposal.kind });
     await notifyProposal(proposal);
   };
 
@@ -1917,7 +1919,8 @@ function strategyKeys(proposals: InPlayProposal[]): string[] {
  * d'intervalle, aucun ne doit effacer ce que l'autre vient d'ajouter. */
 const dupIndex = new WeakMap<object, { ids: Set<string>; keys: Set<string> }>();
 
-function appendInPlayProposals(fresh: InPlayProposal[]): void {
+/** Renvoie les paris vraiment enregistrés (un doublon écarté ici n'est ni affiché ni notifié). */
+function appendInPlayProposals(fresh: InPlayProposal[]): InPlayProposal[] {
   const current = readInPlayProposals();
   // Identifiants et clés de doublon des paris déjà enregistrés : calculés une fois par version du fichier (même tableau
   // tant qu'il n'a pas changé), plus à chaque passage sur les ~10 000 paris.
@@ -1942,8 +1945,9 @@ function appendInPlayProposals(fresh: InPlayProposal[]): void {
     kept.push(p);
   }
   // Rien de nouveau : pas de réécriture du fichier (plus de 10 Mo, plusieurs secondes de blocage sur le téléphone).
-  if (kept.length === 0) return;
+  if (kept.length === 0) return kept;
   writeInPlayProposals([...current, ...kept]);
+  return kept;
 }
 
 /**
@@ -2066,8 +2070,8 @@ export async function runRealInPlayTick(liveFixtures: LiveFixture[]): Promise<nu
           // Marchés suspendus au réel : les stratégies y passaient à côté du filtre (but avant la pause « oui » le 18/10).
           if (proposal.legs.some((l) => suspended.has(weakSegmentOf(l) ?? ''))) continue;
           if (!(await claimPick(proposal))) continue;
+          if (appendInPlayProposals([proposal]).length === 0) continue;
           fresh.push(proposal);
-          appendInPlayProposals([proposal]);
           await notifyProposal(proposal);
         }
       }

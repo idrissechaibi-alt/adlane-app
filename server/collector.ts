@@ -9,6 +9,7 @@ import { SERVER_LIVE_DIR } from '../src/core/serverFeed';
 import { fetchRepoJson } from '../src/core/gitAutoSync';
 import { sendTelegramMessage } from '../src/core/telegram';
 import kvStore from '../src/core/kvStore';
+import { mapWithConcurrency } from '../src/core/concurrency';
 import { namesLikelyMatch, normalizeTeamName } from '../src/core/teamNameMatch';
 import { repoPut } from './github';
 import { log } from './log';
@@ -153,9 +154,9 @@ function queueFinal(t: Tracked, key: string, f: FeedFinal): void {
   pending.set(t.day, p);
 }
 
-/** Alerte Telegram 20e / 60e d'un match réel (une seule fois par match et par moment). */
+/** Alerte Telegram 20e / 60e d'un match réel (une seule fois par match et par moment), dans les fenêtres où le téléphone analyse (15e-35e, 55e-70e). */
 async function wakeIfDue(key: string, m: HubMatch): Promise<void> {
-  const moment = m.statusShort === '1H' && m.minute >= 18 && m.minute <= 30 ? '20' : m.statusShort === '2H' && m.minute >= 58 && m.minute <= 72 ? '60' : null;
+  const moment = m.statusShort === '1H' && m.minute >= 18 && m.minute <= 30 ? '20' : m.statusShort === '2H' && m.minute >= 58 && m.minute <= 70 ? '60' : null;
   if (!moment) return;
   const store = `@server_wake_${hubDateKey()}`;
   const done: string[] = JSON.parse((await kvStore.getItem(store)) ?? '[]');
@@ -165,6 +166,8 @@ async function wakeIfDue(key: string, m: HubMatch): Promise<void> {
   await kvStore.setItem(store, JSON.stringify(done));
   await sendTelegramMessage(`⏱️ ${m.homeTeam} - ${m.awayTeam} (${m.homeGoals}-${m.awayGoals}) : ${m.minute}e minute. Ouvre l'app adlane pour l'analyse des paris de la ${moment}e.`).catch(() => false);
 }
+
+let wakeChain: Promise<void> = Promise.resolve();
 
 const TRACKED_KEY = '@server_tracked';
 let restored = false;
@@ -219,18 +222,20 @@ export async function collectOnce(): Promise<{ live: number; sampled: number; fi
     .slice(0, 25);
   for (const { key } of unique) liveKeys.add(key);
 
-  for (const { m, key, real } of due) {
+  // 4 relevés à la fois : un par un, 25 matchs (statistiques + carte de chaleur) dépassaient 90 s et sautaient les passages de 30 s.
+  await mapWithConcurrency(due, 4, async ({ m, key, real }) => {
     let t = tracked.get(key);
     if (!t) {
       t = { match: { home: m.homeTeam, away: m.awayTeam, league: m.league ?? '', country: m.country ?? '', real }, day, lastSampleAt: 0, lastMinute: 0, lastStatus: '', lastSample: null, htSample: null, seenAt: now, finalTries: 0, done: false };
       tracked.set(key, t);
     }
-    if (real) await wakeIfDue(key, m).catch(() => {});
+    // Alertes une par une : la liste « déjà envoyée » est relue puis réécrite, deux relevés simultanés en perdraient une.
+    if (real) await (wakeChain = wakeChain.then(() => wakeIfDue(key, m)).catch(() => {}));
     const stats = await hubStats(m.homeTeam, m.awayTeam, day, null, { needFirstHalf: false }).catch(() => null);
     t.lastSampleAt = now;
     t.lastMinute = m.minute;
     t.lastStatus = m.statusShort;
-    if (!stats?.all) continue;
+    if (!stats?.all) return;
     const s = buildLiveSample(m, stats.all);
     if (real && now - (t.lastHeatAt ?? 0) >= 120_000) {
       const heat = await hubHeatmap(m.homeTeam, m.awayTeam, day).catch(() => null);
@@ -243,7 +248,7 @@ export async function collectOnce(): Promise<{ live: number; sampled: number; fi
     if (m.statusShort === 'HT' || (m.statusShort === '1H' && m.minute >= 44)) t.htSample = s;
     queueSample(t, key, s);
     sampled++;
-  }
+  });
 
   // Matchs sortis du direct après la 80e : résultat final (retenté à +5, +15, +45 min).
   let finals = 0;
