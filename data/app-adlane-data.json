@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-11-04T18:31:39.427Z",
+  "exportedAt": "2026-11-04T18:32:44.257Z",
   "formatVersion": 1,
   "source": "APP adlane",
   "data": {
@@ -7172,7 +7172,7 @@
       "fictionalReviewed": 63637,
       "fictionalSettledLegs": 57629,
       "lastCreatedAt": "2026-11-04T18:17:59.773Z",
-      "createdLast24h": 1817
+      "createdLast24h": 1816
     },
     "predictionOutcomes30d": 62149,
     "marketSeries": {
@@ -7232,7 +7232,7 @@
         {
           "name": "Principal",
           "ok": true,
-          "latencyMs": 90,
+          "latencyMs": 93,
           "readyModels": 28,
           "configuredReady": 13,
           "configuredTotal": 13
@@ -7240,7 +7240,7 @@
         {
           "name": "Omniroute",
           "ok": true,
-          "latencyMs": 2017,
+          "latencyMs": 39,
           "readyModels": 841,
           "configuredReady": 2,
           "configuredTotal": 2
@@ -7324,8 +7324,14 @@
     },
     "dailyPlan": {
       "date": "2026-11-04",
-      "generatedAt": "2026-11-04T18:10:40.091Z",
+      "generatedAt": "2026-11-04T18:32:24.578Z",
       "matches": [
+        {
+          "match": "Fenerbahçe SK - Liverpool FC",
+          "league": "UEFA Champions League",
+          "kickoff": "2026-11-04T17:45:00Z",
+          "hasOdds": true
+        },
         {
           "match": "PAE AEK - Real Madrid CF",
           "league": "UEFA Champions League",
@@ -7333,9 +7339,21 @@
           "hasOdds": true
         },
         {
-          "match": "Fenerbahçe SK - Liverpool FC",
+          "match": "Racing Club de Lens - Como 1907",
           "league": "UEFA Champions League",
-          "kickoff": "2026-11-04T17:45:00Z",
+          "kickoff": "2026-11-04T20:00:00Z",
+          "hasOdds": true
+        },
+        {
+          "match": "SK Slavia Praha - Arsenal FC",
+          "league": "UEFA Champions League",
+          "kickoff": "2026-11-04T20:00:00Z",
+          "hasOdds": true
+        },
+        {
+          "match": "Borussia Dortmund - Real Betis Balompié",
+          "league": "UEFA Champions League",
+          "kickoff": "2026-11-04T20:00:00Z",
           "hasOdds": true
         },
         {
@@ -7361,32 +7379,14 @@
           "league": "UEFA Champions League",
           "kickoff": "2026-11-04T20:00:00Z",
           "hasOdds": true
-        },
-        {
-          "match": "Racing Club de Lens - Como 1907",
-          "league": "UEFA Champions League",
-          "kickoff": "2026-11-04T20:00:00Z",
-          "hasOdds": true
-        },
-        {
-          "match": "SK Slavia Praha - Arsenal FC",
-          "league": "UEFA Champions League",
-          "kickoff": "2026-11-04T20:00:00Z",
-          "hasOdds": true
-        },
-        {
-          "match": "Borussia Dortmund - Real Betis Balompié",
-          "league": "UEFA Champions League",
-          "kickoff": "2026-11-04T20:00:00Z",
-          "hasOdds": true
         }
       ]
     },
     "apiUsageToday": {
       "countsToday": {
-        "footballData": 2,
+        "footballData": 3,
         "apiFootball": 50,
-        "theOddsApi": 2,
+        "theOddsApi": 3,
         "perplexity": 18,
         "apiFootball-autolearn": 40,
         "sportmonks-autolearn": 12,
@@ -7394,7 +7394,7 @@
         "sportmonks": 51
       },
       "theOddsApiMonth": {
-        "used": 110,
+        "used": 112,
         "limit": 500,
         "period": "month",
         "live": true
@@ -7428,7 +7428,7 @@
       "TheSportsDB": {
         "ok": true,
         "count": 13,
-        "at": "2026-11-04T18:20:32.455Z",
+        "at": "2026-11-04T18:20:31.712Z",
         "failStreak": 0
       },
       "365Scores": {
@@ -8586,13 +8586,9 @@
       ]
     },
     "liveStatsScan": {
-      "lastScan": {
-        "at": "2026-11-04T08:08:24.502Z",
-        "matches": 0,
-        "sources": "6 sources gratuites"
-      },
+      "lastScan": null,
       "todaySamples": {
-        "Fenerbahçe SK - Liverpool FC": 42
+        "Fenerbahçe SK - Liverpool FC": 47
       }
     },
     "backupOddsSources": {
@@ -8602,21 +8598,21 @@
       },
       "fanLine": {
         "fixtures": 20,
-        "soccer": 1
+        "soccer": 5
       },
       "oddsmagnet": {
         "httpStatus": null
       }
     },
     "teamStats": {
-      "indexUpdatedAt": "2026-11-04T01:37:44Z",
-      "teamsInIndex": 111,
+      "indexUpdatedAt": null,
+      "teamsInIndex": 0,
       "summariesCached": 111,
-      "lookups": 411,
-      "withTrend": 46,
-      "unknownTeams": 365,
-      "lastTrendAt": "2026-11-03T21:24:34.379Z",
-      "lastUnknown": "Riestra Res. - Quilmes AC (Reserves)"
+      "lookups": 0,
+      "withTrend": 0,
+      "unknownTeams": 0,
+      "lastTrendAt": null,
+      "lastUnknown": null
     },
     "teamStatsUsageLog": [
       {
@@ -8805,13 +8801,13 @@
       {
         "unit": "corners_1h",
         "label": "Corners 1ère mi-temps",
-        "verified": 2680,
-        "pending": 1072,
+        "verified": 2707,
+        "pending": 810,
         "meanPredicted": 4.1,
         "meanActual": 4.4,
-        "meanError": 0.28,
+        "meanError": 0.3,
         "meanAbsError": 1.52,
-        "bigMisses": 182,
+        "bigMisses": 185,
         "worst": [
           {
             "match": "Sagan Tosu - Omiya Ardija",
@@ -8824,8 +8820,8 @@
             "actual": 0
           },
           {
-            "match": "Mlada Boleslav - Hradec Kralove",
-            "predicted": 9,
+            "match": "Farense - AD Marco 09",
+            "predicted": 8.7,
             "actual": 0
           }
         ]
@@ -8833,13 +8829,13 @@
       {
         "unit": "cards_1h",
         "label": "Cartons 1ère mi-temps",
-        "verified": 2494,
-        "pending": 993,
+        "verified": 2492,
+        "pending": 731,
         "meanPredicted": 1.2,
         "meanActual": 1.4,
-        "meanError": 0.11,
-        "meanAbsError": 0.81,
-        "bigMisses": 47,
+        "meanError": 0.12,
+        "meanAbsError": 0.82,
+        "bigMisses": 51,
         "worst": [
           {
             "match": "Barakaldo - Mirandes",
@@ -8861,19 +8857,14 @@
       {
         "unit": "goals_1h",
         "label": "Buts à la pause",
-        "verified": 1136,
-        "pending": 276,
-        "meanPredicted": 0.9,
-        "meanActual": 0.9,
+        "verified": 845,
+        "pending": 147,
+        "meanPredicted": 0.7,
+        "meanActual": 0.6,
         "meanError": -0.05,
-        "meanAbsError": 0.69,
+        "meanAbsError": 0.68,
         "bigMisses": 7,
         "worst": [
-          {
-            "match": "Clutch FC - RTG FC",
-            "predicted": 2,
-            "actual": 6
-          },
           {
             "match": "Kansas State - Colorado",
             "predicted": 0.6,
@@ -8883,19 +8874,24 @@
             "match": "FC Eindhoven - FC Volendam",
             "predicted": 0.7,
             "actual": 4
+          },
+          {
+            "match": "Olimpia - Santa Fe",
+            "predicted": 0.8,
+            "actual": 4
           }
         ]
       },
       {
         "unit": "goals_ft",
         "label": "Buts en fin de match",
-        "verified": 6208,
-        "pending": 995,
+        "verified": 6252,
+        "pending": 948,
         "meanPredicted": 2.9,
         "meanActual": 3,
         "meanError": 0.08,
         "meanAbsError": 1.19,
-        "bigMisses": 237,
+        "bigMisses": 244,
         "worst": [
           {
             "match": "TSV Landsberg - Bayern Munich II",
@@ -8917,13 +8913,13 @@
       {
         "unit": "corners_ft",
         "label": "Corners sur le match",
-        "verified": 4635,
-        "pending": 414,
+        "verified": 4691,
+        "pending": 353,
         "meanPredicted": 8.4,
         "meanActual": 9.2,
-        "meanError": 0.81,
-        "meanAbsError": 2.83,
-        "bigMisses": 532,
+        "meanError": 0.84,
+        "meanAbsError": 2.9,
+        "bigMisses": 558,
         "worst": [
           {
             "match": "Sagan Tosu - Omiya Ardija",
@@ -8936,8 +8932,8 @@
             "actual": 6
           },
           {
-            "match": "FC Rosengard (W) - Vaxjo DFF (W)",
-            "predicted": 3.6,
+            "match": "FC Rosengard (W) - Vaexjoe W",
+            "predicted": 3,
             "actual": 20
           }
         ]
@@ -8945,13 +8941,13 @@
       {
         "unit": "cards_ft",
         "label": "Cartons sur le match",
-        "verified": 4361,
-        "pending": 348,
-        "meanPredicted": 3.5,
+        "verified": 4379,
+        "pending": 281,
+        "meanPredicted": 3.4,
         "meanActual": 3.9,
-        "meanError": 0.4,
-        "meanAbsError": 1.7,
-        "bigMisses": 467,
+        "meanError": 0.44,
+        "meanAbsError": 1.73,
+        "bigMisses": 495,
         "worst": [
           {
             "match": "Carroi - Sporting Escaldes",
@@ -8973,13 +8969,13 @@
       {
         "unit": "fouls_1h",
         "label": "Fautes 1ère mi-temps",
-        "verified": 1044,
-        "pending": 139,
-        "meanPredicted": 10.4,
-        "meanActual": 11,
-        "meanError": 0.61,
-        "meanAbsError": 2.4,
-        "bigMisses": 18,
+        "verified": 802,
+        "pending": 88,
+        "meanPredicted": 10.1,
+        "meanActual": 10.9,
+        "meanError": 0.87,
+        "meanAbsError": 2.47,
+        "bigMisses": 16,
         "worst": [
           {
             "match": "Juve Stabia - Sudtirol",
@@ -9001,12 +8997,12 @@
       {
         "unit": "fouls_ft",
         "label": "Fautes sur le match",
-        "verified": 1936,
-        "pending": 83,
-        "meanPredicted": 23,
-        "meanActual": 23.6,
-        "meanError": 0.55,
-        "meanAbsError": 4.05,
+        "verified": 1960,
+        "pending": 60,
+        "meanPredicted": 22.9,
+        "meanActual": 23.5,
+        "meanError": 0.6,
+        "meanAbsError": 4.16,
         "bigMisses": 18,
         "worst": [
           {
@@ -9015,14 +9011,14 @@
             "actual": 28
           },
           {
-            "match": "Sonnenhof Grossaspach - RW Essen",
-            "predicted": 10.4,
-            "actual": 32
-          },
-          {
             "match": "Hansa Rostock - Fortuna Dusseldorf",
             "predicted": 26.9,
             "actual": 6
+          },
+          {
+            "match": "Aris - Atromitos",
+            "predicted": 15.3,
+            "actual": 35
           }
         ]
       }
@@ -9031,22 +9027,22 @@
       {
         "unit": "corners_1h",
         "label": "Corners 1ère mi-temps",
-        "samples": 1912,
-        "maeBase": 1.4660854510091723,
-        "maeNew": 1.4594906766601585,
+        "samples": 1773,
+        "maeBase": 1.4899767244642905,
+        "maeNew": 1.4996187659233358,
         "promoted": false,
         "effects": [
           {
             "name": "intensité récente 10 min",
-            "pct": -2
+            "pct": 0
           },
           {
             "name": "intensité récente 20 min",
-            "pct": 8
+            "pct": 7
           },
           {
             "name": "momentum (une équipe domine)",
-            "pct": 3
+            "pct": 4
           },
           {
             "name": "force du favori",
@@ -9054,11 +9050,11 @@
           },
           {
             "name": "favori mené",
-            "pct": 2
+            "pct": 1
           },
           {
             "name": "favori devant",
-            "pct": 10
+            "pct": 7
           },
           {
             "name": "écart de buts",
@@ -9070,95 +9066,95 @@
           },
           {
             "name": "qualité des occasions",
-            "pct": -5
+            "pct": -4
           },
           {
             "name": "pluie",
-            "pct": 3
+            "pct": 2
           },
           {
             "name": "vent",
-            "pct": 15
+            "pct": 16
           },
           {
             "name": "chaleur ou froid",
-            "pct": -10
+            "pct": -8
           }
         ]
       },
       {
         "unit": "cards_1h",
         "label": "Cartons 1ère mi-temps",
-        "samples": 1695,
-        "maeBase": 0.8294983918705223,
-        "maeNew": 0.8236976758815266,
+        "samples": 1533,
+        "maeBase": 0.8698356578168636,
+        "maeNew": 0.8672021252507957,
         "promoted": false,
         "effects": [
           {
             "name": "intensité récente 10 min",
-            "pct": -4
+            "pct": -5
           },
           {
             "name": "intensité récente 20 min",
-            "pct": 0
-          },
-          {
-            "name": "momentum (une équipe domine)",
-            "pct": 0
-          },
-          {
-            "name": "force du favori",
-            "pct": -12
-          },
-          {
-            "name": "favori mené",
-            "pct": 19
-          },
-          {
-            "name": "favori devant",
-            "pct": 23
-          },
-          {
-            "name": "écart de buts",
-            "pct": -15
-          },
-          {
-            "name": "cartons rouges",
-            "pct": -9
-          },
-          {
-            "name": "qualité des occasions",
-            "pct": -2
-          },
-          {
-            "name": "pluie",
             "pct": 1
           },
           {
+            "name": "momentum (une équipe domine)",
+            "pct": 1
+          },
+          {
+            "name": "force du favori",
+            "pct": -13
+          },
+          {
+            "name": "favori mené",
+            "pct": 25
+          },
+          {
+            "name": "favori devant",
+            "pct": 25
+          },
+          {
+            "name": "écart de buts",
+            "pct": -18
+          },
+          {
+            "name": "cartons rouges",
+            "pct": -7
+          },
+          {
+            "name": "qualité des occasions",
+            "pct": -1
+          },
+          {
+            "name": "pluie",
+            "pct": 0
+          },
+          {
             "name": "vent",
-            "pct": 6
+            "pct": 2
           },
           {
             "name": "chaleur ou froid",
-            "pct": -20
+            "pct": -17
           }
         ]
       },
       {
         "unit": "goals_1h",
         "label": "Buts à la pause",
-        "samples": 673,
-        "maeBase": 0.7057671066760297,
-        "maeNew": 0.706747646854021,
+        "samples": 417,
+        "maeBase": 0.6636379695907845,
+        "maeNew": 0.6585429057033786,
         "promoted": false,
         "effects": [
           {
             "name": "intensité récente 10 min",
-            "pct": 4
+            "pct": 0
           },
           {
             "name": "intensité récente 20 min",
-            "pct": 2
+            "pct": 4
           },
           {
             "name": "momentum (une équipe domine)",
@@ -9166,48 +9162,48 @@
           },
           {
             "name": "force du favori",
-            "pct": -10
+            "pct": -6
           },
           {
             "name": "favori mené",
-            "pct": 18
-          },
-          {
-            "name": "favori devant",
-            "pct": 10
-          },
-          {
-            "name": "écart de buts",
-            "pct": -7
-          },
-          {
-            "name": "cartons rouges",
-            "pct": -3
-          },
-          {
-            "name": "qualité des occasions",
-            "pct": 2
-          },
-          {
-            "name": "pluie",
             "pct": 0
           },
           {
+            "name": "favori devant",
+            "pct": 0
+          },
+          {
+            "name": "écart de buts",
+            "pct": 0
+          },
+          {
+            "name": "cartons rouges",
+            "pct": 0
+          },
+          {
+            "name": "qualité des occasions",
+            "pct": 18
+          },
+          {
+            "name": "pluie",
+            "pct": -1
+          },
+          {
             "name": "vent",
-            "pct": -7
+            "pct": -5
           },
           {
             "name": "chaleur ou froid",
-            "pct": -11
+            "pct": -5
           }
         ]
       },
       {
         "unit": "goals_ft",
         "label": "Buts en fin de match",
-        "samples": 3669,
-        "maeBase": 1.1702796657954366,
-        "maeNew": 1.1542811749566355,
+        "samples": 3666,
+        "maeBase": 1.1705785989519137,
+        "maeNew": 1.1544394891684422,
         "promoted": false,
         "effects": [
           {
@@ -9252,7 +9248,7 @@
           },
           {
             "name": "vent",
-            "pct": -3
+            "pct": -2
           },
           {
             "name": "chaleur ou froid",
@@ -9263,9 +9259,9 @@
       {
         "unit": "corners_ft",
         "label": "Corners sur le match",
-        "samples": 3537,
-        "maeBase": 2.6167568922854647,
-        "maeNew": 2.5862692817600026,
+        "samples": 3533,
+        "maeBase": 2.7895024301704594,
+        "maeNew": 2.7556130768757177,
         "promoted": false,
         "effects": [
           {
@@ -9274,81 +9270,23 @@
           },
           {
             "name": "intensité récente 20 min",
-            "pct": -1
-          },
-          {
-            "name": "momentum (une équipe domine)",
-            "pct": 6
-          },
-          {
-            "name": "force du favori",
-            "pct": 3
-          },
-          {
-            "name": "favori mené",
-            "pct": 20
-          },
-          {
-            "name": "favori devant",
-            "pct": 5
-          },
-          {
-            "name": "écart de buts",
-            "pct": -19
-          },
-          {
-            "name": "cartons rouges",
-            "pct": -18
-          },
-          {
-            "name": "qualité des occasions",
-            "pct": -3
-          },
-          {
-            "name": "pluie",
-            "pct": -5
-          },
-          {
-            "name": "vent",
-            "pct": 19
-          },
-          {
-            "name": "chaleur ou froid",
-            "pct": 3
-          }
-        ]
-      },
-      {
-        "unit": "cards_ft",
-        "label": "Cartons sur le match",
-        "samples": 3239,
-        "maeBase": 1.5926269056648925,
-        "maeNew": 1.5588454590360783,
-        "promoted": false,
-        "effects": [
-          {
-            "name": "intensité récente 10 min",
             "pct": -2
           },
           {
-            "name": "intensité récente 20 min",
-            "pct": -4
-          },
-          {
             "name": "momentum (une équipe domine)",
-            "pct": 4
+            "pct": 8
           },
           {
             "name": "force du favori",
-            "pct": 6
+            "pct": 4
           },
           {
             "name": "favori mené",
-            "pct": 21
+            "pct": 17
           },
           {
             "name": "favori devant",
-            "pct": 6
+            "pct": 4
           },
           {
             "name": "écart de buts",
@@ -9356,7 +9294,7 @@
           },
           {
             "name": "cartons rouges",
-            "pct": -18
+            "pct": -20
           },
           {
             "name": "qualité des occasions",
@@ -9364,11 +9302,69 @@
           },
           {
             "name": "pluie",
-            "pct": -4
+            "pct": -6
           },
           {
             "name": "vent",
-            "pct": 4
+            "pct": 18
+          },
+          {
+            "name": "chaleur ou froid",
+            "pct": 6
+          }
+        ]
+      },
+      {
+        "unit": "cards_ft",
+        "label": "Cartons sur le match",
+        "samples": 3173,
+        "maeBase": 1.6683651269062272,
+        "maeNew": 1.6458593980380638,
+        "promoted": false,
+        "effects": [
+          {
+            "name": "intensité récente 10 min",
+            "pct": -3
+          },
+          {
+            "name": "intensité récente 20 min",
+            "pct": -4
+          },
+          {
+            "name": "momentum (une équipe domine)",
+            "pct": 5
+          },
+          {
+            "name": "force du favori",
+            "pct": 6
+          },
+          {
+            "name": "favori mené",
+            "pct": 24
+          },
+          {
+            "name": "favori devant",
+            "pct": 7
+          },
+          {
+            "name": "écart de buts",
+            "pct": -20
+          },
+          {
+            "name": "cartons rouges",
+            "pct": -20
+          },
+          {
+            "name": "qualité des occasions",
+            "pct": -1
+          },
+          {
+            "name": "pluie",
+            "pct": -3
+          },
+          {
+            "name": "vent",
+            "pct": 5
           },
           {
             "name": "chaleur ou froid",
@@ -9379,30 +9375,30 @@
       {
         "unit": "fouls_1h",
         "label": "Fautes 1ère mi-temps",
-        "samples": 1016,
-        "maeBase": 2.2629080002558135,
-        "maeNew": 2.2572610431301485,
+        "samples": 780,
+        "maeBase": 2.380758933420249,
+        "maeNew": 2.402609888144014,
         "promoted": false,
         "effects": [
           {
             "name": "intensité récente 10 min",
-            "pct": -3
-          },
-          {
-            "name": "intensité récente 20 min",
-            "pct": 8
-          },
-          {
-            "name": "momentum (une équipe domine)",
-            "pct": 2
-          },
-          {
-            "name": "force du favori",
             "pct": -2
           },
           {
-            "name": "favori mené",
+            "name": "intensité récente 20 min",
+            "pct": 10
+          },
+          {
+            "name": "momentum (une équipe domine)",
+            "pct": 7
+          },
+          {
+            "name": "force du favori",
             "pct": -4
+          },
+          {
+            "name": "favori mené",
+            "pct": -1
           },
           {
             "name": "favori devant",
@@ -9410,7 +9406,7 @@
           },
           {
             "name": "écart de buts",
-            "pct": -6
+            "pct": -5
           },
           {
             "name": "cartons rouges",
@@ -9418,11 +9414,11 @@
           },
           {
             "name": "qualité des occasions",
-            "pct": 1
+            "pct": 0
           },
           {
             "name": "pluie",
-            "pct": 0
+            "pct": -3
           },
           {
             "name": "vent",
@@ -9430,7 +9426,7 @@
           },
           {
             "name": "chaleur ou froid",
-            "pct": -12
+            "pct": -3
           }
         ]
       },
@@ -9438,8 +9434,8 @@
         "unit": "fouls_ft",
         "label": "Fautes sur le match",
         "samples": 1945,
-        "maeBase": 3.809790536381446,
-        "maeNew": 3.786597582997326,
+        "maeBase": 4.164366567277369,
+        "maeNew": 4.122580883312809,
         "promoted": false,
         "effects": [
           {
@@ -9448,19 +9444,19 @@
           },
           {
             "name": "intensité récente 20 min",
-            "pct": -5
+            "pct": -2
           },
           {
             "name": "momentum (une équipe domine)",
-            "pct": -6
+            "pct": -5
           },
           {
             "name": "force du favori",
-            "pct": 3
+            "pct": 4
           },
           {
             "name": "favori mené",
-            "pct": 2
+            "pct": -1
           },
           {
             "name": "favori devant",
@@ -9468,7 +9464,7 @@
           },
           {
             "name": "écart de buts",
-            "pct": -9
+            "pct": -12
           },
           {
             "name": "cartons rouges",
@@ -9476,7 +9472,7 @@
           },
           {
             "name": "qualité des occasions",
-            "pct": -2
+            "pct": -1
           },
           {
             "name": "pluie",
@@ -9488,7 +9484,7 @@
           },
           {
             "name": "chaleur ou froid",
-            "pct": 1
+            "pct": 2
           }
         ]
       }
