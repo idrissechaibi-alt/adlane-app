@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-11-06T22:02:57.170Z",
+  "exportedAt": "2026-11-07T11:04:21.433Z",
   "formatVersion": 1,
   "source": "APP adlane",
   "data": {
@@ -6616,27 +6616,16 @@
   },
   "health": {
     "nativeBackgroundTicks": {
-      "lastTickAt": "2026-11-06T20:19:10.654Z",
-      "ticksLast24h": 1
+      "lastTickAt": "2026-11-07T10:00:41.952Z",
+      "ticksLast24h": 24
     },
     "tickProgress": {
-      "startedAt": "2026-11-06T20:43:13.830Z",
-      "step": "terminé",
-      "at": "2026-11-06T22:02:08.992Z",
+      "startedAt": "2026-11-07T02:09:22.192Z",
+      "step": "scan en direct 20e/60e",
+      "at": "2026-11-07T11:04:14.629Z",
       "stepDurationsSec": {
-        "terminé": 105,
-        "scan matinal": 85,
-        "relevé live partagé": 0,
-        "scan en direct 20e/60e": 208,
-        "bilan de minuit": 4291,
-        "marqueurs live": 115,
-        "programme fictif": 0,
-        "univers du jour": 0,
-        "compositions T-90": 0,
-        "bilan Scouting": 0,
-        "consolidation apprentissage": 36,
-        "enrichissement matchs suivis": 0,
-        "vérification accès internet des modèles": 0
+        "scan matinal": 0,
+        "relevé live partagé": 32092
       }
     },
     "lastTick": {
@@ -6739,17 +6728,6 @@
       "source": "api_football"
     },
     "abortedTicks": [
-      {
-        "startedAt": "2026-11-02T01:11:25.570Z",
-        "step": "marqueurs live",
-        "at": "2026-11-02T01:12:57.100Z",
-        "stepDurationsSec": {
-          "scan matinal": 0,
-          "relevé live partagé": 0,
-          "scan en direct 20e/60e": 7,
-          "bilan de minuit": 0
-        }
-      },
       {
         "startedAt": "2026-11-02T01:15:38.430Z",
         "step": "scan en direct 20e/60e",
@@ -6885,6 +6863,14 @@
         "stepDurationsSec": {
           "scan matinal": 1,
           "relevé live partagé": 0
+        }
+      },
+      {
+        "startedAt": "2026-11-06T22:03:42.806Z",
+        "step": "scan matinal",
+        "at": "2026-11-06T22:03:42.806Z",
+        "stepDurationsSec": {
+          "terminé": 94
         }
       }
     ],
@@ -7044,11 +7030,11 @@
       "settledLast24h": 4
     },
     "trainingRows": {
-      "last14Days": 19079,
+      "last14Days": 13791,
       "lastClosedAt": "2026-11-06T22:01:29.687Z",
       "bySource": {
-        "api_football": 7906,
-        "omniroute": 11173
+        "api_football": 6353,
+        "omniroute": 7438
       }
     },
     "model": {
@@ -7235,7 +7221,7 @@
         {
           "name": "Principal",
           "ok": true,
-          "latencyMs": 1842,
+          "latencyMs": 162,
           "readyModels": 27,
           "configuredReady": 12,
           "configuredTotal": 13
@@ -7243,8 +7229,8 @@
         {
           "name": "Omniroute",
           "ok": true,
-          "latencyMs": 5611,
-          "readyModels": 831,
+          "latencyMs": 2151,
+          "readyModels": 830,
           "configuredReady": 2,
           "configuredTotal": 2
         }
@@ -7252,23 +7238,23 @@
       "leaderboard": [
         {
           "label": "Principal · auto",
-          "ok": 11881,
+          "ok": 11883,
           "fail": 1328,
-          "avgMs": 1284,
+          "avgMs": 1364,
           "coolingDown": false
         },
         {
           "label": "Principal · gpt-oss-20b",
-          "ok": 4597,
+          "ok": 4599,
           "fail": 959,
-          "avgMs": 1584,
+          "avgMs": 1256,
           "coolingDown": false
         },
         {
           "label": "Principal · allam-2-7b",
-          "ok": 12051,
+          "ok": 12052,
           "fail": 11447,
-          "avgMs": 944,
+          "avgMs": 1001,
           "coolingDown": false
         },
         {
@@ -7304,7 +7290,7 @@
           "ok": 2349,
           "fail": 1021,
           "avgMs": 5015,
-          "coolingDown": true
+          "coolingDown": false
         },
         {
           "label": "Principal · ising-calibration-1.5-31b",
@@ -7318,7 +7304,7 @@
           "ok": 2570,
           "fail": 2303,
           "avgMs": 7353,
-          "coolingDown": true
+          "coolingDown": false
         }
       ],
       "webCapable": [],
@@ -7363,63 +7349,63 @@
     },
     "apiUsageToday": {
       "countsToday": {
-        "footballData": 3,
-        "apiFootball": 21,
-        "theOddsApi": 15,
+        "footballData": 4,
+        "apiFootball": 0,
+        "theOddsApi": 8,
         "perplexity": 0,
-        "apiFootball-autolearn": 13,
-        "sportmonks-autolearn": 1,
+        "apiFootball-autolearn": 0,
+        "sportmonks-autolearn": 0,
         "sofaScore": 0,
-        "sportmonks": 5
+        "sportmonks": 1
       },
       "theOddsApiMonth": {
-        "used": 150,
+        "used": 164,
         "limit": 500,
         "period": "month",
         "live": true
       }
     },
     "apiFootballBudget": {
-      "usedToday": 21,
-      "autolearnUsedToday": 13,
-      "autolearnRemaining": 57
+      "usedToday": 0,
+      "autolearnUsedToday": 0,
+      "autolearnRemaining": 70
     },
     "sofaScore": null,
     "liveSources": {
       "LiveScore": {
         "ok": true,
-        "count": 4,
-        "at": "2026-11-06T22:02:12.683Z",
+        "count": 31,
+        "at": "2026-11-07T11:04:14.472Z",
         "failStreak": 0
       },
-      "365Scores": {
+      "FotMob": {
         "ok": true,
-        "count": 4,
-        "at": "2026-11-06T22:02:12.683Z",
+        "count": 24,
+        "at": "2026-11-07T11:04:14.481Z",
         "failStreak": 0
       },
       "TheSportsDB": {
         "ok": true,
-        "count": 7,
-        "at": "2026-11-06T22:02:12.818Z",
+        "count": 66,
+        "at": "2026-11-07T11:04:14.482Z",
+        "failStreak": 0
+      },
+      "365Scores": {
+        "ok": true,
+        "count": 36,
+        "at": "2026-11-07T11:04:14.494Z",
+        "failStreak": 0
+      },
+      "ESPN": {
+        "ok": true,
+        "count": 1,
+        "at": "2026-11-07T11:04:14.511Z",
         "failStreak": 0
       },
       "AllSportsApi": {
         "ok": true,
         "count": 0,
-        "at": "2026-11-06T22:02:12.819Z",
-        "failStreak": 0
-      },
-      "FotMob": {
-        "ok": true,
-        "count": 4,
-        "at": "2026-11-06T22:02:12.818Z",
-        "failStreak": 0
-      },
-      "ESPN": {
-        "ok": true,
-        "count": 3,
-        "at": "2026-11-06T22:00:52.242Z",
+        "at": "2026-11-07T11:04:14.512Z",
         "failStreak": 0
       }
     },
@@ -7854,7 +7840,8 @@
       "the spartans": "spartans",
       "ca san carlos": "san carlos",
       "bangor 1876": "bangor",
-      "rapid vienna": "rapid wien"
+      "rapid vienna": "rapid wien",
+      "kalju nomme": "nomme kalju"
     },
     "voidedLegs": {
       "fictional": 6494,
@@ -7862,7 +7849,7 @@
       "pendingNoVerdict": 444
     },
     "teamRegistry": {
-      "teams": 5951
+      "teams": 5974
     },
     "comboTrainer": {
       "validated": [
@@ -8213,21 +8200,21 @@
       "moduleNatifPresent": true
     },
     "serverFeed": {
-      "lastPullAt": "2026-11-06T20:53:28.986Z",
-      "slicesRead": 3767,
-      "samplesAdded": 66500,
-      "lastSlice": "data/server/live/2026-11-06/2040-mw2g8x1q.json",
+      "lastPullAt": "2026-11-07T02:09:16.011Z",
+      "slicesRead": 3781,
+      "samplesAdded": 67055,
+      "lastSlice": "data/server/live/2026-11-06/0040-mw2g8x1q.json",
       "server": {
-        "at": "2026-11-06T22:01:48.656Z",
+        "at": "2026-11-07T11:01:49.827Z",
         "host": "DESKTOP-OSPJN0K",
         "role": "collecte",
         "startedAt": "2026-11-04T18:27:47.239Z",
-        "lastTickAt": "2026-11-06T22:01:23.437Z",
-        "liveMatches": 41,
+        "lastTickAt": "2026-11-07T11:01:04.862Z",
+        "liveMatches": 150,
         "sites": {
           "fotmob-matchs": {
             "status": "ok",
-            "lastCheckAt": "2026-11-06T22:01:44.146Z"
+            "lastCheckAt": "2026-11-07T11:01:40.386Z"
           }
         }
       }
@@ -8481,136 +8468,119 @@
       }
     ],
     "unmatchedPlannedLive": {
-      "at": "2026-11-06T20:53:49.322Z",
+      "at": "2026-11-07T11:04:14.579Z",
       "unmatched": [],
       "sourceNames": [
-        "Everton - Coventry City",
-        "Sevilla - Deportivo Alaves",
-        "Hamburger SV - Borussia M'gladbach",
-        "Venezia - Udinese",
-        "Toulouse - Strasbourg",
-        "Willem II - PEC Zwolle",
-        "Derby County - Bolton Wanderers",
-        "Bristol Rovers - Cambridge United",
-        "Oxford City - Leicester City",
-        "Famalicao - Arouca",
-        "Standard Liege - SK Beveren",
-        "Raith Rovers - Dunfermline Athletic",
-        "Ascoli - Palermo",
-        "Boulogne - FC Annecy",
-        "Dijon - Red Star",
-        "Dunkerque - Guingamp",
-        "Grenoble - Reims",
-        "Montpellier - Metz",
-        "Nancy - Sochaux",
-        "FC Dordrecht - NAC Breda",
-        "FC Eindhoven - Jong Ajax",
-        "Helmond Sport - FC Volendam",
-        "Wisla Krakow - Cracovia",
-        "Paris Saint-Germain W - Le Havre W",
-        "FC Admira Wacker Modling - SKN St. Poelten",
-        "Quorn - Alfreton Town",
-        "Brentford Academy - Wolves U21",
-        "Nottingham Forest U21 - Leicester City U21",
-        "Reading U21 - Newcastle United U21",
-        "Stoke City U21 - Fulham U21",
-        "Sunderland U21 - Blackburn Rovers U21",
-        "Alcione - Lumezzane",
-        "Union Brescia - FC Arzignano Valchiampo",
-        "Birzebbuga St. Peters FC - Mosta",
-        "Union Touarga Sport - US Amal Tiznit",
-        "Cliftonville - Larne",
-        "Atletico Grau - Cusco FC",
-        "Odra Opole - Skierniewice",
-        "CF Os Belenenses - Lusitano Ginasio Clube",
-        "Real Aviles Industrial - CD Extremadura 1924",
-        "Aarau - FC Wil 1900",
-        "Ammanford - Briton Ferry",
-        "Cambrian & Clydach - Barry Town",
-        "Haverfordwest - Cardiff Met University",
-        "Holywell Town - Airbus UK Broughton",
-        "Llandudno FC - TNS",
-        "Penybont - Caernarfon",
-        "Connah's Quay - Flint Town United",
-        "Trefelin BGC - Colwyn Bay",
-        "Jong Genk - Gent U23",
-        "Sporting Hasselt - Patro Eisden",
-        "Wisła Kraków - Cracovia",
-        "CF Os Belenenses - Lusitano de Évora",
-        "Cambrian United - Barry Town",
-        "Llandudno FC - The New Saints",
-        "Genk U23 - Gent U23",
-        "Brentford U21 - Wolverhampton Wanderers U21",
-        "Genk U23 - KAA Gent II",
-        "Sunderland U21 - Blackburn U21",
-        "Reading U21 - Newcastle U21",
-        "Nottingham F. U21 - Leicester City U21",
-        "Admira - St. Pölten",
-        "Strabane Athletic - Annagh United",
-        "Moyola Park - Newry City",
-        "Ballinamallard United - Rathfriland Rangers",
-        "Haverfordwest - Cardiff Metropolitan",
-        "PSG (W) - Le Havre (W)",
-        "CF Os Belenenses - Lusitano GC",
-        "Alianza Fc Panama II - Tauro Fc Ii",
-        "Cd Plaza Amador Ii - San Martín Fc",
-        "FC Chorrillo - Potros del Este",
-        "US Touarga - Amal Tiznit",
-        "Europa FC - Hound Dogs",
-        "Paris Saint-Germain - Le Havre AC",
-        "Saint Louis - Dayton",
-        "George Mason - Fordham",
-        "Omaha - South Dakota",
-        "Warta Sieradz - Lechia Tomaszów Mazowiecki",
-        "Penrhyncoch - Caersws",
-        "Bala Town - Guilsfield"
+        "Eyupspor - Kocaelispor",
+        "Perth Glory - Newcastle Jets",
+        "Granada W - Espanyol W",
+        "SC Freiburg W - 1. FC Nuremberg W",
+        "Naftan Novopolotsk - Maxline Vitebsk",
+        "FC Kuressaare - Nomme United",
+        "FCI Levadia - Nomme Kalju FC",
+        "Narva Trans - Harju Jalgpallikool",
+        "Paide Linnameeskond - Flora Tallinn",
+        "Tammeka - Parnu JK Vaprus",
+        "FC Meshakhte Tkibuli - Torpedo Kutaisi",
+        "Lee Man FC - Southern District RSA",
+        "Rajasthan United - Gokulam FC",
+        "FK Struga - KF Shkendija",
+        "Sokol Kleczew - Sandecja Nowy Sacz",
+        "FC Bihor Oradea - CSM Slatina",
+        "Keciorengucu - Manisa FK",
+        "Van Spor Kulubu - Sivasspor",
+        "Ankaragucu - Kahramanmaras Istiklalspor",
+        "Serik Belediyespor - Iskenderun FK",
+        "Kudrivka - Chornomorets Odesa",
+        "Hoang Anh Gia Lai - Ha Noi FC",
+        "Hai Phong - Song Lam Nghe An",
+        "Ninh Binh FC - Bac Ninh",
+        "Freiburg (W) - Nürnberg (W)",
+        "Fakel - Dynamo Moscow",
+        "Naftan Novopolotsk - ML Vitebsk",
+        "Andijon - Lokomotiv Tashkent",
+        "Khonkaen United FC - Songkhla United FC",
+        "FC Lida - Bate Borisov II Reserve",
+        "Dinamo Minsk II Reserve - FC Slutsk",
+        "Energetik BGU - Ostrovets",
+        "Ofk Malzenice - STK Samorin",
+        "Genoa U19 - Lecce U19",
+        "Atalanta U19 - Inter Milan U19",
+        "Aragvi Dusheti - Kolkheti Poti",
+        "Gareji - Merani Martvili",
+        "Levadia Tallinn - Kalju Nomme",
+        "FC Minsk II - Molodechno",
+        "Hapoel Yarka - Maccabi Ihud Bnei Ivtin",
+        "Istiklol Dushanbe - FK Vakhsh",
+        "Kharkiv - Karpaty Lviv",
+        "Sardarapat FC - Ararat Yerevan",
+        "Prykarpattia - Pheniks-Mariupol",
+        "Ordabasy Shymkent - Kaysar Kyzylorda",
+        "Mombasa United FC - Shabana",
+        "Granada - Espanyol",
+        "Dangkor Senchey - Life Sihanoukville",
+        "Podillya Khmelnytskyi - Dnister Zalishchyky",
+        "JDFS Alberts - JFK Ventspils",
+        "Valmiera - Skanstes",
+        "Kotwica Kórnik - Lech Poznań II",
+        "Metta - Mārupe",
+        "Granada Femenino - Espanyol Femení",
+        "Minsk-2 - Molodechno",
+        "Narva Trans - Harju Laagri",
+        "Melbourne City Women - Beijing Jingtan",
+        "Vanspor - Sivasspor",
+        "Becamex Hồ Chí Minh City - PVF-CAND",
+        "Amasyaspor - Galata",
+        "Lida - BATE-2 Borisov",
+        "Dinamo-2 Minsk - Slutsk",
+        "SKA-1938 Minsk - Ostrovets",
+        "Dynamo Malženice - Šamorín",
+        "Gödöllő - Kisvárda II",
+        "Velké Hamry - Horní Ředice",
+        "Benešov - Dukla Praha B",
+        "Loko Praha - Bohemians 1905 B",
+        "Motorlet Praha - Admira Praha",
+        "Slavia Praha C - Dynamo České Budějovice",
+        "Mladá Boleslav B - Pardubice B",
+        "Karadeniz Ereğli 1980 - İnkılap",
+        "Karaköprü Belediyespor - Niğde Belediyesispor",
+        "Slovan Liberec B - Neratovice-Byškovice",
+        "Metalist Kharkiv - Lokomotyv Kyiv",
+        "Yeni Mersin İdmanyurdu - Bitlis 1916",
+        "Fatsa Belediyespor - Pazarspor",
+        "Tokat Belediyespor - Karabük İdman Yurdu",
+        "1922 Akşehirspor - Bursa Yıldırımspor",
+        "Kırıkkale - Yozgat Belediyesi Bozokspor"
       ]
     },
     "liveStatsScan": {
-      "lastScan": {
-        "at": "2026-11-06T20:49:11.776Z",
-        "matches": 6,
-        "sources": "6 sources gratuites"
-      },
-      "todaySamples": {
-        "Hamburger SV - Borussia Mönchengladbach": 119,
-        "Toulouse FC - RC Strasbourg Alsace": 96,
-        "Venezia FC - Udinese Calcio": 98,
-        "Sevilla FC - Deportivo Alavés": 87,
-        "Everton FC - Coventry City FC": 39,
-        "Bristol Rovers - Cambridge United": 8,
-        "Oxford City - Leicester": 10
-      }
+      "lastScan": null,
+      "todaySamples": {}
     },
     "backupOddsSources": {
       "betBetter": {
-        "freePicks": 4,
-        "totalGoals": 0
+        "freePicks": 9,
+        "totalGoals": 2
       },
       "fanLine": {
         "fixtures": 20,
-        "soccer": 1
+        "soccer": 9
       },
       "oddsmagnet": {
         "httpStatus": null
       }
     },
     "teamStats": {
-      "indexUpdatedAt": "2026-11-06T01:46:23Z",
+      "indexUpdatedAt": "2026-11-07T01:07:32Z",
       "teamsInIndex": 111,
       "summariesCached": 111,
-      "lookups": 57,
-      "withTrend": 7,
-      "unknownTeams": 50,
-      "lastTrendAt": "2026-11-06T20:43:32.699Z",
-      "lastUnknown": "Odra Opole - Skierniewice"
+      "lookups": 1,
+      "withTrend": 0,
+      "unknownTeams": 1,
+      "lastTrendAt": null,
+      "lastUnknown": "FC Minsk - Molodechno"
     },
     "teamStatsUsageLog": [
-      {
-        "at": "2026-11-06T20:34:57.426Z",
-        "match": "Dijon - Red Star",
-        "result": "équipe inconnue"
-      },
       {
         "at": "2026-11-06T20:34:58.803Z",
         "match": "Everton - Coventry City",
@@ -8729,6 +8699,11 @@
       {
         "at": "2026-11-06T20:45:56.502Z",
         "match": "Odra Opole - Skierniewice",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-11-07T11:04:20.044Z",
+        "match": "FC Minsk - Molodechno",
         "result": "équipe inconnue"
       }
     ],
@@ -8854,7 +8829,7 @@
         "unit": "goals_1h",
         "label": "Buts à la pause",
         "verified": 1151,
-        "pending": 307,
+        "pending": 311,
         "meanPredicted": 0.9,
         "meanActual": 0.9,
         "meanError": -0.06,
@@ -8882,7 +8857,7 @@
         "unit": "goals_ft",
         "label": "Buts en fin de match",
         "verified": 6394,
-        "pending": 1060,
+        "pending": 1064,
         "meanPredicted": 2.9,
         "meanActual": 3,
         "meanError": 0.08,
@@ -10452,7 +10427,7 @@
         }
       ],
       "samples": {
-        "pending": 138,
+        "pending": 146,
         "measured": 2716
       }
     },
