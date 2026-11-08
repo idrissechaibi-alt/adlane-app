@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-11-08T15:17:49.219Z",
+  "exportedAt": "2026-11-08T15:22:04.807Z",
   "formatVersion": 1,
   "source": "APP adlane",
   "data": {
@@ -6725,9 +6725,9 @@
       "nightlyReviewPointsCreated": 0
     },
     "lastRealFastTick": {
-      "at": "2026-11-08T14:57:59.777Z",
-      "liveFound": 10,
-      "fresh": 0,
+      "at": "2026-11-08T15:20:26.516Z",
+      "liveFound": 9,
+      "fresh": 3,
       "source": "api_football"
     },
     "abortedTicks": [
@@ -7029,8 +7029,8 @@
       "won": 3545,
       "lastPlacedAt": "2026-11-08T14:30:09.992Z",
       "lastSettledAt": "2026-11-08T14:25:24.829Z",
-      "placedLast24h": 159,
-      "settledLast24h": 123
+      "placedLast24h": 136,
+      "settledLast24h": 88
     },
     "trainingRows": {
       "last14Days": 16951,
@@ -7159,12 +7159,12 @@
       ]
     },
     "inPlayProposals": {
-      "real": 1049,
+      "real": 1055,
       "fictional": 75666,
       "fictionalReviewed": 73604,
       "fictionalSettledLegs": 67203,
-      "lastCreatedAt": "2026-11-08T15:17:23.080Z",
-      "createdLast24h": 7508
+      "lastCreatedAt": "2026-11-08T15:21:43.990Z",
+      "createdLast24h": 7499
     },
     "predictionOutcomes30d": 71912,
     "marketSeries": {
@@ -7224,21 +7224,28 @@
         {
           "name": "Principal",
           "ok": true,
-          "latencyMs": 316,
-          "readyModels": 25,
-          "configuredReady": 10,
+          "latencyMs": 145,
+          "readyModels": 26,
+          "configuredReady": 11,
           "configuredTotal": 13
         },
         {
           "name": "Omniroute",
           "ok": true,
-          "latencyMs": 2548,
+          "latencyMs": 4378,
           "readyModels": 845,
           "configuredReady": 2,
           "configuredTotal": 2
         }
       ],
       "leaderboard": [
+        {
+          "label": "Omniroute · Clodiko",
+          "ok": 28164,
+          "fail": 1160,
+          "avgMs": 2729,
+          "coolingDown": false
+        },
         {
           "label": "Principal · allam-2-7b",
           "ok": 12553,
@@ -7247,31 +7254,24 @@
           "coolingDown": true
         },
         {
-          "label": "Omniroute · Clodiko",
-          "ok": 28160,
-          "fail": 1160,
-          "avgMs": 3555,
-          "coolingDown": false
-        },
-        {
-          "label": "Principal · riva-translate-4b-instruct-v2",
-          "ok": 3373,
-          "fail": 2586,
-          "avgMs": 2813,
+          "label": "Principal · gpt-oss-120b",
+          "ok": 3629,
+          "fail": 4136,
+          "avgMs": 3857,
           "coolingDown": false
         },
         {
           "label": "Omniroute · Maximus appus",
-          "ok": 24389,
+          "ok": 24393,
           "fail": 940,
-          "avgMs": 6176,
+          "avgMs": 9287,
           "coolingDown": false
         },
         {
-          "label": "Principal · gpt-oss-120b",
-          "ok": 3627,
-          "fail": 4135,
-          "avgMs": 4329,
+          "label": "Principal · riva-translate-4b-instruct-v2",
+          "ok": 3376,
+          "fail": 2588,
+          "avgMs": 8227,
           "coolingDown": false
         },
         {
@@ -7467,7 +7467,7 @@
     "apiUsageToday": {
       "countsToday": {
         "footballData": 7,
-        "apiFootball": 86,
+        "apiFootball": 88,
         "theOddsApi": 35,
         "perplexity": 12,
         "apiFootball-autolearn": 54,
@@ -7483,47 +7483,47 @@
       }
     },
     "apiFootballBudget": {
-      "usedToday": 86,
+      "usedToday": 88,
       "autolearnUsedToday": 54,
-      "autolearnRemaining": 14
+      "autolearnRemaining": 12
     },
     "sofaScore": null,
     "liveSources": {
       "TheSportsDB": {
         "ok": true,
-        "count": 216,
-        "at": "2026-11-08T15:15:31.387Z",
+        "count": 219,
+        "at": "2026-11-08T15:21:53.853Z",
         "failStreak": 0
       },
       "LiveScore": {
         "ok": true,
-        "count": 105,
-        "at": "2026-11-08T15:17:17.301Z",
+        "count": 104,
+        "at": "2026-11-08T15:21:42.257Z",
         "failStreak": 0
       },
       "AllSportsApi": {
         "ok": true,
         "count": 5,
-        "at": "2026-11-08T15:17:32.939Z",
+        "at": "2026-11-08T15:21:42.344Z",
         "failStreak": 0
       },
       "365Scores": {
-        "ok": false,
-        "error": "fetch failed: Fetch request has been canceled",
-        "at": "2026-11-08T15:15:59.002Z",
-        "failStreak": 25
+        "ok": true,
+        "count": 56,
+        "at": "2026-11-08T15:22:04.036Z",
+        "failStreak": 0
       },
       "FotMob": {
         "ok": true,
         "count": 106,
-        "at": "2026-11-08T15:17:21.771Z",
+        "at": "2026-11-08T15:21:42.220Z",
         "failStreak": 0
       },
       "ESPN": {
-        "ok": false,
-        "error": "fetch failed: Fetch request has been canceled",
-        "at": "2026-11-08T15:15:59.015Z",
-        "failStreak": 25
+        "ok": true,
+        "count": 23,
+        "at": "2026-11-08T15:21:15.373Z",
+        "failStreak": 0
       }
     },
     "learnedTeamAliases": {
@@ -7972,7 +7972,7 @@
     "voidedLegs": {
       "fictional": 6690,
       "real": 3,
-      "pendingNoVerdict": 1809
+      "pendingNoVerdict": 1815
     },
     "teamRegistry": {
       "teams": 2909
@@ -8124,7 +8124,7 @@
         {
           "coach": "Guardiola",
           "league": "Premier League",
-          "verdicts": 62,
+          "verdicts": 67,
           "settledLegs": 51,
           "supported": {
             "n": 20,
@@ -8282,8 +8282,8 @@
           "ready": false
         }
       ],
-      "total": 311,
-      "analysesIA": 89,
+      "total": 316,
+      "analysesIA": 90,
       "budgetIAParJour": 160,
       "bilans": {
         "reviews": 78,
@@ -8368,21 +8368,21 @@
       "moduleNatifPresent": true
     },
     "serverFeed": {
-      "lastPullAt": "2026-11-08T15:15:43.905Z",
-      "slicesRead": 4418,
-      "samplesAdded": 78331,
-      "lastSlice": "data/server/live/2026-11-08/1450-mw2g8x1q.json",
+      "lastPullAt": "2026-11-08T15:20:52.840Z",
+      "slicesRead": 4421,
+      "samplesAdded": 78374,
+      "lastSlice": "data/server/live/2026-11-08/1520-mw2g8x1q.json",
       "server": {
-        "at": "2026-11-08T15:16:25.155Z",
+        "at": "2026-11-08T15:21:25.163Z",
         "host": "DESKTOP-OSPJN0K",
         "role": "collecte",
         "startedAt": "2026-11-04T18:27:47.239Z",
-        "lastTickAt": "2026-11-08T14:57:15.356Z",
-        "liveMatches": 356,
+        "lastTickAt": "2026-11-08T15:21:16.293Z",
+        "liveMatches": 435,
         "sites": {
           "fotmob-matchs": {
-            "status": "erreur",
-            "lastCheckAt": "2026-11-08T14:57:14.372Z"
+            "status": "ok",
+            "lastCheckAt": "2026-11-08T15:21:13.155Z"
           }
         }
       }
@@ -8636,13 +8636,14 @@
       }
     ],
     "unmatchedPlannedLive": {
-      "at": "2026-11-08T15:15:48.410Z",
+      "at": "2026-11-08T15:20:53.318Z",
       "unmatched": [],
       "sourceNames": [
         "Brighton - Brentford",
         "Crystal Palace - Liverpool",
         "Ipswich Town - AFC Bournemouth",
         "Sunderland - Chelsea",
+        "Real Sociedad - Rayo Vallecano",
         "FC Cologne - Bayer Leverkusen",
         "Genoa - AC Milan",
         "Monza - Atalanta",
@@ -8655,6 +8656,7 @@
         "Crystal Palace W - Charlton Athletic W",
         "Tottenham Hotspur W - Brighton W",
         "London City Lionesses - Birmingham City W",
+        "Girona - Almeria",
         "Virtus Entella - Modena",
         "Ipswich Town W - Bristol City W",
         "Newcastle United W - Burnley W",
@@ -8666,7 +8668,6 @@
         "Jablonec - Mlada Boleslav",
         "Slavia Prague - SK Lisen",
         "TSV Hartberg - SCR Altach",
-        "WSG Tirol - Austria Wien",
         "AEK Athens - Levadiakos",
         "Asteras Tripolis - Kalamata",
         "Osijek - Hajduk Split",
@@ -8717,27 +8718,27 @@
         "Enugu Rangers - Kwara United",
         "Nasarawa United - Plateau United",
         "Ranchers Bees - Enyimba",
-        "Warri Wolves FC - Katsina United",
-        "LKS Lodz - Stal Rzeszow"
+        "Warri Wolves FC - Katsina United"
       ]
     },
     "liveStatsScan": {
       "lastScan": {
-        "at": "2026-11-08T15:16:41.465Z",
+        "at": "2026-11-08T15:20:55.272Z",
         "matches": 10,
         "sources": "6 sources gratuites"
       },
       "todaySamples": {
-        "Crystal Palace FC - Liverpool FC": 68,
-        "Sunderland AFC - Chelsea FC": 67,
-        "Ipswich Town FC - AFC Bournemouth": 62,
-        "AC Monza - Atalanta BC": 66,
-        "Brighton & Hove Albion FC - Brentford FC": 66,
-        "Genoa CFC - AC Milan": 64,
-        "Stade Rennais FC 1901 - Lille OSC": 62,
-        "1. FC Köln - Bayer 04 Leverkusen": 38,
+        "Crystal Palace FC - Liverpool FC": 69,
+        "Sunderland AFC - Chelsea FC": 69,
+        "Ipswich Town FC - AFC Bournemouth": 64,
+        "AC Monza - Atalanta BC": 68,
+        "Brighton & Hove Albion FC - Brentford FC": 67,
+        "Genoa CFC - AC Milan": 65,
+        "Stade Rennais FC 1901 - Lille OSC": 65,
+        "1. FC Köln - Bayer 04 Leverkusen": 40,
         "Cray Wanderers - Stockport County": 12,
-        "Wimborne Town - Crawley Town": 1
+        "Wimborne Town - Crawley Town": 3,
+        "Elche CF - Real Betis Balompié": 2
       }
     },
     "backupOddsSources": {
@@ -8747,7 +8748,7 @@
       },
       "fanLine": {
         "fixtures": 20,
-        "soccer": 1
+        "soccer": 2
       },
       "oddsmagnet": {
         "httpStatus": null
@@ -8757,23 +8758,13 @@
       "indexUpdatedAt": "2026-11-08T00:53:59Z",
       "teamsInIndex": 111,
       "summariesCached": 111,
-      "lookups": 971,
-      "withTrend": 49,
+      "lookups": 973,
+      "withTrend": 51,
       "unknownTeams": 922,
-      "lastTrendAt": "2026-11-08T15:16:42.501Z",
+      "lastTrendAt": "2026-11-08T15:20:56.146Z",
       "lastUnknown": "Wimborne Town - Crawley Town"
     },
     "teamStatsUsageLog": [
-      {
-        "at": "2026-11-08T14:33:08.944Z",
-        "match": "L'Aquila - K-Sport Montecchio Gallo",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-11-08T14:33:13.571Z",
-        "match": "Imperia - Saluzzo",
-        "result": "équipe inconnue"
-      },
       {
         "at": "2026-11-08T14:33:14.213Z",
         "match": "Bisceglie - Gladiator",
@@ -8887,6 +8878,16 @@
       {
         "at": "2026-11-08T15:16:42.501Z",
         "match": "AC Monza - Atalanta BC",
+        "result": "tendance"
+      },
+      {
+        "at": "2026-11-08T15:19:51.105Z",
+        "match": "Brighton & Hove Albion FC - Brentford FC",
+        "result": "tendance"
+      },
+      {
+        "at": "2026-11-08T15:20:56.144Z",
+        "match": "Sunderland AFC - Chelsea FC",
         "result": "tendance"
       }
     ],
@@ -9675,7 +9676,7 @@
       },
       {
         "key": "btts|yes|ft",
-        "factor": 1.021
+        "factor": 1.018
       }
     ],
     "oneXBetVsBet365": [
