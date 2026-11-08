@@ -2009,7 +2009,10 @@ export async function withdrawProposal(
   const l = p.legs[0];
   const ratio = reason === 'cote' && opts.odds && opts.estimated && opts.estimated > 0 ? Math.max(0.5, Math.min(1, opts.odds / opts.estimated)) : undefined;
   await addRemoved({ home: l.homeTeam, away: l.awayTeam, market: l.market, selection: l.selection, reason, ratio, lineMin: opts.lineMin, lineMax: opts.lineMax });
-  writeInPlayProposals(readInPlayProposals().filter((x) => x.id !== p.id));
+  const all = readInPlayProposals();
+  // Fichier illisible (lecture vide) : on ne réécrit jamais, sous peine d'effacer tout l'historique.
+  if (all.length === 0) return false;
+  writeInPlayProposals(all.filter((x) => x.id !== p.id));
   await releaseClaim(p);
   return true;
 }
@@ -2046,7 +2049,7 @@ export function proposalDuplicateKey(p: InPlayProposal): string | null {
   const shape = legShapeKey(l.market, l.selection);
   // Pari RÉEL : un seul par match, marché, fenêtre et côté, quel que soit le checkpoint (le même pari reproposé à la 60e après la
   // 20e comptait deux fois dans les statistiques). Fictif : un par checkpoint (la calibration apprend chaque moment).
-  if (p.real !== false) return `r|${names}|${shape}`;
+  if (p.real !== false) return `r|${p.createdAt.slice(0, 10)}|${names}|${shape}`;
   const kind = p.kind === 'halftime' || (p.kind === 'minute60' && p.minute != null && p.minute < 55) ? 'ht' : p.kind;
   return `f|${names}|${shape}|${kind}`;
 }
@@ -2131,7 +2134,6 @@ export async function runRealInPlayTick(liveFixtures: LiveFixture[]): Promise<nu
   await ensureDeltaSamplesLoaded();
   await runLiveStatsScan(liveFixtures).catch(() => 0);
   await ensureRemovedLoaded();
-  pruneDuplicateRealProposals();
   const existingReal = readInPlayProposals().filter((p) => p.real !== false);
   const alreadyProposed = new Set([
     ...existingReal.filter((p) => !p.strategy).flatMap((p) => p.legs.map((l) => `${l.fixtureId}-${p.kind}`)),
