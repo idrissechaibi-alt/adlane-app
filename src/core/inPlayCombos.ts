@@ -118,6 +118,7 @@ import { backupTotalGoalsOdds } from '../api/footballDataAPIs/backupOdds';
 import { ensureRefCorrections, recordRefComparison } from './oddsLoop';
 import { toX1Odds, CountInfo, MIN_ESTIMATED_ODDS, OddsContext, ensureOddsLoaded, estimateLegOdds, featuresOf, parseLine, setOddsWatch } from './oddsLearning';
 import { ensureLineLimitsLoaded, ensureMarketOffLoaded, isMarketOff, lineAvailability } from './lineLimits';
+import { RemovalReason, addRemoved, ensureRemovedLoaded, isLegRemoved, legShapeKey, removedOddsFactor } from './removedBets';
 import { atLeastProb, pickHighestOverLine, pickLowestUnderLine } from './countModel';
 import AsyncStorage from './kvStore';
 import { matchesForDate, isWithinBreakWindow } from './internationalBreak';
@@ -1238,17 +1239,20 @@ const CLAIMED_KEY = '@claimed_picks';
 let claimed: Map<string, number> | null = null;
 let claimedLoading: Promise<void> | null = null;
 
+async function ensureClaimedLoaded(): Promise<void> {
+  if (claimed) return;
+  claimedLoading ??= (async () => {
+    try {
+      claimed = new Map(Object.entries(JSON.parse((await AsyncStorage.getItem(CLAIMED_KEY)) ?? '{}')));
+    } catch {
+      claimed = new Map();
+    }
+  })();
+  await claimedLoading;
+}
+
 async function claimPick(p: InPlayProposal): Promise<boolean> {
-  if (!claimed) {
-    claimedLoading ??= (async () => {
-      try {
-        claimed = new Map(Object.entries(JSON.parse((await AsyncStorage.getItem(CLAIMED_KEY)) ?? '{}')));
-      } catch {
-        claimed = new Map();
-      }
-    })();
-    await claimedLoading;
-  }
+  await ensureClaimedLoaded();
   const key = p.legs.map((l) => `${normalizeTeamName(l.homeTeam)}|${normalizeTeamName(l.awayTeam)}|${l.selection}`).sort().join('+') + `|${p.kind}`;
   const now = Date.now();
   for (const [k, at] of claimed!) if (now - at > 24 * 3_600_000) claimed!.delete(k);
@@ -1414,6 +1418,7 @@ async function bestLegFor(
   await ensureOddsLoaded();
   await ensureLineLimitsLoaded();
   await ensureMarketOffLoaded();
+  await ensureRemovedLoaded();
   const currentStats = await fetchRealLiveStats(live);
   // Corners et cartons déjà comptés (sources live gratuites) : sans eux, le
   // pipe réel ne pouvait proposer que des marchés de buts.
@@ -1438,9 +1443,14 @@ async function bestLegFor(
   // Tableau bet365 réel (MoviOdds, sans clé) + 365Scores : cotes et lignes réellement proposées sur CE match.
   if (lineup) for (const l of rawLegs) l.evidence += lineup.note;
   const ref = rawLegs.length > 0 ? await getRefOdds(match.homeTeam, match.awayTeam) : null;
+  // Un pari déjà proposé sur ce match (même marché, fenêtre et côté) n'est jamais reproposé à un autre checkpoint.
+  const takenShapes = existingRealShapes(live.homeTeam, live.awayTeam);
   const playable = rawLegs.filter(
     (l) =>
       worthProposing(l) &&
+      !takenShapes.has(legShapeKey(l.market, l.selection)) &&
+      // Ligne inexistante ou marché non proposé, signalés par l'utilisateur : retiré, pas reproposé.
+      !isLegRemoved(live.homeTeam, live.awayTeam, l.market, l.selection) &&
       // Marché que le bookmaker ne propose pas pour l'instant sur ce match (signalé par l'utilisateur).
       !isMarketOff(live.fixtureId, l.projection?.unit ?? l.market) &&
       // Ligne absente du tableau bet365 en ce moment : ce pari n'existe pas chez lui.
@@ -1481,7 +1491,8 @@ async function bestLegFor(
     const b = await backupTotalGoalsOdds(match.homeTeam, match.awayTeam, l.selection).catch(() => null);
     if (b) backup.set(l, Math.round(b.fairOdds * 0.93 * 100) / 100);
   }
-  const withOdds = playable.map((l) => ({ leg: l, odds: backup.get(l) ?? oddsOf(l) }));
+  // Cote saisie sous le plancher : l'estimation est ramenée à l'écart mesuré avec la cote réelle, le pari revient quand elle remonte.
+  const withOdds = playable.map((l) => ({ leg: l, odds: (backup.get(l) ?? oddsOf(l)) * removedOddsFactor(live.homeTeam, live.awayTeam, l.market, l.selection) }));
   // Plancher de cote : sous 1,40 estimé, le pari n'est PAS proposé. Il est gardé en attente (affiché dans le
   // créneau) et réévalué à chaque passage : s'il atteint 1,40 avec l'évolution du match, il est proposé.
   const waiting = withOdds.filter((x) => x.odds < MIN_ESTIMATED_ODDS).sort((a, b) => b.leg.prob - a.leg.prob).slice(0, 4);
@@ -1895,7 +1906,9 @@ function strategyProposals(
     const leg: CandidateLeg = { market: bet.market, selection: bet.selection, prob: bet.prob, evidence: bet.evidence };
     // Pari réel : même plancher de cote que les autres paris (estimation sous 1.40 = pas proposé, réévalué au passage suivant).
     if (real) {
-      const est = estimateLegOdds(leg, 1, live.minute).odds;
+      if (isLegRemoved(live.homeTeam, live.awayTeam, leg.market, leg.selection)) continue;
+      if (existingRealShapes(live.homeTeam, live.awayTeam).has(legShapeKey(leg.market, leg.selection))) continue;
+      const est = estimateLegOdds(leg, 1, live.minute).odds * removedOddsFactor(live.homeTeam, live.awayTeam, leg.market, leg.selection);
       if (est < MIN_ESTIMATED_ODDS) continue;
       leg.estOdds = est;
     }
@@ -1950,6 +1963,78 @@ function appendInPlayProposals(fresh: InPlayProposal[]): InPlayProposal[] {
   return kept;
 }
 
+/** Mêmes équipes d'une source à l'autre (noms normalisés ou proches). */
+function sameTeams(a: { homeTeam: string; awayTeam: string }, home: string, away: string): boolean {
+  const ok = (x: string, y: string) => normalizeTeamName(x) === normalizeTeamName(y) || namesLikelyMatch(normalizeTeamName(x), normalizeTeamName(y));
+  return ok(a.homeTeam, home) && ok(a.awayTeam, away);
+}
+
+/** Dates (UTC) d'hier, d'aujourd'hui et de demain : seuls les paris proches sont comparés (le fichier compte des milliers de paris). */
+function nearDates(): Set<string> {
+  return new Set([-1, 0, 1].map((d) => new Date(Date.now() + d * 86_400_000).toISOString().slice(0, 10)));
+}
+
+/** Identités (marché, fenêtre, côté) des paris RÉELS déjà enregistrés sur ce match, tous checkpoints confondus. */
+function existingRealShapes(home: string, away: string): Set<string> {
+  const near = nearDates();
+  const out = new Set<string>();
+  for (const p of readInPlayProposals()) {
+    if (p.real === false || p.legs.length !== 1 || !near.has(p.createdAt.slice(0, 10))) continue;
+    if (sameTeams(p.legs[0], home, away)) out.add(legShapeKey(p.legs[0].market, p.legs[0].selection));
+  }
+  return out;
+}
+
+/** Libère la réservation d'un pari (claimPick) : un pari retiré peut être proposé de nouveau. */
+async function releaseClaim(p: InPlayProposal): Promise<void> {
+  await ensureClaimedLoaded();
+  const key = p.legs.map((l) => `${normalizeTeamName(l.homeTeam)}|${normalizeTeamName(l.awayTeam)}|${l.selection}`).sort().join('+') + `|${p.kind}`;
+  if (claimed?.delete(key)) AsyncStorage.setItem(CLAIMED_KEY, JSON.stringify(Object.fromEntries(claimed))).catch(() => {});
+}
+
+/**
+ * Retire un pari réel des propositions (donc des statistiques) sur demande de l'utilisateur :
+ * - 'ligne' : la ligne n'existe pas chez son bookmaker (bornes réellement proposées en option) ;
+ * - 'marche' : marché non proposé sur ce match ;
+ * - 'cote' : cote saisie sous le plancher (1,40) — le pari revient dès que l'estimation de l'app, ramenée à l'écart mesuré
+ *   avec cette cote réelle, repasse au-dessus du plancher.
+ * Les paris à plusieurs jambes ne sont pas retirés ici (aucun combiné réel sans recette validée).
+ */
+export async function withdrawProposal(
+  p: InPlayProposal,
+  reason: RemovalReason,
+  opts: { odds?: number; estimated?: number; lineMin?: number | null; lineMax?: number | null } = {}
+): Promise<boolean> {
+  if (p.legs.length !== 1 || p.real === false) return false;
+  const l = p.legs[0];
+  const ratio = reason === 'cote' && opts.odds && opts.estimated && opts.estimated > 0 ? Math.max(0.5, Math.min(1, opts.odds / opts.estimated)) : undefined;
+  await addRemoved({ home: l.homeTeam, away: l.awayTeam, market: l.market, selection: l.selection, reason, ratio, lineMin: opts.lineMin, lineMax: opts.lineMax });
+  writeInPlayProposals(readInPlayProposals().filter((x) => x.id !== p.id));
+  await releaseClaim(p);
+  return true;
+}
+
+/** Doublons déjà enregistrés (paris réels non réglés des deux derniers jours) : le plus ancien reste, les autres sont retirés. */
+export function pruneDuplicateRealProposals(): number {
+  const all = readInPlayProposals();
+  const near = nearDates();
+  const seen = new Set<string>();
+  const drop = new Set<string>();
+  const candidates = all.filter((p) => p.real !== false && p.legs.length === 1 && near.has(p.createdAt.slice(0, 10))).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  for (const p of candidates) {
+    const key = proposalDuplicateKey(p);
+    if (!key) continue;
+    if (!seen.has(key)) {
+      seen.add(key);
+      continue;
+    }
+    // Jamais un pari déjà réglé ni un pari dont l'utilisateur a saisi la cote : seulement les doublons encore ouverts.
+    if (!p.legs[0].settled && p.legs[0].bookOdds == null) drop.add(p.id);
+  }
+  if (drop.size > 0) writeInPlayProposals(all.filter((p) => !drop.has(p.id)));
+  return drop.size;
+}
+
 /**
  * Clé de doublon d'un pari simple : match + marché + fenêtre + côté + checkpoint.
  * null pour un combiné (plusieurs matchs, jamais comparé ici).
@@ -1957,10 +2042,13 @@ function appendInPlayProposals(fresh: InPlayProposal[]): InPlayProposal[] {
 export function proposalDuplicateKey(p: InPlayProposal): string | null {
   if (p.legs.length !== 1) return null;
   const l = p.legs[0];
-  const side = /^moins de|^0-0|ne marquent pas|\(non\)/i.test(l.selection) ? 'under' : 'over';
-  const window = /sur le match|total match/i.test(l.selection) ? 'ft' : 'other';
+  const names = `${normalizeTeamName(l.homeTeam)}|${normalizeTeamName(l.awayTeam)}`;
+  const shape = legShapeKey(l.market, l.selection);
+  // Pari RÉEL : un seul par match, marché, fenêtre et côté, quel que soit le checkpoint (le même pari reproposé à la 60e après la
+  // 20e comptait deux fois dans les statistiques). Fictif : un par checkpoint (la calibration apprend chaque moment).
+  if (p.real !== false) return `r|${names}|${shape}`;
   const kind = p.kind === 'halftime' || (p.kind === 'minute60' && p.minute != null && p.minute < 55) ? 'ht' : p.kind;
-  return `${p.real === false ? 'f' : 'r'}|${normalizeTeamName(l.homeTeam)}|${normalizeTeamName(l.awayTeam)}|${l.market}|${window}|${side}|${kind}`;
+  return `f|${names}|${shape}|${kind}`;
 }
 
 /**
@@ -2042,6 +2130,8 @@ export async function runLiveStatsScan(liveFixtures: LiveFixture[]): Promise<num
 export async function runRealInPlayTick(liveFixtures: LiveFixture[]): Promise<number> {
   await ensureDeltaSamplesLoaded();
   await runLiveStatsScan(liveFixtures).catch(() => 0);
+  await ensureRemovedLoaded();
+  pruneDuplicateRealProposals();
   const existingReal = readInPlayProposals().filter((p) => p.real !== false);
   const alreadyProposed = new Set([
     ...existingReal.filter((p) => !p.strategy).flatMap((p) => p.legs.map((l) => `${l.fixtureId}-${p.kind}`)),

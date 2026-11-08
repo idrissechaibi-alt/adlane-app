@@ -18,7 +18,7 @@ import { InteractionManager,
 import { Ionicons } from '@expo/vector-icons';
 import { MIN_ESTIMATED_ODDS, WatchedBet, ensureOddsLoaded, estimateProposalOdds, explainOddsMoves, getObservedOddsList, readOddsWatch } from '../core/oddsLearning';
 import { userMarkLineAvailable, userMarkLineUnavailable, userMarkMarketOff, userRecordOddsAndLearn, userSaveBet, userSetLegBookOdds } from '../core/serverLink';
-import { liveLegContext, proposalDuplicateKey } from '../core/inPlayCombos';
+import { liveLegContext, proposalDuplicateKey, withdrawProposal } from '../core/inPlayCombos';
 import { parseLine } from '../core/oddsLearning';
 import { executeMorningScan, getDailyPlan, checkAndUpdateT90Status, DailyPlan, runMorningScanIfDue, todayLocalDateString } from '../core/scheduler';
 import { buildScheduledMatches, ProposedSlip } from '../core/dailyWorkflow';
@@ -425,6 +425,12 @@ export default function DailyPlanScreen() {
       setOddsNoteId(null);
       setOddsNoteInput('');
       setOddsVersion((v) => v + 1);
+      // Cote réelle sous le plancher : le pari n'est pas jouable, il sort des propositions et des statistiques, et revient
+      // dès que l'estimation de l'app (ramenée à cet écart) repasse au-dessus du plancher.
+      if (odds < MIN_ESTIMATED_ODDS && (await withdrawProposal(proposal, 'cote', { odds, estimated: est }))) {
+        loadInPlayProposals();
+        Alert.alert('Pari retiré', `Cote ${odds.toFixed(2)} sous ${MIN_ESTIMATED_ODDS.toFixed(2)} : le pari est retiré des statistiques. Il sera reproposé si l'app estime que la cote dépasse ${MIN_ESTIMATED_ODDS.toFixed(2)}.`);
+      }
     } catch (error: any) {
       Alert.alert('Erreur', `Impossible d'enregistrer la cote : ${error.message}`);
     }
@@ -453,7 +459,9 @@ export default function DailyPlanScreen() {
     const marketOff = async () => {
       flagLeg();
       await userMarkMarketOff(leg.fixtureId, key);
-      Alert.alert('Noté', "Marché mis de côté 30 minutes pour ce match. Les lignes apprises ne changent pas.");
+      const removed = await withdrawProposal(proposal, 'marche');
+      if (removed) loadInPlayProposals();
+      Alert.alert('Noté', `Marché mis de côté 30 minutes pour ce match. Les lignes apprises ne changent pas.${removed ? '\nPari retiré des statistiques.' : ''}`);
       setOddsVersion((v) => v + 1);
     };
     const lineMissing = async () => {
@@ -530,13 +538,17 @@ export default function DailyPlanScreen() {
       if (high != null) await learn(high, highOdds, 'high');
       setMinLineForm(null);
       setOddsVersion((v) => v + 1);
+      // La ligne du pari n'existe pas : il sort des propositions et des statistiques, sans revenir tant que la ligne reste hors du menu.
+      const removed = await withdrawProposal(proposal, 'ligne', { lineMin: low, lineMax: high });
+      if (removed) loadInPlayProposals();
       const around = (l: number) => `${l - expected >= 0 ? '+' : ''}${(l - expected).toFixed(1)}`;
       Alert.alert(
         'Noté',
         `Pour ce moment du match${ctx ? ` (${ctx.minute}e minute)` : ''}, total attendu par l'app : ${expected.toFixed(1)}.` +
           (low != null ? `\n${parsed.side === 'under' ? 'Moins' : 'Plus'} de ${low} (ligne min)${lowOdds ? ` à ${lowOdds.toFixed(2)}` : ''} (${around(low)} par rapport au total attendu).` : '') +
           (high != null ? `\n${parsed.side === 'under' ? 'Moins' : 'Plus'} de ${high}${highOdds ? ` à ${highOdds.toFixed(2)}` : ''} (ligne max, ${around(high)}).` : '') +
-          "\nCes lignes servent à comprendre comment ton bookmaker construit son menu et ses cotes. Elles ne bloquent rien : l'app continue de chercher le marché le plus intéressant."
+          (removed ? '\nPari retiré des statistiques.' : '') +
+          "\nCes lignes servent à comprendre comment ton bookmaker construit son menu et ses cotes. L'app continue de chercher le marché le plus intéressant."
       );
     } catch (error: any) {
       Alert.alert('Erreur', `Impossible d'enregistrer : ${error.message}`);
