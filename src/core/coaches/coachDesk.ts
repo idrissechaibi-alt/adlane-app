@@ -197,3 +197,48 @@ export async function getCoachStatus(): Promise<{ coaches: CoachRecord[]; total:
   });
   return { coaches, total: all.length };
 }
+
+// ---- Étape 3 : le poids de l'avis de l'entraîneur suit la preuve mesurée.
+
+/** Écart (points) à partir duquel l'avis pèse le maximum. */
+const FULL_WEIGHT_EDGE = 40;
+let weightMemo: { at: number; byCoach: Map<string, number> } | null = null;
+
+/**
+ * Poids de l'avis d'un entraîneur dans la probabilité d'un pari réel : 0 tant que sa preuve n'est pas faite (mode ombre), puis il croît
+ * avec l'écart mesuré entre les paris qu'il soutient et ceux qu'il conteste (8 points : 0,25 ; 24 points : 0,6 ; 40 points et plus : 1).
+ * Recalculé à chaque bilan : si l'écart retombe sous le seuil, le poids revient à 0.
+ */
+export async function coachWeight(coachId: string): Promise<number> {
+  if (!weightMemo || Date.now() - weightMemo.at > 10 * 60_000) {
+    const status = await getCoachStatus();
+    const byCoach = new Map<string, number>();
+    for (const c of status.coaches) {
+      const id = COACHES.find((x) => x.name === c.coach)?.id;
+      if (id) byCoach.set(id, c.ready && c.edge != null ? Math.max(0.25, Math.min(1, c.edge / FULL_WEIGHT_EDGE)) : 0);
+    }
+    weightMemo = { at: Date.now(), byCoach };
+  }
+  return weightMemo.byCoach.get(coachId) ?? 0;
+}
+
+export interface WeightedAdjust {
+  /** Ajustement de probabilité à appliquer (déjà multiplié par le poids), de -0,1 à +0,05. */
+  adjust: number;
+  weight: number;
+  stance: Stance;
+  reasons: string[];
+}
+
+/** Ajustements pondérés d'un match (mêmes équipes pour toutes les jambes) ; null si pas d'entraîneur ou poids nul. */
+export async function weightedCoachAdjust(legs: CoachLegInput[]): Promise<WeightedAdjust[] | null> {
+  try {
+    const res = await coachOpinions(legs);
+    if (!res) return null;
+    const weight = await coachWeight(res.coach.id);
+    if (weight <= 0) return null;
+    return res.opinions.map((o) => ({ adjust: Math.round(o.adjust * weight * 1000) / 1000, weight, stance: o.stance, reasons: o.reasons }));
+  } catch {
+    return null;
+  }
+}

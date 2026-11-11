@@ -94,7 +94,7 @@ import {
 } from './learnStore';
 import { sendLocalNotification } from './notifications';
 import { normalizeTeamName, namesLikelyMatch } from './teamNameMatch';
-import { recordShadowVerdict, samplesFor } from './coaches/coachDesk';
+import { recordShadowVerdict, samplesFor, weightedCoachAdjust } from './coaches/coachDesk';
 import { runCoachAnalysis, analysisKey, getAnalysis } from './coaches/coachAnalysis';
 import { OmnirouteConfig } from '../types';
 import { mapWithConcurrency } from './concurrency';
@@ -1583,7 +1583,23 @@ async function processRealSlotCheckpoint(
   const perMatchLegs = perMatchResults
     .map((legs) => legs.filter((l) => !(l.leg.market === '1X2' && l.leg.prob < 0.5)))
     .filter((r) => r.length > 0);
-  if (perMatchLegs.length === 0) return;
+  // Avis de l'entraîneur de la ligue : son poids est nul tant que sa preuve n'est pas faite, puis croît avec l'écart mesuré (coachDesk.ts).
+  for (const items of perMatchLegs) {
+    const adj = await weightedCoachAdjust(items.map((x) => ({ market: x.leg.market, selection: x.leg.selection, prob: x.leg.prob, league: x.match.league, homeTeam: x.match.homeTeam, awayTeam: x.match.awayTeam })));
+    if (!adj) continue;
+    items.forEach((x, i) => {
+      const a = adj[i];
+      if (!a || a.adjust === 0) return;
+      x.leg.prob = Math.max(0.01, Math.min(0.99, x.leg.prob + a.adjust));
+      x.leg.evidence += ` Avis de l'entraîneur (poids ${a.weight.toFixed(2)}) : ${a.stance}, ${a.adjust > 0 ? '+' : ''}${(a.adjust * 100).toFixed(1)} pt.`;
+    });
+    // Un avis contraire peut faire passer un pari sous le seuil : il n'est alors pas proposé.
+    for (let i = items.length - 1; i >= 0; i--) if (items[i].leg.prob < MIN_LEG_PROB) items.splice(i, 1);
+  }
+  const withLegs = perMatchLegs.filter((r) => r.length > 0);
+  if (withLegs.length === 0) return;
+  perMatchLegs.length = 0;
+  perMatchLegs.push(...withLegs);
 
   const emit = async (items: LegWithContext[], label: string) => {
     // Dernier contrôle avant d'envoyer : le score des sources live gratuites doit être celui sur lequel le pari a été calculé
