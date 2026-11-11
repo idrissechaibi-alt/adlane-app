@@ -4,6 +4,7 @@
 
 import type { LiveStatsSample } from '../liveStatsStore';
 import type { CoachProfile } from './knowledge';
+import { CONF_WEIGHT, expectedBehavior, matchupOf, type TeamTendency } from './teamTendencies';
 
 export interface TacticalRead {
   minute: number;
@@ -151,8 +152,73 @@ export interface CoachOpinion {
 
 const NEUTRAL = (why: string): CoachOpinion => ({ stance: 'neutre', adjust: 0, reasons: [why] });
 
+const has = (x: number | undefined): x is number => typeof x === 'number';
+
+export interface TeamTendencies {
+  home: TeamTendency | null;
+  away: TeamTendency | null;
+}
+
+/**
+ * Apport des tendances propres aux deux équipes (analyses vidéo) : style contre style, réactions au score, début et fin de match.
+ * Borné à ±0,2 sur le score de l'avis, pondéré par la confiance de chaque fiche (une fiche « faible » pèse très peu).
+ * Les raisons commencent par « profil : » pour pouvoir mesurer plus tard lesquelles se vérifient (journal d'ombre).
+ */
+function teamLens(read: TacticalRead, teams: TeamTendencies, market: string, over: boolean, under: boolean): { delta: number; reasons: string[] } {
+  const reasons: string[] = [];
+  let delta = 0;
+  const { home, away } = teams;
+  if (!home && !away) return { delta, reasons };
+  const m = matchupOf(home, away);
+  const homeSit = { minute: read.minute, diff: read.diff, secondHalf: read.minute > 46 };
+  const awaySit = { minute: read.minute, diff: -read.diff, secondHalf: read.minute > 46 };
+  const goals = market === 'total_buts' || market === 'buts_1ere_mt' || market === 'btts';
+  const pressureMarket = market === 'corners' || market === 'corners_equipe' || market === 'tirs_equipe';
+
+  if (goals) {
+    // Rythme habituel des deux équipes : le duel est plutôt ouvert ou fermé.
+    if (m.weight > 0 && Math.abs(m.tempoBias) >= 0.2) {
+      delta += (over ? 1 : under ? -1 : 0) * m.tempoBias * 0.12;
+      if (over || under) reasons.push(`profil : duel ${m.tempoBias > 0 ? 'ouvert' : 'fermé'} d'après les deux styles`);
+    }
+    for (const f of m.flags) {
+      if (f === 'deux_defenses_fragiles' || f === 'deux_pressings_hauts' || f === 'contre_contre_ligne_haute' || f === 'pressing_contre_relance_fragile') delta += (over ? 1 : under ? -1 : 0) * 0.06;
+      if (f === 'deux_equipes_fermees' || f === 'domine_contre_bloc_bas' || f === 'bloc_bas_contre_equipe_qui_souffre') delta += (over ? -1 : under ? 1 : 0) * 0.06;
+    }
+    // Réactions au score : qui mène recule ou continue, qui est mené pousse ou craque.
+    const leaderIsHome = read.diff > 0;
+    const leader = read.diff === 0 ? null : leaderIsHome ? home : away;
+    const trailer = read.diff === 0 ? null : leaderIsHome ? away : home;
+    if (leader?.leading === 'bloc_bas') { delta += (over ? -1 : under ? 1 : 0) * 0.1 * CONF_WEIGHT[leader.conf]; reasons.push(`profil : ${leader.club} recule quand il mène`); }
+    if (leader?.leading === 'continue') { delta += (over ? 1 : under ? -1 : 0) * 0.08 * CONF_WEIGHT[leader.conf]; reasons.push(`profil : ${leader.club} continue d'attaquer en menant`); }
+    if (trailer?.trailing === 'pousse' && read.minute >= 45) { delta += (over ? 1 : under ? -1 : 0) * 0.1 * CONF_WEIGHT[trailer.conf]; reasons.push(`profil : ${trailer.club} pousse quand il est mené`); }
+    if (trailer?.trailing === 's_effondre') { delta += (over ? 1 : under ? -1 : 0) * 0.1 * CONF_WEIGHT[trailer.conf]; reasons.push(`profil : ${trailer.club} craque quand il est mené`); }
+    // Début et fin de match.
+    for (const t of [home, away]) {
+      if (!t) continue;
+      const cw = CONF_WEIGHT[t.conf];
+      if (read.minute <= 30 && t.start === 'fragile') { delta += (over ? 1 : under ? -1 : 0) * 0.08 * cw; reasons.push(`profil : ${t.club} démarre souvent mal`); }
+      if (read.minute >= 46 && read.minute <= 62 && t.start2h) { delta += (over ? 1 : under ? -1 : 0) * 0.06 * cw; reasons.push(`profil : ${t.club} entame mal la seconde période`); }
+      if (read.minute >= 65 && (t.late === 'baisse' || t.late === 'monte')) { delta += (over ? 1 : under ? -1 : 0) * 0.08 * cw; reasons.push(`profil : ${t.club} ${t.late === 'baisse' ? 'baisse' : 'monte'} en fin de match`); }
+    }
+  } else if (pressureMarket) {
+    // Corners et tirs : l'équipe qui pousse (menée ou dominante) et ses coups de pied arrêtés.
+    // L'équipe qui pousse : celle qui est menée ; à égalité, celle qui domine ces dernières minutes.
+    const pusher = read.diff < 0 ? home : read.diff > 0 ? away : (read.recentDominance ?? read.dominance) >= 0 ? home : away;
+    if (pusher && has(pusher.tags.setPieces) && pusher.tags.setPieces >= 0.75) { delta += (over ? 1 : under ? -1 : 0) * 0.08 * CONF_WEIGHT[pusher.conf]; reasons.push(`profil : ${pusher.club} dangereux sur coups de pied arrêtés`); }
+    if (pusher && has(pusher.tags.crosses) && pusher.tags.crosses >= 0.75) { delta += (over ? 1 : under ? -1 : 0) * 0.06 * CONF_WEIGHT[pusher.conf]; reasons.push(`profil : ${pusher.club} joue beaucoup sur les côtés`); }
+    if (m.flags.includes('domine_contre_bloc_bas')) { delta += (over ? 1 : under ? -1 : 0) * 0.08; reasons.push('profil : domination contre un bloc bas'); }
+  }
+  // Comportements décrits par les fiches pour la situation courante (journal seulement quand rien d'autre n'a été retenu).
+  if (!reasons.length) {
+    const b = [...expectedBehavior(home, homeSit), ...expectedBehavior(away, awaySit)];
+    if (b.length) reasons.push(`profil : ${b[0]}`);
+  }
+  return { delta: Math.max(-0.2, Math.min(0.2, delta)), reasons };
+}
+
 /** Avis de l'entraîneur sur une jambe : score entre -1 (contre) et +1 (pour) selon la lecture tactique, filtré par sa ligue. */
-export function opinionOn(read: TacticalRead | null, coach: CoachProfile, leg: { market: string; selection: string; homeTeam?: string; awayTeam?: string }): CoachOpinion {
+export function opinionOn(read: TacticalRead | null, coach: CoachProfile, leg: { market: string; selection: string; homeTeam?: string; awayTeam?: string }, teams?: TeamTendencies): CoachOpinion {
   if (!read) return NEUTRAL('Pas de relevé tactique du match.');
   if (!read.reliable) return NEUTRAL('Statistiques trop pauvres pour une lecture tactique.');
   const over = /^plus de/i.test(leg.selection);
@@ -213,6 +279,15 @@ export function opinionOn(read: TacticalRead | null, coach: CoachProfile, leg: {
     } else return NEUTRAL('Sélection 1X2 non reconnue.');
   } else {
     return NEUTRAL('Marché sans lecture tactique dédiée.');
+  }
+
+  // Tendances propres aux deux équipes (analyses vidéo) : un complément borné, jamais le motif principal.
+  if (teams) {
+    const bttsYes = leg.market === 'btts' && !/non/i.test(leg.selection);
+    const bttsNo = leg.market === 'btts' && /non/i.test(leg.selection);
+    const t = teamLens(read, teams, leg.market, over || bttsYes, under || bttsNo);
+    score += t.delta;
+    reasons.push(...t.reasons);
   }
 
   score = clamp(score, -1, 1);

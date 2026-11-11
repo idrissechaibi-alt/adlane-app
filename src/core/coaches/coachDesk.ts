@@ -8,6 +8,7 @@ import { readInPlayProposals, type InPlayProposal } from '../learnStore';
 import { namesLikelyMatch, normalizeTeamName } from '../teamNameMatch';
 import { COACHES, coachForLeague, type CoachProfile } from './knowledge';
 import { opinionOn, readMatch, type CoachOpinion, type Stance, type TacticalRead } from './tacticalEngine';
+import { tendencyOf } from './teamTendencies';
 import { aiOpinionOnLeg, analysisKey, getAnalysis, type Checkpoint } from './coachAnalysis';
 
 const KEY = '@coach_shadow_v1';
@@ -77,7 +78,8 @@ export async function coachOpinions(legs: CoachLegInput[]): Promise<{ coach: Coa
   const coach = coachForLeague(legs[0]?.league);
   if (!coach) return null;
   const read = readMatch(await samplesFor(legs[0].homeTeam, legs[0].awayTeam));
-  return { coach, read, opinions: legs.map((l) => opinionOn(read, coach, l)) };
+  const teams = { home: tendencyOf(legs[0].homeTeam), away: tendencyOf(legs[0].awayTeam) };
+  return { coach, read, opinions: legs.map((l) => opinionOn(read, coach, l, teams)) };
 }
 
 /** Enregistre le verdict d'ombre d'un pari réel qui vient d'être proposé (n'influence rien). */
