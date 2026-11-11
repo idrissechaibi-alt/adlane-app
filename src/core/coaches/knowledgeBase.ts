@@ -9,6 +9,7 @@ import glossaryData from './data/glossary.json';
 import metricsData from './data/metrics.json';
 import { CLUB_STATS, type TeamWindow } from './leagueStats';
 import { clubCoachOf } from './clubCoaches';
+import { matchupBlock, tendencyBlock } from './teamTendencies';
 import { coachForLeague, coachSystemPrompt, type CoachProfile } from './knowledge';
 import { recentClubNotes, recentPlayerNotes, recentLeagueLessons } from './clubNotes';
 import { bankStatsFor, dynamicFacts } from './knowledgeFeed';
@@ -167,6 +168,7 @@ function clubBlock(team: string): string {
     fmtWindow(st?.courant, 'Saison en cours'),
     fmtMetrics(metricsOf(p?.club ?? entry!.club, '2026-27')),
     fmtMetrics(metricsOf(p?.club ?? entry!.club, '2025-26')),
+    tendencyBlock(p?.club ?? entry!.club),
     recentClubNotes(p?.club ?? entry!.club).length ? `Bilans récents de l'entraîneur sur ce club : ${recentClubNotes(p?.club ?? entry!.club).map((x) => clip(x, 220)).join(' | ')}` : '',
     recentPlayerNotes(p?.club ?? entry!.club).length ? `Notes récentes sur ses joueurs : ${recentPlayerNotes(p?.club ?? entry!.club).map((x) => clip(x, 180)).join(' | ')}` : '',
   ].filter(Boolean);
@@ -192,6 +194,6 @@ export function coachBriefing(homeTeam: string, awayTeam: string, league: string
       ].filter(Boolean).join('\n')
     : '';
   const factText = facts.map((f) => `- [${f.id}] ${clip(f.fact_fr, 380)}${f.caveat_fr ? ` (limite : ${clip(f.caveat_fr, 120)})` : ''}`).join('\n');
-  const context = [clubBlock(homeTeam), clubBlock(awayTeam), league_, factText ? `# Faits de recherche (thèses, articles, rapports officiels)\n${factText}` : ''].filter(Boolean).join('\n\n');
+  const context = [clubBlock(homeTeam), clubBlock(awayTeam), matchupBlock(homeTeam, awayTeam), league_, factText ? `# Faits de recherche (thèses, articles, rapports officiels)\n${factText}` : ''].filter(Boolean).join('\n\n');
   return { coach, system: coach ? coachSystemPrompt(coach) : '', context };
 }
