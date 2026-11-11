@@ -68,3 +68,10 @@ describe('tendances d’équipe', () => {
     expect(b.context.length).toBeLessThan(14000);
   });
 });
+
+describe('poids de l’avis de l’entraîneur', () => {
+  it('est nul tant que la preuve n’est pas faite', async () => {
+    const { coachWeight } = await import('../src/core/coaches/coachDesk');
+    expect(await coachWeight('guardiola')).toBe(0);
+  });
+});
