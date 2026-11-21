@@ -161,9 +161,11 @@ export function tendencyBlock(team: string): string {
   const t = tendencyOf(team);
   if (!t || (!t.notes && !t.patterns.length)) return '';
   const clip = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
+  // Les observations s'accumulent (vagues successives) : on garde le début (style) et la fin (résultats les plus récents).
+  const notes = t.notes.length > 520 ? `${t.notes.slice(0, 220)} … ${t.notes.slice(-280)}` : t.notes;
   const lines = [
-    `Observations vidéo [confiance ${t.conf}, ${t.sources.length} source(s)]${t.shape ? ` — schéma ${t.shape}` : ''} : ${clip(t.notes, 520)}`,
-    t.patterns.length ? `Schémas à surveiller : ${t.patterns.slice(0, 3).map((p) => clip(p, 200)).join(' | ')}` : '',
+    `Observations vidéo [confiance ${t.conf}, ${t.sources.length} source(s)]${t.shape ? ` — schéma ${t.shape}` : ''} : ${notes}`,
+    t.patterns.length ? `Schémas à surveiller : ${t.patterns.slice(0, 2).map((p) => clip(p, 150)).join(' | ')}` : '',
   ].filter(Boolean);
   return lines.join('\n');
 }
