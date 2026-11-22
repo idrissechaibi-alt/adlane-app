@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-11-22T12:55:30.478Z",
+  "exportedAt": "2026-11-22T13:19:26.331Z",
   "formatVersion": 1,
   "source": "APP adlane",
   "data": {
@@ -6617,12 +6617,22 @@
   "health": {
     "nativeBackgroundTicks": {
       "lastTickAt": "2026-11-21T20:25:14.110Z",
-      "ticksLast24h": 28
+      "ticksLast24h": 27
     },
     "tickProgress": {
+      "startedAt": "2026-11-22T13:10:03.819Z",
+      "step": "scan en direct 20e/60e",
+      "at": "2026-11-22T13:10:15.998Z",
+      "stepDurationsSec": {
+        "terminé": 783,
+        "scan matinal": 12,
+        "relevé live partagé": 0
+      }
+    },
+    "lastTick": {
       "startedAt": "2026-11-22T12:32:29.847Z",
-      "step": "consolidation apprentissage",
-      "at": "2026-11-22T12:39:04.137Z",
+      "finishedAt": "2026-11-22T12:57:01.251Z",
+      "durationSec": 1471,
       "stepDurationsSec": {
         "terminé": 100,
         "scan matinal": 0,
@@ -6633,44 +6643,28 @@
         "programme fictif": 1,
         "univers du jour": 2,
         "compositions T-90": 90,
-        "bilan Scouting": 0
-      }
-    },
-    "lastTick": {
-      "startedAt": "2026-11-22T12:14:11.679Z",
-      "finishedAt": "2026-11-22T12:30:49.423Z",
-      "durationSec": 998,
-      "stepDurationsSec": {
-        "terminé": 44935,
-        "scan matinal": 14,
-        "relevé live partagé": 0,
-        "scan en direct 20e/60e": 729,
-        "bilan de minuit": 24,
-        "marqueurs live": 216,
-        "programme fictif": 0,
-        "univers du jour": 0,
-        "compositions T-90": 0,
         "bilan Scouting": 0,
-        "consolidation apprentissage": 13,
+        "consolidation apprentissage": 1077,
         "enrichissement matchs suivis": 0,
         "vérification accès internet des modèles": 0
       },
       "universeSize": 0,
-      "omnirouteConfigured": false,
-      "fictionalProgramSize": 0,
+      "omnirouteConfigured": true,
+      "fictionalProgramSize": 500,
       "fictionalProgramFromFeed": false,
-      "fictionalMatchesAhead": 0,
+      "fictionalMatchesAhead": 487,
+      "fictionalNextKickoffUtc": "2026-11-22T12:40:00.000Z",
       "fictionalCountriesTried": 0,
-      "fictionalCountriesTotal": 0,
-      "fictionalSportmonksMatches": 0,
-      "fictionalSofascoreMatches": 0,
+      "fictionalCountriesTotal": 60,
+      "fictionalSportmonksMatches": 6,
+      "fictionalSofascoreMatches": 709,
       "fictionalOmnirouteMatches": 0,
       "liveFixturesFound": 1,
-      "fictionalLiveFixturesFound": 181,
-      "liveFixturesSource": "api_football",
+      "fictionalLiveFixturesFound": 192,
+      "liveFixturesSource": "sources_live_gratuites",
       "liveMarkerObserved": 68,
-      "liveMarkerClosed": 14,
-      "freshInPlayProposals": 33,
+      "liveMarkerClosed": 24,
+      "freshInPlayProposals": 95,
       "intlBreak": {
         "withinWindow": false,
         "matchesScheduledToday": 0,
@@ -6680,7 +6674,7 @@
       },
       "sportmonksConfirmedMatches": 0,
       "sofaScoreConfirmedMatches": null,
-      "nightlyReviewPointsCreated": 21
+      "nightlyReviewPointsCreated": 0
     },
     "lastFastTick": {
       "startedAt": "2026-11-21T20:29:39.982Z",
@@ -6730,10 +6724,10 @@
       "nightlyReviewPointsCreated": 21
     },
     "lastRealFastTick": {
-      "at": "2026-11-22T12:39:24.406Z",
-      "liveFound": 1,
+      "at": "2026-11-22T13:11:02.232Z",
+      "liveFound": 2,
       "fresh": 0,
-      "source": "sources_live_gratuites"
+      "source": "api_football"
     },
     "abortedTicks": [
       {
@@ -7076,8 +7070,8 @@
       "won": 3910,
       "lastPlacedAt": "2026-11-22T12:30:35.528Z",
       "lastSettledAt": "2026-11-21T23:45:14.526Z",
-      "placedLast24h": 785,
-      "settledLast24h": 588
+      "placedLast24h": 631,
+      "settledLast24h": 550
     },
     "trainingRows": {
       "last14Days": 5762,
@@ -7211,7 +7205,7 @@
       "fictionalReviewed": 15549,
       "fictionalSettledLegs": 14813,
       "lastCreatedAt": "2026-11-22T12:55:21.615Z",
-      "createdLast24h": 5275
+      "createdLast24h": 5003
     },
     "predictionOutcomes30d": 57003,
     "marketSeries": {
@@ -7271,7 +7265,7 @@
         {
           "name": "Principal",
           "ok": true,
-          "latencyMs": 166,
+          "latencyMs": 88,
           "readyModels": 29,
           "configuredReady": 12,
           "configuredTotal": 13
@@ -7279,8 +7273,8 @@
         {
           "name": "Omniroute",
           "ok": true,
-          "latencyMs": 2455,
-          "readyModels": 888,
+          "latencyMs": 2663,
+          "readyModels": 876,
           "configuredReady": 2,
           "configuredTotal": 2
         }
@@ -7288,30 +7282,23 @@
       "leaderboard": [
         {
           "label": "Principal · allam-2-7b",
-          "ok": 13652,
-          "fail": 12834,
-          "avgMs": 1379,
-          "coolingDown": true
-        },
-        {
-          "label": "Principal · nemotron-3-ultra-550b",
-          "ok": 3502,
-          "fail": 1191,
-          "avgMs": 3709,
+          "ok": 13664,
+          "fail": 12836,
+          "avgMs": 806,
           "coolingDown": false
         },
         {
           "label": "Principal · auto",
-          "ok": 16341,
-          "fail": 1487,
-          "avgMs": 13115,
+          "ok": 16353,
+          "fail": 1489,
+          "avgMs": 8175,
           "coolingDown": false
         },
         {
           "label": "Omniroute · Clodiko",
-          "ok": 34383,
-          "fail": 1174,
-          "avgMs": 117891,
+          "ok": 34394,
+          "fail": 1175,
+          "avgMs": 14868,
           "coolingDown": false
         },
         {
@@ -7333,6 +7320,13 @@
           "ok": 1372,
           "fail": 1624,
           "avgMs": 90180,
+          "coolingDown": false
+        },
+        {
+          "label": "Principal · nemotron-3-ultra-550b",
+          "ok": 3507,
+          "fail": 1191,
+          "avgMs": 180460,
           "coolingDown": false
         },
         {
@@ -7363,18 +7357,24 @@
     },
     "dailyPlan": {
       "date": "2026-11-22",
-      "generatedAt": "2026-11-22T12:14:16.396Z",
+      "generatedAt": "2026-11-22T13:10:06.701Z",
       "matches": [
         {
           "match": "Juventus FC - Venezia FC",
           "league": "Serie A",
           "kickoff": "2026-11-22T11:30:00Z",
-          "hasOdds": true
+          "hasOdds": false
         },
         {
           "match": "FC Barcelona - Villarreal CF",
           "league": "Primera Division",
           "kickoff": "2026-11-22T13:00:00Z",
+          "hasOdds": true
+        },
+        {
+          "match": "US Sassuolo Calcio - Genoa CFC",
+          "league": "Serie A",
+          "kickoff": "2026-11-22T14:00:00Z",
           "hasOdds": true
         },
         {
@@ -7391,12 +7391,6 @@
         },
         {
           "match": "Bologna FC 1909 - Udinese Calcio",
-          "league": "Serie A",
-          "kickoff": "2026-11-22T14:00:00Z",
-          "hasOdds": true
-        },
-        {
-          "match": "US Sassuolo Calcio - Genoa CFC",
           "league": "Serie A",
           "kickoff": "2026-11-22T14:00:00Z",
           "hasOdds": true
@@ -7444,14 +7438,14 @@
           "hasOdds": true
         },
         {
-          "match": "Olympique de Marseille - Le Mans FC",
-          "league": "Ligue 1",
+          "match": "Atalanta BC - FC Internazionale Milano",
+          "league": "Serie A",
           "kickoff": "2026-11-22T19:45:00Z",
           "hasOdds": true
         },
         {
-          "match": "Atalanta BC - FC Internazionale Milano",
-          "league": "Serie A",
+          "match": "Olympique de Marseille - Le Mans FC",
+          "league": "Ligue 1",
           "kickoff": "2026-11-22T19:45:00Z",
           "hasOdds": true
         },
@@ -7465,63 +7459,63 @@
     },
     "apiUsageToday": {
       "countsToday": {
-        "footballData": 1,
-        "apiFootball": 6,
-        "theOddsApi": 7,
-        "perplexity": 5,
-        "apiFootball-autolearn": 2,
+        "footballData": 3,
+        "apiFootball": 8,
+        "theOddsApi": 17,
+        "perplexity": 8,
+        "apiFootball-autolearn": 3,
         "sportmonks-autolearn": 1,
         "sofaScore": 0,
-        "sportmonks": 3
+        "sportmonks": 4
       },
       "theOddsApiMonth": {
-        "used": 466,
+        "used": 486,
         "limit": 500,
         "period": "month",
         "live": true
       }
     },
     "apiFootballBudget": {
-      "usedToday": 6,
-      "autolearnUsedToday": 2,
-      "autolearnRemaining": 68
+      "usedToday": 8,
+      "autolearnUsedToday": 3,
+      "autolearnRemaining": 67
     },
     "sofaScore": null,
     "liveSources": {
       "FotMob": {
         "ok": true,
-        "count": 64,
-        "at": "2026-11-22T12:55:23.344Z",
+        "count": 70,
+        "at": "2026-11-22T13:19:22.899Z",
         "failStreak": 0
       },
       "365Scores": {
         "ok": true,
-        "count": 51,
-        "at": "2026-11-22T12:55:23.578Z",
+        "count": 54,
+        "at": "2026-11-22T13:17:55.736Z",
         "failStreak": 0
       },
       "ESPN": {
         "ok": true,
-        "count": 15,
-        "at": "2026-11-22T12:55:24.731Z",
+        "count": 19,
+        "at": "2026-11-22T13:19:22.731Z",
         "failStreak": 0
       },
       "LiveScore": {
         "ok": true,
-        "count": 89,
-        "at": "2026-11-22T12:55:23.079Z",
+        "count": 71,
+        "at": "2026-11-22T13:19:22.053Z",
         "failStreak": 0
       },
       "AllSportsApi": {
         "ok": true,
         "count": 0,
-        "at": "2026-11-22T12:55:24.732Z",
+        "at": "2026-11-22T13:19:22.034Z",
         "failStreak": 0
       },
       "TheSportsDB": {
         "ok": true,
-        "count": 167,
-        "at": "2026-11-22T12:55:23.236Z",
+        "count": 121,
+        "at": "2026-11-22T13:17:55.386Z",
         "failStreak": 0
       }
     },
@@ -8019,10 +8013,10 @@
     "voidedLegs": {
       "fictional": 756,
       "real": 0,
-      "pendingNoVerdict": 782
+      "pendingNoVerdict": 963
     },
     "teamRegistry": {
-      "teams": 5781
+      "teams": 5823
     },
     "comboTrainer": {
       "validated": [
@@ -8378,16 +8372,40 @@
       "analysesIA": 143,
       "budgetIAParJour": 160,
       "bilans": {
-        "reviews": 119,
+        "reviews": 120,
         "clubsWithNotes": 95,
-        "playerNotes": 645
+        "playerNotes": 649
       },
       "avantMatch": [
         {
           "match": "FC Barcelona - Villarreal CF",
-          "state": "echec_ia",
-          "detail": "aucune réponse exploitable des IA (Principal · allam-2-7b : erreur — HTTP 429 : All models exhausted: 1 route checked (1 rate-limited or on cooldown). Add more)",
-          "at": "2026-11-22T12:51:12.654Z"
+          "state": "pret",
+          "detail": "Omniroute · Clodiko · LiveScore, FotMob, 365Scores, ESPN",
+          "at": "2026-11-22T13:11:16.510Z"
+        },
+        {
+          "match": "US Sassuolo Calcio - Genoa CFC",
+          "state": "attente_compo",
+          "detail": "moins de 11 titulaires confirmés par 3 sources (LiveScore, FotMob, 365Scores)",
+          "at": "2026-11-22T13:10:05.671Z"
+        },
+        {
+          "match": "Paris FC - Angers SCO",
+          "state": "attente_compo",
+          "detail": "1 source(s) seulement ont publié la composition (3 minimum) (365Scores)",
+          "at": "2026-11-22T13:10:05.702Z"
+        },
+        {
+          "match": "Hull City AFC - Brighton & Hove Albion FC",
+          "state": "pret",
+          "detail": "Omniroute · Clodiko · LiveScore, FotMob, 365Scores, ESPN",
+          "at": "2026-11-22T13:11:05.165Z"
+        },
+        {
+          "match": "Bologna FC 1909 - Udinese Calcio",
+          "state": "attente_compo",
+          "detail": "moins de 11 titulaires confirmés par 3 sources (LiveScore, FotMob, 365Scores)",
+          "at": "2026-11-22T13:10:07.022Z"
         }
       ],
       "alimentation": {
@@ -8400,21 +8418,21 @@
       "moduleNatifPresent": true
     },
     "serverFeed": {
-      "lastPullAt": "2026-11-22T12:51:20.894Z",
-      "slicesRead": 6770,
-      "samplesAdded": 110799,
-      "lastSlice": "data/server/live/2026-11-22/1240-mwpugrzs.json",
+      "lastPullAt": "2026-11-22T13:19:21.477Z",
+      "slicesRead": 6775,
+      "samplesAdded": 111159,
+      "lastSlice": "data/server/live/2026-11-22/1310-mwpugrzs.json",
       "server": {
-        "at": "2026-11-22T12:52:29.736Z",
+        "at": "2026-11-22T13:17:29.798Z",
         "host": "DESKTOP-OSPJN0K",
         "role": "collecte",
         "startedAt": "2026-11-21T03:24:30.764Z",
-        "lastTickAt": "2026-11-22T12:51:33.008Z",
-        "liveMatches": 298,
+        "lastTickAt": "2026-11-22T13:17:02.205Z",
+        "liveMatches": 267,
         "sites": {
           "fotmob-matchs": {
             "status": "ok",
-            "lastCheckAt": "2026-11-22T12:52:02.580Z"
+            "lastCheckAt": "2026-11-22T13:17:04.007Z"
           }
         }
       }
@@ -8668,99 +8686,100 @@
       }
     ],
     "unmatchedPlannedLive": {
-      "at": "2026-11-22T12:51:24.550Z",
+      "at": "2026-11-22T13:11:00.455Z",
       "unmatched": [],
       "sourceNames": [
+        "Barcelona - Villarreal",
         "Juventus - Venezia",
-        "FC Twente - Willem II",
         "Burnley - Blackburn Rovers",
+        "Kasımpaşa - Alanyaspor",
+        "Konyaspor - Beşiktaş",
         "SK Beveren - Gent",
         "Birmingham City W - Manchester United W",
         "Manchester City W - Tottenham Hotspur W",
+        "Cordoba - Real Oviedo",
         "Energie Cottbus - Hertha Berlin",
         "Kaiserslautern - Dynamo Dresden",
         "Karlsruher SC - VfL Osnabrück",
+        "FC Zurich - St. Gallen",
+        "BK Haecken - Elfsborg",
+        "Sirius - Djurgaarden",
+        "AC Horsens - Silkeborg",
+        "Viborg - Randers FC",
         "Odds Ballklubb - Bryne",
         "Pardubice - FC Zbrojovka Brno",
-        "Rakow Czestochowa - Widzew Lodz",
-        "Botev Vratsa - CSKA 1948 Sofia",
         "Greece U17 - Panama U17",
+        "Ecuador U17 - Uganda",
         "Denmark U17 - Australia U17",
-        "Granada W - Real Madrid W",
-        "Real Sociedad W - Sevilla W",
+        "SC Freiburg W - VfB Stuttgart",
         "Como W - Roma W",
         "Ternana Femminile - Inter W",
         "Vora - KF Tirana",
-        "Arsenal Dzerzhinsk - Neman Grodno",
+        "Pyunik - Sardarapat",
+        "FC Kapaz - Qarabag FK",
         "Montana - Dobrudzha Dobrich",
+        "Olympiakos Nicosia - AEK Larnaca",
         "Akritas Chlorakas - Doxa Katokopia",
         "Polemidion - Anagennisi Deryneia",
         "FC Vlasim - SK Prostejov",
         "SK Kladno - Vysocina Jihlava",
         "Midtjylland W - HB Koege W",
         "VfB Stuttgart II - Ingolstadt",
+        "1. FC Nuremberg II - DJK Vilzing",
+        "1. FC Phonix Lubeck - St.Pauli II",
+        "Eintracht Norderstedt - Schoeningen",
+        "HSC Hannover - VfB Lubeck",
+        "SV Todesfelde - Delmenhorst",
         "BFC Preussen - BSG Chemie Leipzig",
+        "Sandhausen - Stuttgarter Kickers",
         "Zakynthos APS - Panserraikos FC",
+        "Olympiacos B - Kalamaria",
         "Zalaegerszeg - Vasas Budapest",
         "Szentlorinc - Kecskemeti TE",
         "Persib Bandung - Bali United",
         "Pro Vercelli - Novara",
         "Union Brescia - Renate",
         "Scafatese - Foggia",
+        "FC Zaria Balti - Dacia-2 Buiucani",
         "SC Heerenveen W - ADO Den Haag W",
-        "FK Bregalnica Stip - FK Struga",
         "Sogndal - Bjarg",
         "Roea W - Arna-Bjoernar W",
-        "Hutnik Krakow - Resovia",
         "Olimpia Grudziadz - Gornik Leczna",
-        "Sanjoanense - Academica",
         "FK Radnicki 1923 - Cukaricki",
         "Hougang United FC - Tampines Rovers FC",
         "Lion City Sailors FC - Geylang International FC",
-        "Arenas Getxo - Real Aviles Industrial",
         "UD Ourense - Racing de Ferrol",
-        "Alcorcon - Algeciras",
-        "SD Huesca - UD Ibiza",
-        "Deportivo Alaves B - Compostela",
-        "Real Oviedo B - Atletico Astorga",
-        "Girona B - UD Logrones B",
-        "Naxara CD - Ebro",
-        "Utebo - CF Calamocha",
         "Reus FC Reddis - UE Olot",
-        "Atletico Baleares - Murcia B",
-        "Castellon B - Castellonense",
-        "Mallorca B - CD Cieza",
-        "UCAM Murcia - Yeclano",
-        "Atletico Central - Xerez",
-        "Don Benito - Marbella FC",
-        "Mijas-Las Lagunas - Las Palmas B",
         "CA Antoniano - Puente Genil",
         "Linares Deportivo - Atletico Sanluqueno CF",
         "CD Atletico Paso - Real Valladolid Promesas",
-        "Bangkok United - Ayutthaya United FC",
         "Chiangrai United - Lamphun Warrior",
         "Rayong FC - Rasisalai United",
-        "Menemen FK - Sanliurfaspor",
+        "Esenler Erokspor - Antalyaspor",
+        "Manisa FK - Pendikspor",
         "Inegol Kafkas - Arnavutkoy Belediyespor",
-        "24 Erzincanspor - Karacabey Belediye Spor",
-        "Iskenderun FK - Ankaragucu",
         "Beyoglu Yeni Carsi FK - Inegolspor",
         "Sakaryaspor - Serik Belediyespor",
         "Yeni Orduspor - 12 Bingol Spor",
         "Dynamo Kyiv - FC Obolon Kyiv",
-        "Veres Rivne - Bukovyna Chernivtsi",
-        "Da Nang - Ninh Binh FC",
-        "Hong Linh Ha Tinh - Ho Chi Minh City FC"
+        "Kolbotn (W) - Øvrevoll Hosle (W)",
+        "FC Midtjylland (W) - HB Køge (W)",
+        "Freiburg (W) - VfB Stuttgart (W)",
+        "Nürnberg II - DJK Vilzing",
+        "CD Atlético Paso - Real Valladolid B",
+        "Røa (W) - Arna-Bjørnar (W)",
+        "Häcken - Elfsborg"
       ]
     },
     "liveStatsScan": {
       "lastScan": {
-        "at": "2026-11-22T12:51:28.246Z",
-        "matches": 1,
+        "at": "2026-11-22T13:11:01.053Z",
+        "matches": 2,
         "sources": "6 sources gratuites"
       },
       "todaySamples": {
-        "Juventus FC - Venezia FC": 11
+        "Juventus FC - Venezia FC": 13,
+        "FC Barcelona - Villarreal CF": 17
       }
     },
     "backupOddsSources": {
@@ -8770,7 +8789,7 @@
       },
       "fanLine": {
         "fixtures": 20,
-        "soccer": 6
+        "soccer": 12
       },
       "oddsmagnet": {
         "httpStatus": null
@@ -8780,137 +8799,137 @@
       "indexUpdatedAt": "2026-11-22T01:31:37Z",
       "teamsInIndex": 111,
       "summariesCached": 111,
-      "lookups": 87,
-      "withTrend": 6,
-      "unknownTeams": 81,
-      "lastTrendAt": "2026-11-22T12:51:31.801Z",
-      "lastUnknown": "Bangkok United - Ayutthaya United FC"
+      "lookups": 132,
+      "withTrend": 8,
+      "unknownTeams": 124,
+      "lastTrendAt": "2026-11-22T13:10:08.029Z",
+      "lastUnknown": "Burnley - Blackburn Rovers"
     },
     "teamStatsUsageLog": [
       {
-        "at": "2026-11-21T23:34:26.825Z",
-        "match": "Atletico Balboa - CD Luis Angel Firpo",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-11-21T23:34:26.967Z",
-        "match": "Atletico Balboa - CD Luis Angel Firpo",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-11-22T12:14:15.783Z",
-        "match": "FC Barcelona - Villarreal CF",
-        "result": "tendance"
-      },
-      {
-        "at": "2026-11-22T12:14:20.733Z",
-        "match": "Juventus - Venezia",
-        "result": "tendance"
-      },
-      {
-        "at": "2026-11-22T12:26:32.782Z",
-        "match": "Hutnik Krakow - Resovia",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-11-22T12:26:33.055Z",
-        "match": "Alcorcon - Algeciras",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-11-22T12:26:33.235Z",
-        "match": "Arsenal Dzerzhinsk - Neman Grodno",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-11-22T12:26:33.266Z",
-        "match": "FK Bregalnica Stip - FK Struga",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-11-22T12:26:33.345Z",
+        "at": "2026-11-22T13:11:11.188Z",
         "match": "Real Sireti - CS Petrocub",
         "result": "équipe inconnue"
       },
       {
-        "at": "2026-11-22T12:26:33.436Z",
-        "match": "Skierniewice - Pogon Siedlce",
+        "at": "2026-11-22T13:11:11.360Z",
+        "match": "Real Sireti - CS Petrocub",
         "result": "équipe inconnue"
       },
       {
-        "at": "2026-11-22T12:32:30.335Z",
-        "match": "FC Barcelona - Villarreal CF",
-        "result": "tendance"
-      },
-      {
-        "at": "2026-11-22T12:32:33.292Z",
-        "match": "Granada W - Real Madrid W",
+        "at": "2026-11-22T13:11:11.580Z",
+        "match": "FK Bregalnica Stip - FK Struga",
         "result": "équipe inconnue"
       },
       {
-        "at": "2026-11-22T12:32:33.467Z",
-        "match": "Rakow Czestochowa - Widzew Lodz",
+        "at": "2026-11-22T13:11:11.692Z",
+        "match": "FK Bregalnica Stip - FK Struga",
         "result": "équipe inconnue"
       },
       {
-        "at": "2026-11-22T12:32:34.116Z",
-        "match": "SD Huesca - UD Ibiza",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-11-22T12:32:34.997Z",
-        "match": "FC Twente - Willem II",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-11-22T12:35:16.477Z",
-        "match": "Burnley - Blackburn Rovers",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-11-22T12:35:16.870Z",
-        "match": "Real Sociedad (W) - Sevilla W",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-11-22T12:35:17.017Z",
-        "match": "UD Ourense - Racing de Ferrol",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-11-22T12:35:17.142Z",
-        "match": "UCAM Murcia - Yeclano",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-11-22T12:35:17.330Z",
-        "match": "Linares Deportivo - Atletico Sanluqueno CF",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-11-22T12:35:17.665Z",
-        "match": "Castellon B - Castellonense",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-11-22T12:35:22.592Z",
-        "match": "CD Atletico Paso - Real Valladolid Promesas",
-        "result": "équipe inconnue"
-      },
-      {
-        "at": "2026-11-22T12:35:24.535Z",
+        "at": "2026-11-22T13:11:11.745Z",
         "match": "Bangkok United - Ayutthaya United FC",
         "result": "équipe inconnue"
       },
       {
-        "at": "2026-11-22T12:39:25.053Z",
-        "match": "FC Barcelona - Villarreal CF",
-        "result": "tendance"
+        "at": "2026-11-22T13:11:11.987Z",
+        "match": "Bangkok United - Ayutthaya United FC",
+        "result": "équipe inconnue"
       },
       {
-        "at": "2026-11-22T12:51:31.793Z",
-        "match": "Juventus FC - Venezia FC",
-        "result": "tendance"
+        "at": "2026-11-22T13:11:12.022Z",
+        "match": "Granada W - Real Madrid W",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-11-22T13:11:12.219Z",
+        "match": "Granada W - Real Madrid W",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-11-22T13:11:12.253Z",
+        "match": "Real Sociedad W - Sevilla W",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-11-22T13:11:12.359Z",
+        "match": "Real Sociedad W - Sevilla W",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-11-22T13:11:12.505Z",
+        "match": "UD Ourense - Racing de Ferrol",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-11-22T13:11:12.623Z",
+        "match": "UD Ourense - Racing de Ferrol",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-11-22T13:11:12.734Z",
+        "match": "Alcorcon - Algeciras",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-11-22T13:11:12.863Z",
+        "match": "Alcorcon - Algeciras",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-11-22T13:11:12.912Z",
+        "match": "SD Huesca - UD Ibiza",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-11-22T13:11:13.393Z",
+        "match": "SD Huesca - UD Ibiza",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-11-22T13:11:13.966Z",
+        "match": "Castellon B - Castellonense",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-11-22T13:11:14.151Z",
+        "match": "Castellon B - Castellonense",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-11-22T13:11:14.185Z",
+        "match": "UCAM Murcia - Yeclano",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-11-22T13:11:14.276Z",
+        "match": "UCAM Murcia - Yeclano",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-11-22T13:11:14.405Z",
+        "match": "FC Twente - Willem II",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-11-22T13:11:15.117Z",
+        "match": "FC Twente - Willem II",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-11-22T13:11:15.427Z",
+        "match": "Rakow Czestochowa - Widzew Lodz",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-11-22T13:11:15.925Z",
+        "match": "Rakow Czestochowa - Widzew Lodz",
+        "result": "équipe inconnue"
+      },
+      {
+        "at": "2026-11-22T13:11:16.271Z",
+        "match": "Burnley - Blackburn Rovers",
+        "result": "équipe inconnue"
       }
     ],
     "bookieLineMinimums": {
@@ -8981,7 +9000,7 @@
         "unit": "corners_1h",
         "label": "Corners 1ère mi-temps",
         "verified": 661,
-        "pending": 436,
+        "pending": 457,
         "meanPredicted": 4.5,
         "meanActual": 4.5,
         "meanError": 0,
@@ -9009,7 +9028,7 @@
         "unit": "cards_1h",
         "label": "Cartons 1ère mi-temps",
         "verified": 628,
-        "pending": 422,
+        "pending": 436,
         "meanPredicted": 1.2,
         "meanActual": 1.2,
         "meanError": 0,
@@ -9037,7 +9056,7 @@
         "unit": "goals_1h",
         "label": "Buts à la pause",
         "verified": 481,
-        "pending": 163,
+        "pending": 165,
         "meanPredicted": 1.3,
         "meanActual": 1.2,
         "meanError": -0.02,
@@ -9064,8 +9083,8 @@
       {
         "unit": "goals_ft",
         "label": "Buts en fin de match",
-        "verified": 1254,
-        "pending": 259,
+        "verified": 1255,
+        "pending": 270,
         "meanPredicted": 2.9,
         "meanActual": 2.9,
         "meanError": 0.04,
@@ -9092,8 +9111,8 @@
       {
         "unit": "corners_ft",
         "label": "Corners sur le match",
-        "verified": 1111,
-        "pending": 138,
+        "verified": 1112,
+        "pending": 148,
         "meanPredicted": 8.3,
         "meanActual": 9.1,
         "meanError": 0.79,
@@ -9120,8 +9139,8 @@
       {
         "unit": "cards_ft",
         "label": "Cartons sur le match",
-        "verified": 1032,
-        "pending": 125,
+        "verified": 1033,
+        "pending": 131,
         "meanPredicted": 3.8,
         "meanActual": 3.8,
         "meanError": 0,
@@ -9496,9 +9515,9 @@
       {
         "unit": "cards_ft",
         "label": "Cartons sur le match",
-        "samples": 695,
+        "samples": 694,
         "maeBase": 1.5230964392162045,
-        "maeNew": 1.4986117528061933,
+        "maeNew": 1.4989073492943579,
         "promoted": false,
         "effects": [
           {
@@ -9511,7 +9530,7 @@
           },
           {
             "name": "momentum (une équipe domine)",
-            "pct": 14
+            "pct": 13
           },
           {
             "name": "force du favori",
@@ -9531,7 +9550,7 @@
           },
           {
             "name": "cartons rouges",
-            "pct": -19
+            "pct": -16
           },
           {
             "name": "qualité des occasions",
@@ -9614,7 +9633,7 @@
         "label": "Fautes sur le match",
         "samples": 419,
         "maeBase": 3.364488927670254,
-        "maeNew": 3.4182986448359127,
+        "maeNew": 3.4186350753603,
         "promoted": false,
         "effects": [
           {
@@ -10573,11 +10592,11 @@
         },
         {
           "unit": "cards_ft",
-          "factor": 1.6247163740557002,
+          "factor": 1.6285674541882136,
           "samples": 400,
-          "meanDelta": 0.0001872009726815449,
-          "meanAbsDelta": 1.376058692808905,
-          "dispersion": 1.2938162425092823,
+          "meanDelta": 0.006649901901165576,
+          "meanAbsDelta": 1.3734483607770043,
+          "dispersion": 1.2868335957309485,
           "bins": [
             {
               "upTo": 0.8535353535353535,
@@ -10586,12 +10605,12 @@
             },
             {
               "upTo": 1.3881673881673882,
-              "factor": 1.8555792029945735,
+              "factor": 1.8717337910747325,
               "samples": 133
             },
             {
               "upTo": null,
-              "factor": 1.0891671605476887,
+              "factor": 1.0874886801841372,
               "samples": 134
             }
           ]
@@ -10600,8 +10619,8 @@
           "unit": "fouls_ft",
           "factor": 1.0599008812677506,
           "samples": 400,
-          "meanDelta": 0.3673015573747668,
-          "meanAbsDelta": 3.512983970733209,
+          "meanDelta": 0.36552045260973415,
+          "meanAbsDelta": 3.511202865968177,
           "dispersion": 1.58573509894491,
           "bins": [
             {
@@ -10673,8 +10692,8 @@
         }
       ],
       "samples": {
-        "pending": 127,
-        "measured": 2723
+        "pending": 128,
+        "measured": 2721
       }
     },
     "configured": {
